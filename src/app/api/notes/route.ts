@@ -28,13 +28,11 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { title, content } = body;
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const contentInput = typeof body.content === "string" ? body.content.trim() : "";
 
-    if (!title || !content) {
-      return NextResponse.json(
-        { error: "Title and content are required" },
-        { status: 400 }
-      );
+    if (!title) {
+      return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
 
     const user = await prisma.user.findUnique({
@@ -48,7 +46,7 @@ export async function POST(req: Request) {
     const note = await prisma.note.create({
       data: {
         title,
-        content,
+        content: contentInput || null,
         userId: user.id,
       },
     });
