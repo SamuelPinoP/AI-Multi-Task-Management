@@ -22,6 +22,8 @@ export default function NotesPage() {
   const [editContent, setEditContent] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [generatingNoteId, setGeneratingNoteId] = useState<string | null>(null);
 
   async function fetchNotes(showLoading = true) {
     try {
@@ -187,6 +189,43 @@ export default function NotesPage() {
     }
   }
 
+
+  async function handleTurnIntoTasks(noteId: string) {
+    try {
+      setGeneratingNoteId(noteId);
+      setError("");
+      setSuccessMessage("");
+
+      const res = await fetch("/api/ai/note-to-tasks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ noteId }),
+      });
+
+      const data = (await res.json().catch(() => null)) as
+        | { createdCount?: number; message?: string; error?: string }
+        | null;
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Could not turn note into tasks");
+      }
+
+      if ((data?.createdCount ?? 0) > 0) {
+        setSuccessMessage(data?.message || `Created ${data?.createdCount ?? 0} tasks.`);
+        return;
+      }
+
+      setSuccessMessage(data?.message || "No actionable tasks found in that note.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not turn note into tasks.";
+      setError(message);
+    } finally {
+      setGeneratingNoteId(null);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-white px-6 py-10 text-black">
       <div className="mx-auto max-w-4xl">
@@ -231,6 +270,7 @@ export default function NotesPage() {
           </form>
 
           {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+          {successMessage && <p className="mt-4 text-sm text-green-700">{successMessage}</p>}
         </section>
 
         <section>
@@ -245,6 +285,7 @@ export default function NotesPage() {
               {notes.map((note) => {
                 const isDeleting = deletingNoteId === note.id;
                 const isEditing = editingNoteId === note.id;
+                const isGeneratingTasks = generatingNoteId === note.id;
 
                 return (
                   <article
@@ -296,6 +337,14 @@ export default function NotesPage() {
                               className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                             >
                               Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleTurnIntoTasks(note.id)}
+                              disabled={isGeneratingTasks}
+                              className="rounded-lg border border-blue-300 px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {isGeneratingTasks ? "Generating..." : "Turn into tasks"}
                             </button>
                             <button
                               type="button"
