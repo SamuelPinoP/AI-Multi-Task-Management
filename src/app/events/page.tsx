@@ -24,6 +24,18 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
+function getLocalDayStart(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function isEventToday(event: EventItem, now: Date) {
+  const todayStart = getLocalDayStart(now);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  const eventStart = new Date(event.startTime);
+  return eventStart >= todayStart && eventStart < tomorrowStart;
+}
+
 export default function EventsPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [fetching, setFetching] = useState(true);
@@ -50,6 +62,26 @@ export default function EventsPage() {
       (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
     );
   }, [events]);
+
+  const eventSections = useMemo(() => {
+    const now = new Date();
+    const soonBoundary = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const today = visibleEvents.filter((event) => isEventToday(event, now));
+    const upcoming = visibleEvents.filter((event) => {
+      const start = new Date(event.startTime);
+      return start > now && start <= soonBoundary && !isEventToday(event, now);
+    });
+    const later = visibleEvents.filter((event) => new Date(event.startTime) > soonBoundary);
+    const past = visibleEvents.filter((event) => new Date(event.endTime) < now);
+
+    return [
+      { key: "TODAY", title: "Today", events: today },
+      { key: "UPCOMING", title: "Upcoming Soon", events: upcoming },
+      { key: "LATER", title: "Later", events: later },
+      { key: "PAST", title: "Past", events: past },
+    ] as const;
+  }, [visibleEvents]);
 
   async function fetchEvents(showLoading = true) {
     try {
@@ -286,15 +318,35 @@ export default function EventsPage() {
           ) : visibleEvents.length === 0 ? (
             <p className="text-gray-600">No events yet.</p>
           ) : (
-            <div className="space-y-4">
-              {visibleEvents.map((event) => {
+            <div className="space-y-6">
+              {eventSections.map((section) => (
+                <div key={section.key}>
+                  <h3 className="mb-3 text-lg font-semibold text-gray-800">{section.title}</h3>
+                  {section.events.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-gray-200 px-4 py-3 text-sm text-gray-500">
+                      No events in this section.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {section.events.map((event) => {
                 const isEditing = editingEventId === event.id;
                 const isDeleting = deletingEventId === event.id;
+                const now = new Date();
+                const today = isEventToday(event, now);
+                const startsSoon = new Date(event.startTime).getTime() > now.getTime()
+                  && new Date(event.startTime).getTime() <= now.getTime() + 48 * 60 * 60 * 1000;
+                const badgeText = today ? "Today" : startsSoon ? "Soon" : null;
+                const badgeStyles = today ? "text-emerald-700" : "text-blue-700";
+                const cardStyles = today
+                  ? "border-emerald-200 bg-emerald-50"
+                  : startsSoon
+                    ? "border-blue-200 bg-blue-50"
+                    : "border-gray-200";
 
                 return (
                   <article
                     key={event.id}
-                    className="rounded-2xl border border-gray-200 p-5 shadow-sm"
+                    className={`rounded-2xl border p-5 shadow-sm ${cardStyles}`}
                   >
                     {isEditing ? (
                       <div className="space-y-3">
@@ -346,7 +398,16 @@ export default function EventsPage() {
                       </div>
                     ) : (
                       <>
-                        <h3 className="text-xl font-semibold">{event.title}</h3>
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="text-xl font-semibold">{event.title}</h3>
+                          {badgeText && (
+                            <span
+                              className={`rounded-full border border-current px-2.5 py-1 text-xs font-medium ${badgeStyles}`}
+                            >
+                              {badgeText}
+                            </span>
+                          )}
+                        </div>
                         {event.description ? (
                           <p className="mt-2 text-gray-700">{event.description}</p>
                         ) : (
@@ -382,7 +443,11 @@ export default function EventsPage() {
                     )}
                   </article>
                 );
-              })}
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </section>

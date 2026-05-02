@@ -18,6 +18,25 @@ type Task = {
   updatedAt: string;
 };
 
+type TaskUrgency = "OVERDUE" | "DUE_TODAY" | "DUE_SOON" | "NONE";
+
+function getLocalDayStart(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function getTaskUrgency(task: Task): TaskUrgency {
+  if (task.status === "DONE" || !task.dueDate) return "NONE";
+
+  const dueDate = getLocalDayStart(new Date(task.dueDate));
+  const today = getLocalDayStart(new Date());
+  const dayDiff = Math.floor((dueDate.getTime() - today.getTime()) / 86400000);
+
+  if (dayDiff < 0) return "OVERDUE";
+  if (dayDiff === 0) return "DUE_TODAY";
+  if (dayDiff <= 3) return "DUE_SOON";
+  return "NONE";
+}
+
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [fetching, setFetching] = useState(true);
@@ -87,6 +106,21 @@ export default function TasksPage() {
 
     return sorted;
   }, [tasks, searchQuery, filter, priorityFilter, sortBy]);
+
+  const taskSections = useMemo(() => {
+    const overdue = visibleTasks.filter((task) => getTaskUrgency(task) === "OVERDUE");
+    const dueToday = visibleTasks.filter((task) => getTaskUrgency(task) === "DUE_TODAY");
+    const upcoming = visibleTasks.filter((task) => {
+      const urgency = getTaskUrgency(task);
+      return urgency === "DUE_SOON" || urgency === "NONE";
+    });
+
+    return [
+      { key: "OVERDUE", title: "Overdue", tasks: overdue },
+      { key: "DUE_TODAY", title: "Due Today", tasks: dueToday },
+      { key: "UPCOMING", title: "Upcoming", tasks: upcoming },
+    ] as const;
+  }, [visibleTasks]);
 
   async function fetchTasks(showLoading = true) {
     try {
@@ -329,14 +363,49 @@ export default function TasksPage() {
           </div>
 
           {fetching ? <p className="text-gray-600">Loading tasks...</p> : visibleTasks.length === 0 ? <p className="text-gray-600">No tasks match your current search/filters.</p> : (
-            <div className="space-y-4">
-              {visibleTasks.map((task) => {
+            <div className="space-y-6">
+              {taskSections.map((section) => (
+                <div key={section.key}>
+                  <h3 className="mb-3 text-lg font-semibold text-gray-800">{section.title}</h3>
+                  {section.tasks.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-gray-200 px-4 py-3 text-sm text-gray-500">
+                      No tasks in this section.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {section.tasks.map((task) => {
                 const isEditing = editingTaskId === task.id;
                 const isDeleting = deletingTaskId === task.id;
                 const isToggling = togglingTaskId === task.id;
+                const urgency = getTaskUrgency(task);
+                const urgencyLabel =
+                  urgency === "OVERDUE"
+                    ? "Overdue"
+                    : urgency === "DUE_TODAY"
+                      ? "Due Today"
+                      : urgency === "DUE_SOON"
+                        ? "Due Soon"
+                        : null;
+                const urgencyLabelStyles =
+                  urgency === "OVERDUE"
+                    ? "text-red-700"
+                    : urgency === "DUE_TODAY"
+                      ? "text-amber-700"
+                      : "text-blue-700";
+                const urgencyStyles =
+                  urgency === "OVERDUE"
+                    ? "border-red-200 bg-red-50"
+                    : urgency === "DUE_TODAY"
+                      ? "border-amber-200 bg-amber-50"
+                      : urgency === "DUE_SOON"
+                        ? "border-blue-200 bg-blue-50"
+                        : "border-gray-200";
 
                 return (
-                  <article key={task.id} className="rounded-2xl border border-gray-200 p-5 shadow-sm">
+                  <article
+                    key={task.id}
+                    className={`rounded-2xl border p-5 shadow-sm ${urgencyStyles}`}
+                  >
                     {isEditing ? (
                       <div className="space-y-3">
                         <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-2 outline-none focus:border-black" />
@@ -354,7 +423,16 @@ export default function TasksPage() {
                     ) : (
                       <>
                         <div className="flex items-start justify-between gap-4">
-                          <h3 className="text-xl font-semibold">{task.title}</h3>
+                          <div>
+                            <h3 className="text-xl font-semibold">{task.title}</h3>
+                            {urgencyLabel && (
+                              <span
+                                className={`mt-2 inline-block rounded-full border border-current px-2.5 py-1 text-xs font-medium ${urgencyLabelStyles}`}
+                              >
+                                {urgencyLabel}
+                              </span>
+                            )}
+                          </div>
                           <div className="flex flex-wrap gap-2">
                             <button type="button" onClick={() => startEditing(task)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700">Edit</button>
                             <button type="button" onClick={() => void handleToggleComplete(task)} disabled={isToggling} className="rounded-lg border border-green-300 px-3 py-1.5 text-sm font-medium text-green-700 disabled:opacity-60">{isToggling ? "Updating..." : task.status === "DONE" ? "Mark Incomplete" : "Mark Done"}</button>
@@ -371,7 +449,11 @@ export default function TasksPage() {
                     )}
                   </article>
                 );
-              })}
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </section>
