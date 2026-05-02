@@ -94,6 +94,12 @@ export default async function DashboardPage() {
             >
               Go to Tasks
             </Link>
+            <Link
+              href="/events"
+              className="rounded-xl border border-gray-300 px-5 py-3 transition hover:bg-gray-50"
+            >
+              Go to Events
+            </Link>
           </div>
         </section>
 
