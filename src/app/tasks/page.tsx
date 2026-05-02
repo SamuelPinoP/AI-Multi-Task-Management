@@ -31,6 +31,7 @@ export default function TasksPage() {
   const [filter, setFilter] = useState<TaskFilter>("ALL");
   const [priorityFilter, setPriorityFilter] = useState<"ALL" | Priority>("ALL");
   const [sortBy, setSortBy] = useState<SortOption>("NEWEST");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -45,7 +46,19 @@ export default function TasksPage() {
   const [editDueDate, setEditDueDate] = useState("");
 
   const visibleTasks = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
     const filtered = tasks
+      .filter((task) => {
+        if (!normalizedQuery) return true;
+
+        const titleMatches = task.title.toLowerCase().includes(normalizedQuery);
+        const descriptionMatches = (task.description ?? "")
+          .toLowerCase()
+          .includes(normalizedQuery);
+
+        return titleMatches || descriptionMatches;
+      })
       .filter((task) => {
         if (filter === "ACTIVE") return task.status !== "DONE";
         if (filter === "COMPLETED") return task.status === "DONE";
@@ -73,7 +86,7 @@ export default function TasksPage() {
     });
 
     return sorted;
-  }, [tasks, filter, priorityFilter, sortBy]);
+  }, [tasks, searchQuery, filter, priorityFilter, sortBy]);
 
   async function fetchTasks(showLoading = true) {
     try {
@@ -288,7 +301,14 @@ export default function TasksPage() {
 
         <section>
           <h2 className="mb-4 text-2xl font-semibold">Your Tasks</h2>
-          <div className="mb-4 grid gap-3 rounded-2xl border border-gray-200 p-4 sm:grid-cols-3">
+          <div className="mb-4 grid gap-3 rounded-2xl border border-gray-200 p-4 sm:grid-cols-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search tasks by title or description..."
+              className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black sm:col-span-2"
+            />
             <select value={filter} onChange={(e) => setFilter(e.target.value as TaskFilter)} className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black">
               <option value="ALL">All Tasks</option>
               <option value="ACTIVE">Active</option>
@@ -308,7 +328,7 @@ export default function TasksPage() {
             </select>
           </div>
 
-          {fetching ? <p className="text-gray-600">Loading tasks...</p> : visibleTasks.length === 0 ? <p className="text-gray-600">No tasks match your filters.</p> : (
+          {fetching ? <p className="text-gray-600">Loading tasks...</p> : visibleTasks.length === 0 ? <p className="text-gray-600">No tasks match your current search/filters.</p> : (
             <div className="space-y-4">
               {visibleTasks.map((task) => {
                 const isEditing = editingTaskId === task.id;

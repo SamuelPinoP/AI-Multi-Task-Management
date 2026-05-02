@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Note = {
   id: string;
@@ -22,6 +22,21 @@ export default function NotesPage() {
   const [editContent, setEditContent] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [error, setError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const visibleNotes = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return notes;
+    }
+
+    return notes.filter((note) => {
+      const titleMatches = note.title.toLowerCase().includes(normalizedQuery);
+      const contentMatches = (note.content ?? "").toLowerCase().includes(normalizedQuery);
+      return titleMatches || contentMatches;
+    });
+  }, [notes, searchQuery]);
 
   async function fetchNotes(showLoading = true) {
     try {
@@ -235,14 +250,25 @@ export default function NotesPage() {
 
         <section>
           <h2 className="mb-4 text-2xl font-semibold">Your Notes</h2>
+          <div className="mb-4">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search notes by title or content..."
+              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+            />
+          </div>
 
           {fetching ? (
             <p className="text-gray-600">Loading notes...</p>
           ) : notes.length === 0 ? (
             <p className="text-gray-600">No notes yet.</p>
+          ) : visibleNotes.length === 0 ? (
+            <p className="text-gray-600">No notes match your search.</p>
           ) : (
             <div className="space-y-4">
-              {notes.map((note) => {
+              {visibleNotes.map((note) => {
                 const isDeleting = deletingNoteId === note.id;
                 const isEditing = editingNoteId === note.id;
 
