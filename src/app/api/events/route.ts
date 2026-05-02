@@ -22,6 +22,7 @@ export async function GET() {
       where: { email: DEMO_USER_EMAIL },
       include: {
         events: {
+          where: { deletedAt: null },
           orderBy: [{ startTime: "asc" }, { createdAt: "desc" }],
         },
       },

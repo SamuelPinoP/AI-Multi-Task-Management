@@ -26,6 +26,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     const updated = await prisma.note.updateMany({
       where: {
         id,
+        deletedAt: null,
         user: {
           email: DEMO_USER_EMAIL,
         },
@@ -34,6 +35,7 @@ export async function PATCH(req: Request, context: RouteContext) {
         title,
         content: contentInput || null,
       },
+      data: { deletedAt: new Date() },
     });
 
     if (updated.count === 0) {
@@ -57,20 +59,22 @@ export async function DELETE(_req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Note id is required" }, { status: 400 });
     }
 
-    const deleted = await prisma.note.deleteMany({
+    const deleted = await prisma.note.updateMany({
       where: {
         id,
+        deletedAt: null,
         user: {
           email: DEMO_USER_EMAIL,
         },
       },
+      data: { deletedAt: new Date() },
     });
 
     if (deleted.count === 0) {
       return NextResponse.json({ error: "Note not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ message: "Note deleted successfully" }, { status: 200 });
+    return NextResponse.json({ message: "Note moved to trash" }, { status: 200 });
   } catch (error) {
     console.error("DELETE /api/notes/[id] error:", error);
     return NextResponse.json({ error: "Failed to delete note" }, { status: 500 });

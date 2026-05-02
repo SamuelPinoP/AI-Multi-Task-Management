@@ -53,6 +53,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     const updated = await prisma.task.updateMany({
       where: {
         id,
+        deletedAt: null,
         user: {
           email: DEMO_USER_EMAIL,
         },
@@ -65,6 +66,7 @@ export async function PATCH(req: Request, context: RouteContext) {
         dueDate,
         completedAt: body.status === TaskStatus.DONE ? new Date() : null,
       },
+      data: { deletedAt: new Date() },
     });
 
     if (updated.count === 0) {
@@ -87,20 +89,22 @@ export async function DELETE(_req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Task id is required" }, { status: 400 });
     }
 
-    const deleted = await prisma.task.deleteMany({
+    const deleted = await prisma.task.updateMany({
       where: {
         id,
+        deletedAt: null,
         user: {
           email: DEMO_USER_EMAIL,
         },
       },
+      data: { deletedAt: new Date() },
     });
 
     if (deleted.count === 0) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ message: "Task deleted successfully" }, { status: 200 });
+    return NextResponse.json({ message: "Task moved to trash" }, { status: 200 });
   } catch (error) {
     console.error("DELETE /api/tasks/[id] error:", error);
     return NextResponse.json({ error: "Failed to delete task" }, { status: 500 });

@@ -9,6 +9,7 @@ export async function GET() {
       where: { email: DEMO_USER_EMAIL },
       include: {
         notes: {
+          where: { deletedAt: null },
           orderBy: { createdAt: "desc" },
         },
       },
