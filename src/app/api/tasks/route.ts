@@ -18,6 +18,7 @@ export async function GET() {
       where: { email: DEMO_USER_EMAIL },
       include: {
         tasks: {
+          where: { deletedAt: null },
           orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
         },
       },

@@ -61,6 +61,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     const updated = await prisma.event.updateMany({
       where: {
         id,
+        deletedAt: null,
         user: {
           email: DEMO_USER_EMAIL,
         },
@@ -72,6 +73,7 @@ export async function PATCH(req: Request, context: RouteContext) {
         startTime,
         endTime,
       },
+      data: { deletedAt: new Date() },
     });
 
     if (updated.count === 0) {
@@ -94,20 +96,22 @@ export async function DELETE(_req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Event id is required" }, { status: 400 });
     }
 
-    const deleted = await prisma.event.deleteMany({
+    const deleted = await prisma.event.updateMany({
       where: {
         id,
+        deletedAt: null,
         user: {
           email: DEMO_USER_EMAIL,
         },
       },
+      data: { deletedAt: new Date() },
     });
 
     if (deleted.count === 0) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ message: "Event deleted successfully" }, { status: 200 });
+    return NextResponse.json({ message: "Event moved to trash" }, { status: 200 });
   } catch (error) {
     console.error("DELETE /api/events/[id] error:", error);
     return NextResponse.json({ error: "Failed to delete event" }, { status: 500 });
