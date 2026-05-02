@@ -1,9 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
+type TaskFilter = "ALL" | "ACTIVE" | "COMPLETED";
+type SortOption = "NEWEST" | "OLDEST" | "DUE_DATE_ASC" | "DUE_DATE_DESC";
 
 type Task = {
   id: string;
@@ -26,6 +28,10 @@ export default function TasksPage() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
+  const [filter, setFilter] = useState<TaskFilter>("ALL");
+  const [priorityFilter, setPriorityFilter] = useState<"ALL" | Priority>("ALL");
+  const [sortBy, setSortBy] = useState<SortOption>("NEWEST");
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("TODO");
@@ -37,6 +43,37 @@ export default function TasksPage() {
   const [editStatus, setEditStatus] = useState<TaskStatus>("TODO");
   const [editPriority, setEditPriority] = useState<Priority>("MEDIUM");
   const [editDueDate, setEditDueDate] = useState("");
+
+  const visibleTasks = useMemo(() => {
+    const filtered = tasks
+      .filter((task) => {
+        if (filter === "ACTIVE") return task.status !== "DONE";
+        if (filter === "COMPLETED") return task.status === "DONE";
+        return true;
+      })
+      .filter((task) => {
+        if (priorityFilter === "ALL") return true;
+        return task.priority === priorityFilter;
+      });
+
+    const sorted = [...filtered].sort((a, b) => {
+      if (sortBy === "NEWEST") {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+
+      if (sortBy === "OLDEST") {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+
+      const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+      const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+
+      if (sortBy === "DUE_DATE_ASC") return aDue - bDue;
+      return bDue - aDue;
+    });
+
+    return sorted;
+  }, [tasks, filter, priorityFilter, sortBy]);
 
   async function fetchTasks(showLoading = true) {
     try {
@@ -251,9 +288,29 @@ export default function TasksPage() {
 
         <section>
           <h2 className="mb-4 text-2xl font-semibold">Your Tasks</h2>
-          {fetching ? <p className="text-gray-600">Loading tasks...</p> : tasks.length === 0 ? <p className="text-gray-600">No tasks yet.</p> : (
+          <div className="mb-4 grid gap-3 rounded-2xl border border-gray-200 p-4 sm:grid-cols-3">
+            <select value={filter} onChange={(e) => setFilter(e.target.value as TaskFilter)} className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black">
+              <option value="ALL">All Tasks</option>
+              <option value="ACTIVE">Active</option>
+              <option value="COMPLETED">Completed</option>
+            </select>
+            <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value as "ALL" | Priority)} className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black">
+              <option value="ALL">All Priorities</option>
+              <option value="LOW">Low Priority</option>
+              <option value="MEDIUM">Medium Priority</option>
+              <option value="HIGH">High Priority</option>
+            </select>
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortOption)} className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black">
+              <option value="NEWEST">Newest First</option>
+              <option value="OLDEST">Oldest First</option>
+              <option value="DUE_DATE_ASC">Due Date (Soonest)</option>
+              <option value="DUE_DATE_DESC">Due Date (Latest)</option>
+            </select>
+          </div>
+
+          {fetching ? <p className="text-gray-600">Loading tasks...</p> : visibleTasks.length === 0 ? <p className="text-gray-600">No tasks match your filters.</p> : (
             <div className="space-y-4">
-              {tasks.map((task) => {
+              {visibleTasks.map((task) => {
                 const isEditing = editingTaskId === task.id;
                 const isDeleting = deletingTaskId === task.id;
                 const isToggling = togglingTaskId === task.id;
