@@ -34,7 +34,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       data: {
         title,
         content: contentInput || null,
-      }
+      },
     });
 
     if (updated.count === 0) {
@@ -65,7 +65,10 @@ export async function DELETE(_req: Request, context: RouteContext) {
         user: {
           email: DEMO_USER_EMAIL,
         },
-      }
+      },
+      data: {
+        deletedAt: new Date(),
+      },
     });
 
     if (deleted.count === 0) {
