@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 type EventItem = {
   id: string;
@@ -44,6 +45,7 @@ export default function EventsPage() {
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -229,10 +231,6 @@ export default function EventsPage() {
   }
 
   async function handleDeleteEvent(eventId: string) {
-    if (!window.confirm("Are you sure you want to delete this event?")) {
-      return;
-    }
-
     try {
       setDeletingEventId(eventId);
       setError("");
@@ -255,14 +253,15 @@ export default function EventsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white px-6 py-10 text-black">
+    <>
+    <main className="min-h-screen px-6 py-10">
       <div className="mx-auto max-w-4xl">
         <h1 className="mb-2 text-4xl font-bold">Events</h1>
-        <p className="mb-8 text-gray-600">
+        <p className="mb-8 text-zinc-600 dark:text-zinc-300">
           Create and manage scheduled events for AI-Multi Task-Management.
         </p>
 
-        <section className="mb-10 rounded-2xl border border-gray-200 p-6 shadow-sm">
+        <section className="mb-10 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
           <h2 className="mb-4 text-2xl font-semibold">Create Event</h2>
 
           <form onSubmit={handleCreateEvent} className="space-y-4">
@@ -270,33 +269,33 @@ export default function EventsPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Event title"
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+              className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
             />
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Description (optional)"
               rows={4}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+              className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
             />
             <input
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               placeholder="Location (optional)"
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+              className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
             />
             <div className="grid gap-3 sm:grid-cols-2">
               <input
                 type="datetime-local"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                className="rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
               />
               <input
                 type="datetime-local"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
-                className="rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
               />
             </div>
             <button
@@ -314,16 +313,16 @@ export default function EventsPage() {
         <section>
           <h2 className="mb-4 text-2xl font-semibold">Your Events</h2>
           {fetching ? (
-            <p className="text-gray-600">Loading events...</p>
+            <p className="text-zinc-600 dark:text-zinc-300">Loading events...</p>
           ) : visibleEvents.length === 0 ? (
-            <p className="text-gray-600">No events yet.</p>
+            <p className="text-zinc-600 dark:text-zinc-300">No events yet.</p>
           ) : (
             <div className="space-y-6">
               {eventSections.map((section) => (
                 <div key={section.key}>
                   <h3 className="mb-3 text-lg font-semibold text-gray-800">{section.title}</h3>
                   {section.events.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-gray-200 px-4 py-3 text-sm text-gray-500">
+                    <p className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 px-4 py-3 text-sm text-gray-500">
                       No events in this section.
                     </p>
                   ) : (
@@ -341,7 +340,7 @@ export default function EventsPage() {
                   ? "border-emerald-200 bg-emerald-50"
                   : startsSoon
                     ? "border-blue-200 bg-blue-50"
-                    : "border-gray-200";
+                    : "border-zinc-200 dark:border-zinc-800";
 
                 return (
                   <article
@@ -353,31 +352,31 @@ export default function EventsPage() {
                         <input
                           value={editTitle}
                           onChange={(e) => setEditTitle(e.target.value)}
-                          className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-black"
+                          className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
                         />
                         <textarea
                           value={editDescription}
                           onChange={(e) => setEditDescription(e.target.value)}
                           rows={3}
-                          className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-black"
+                          className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
                         />
                         <input
                           value={editLocation}
                           onChange={(e) => setEditLocation(e.target.value)}
-                          className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-black"
+                          className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
                         />
                         <div className="grid gap-3 sm:grid-cols-2">
                           <input
                             type="datetime-local"
                             value={editStartTime}
                             onChange={(e) => setEditStartTime(e.target.value)}
-                            className="rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-black"
+                            className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
                           />
                           <input
                             type="datetime-local"
                             value={editEndTime}
                             onChange={(e) => setEditEndTime(e.target.value)}
-                            className="rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-black"
+                            className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
                           />
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -390,7 +389,7 @@ export default function EventsPage() {
                           </button>
                           <button
                             onClick={cancelEditing}
-                            className="rounded-xl border border-gray-300 px-4 py-2"
+                            className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2"
                           >
                             Cancel
                           </button>
@@ -414,7 +413,7 @@ export default function EventsPage() {
                           <p className="mt-2 text-gray-500">No description.</p>
                         )}
                         {event.location ? (
-                          <p className="mt-2 text-sm text-gray-600">Location: {event.location}</p>
+                          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">Location: {event.location}</p>
                         ) : (
                           <p className="mt-2 text-sm text-gray-500">No location set.</p>
                         )}
@@ -427,12 +426,12 @@ export default function EventsPage() {
                         <div className="mt-4 flex gap-2">
                           <button
                             onClick={() => startEditing(event)}
-                            className="rounded-xl border border-gray-300 px-4 py-2"
+                            className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2"
                           >
                             Edit
                           </button>
                           <button
-                            onClick={() => void handleDeleteEvent(event.id)}
+                            onClick={() => setConfirmDeleteId(event.id)}
                             disabled={isDeleting}
                             className="rounded-xl bg-red-600 px-4 py-2 text-white disabled:opacity-50"
                           >
@@ -453,5 +452,7 @@ export default function EventsPage() {
         </section>
       </div>
     </main>
+    <ConfirmDialog open={Boolean(confirmDeleteId)} title="Confirm delete" message="This will move the item to Trash." loading={Boolean(deletingEventId)} onCancel={() => setConfirmDeleteId(null)} onConfirm={() => { if (confirmDeleteId) void handleDeleteEvent(confirmDeleteId); setConfirmDeleteId(null); }} />
+    </>
   );
 }
