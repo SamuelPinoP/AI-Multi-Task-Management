@@ -36,3 +36,20 @@ export async function PATCH(req: Request) {
 
   return NextResponse.json({ message: "Item restored" }, { status: 200 });
 }
+
+
+export async function DELETE() {
+  const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL }, select: { id: true } });
+  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+  const [notes, tasks, events] = await Promise.all([
+    prisma.note.deleteMany({ where: { userId: user.id, deletedAt: { not: null } } }),
+    prisma.task.deleteMany({ where: { userId: user.id, deletedAt: { not: null } } }),
+    prisma.event.deleteMany({ where: { userId: user.id, deletedAt: { not: null } } }),
+  ]);
+
+  return NextResponse.json({
+    message: "Trash emptied",
+    deleted: { notes: notes.count, tasks: tasks.count, events: events.count },
+  }, { status: 200 });
+}

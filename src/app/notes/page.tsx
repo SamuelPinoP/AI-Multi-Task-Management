@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 type Note = {
   id: string;
@@ -22,6 +23,7 @@ export default function NotesPage() {
   const [editContent, setEditContent] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [error, setError] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   const visibleNotes = useMemo(() => {
@@ -172,11 +174,6 @@ export default function NotesPage() {
   }
 
   async function handleDelete(noteId: string) {
-    const confirmed = window.confirm("Are you sure you want to delete this note?");
-    if (!confirmed) {
-      return;
-    }
-
     try {
       setDeletingNoteId(noteId);
       setError("");
@@ -203,14 +200,15 @@ export default function NotesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white px-6 py-10 text-black">
+    <>
+    <main className="min-h-screen px-6 py-10">
       <div className="mx-auto max-w-4xl">
         <h1 className="mb-2 text-4xl font-bold">Notes</h1>
-        <p className="mb-8 text-gray-600">
+        <p className="mb-8 text-zinc-600 dark:text-zinc-300">
           Create and manage your notes for AI-Multi Task-Management.
         </p>
 
-        <section className="mb-10 rounded-2xl border border-gray-200 p-6 shadow-sm">
+        <section className="mb-10 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
           <h2 className="mb-4 text-2xl font-semibold">Create a Note</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -221,7 +219,7 @@ export default function NotesPage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Enter a note title"
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
               />
             </div>
 
@@ -232,7 +230,7 @@ export default function NotesPage() {
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Write your note here..."
                 rows={6}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
               />
             </div>
 
@@ -256,16 +254,16 @@ export default function NotesPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search notes by title or content..."
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+              className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
             />
           </div>
 
           {fetching ? (
-            <p className="text-gray-600">Loading notes...</p>
+            <p className="text-zinc-600 dark:text-zinc-300">Loading notes...</p>
           ) : notes.length === 0 ? (
-            <p className="text-gray-600">No notes yet.</p>
+            <p className="text-zinc-600 dark:text-zinc-300">No notes yet.</p>
           ) : visibleNotes.length === 0 ? (
-            <p className="text-gray-600">No notes match your search.</p>
+            <p className="text-zinc-600 dark:text-zinc-300">No notes match your search.</p>
           ) : (
             <div className="space-y-4">
               {visibleNotes.map((note) => {
@@ -275,7 +273,7 @@ export default function NotesPage() {
                 return (
                   <article
                     key={note.id}
-                    className="rounded-2xl border border-gray-200 p-5 shadow-sm"
+                    className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm"
                   >
                     {isEditing ? (
                       <div className="space-y-3">
@@ -283,14 +281,14 @@ export default function NotesPage() {
                           type="text"
                           value={editTitle}
                           onChange={(e) => setEditTitle(e.target.value)}
-                          className="w-full rounded-xl border border-gray-300 px-4 py-2 outline-none focus:border-black"
+                          className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2 outline-none focus:border-black"
                         />
                         <textarea
                           value={editContent}
                           onChange={(e) => setEditContent(e.target.value)}
                           rows={5}
                           placeholder="Content (optional)"
-                          className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                          className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
                         />
                         <div className="flex gap-2">
                           <button
@@ -305,7 +303,7 @@ export default function NotesPage() {
                             type="button"
                             onClick={cancelEditing}
                             disabled={savingEdit}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             Cancel
                           </button>
@@ -319,13 +317,13 @@ export default function NotesPage() {
                             <button
                               type="button"
                               onClick={() => startEditing(note)}
-                              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                              className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                             >
                               Edit
                             </button>
                             <button
                               type="button"
-                              onClick={() => void handleDelete(note.id)}
+                              onClick={() => setConfirmDeleteId(note.id)}
                               disabled={isDeleting}
                               className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                             >
@@ -352,5 +350,7 @@ export default function NotesPage() {
         </section>
       </div>
     </main>
+    <ConfirmDialog open={Boolean(confirmDeleteId)} title="Confirm delete" message="This will move the item to Trash." loading={Boolean(deletingNoteId)} onCancel={() => setConfirmDeleteId(null)} onConfirm={() => { if (confirmDeleteId) void handleDelete(confirmDeleteId); setConfirmDeleteId(null); }} />
+    </>
   );
 }
