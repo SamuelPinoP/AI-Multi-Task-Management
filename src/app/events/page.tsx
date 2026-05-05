@@ -25,6 +25,19 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
+function formatDayKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
 function getLocalDayStart(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
@@ -46,6 +59,11 @@ export default function EventsPage() {
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [selectedDayKey, setSelectedDayKey] = useState(() => formatDayKey(new Date()));
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -84,6 +102,60 @@ export default function EventsPage() {
       { key: "PAST", title: "Past", events: past },
     ] as const;
   }, [visibleEvents]);
+
+  const eventsByDay = useMemo(() => {
+    return visibleEvents.reduce<Record<string, EventItem[]>>((acc, event) => {
+      const key = formatDayKey(new Date(event.startTime));
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(event);
+      return acc;
+    }, {});
+  }, [visibleEvents]);
+
+  const calendarDays = useMemo(() => {
+    const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+    const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
+    const calendarStart = new Date(monthStart);
+    calendarStart.setDate(calendarStart.getDate() - monthStart.getDay());
+    const calendarEnd = new Date(monthEnd);
+    calendarEnd.setDate(calendarEnd.getDate() + (6 - monthEnd.getDay()));
+
+    const days: Date[] = [];
+    const cursor = new Date(calendarStart);
+    while (cursor <= calendarEnd) {
+      days.push(new Date(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return days;
+  }, [calendarMonth]);
+
+  const selectedDayEvents = useMemo(() => {
+    const eventsForDay = eventsByDay[selectedDayKey] ?? [];
+    return [...eventsForDay].sort(
+      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+    );
+  }, [eventsByDay, selectedDayKey]);
+
+  const selectedDayLabel = useMemo(() => {
+    const [year, month, day] = selectedDayKey.split("-").map(Number);
+    return new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(
+      new Date(year, month - 1, day)
+    );
+  }, [selectedDayKey]);
+
+  function goToPreviousMonth() {
+    setCalendarMonth(
+      (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
+    );
+  }
+
+  function goToNextMonth() {
+    setCalendarMonth(
+      (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
+    );
+  }
 
   async function fetchEvents(showLoading = true) {
     try {
@@ -308,6 +380,97 @@ export default function EventsPage() {
           </form>
 
           {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+        </section>
+
+        <section className="mb-10 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-2xl font-semibold">Calendar</h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={goToPreviousMonth}
+                className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm"
+              >
+                Previous
+              </button>
+              <p className="min-w-40 text-center text-sm font-medium">
+                {new Intl.DateTimeFormat("en-US", {
+                  month: "long",
+                  year: "numeric",
+                }).format(calendarMonth)}
+              </p>
+              <button
+                onClick={goToNextMonth}
+                className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-3 grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+              <span key={day}>{day}</span>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-2">
+            {calendarDays.map((day) => {
+              const dayKey = formatDayKey(day);
+              const eventCount = eventsByDay[dayKey]?.length ?? 0;
+              const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
+              const isSelected = dayKey === selectedDayKey;
+              const isToday = dayKey === formatDayKey(new Date());
+
+              return (
+                <button
+                  key={dayKey}
+                  onClick={() => setSelectedDayKey(dayKey)}
+                  className={`min-h-20 rounded-xl border p-2 text-left transition ${isSelected
+                    ? "border-black bg-zinc-100 dark:bg-zinc-800"
+                    : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"} ${!isCurrentMonth ? "opacity-50" : ""}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`text-sm ${isToday ? "font-bold text-blue-700" : ""}`}>
+                      {day.getDate()}
+                    </span>
+                    {eventCount > 0 && (
+                      <span className="rounded-full bg-black px-2 py-0.5 text-xs text-white">
+                        {eventCount}
+                      </span>
+                    )}
+                  </div>
+                  {eventCount > 0 && (
+                    <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">
+                      {eventCount === 1 ? "1 event" : `${eventCount} events`}
+                    </p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-6 rounded-xl border border-zinc-200 dark:border-zinc-700 p-4">
+            <h3 className="mb-3 text-lg font-semibold">Events on {selectedDayLabel}</h3>
+            {selectedDayEvents.length === 0 ? (
+              <p className="text-sm text-zinc-600 dark:text-zinc-300">No events for this day.</p>
+            ) : (
+              <ul className="space-y-3">
+                {selectedDayEvents.map((event) => (
+                  <li key={event.id} className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-3">
+                    <p className="font-medium">{event.title}</p>
+                    <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                      {formatTime(event.startTime)} - {formatTime(event.endTime)}
+                    </p>
+                    {event.location && (
+                      <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                        {event.location}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </section>
 
         <section>
