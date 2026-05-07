@@ -1,12 +1,8 @@
-import { Recurrence } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
 import { NextResponse } from "next/server";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
-
-function isValidRecurrence(value: unknown): value is Recurrence {
-  return typeof value === "string" && Object.values(Recurrence).includes(value as Recurrence);
-}
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -81,7 +77,7 @@ export async function PATCH(req: Request, context: RouteContext) {
         location: location || null,
         startTime,
         endTime,
-        recurrence: body.recurrence,
+        recurrence: normalizeRecurrence(body.recurrence),
       },
     });
 
@@ -90,7 +86,15 @@ export async function PATCH(req: Request, context: RouteContext) {
     }
 
     const event = await prisma.event.findUnique({ where: { id } });
-    return NextResponse.json(event, { status: 200 });
+    return NextResponse.json(
+      event
+        ? {
+            ...event,
+            recurrence: normalizeRecurrence(event.recurrence),
+          }
+        : null,
+      { status: 200 }
+    );
   } catch (error) {
     console.error("PATCH /api/events/[id] error:", error);
     return NextResponse.json({ error: "Failed to update event" }, { status: 500 });

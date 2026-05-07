@@ -1,12 +1,8 @@
-import { Recurrence } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
 import { NextResponse } from "next/server";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
-
-function isValidRecurrence(value: unknown): value is Recurrence {
-  return typeof value === "string" && Object.values(Recurrence).includes(value as Recurrence);
-}
 
 function parseDateTime(value: unknown, fieldName: string) {
   if (typeof value !== "string" || !value.trim()) {
@@ -37,7 +33,12 @@ export async function GET() {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    return NextResponse.json(user.events);
+    return NextResponse.json(
+      user.events.map((event) => ({
+        ...event,
+        recurrence: normalizeRecurrence(event.recurrence),
+      }))
+    );
   } catch (error) {
     console.error("GET /api/events error:", error);
     return NextResponse.json({ error: "Failed to fetch events" }, { status: 500 });
@@ -93,7 +94,7 @@ export async function POST(req: Request) {
         location: location || null,
         startTime,
         endTime,
-        recurrence: isValidRecurrence(body.recurrence) ? body.recurrence : Recurrence.NONE,
+        recurrence: normalizeRecurrence(body.recurrence),
         userId: user.id,
       },
     });
