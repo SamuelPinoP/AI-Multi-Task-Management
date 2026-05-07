@@ -1,134 +1,49 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
 import { NextResponse } from "next/server";
+import { Recurrence } from "@prisma/client";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
-
-type RouteContext = {
-  params: Promise<{ id: string }>;
-};
-
-function parseDateTime(value: unknown, fieldName: string) {
-  if (typeof value !== "string" || !value.trim()) {
-    return { error: `${fieldName} is required` };
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return { error: `Invalid ${fieldName.toLowerCase()}` };
-  }
-
-  return { value: parsed };
-}
+type RouteContext = { params: Promise<{ id: string }> };
+const parseDate = (v: unknown) => (typeof v === "string" && v.trim() ? new Date(v) : null);
 
 export async function PATCH(req: Request, context: RouteContext) {
-  try {
-    const { id } = await context.params;
+  const { id } = await context.params;
+  const body = await req.json();
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
+  if (!isValidRecurrence(body.recurrence)) return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
 
-    if (!id) {
-      return NextResponse.json({ error: "Event id is required" }, { status: 400 });
-    }
-
-    const body = await req.json();
-
-    const title = typeof body.title === "string" ? body.title.trim() : "";
-    if (!title) {
-      return NextResponse.json({ error: "Title is required" }, { status: 400 });
-    }
-
-    const startResult = parseDateTime(body.startTime, "Start time");
-    if (startResult.error) {
-      return NextResponse.json({ error: startResult.error }, { status: 400 });
-    }
-
-    const endResult = parseDateTime(body.endTime, "End time");
-    if (endResult.error) {
-      return NextResponse.json({ error: endResult.error }, { status: 400 });
-    }
-
-    const startTime = startResult.value as Date;
-    const endTime = endResult.value as Date;
-
-    if (endTime <= startTime) {
-      return NextResponse.json(
-        { error: "End time must be after start time" },
-        { status: 400 }
-      );
-    }
-
-    if (!isValidRecurrence(body.recurrence)) {
-      return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
-    }
-
-    const description = typeof body.description === "string" ? body.description.trim() : "";
-    const location = typeof body.location === "string" ? body.location.trim() : "";
-
-    const updated = await prisma.event.updateMany({
-      where: {
-        id,
-        deletedAt: null,
-        user: {
-          email: DEMO_USER_EMAIL,
-        },
-      },
-      data: {
-        title,
-        description: description || null,
-        location: location || null,
-        startTime,
-        endTime,
-        recurrence: normalizeRecurrence(body.recurrence),
-      },
-    });
-
-    if (updated.count === 0) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 });
-    }
-
-    const event = await prisma.event.findUnique({ where: { id } });
-    return NextResponse.json(
-      event
-        ? {
-            ...event,
-            recurrence: normalizeRecurrence(event.recurrence),
-          }
-        : null,
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("PATCH /api/events/[id] error:", error);
-    return NextResponse.json({ error: "Failed to update event" }, { status: 500 });
+  const recurrence = normalizeRecurrence(body.recurrence);
+  const startTime = parseDate(body.startTime);
+  const endTime = parseDate(body.endTime);
+  if (recurrence === Recurrence.NONE) {
+    if (!startTime || !endTime) return NextResponse.json({ error: "One-time events require start and end time" }, { status: 400 });
+    if (endTime <= startTime) return NextResponse.json({ error: "End time must be after start time" }, { status: 400 });
   }
+
+  const recurrenceAnchorDate = parseDate(body.recurrenceAnchorDate) ?? startTime;
+  if (recurrence !== Recurrence.NONE && !recurrenceAnchorDate) return NextResponse.json({ error: "Recurring events require an anchor date" }, { status: 400 });
+
+  const updated = await prisma.event.updateMany({ where: { id, deletedAt: null, user: { email: DEMO_USER_EMAIL } }, data: {
+    title,
+    description: typeof body.description === "string" && body.description.trim() ? body.description.trim() : null,
+    location: typeof body.location === "string" && body.location.trim() ? body.location.trim() : null,
+    startTime,
+    endTime,
+    recurrence,
+    recurrenceAnchorDate,
+    recurrenceWeekday: typeof body.recurrenceWeekday === 'number' ? body.recurrenceWeekday : null,
+    recurrenceMonthDay: typeof body.recurrenceMonthDay === 'number' ? body.recurrenceMonthDay : null,
+  } });
+  if (!updated.count) return NextResponse.json({ error: "Event not found" }, { status: 404 });
+  const event = await prisma.event.findUnique({ where: { id } });
+  return NextResponse.json(event ? { ...event, recurrence: normalizeRecurrence(event.recurrence) } : null);
 }
 
 export async function DELETE(_req: Request, context: RouteContext) {
-  try {
-    const { id } = await context.params;
-
-    if (!id) {
-      return NextResponse.json({ error: "Event id is required" }, { status: 400 });
-    }
-
-    const deleted = await prisma.event.updateMany({
-      where: {
-        id,
-        deletedAt: null,
-        user: {
-          email: DEMO_USER_EMAIL,
-        },
-      },
-      data: {
-        deletedAt: new Date(),
-      },
-    });
-
-    if (deleted.count === 0) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({ message: "Event moved to trash" }, { status: 200 });
-  } catch (error) {
-    console.error("DELETE /api/events/[id] error:", error);
-    return NextResponse.json({ error: "Failed to delete event" }, { status: 500 });
-  }
+  const { id } = await context.params;
+  const deleted = await prisma.event.updateMany({ where: { id, deletedAt: null, user: { email: DEMO_USER_EMAIL } }, data: { deletedAt: new Date() } });
+  if (!deleted.count) return NextResponse.json({ error: "Event not found" }, { status: 404 });
+  return NextResponse.json({ message: "Event moved to trash" });
 }

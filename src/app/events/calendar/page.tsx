@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { formatRecurrenceLabel, normalizeRecurrence } from "@/lib/recurrence";
+import { eventOccursOnDay, formatRecurrenceLabel, normalizeRecurrence } from "@/lib/recurrence";
 
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
@@ -11,9 +11,12 @@ type EventItem = {
   title: string;
   description: string | null;
   location: string | null;
-  startTime: string;
-  endTime: string;
+  startTime: string | null;
+  endTime: string | null;
   recurrence?: Recurrence | null;
+  recurrenceAnchorDate?: string | null;
+  recurrenceWeekday?: number | null;
+  recurrenceMonthDay?: number | null;
 };
 
 function formatDayKey(date: Date) {
@@ -23,7 +26,8 @@ function formatDayKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function formatTime(value: string) {
+function formatTime(value: string | null) {
+  if (!value) return "Time not specified";
   return new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(new Date(value));
 }
 
@@ -60,17 +64,6 @@ export default function EventsCalendarPage() {
     void loadEvents();
   }, []);
 
-  const eventsByDay = useMemo(() => {
-    return events.reduce<Record<string, EventItem[]>>((acc, event) => {
-      const key = formatDayKey(new Date(event.startTime));
-      if (!acc[key]) {
-        acc[key] = [];
-      }
-      acc[key].push(event);
-      return acc;
-    }, {});
-  }, [events]);
-
   const monthDays = useMemo(() => {
     const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
     const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0);
@@ -92,10 +85,20 @@ export default function EventsCalendarPage() {
     return days;
   }, [month]);
 
+  const eventsByDay = useMemo(() => {
+    const map: Record<string, EventItem[]> = {};
+    for (const day of monthDays) {
+      const key = formatDayKey(day);
+      const matches = events.filter((event) => eventOccursOnDay(event, day));
+      if (matches.length) map[key] = matches;
+    }
+    return map;
+  }, [events, monthDays]);
+
   const selectedDayEvents = useMemo(() => {
     const dayEvents = eventsByDay[selectedDayKey] ?? [];
     return [...dayEvents].sort(
-      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+      (a, b) => new Date(a.startTime ?? 0).getTime() - new Date(b.startTime ?? 0).getTime()
     );
   }, [eventsByDay, selectedDayKey]);
 
@@ -228,7 +231,7 @@ export default function EventsCalendarPage() {
                   >
                     <p className="font-medium">{event.title}</p>
                     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                      {formatTime(event.startTime)} - {formatTime(event.endTime)}
+                      {formatTime(event.startTime)}{event.endTime ? ` - ${formatTime(event.endTime)}` : ""}
                     </p>
                     {event.location && (
                       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{event.location}</p>

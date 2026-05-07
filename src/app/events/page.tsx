@@ -12,14 +12,18 @@ type EventItem = {
   title: string;
   description: string | null;
   location: string | null;
-  startTime: string;
-  endTime: string;
+  startTime: string | null;
+  endTime: string | null;
+  recurrenceAnchorDate?: string | null;
+  recurrenceWeekday?: number | null;
+  recurrenceMonthDay?: number | null;
   createdAt: string;
   updatedAt: string;
   recurrence?: Recurrence | null;
 };
 
-function toInputDateTime(value: string) {
+function toInputDateTime(value: string | null) {
+  if (!value) return "";
   return new Date(value).toISOString().slice(0, 16);
 }
 
@@ -37,7 +41,8 @@ function formatDayKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function formatTime(value: string) {
+function formatTime(value: string | null) {
+  if (!value) return "Time not specified";
   return new Intl.DateTimeFormat("en-US", {
     timeStyle: "short",
   }).format(new Date(value));
@@ -51,6 +56,7 @@ function isEventToday(event: EventItem, now: Date) {
   const todayStart = getLocalDayStart(now);
   const tomorrowStart = new Date(todayStart);
   tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  if (!event.startTime) return false;
   const eventStart = new Date(event.startTime);
   return eventStart >= todayStart && eventStart < tomorrowStart;
 }
@@ -86,7 +92,7 @@ export default function EventsPage() {
 
   const visibleEvents = useMemo(() => {
     return [...events].sort(
-      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+      (a, b) => new Date(a.startTime ?? 0).getTime() - new Date(b.startTime ?? 0).getTime()
     );
   }, [events]);
 
@@ -96,11 +102,12 @@ export default function EventsPage() {
 
     const today = visibleEvents.filter((event) => isEventToday(event, now));
     const upcoming = visibleEvents.filter((event) => {
+      if (!event.startTime) return false;
       const start = new Date(event.startTime);
       return start > now && start <= soonBoundary && !isEventToday(event, now);
     });
-    const later = visibleEvents.filter((event) => new Date(event.startTime) > soonBoundary);
-    const past = visibleEvents.filter((event) => new Date(event.endTime) < now);
+    const later = visibleEvents.filter((event) => event.startTime && new Date(event.startTime) > soonBoundary);
+    const past = visibleEvents.filter((event) => event.endTime && new Date(event.endTime) < now);
 
     return [
       { key: "TODAY", title: "Today", events: today },
@@ -112,6 +119,7 @@ export default function EventsPage() {
 
   const eventsByDay = useMemo(() => {
     return visibleEvents.reduce<Record<string, EventItem[]>>((acc, event) => {
+      if (!event.startTime) return acc;
       const key = formatDayKey(new Date(event.startTime));
       if (!acc[key]) {
         acc[key] = [];
@@ -141,7 +149,7 @@ export default function EventsPage() {
   const selectedDayEvents = useMemo(() => {
     const eventsForDay = eventsByDay[selectedDayKey] ?? [];
     return [...eventsForDay].sort(
-      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+      (a, b) => new Date(a.startTime ?? 0).getTime() - new Date(b.startTime ?? 0).getTime()
     );
   }, [eventsByDay, selectedDayKey]);
 
@@ -199,12 +207,12 @@ export default function EventsPage() {
       return;
     }
 
-    if (!startTime || !endTime) {
-      setError("Start time and end time are required.");
+    if (recurrence === "NONE" && (!startTime || !endTime)) {
+      setError("One-time events require start and end time.");
       return;
     }
 
-    if (new Date(endTime) <= new Date(startTime)) {
+    if (startTime && endTime && new Date(endTime) <= new Date(startTime)) {
       setError("End time must be after start time.");
       return;
     }
@@ -220,9 +228,10 @@ export default function EventsPage() {
           title,
           description,
           location,
-          startTime,
-          endTime,
+          startTime: startTime || null,
+          endTime: endTime || null,
           recurrence,
+          recurrenceAnchorDate: startTime || null,
         }),
       });
 
@@ -272,12 +281,12 @@ export default function EventsPage() {
       return;
     }
 
-    if (!editStartTime || !editEndTime) {
-      setError("Start time and end time are required.");
+    if (editRecurrence === "NONE" && (!editStartTime || !editEndTime)) {
+      setError("One-time events require start and end time.");
       return;
     }
 
-    if (new Date(editEndTime) <= new Date(editStartTime)) {
+    if (editStartTime && editEndTime && new Date(editEndTime) <= new Date(editStartTime)) {
       setError("End time must be after start time.");
       return;
     }
@@ -293,9 +302,10 @@ export default function EventsPage() {
           title: editTitle,
           description: editDescription,
           location: editLocation,
-          startTime: editStartTime,
-          endTime: editEndTime,
+          startTime: editStartTime || null,
+          endTime: editEndTime || null,
           recurrence: editRecurrence,
+          recurrenceAnchorDate: editStartTime || null,
         }),
       });
 
