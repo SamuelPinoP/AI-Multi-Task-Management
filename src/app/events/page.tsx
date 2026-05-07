@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { formatRecurrenceLabel, normalizeRecurrence } from "@/lib/recurrence";
 
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
@@ -15,7 +16,7 @@ type EventItem = {
   endTime: string;
   createdAt: string;
   updatedAt: string;
-  recurrence: Recurrence;
+  recurrence?: Recurrence | null;
 };
 
 function toInputDateTime(value: string) {
@@ -40,12 +41,6 @@ function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-function formatRecurrenceLabel(recurrence: Recurrence) {
-  if (recurrence === "NONE") return "No";
-  if (recurrence === "BIWEEKLY") return "every 2 weeks";
-  return recurrence.toLowerCase();
 }
 
 function getLocalDayStart(date: Date) {
@@ -180,7 +175,7 @@ export default function EventsPage() {
       }
 
       const data = (await res.json()) as EventItem[];
-      setEvents(data);
+      setEvents(data.map((event) => ({ ...event, recurrence: normalizeRecurrence(event.recurrence) })));
     } catch {
       setError("Could not load events.");
     } finally {
@@ -257,7 +252,7 @@ export default function EventsPage() {
     setEditLocation(event.location ?? "");
     setEditStartTime(toInputDateTime(event.startTime));
     setEditEndTime(toInputDateTime(event.endTime));
-    setEditRecurrence(event.recurrence);
+    setEditRecurrence(normalizeRecurrence(event.recurrence));
     setError("");
   }
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { formatRecurrenceLabel, normalizeRecurrence } from "@/lib/recurrence";
 
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
@@ -12,7 +13,7 @@ type EventItem = {
   location: string | null;
   startTime: string;
   endTime: string;
-  recurrence: Recurrence;
+  recurrence?: Recurrence | null;
 };
 
 function formatDayKey(date: Date) {
@@ -24,12 +25,6 @@ function formatDayKey(date: Date) {
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(new Date(value));
-}
-
-function formatRecurrenceLabel(recurrence: Recurrence) {
-  if (recurrence === "NONE") return "No";
-  if (recurrence === "BIWEEKLY") return "every 2 weeks";
-  return recurrence.toLowerCase();
 }
 
 export default function EventsCalendarPage() {
@@ -54,7 +49,7 @@ export default function EventsCalendarPage() {
         }
 
         const data = (await response.json()) as EventItem[];
-        setEvents(data);
+        setEvents(data.map((event) => ({ ...event, recurrence: normalizeRecurrence(event.recurrence) })));
       } catch {
         setError("Could not load events for the calendar.");
       } finally {
