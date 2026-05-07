@@ -24,3 +24,61 @@ export function formatRecurrenceLabel(value: unknown) {
   if (recurrence === Recurrence.BIWEEKLY) return "every 2 weeks";
   return recurrence.toLowerCase();
 }
+
+export type RecurringEventBase = {
+  id: string;
+  startTime: string;
+  endTime: string;
+  recurrence?: Recurrence | null;
+};
+
+function isSameOrBefore(a: Date, b: Date) {
+  return a.getTime() <= b.getTime();
+}
+
+function addByRecurrence(date: Date, recurrence: Recurrence) {
+  const next = new Date(date);
+  if (recurrence === Recurrence.DAILY) next.setDate(next.getDate() + 1);
+  if (recurrence === Recurrence.WEEKLY) next.setDate(next.getDate() + 7);
+  if (recurrence === Recurrence.BIWEEKLY) next.setDate(next.getDate() + 14);
+  if (recurrence === Recurrence.MONTHLY) next.setMonth(next.getMonth() + 1);
+  return next;
+}
+
+export function expandRecurringEventsForRange<T extends RecurringEventBase>(
+  events: T[],
+  rangeStart: Date,
+  rangeEnd: Date
+): T[] {
+  return events.flatMap((event) => {
+    const recurrence = normalizeRecurrence(event.recurrence);
+    if (recurrence === Recurrence.NONE) {
+      const eventStart = new Date(event.startTime);
+      if (eventStart < rangeStart || eventStart > rangeEnd) return [];
+      return [event];
+    }
+
+    const baseStart = new Date(event.startTime);
+    const baseEnd = new Date(event.endTime);
+    const durationMs = baseEnd.getTime() - baseStart.getTime();
+    let occurrenceStart = new Date(baseStart);
+    const expanded: T[] = [];
+
+    while (isSameOrBefore(occurrenceStart, rangeEnd)) {
+      if (occurrenceStart >= rangeStart) {
+        const occurrenceEnd = new Date(occurrenceStart.getTime() + durationMs);
+        expanded.push({
+          ...event,
+          id: `${event.id}-${occurrenceStart.toISOString()}`,
+          startTime: occurrenceStart.toISOString(),
+          endTime: occurrenceEnd.toISOString(),
+        });
+      }
+
+      occurrenceStart = addByRecurrence(occurrenceStart, recurrence);
+      if (occurrenceStart.getTime() === baseStart.getTime()) break;
+    }
+
+    return expanded;
+  });
+}
