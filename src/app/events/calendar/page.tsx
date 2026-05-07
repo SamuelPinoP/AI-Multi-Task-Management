@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
+
 type EventItem = {
   id: string;
   title: string;
@@ -10,6 +12,7 @@ type EventItem = {
   location: string | null;
   startTime: string;
   endTime: string;
+  recurrence: Recurrence;
 };
 
 function formatDayKey(date: Date) {
@@ -229,6 +232,9 @@ export default function EventsCalendarPage() {
                     {event.location && (
                       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{event.location}</p>
                     )}
+                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                      Repeats: {event.recurrence === "NONE" ? "No" : event.recurrence.toLowerCase()}
+                    </p>
                     {event.description && (
                       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
                         {event.description}
