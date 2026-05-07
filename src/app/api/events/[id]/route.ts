@@ -1,7 +1,12 @@
+import { Recurrence } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
+
+function isValidRecurrence(value: unknown): value is Recurrence {
+  return typeof value === "string" && Object.values(Recurrence).includes(value as Recurrence);
+}
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -55,6 +60,10 @@ export async function PATCH(req: Request, context: RouteContext) {
       );
     }
 
+    if (!isValidRecurrence(body.recurrence)) {
+      return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
+    }
+
     const description = typeof body.description === "string" ? body.description.trim() : "";
     const location = typeof body.location === "string" ? body.location.trim() : "";
 
@@ -72,6 +81,7 @@ export async function PATCH(req: Request, context: RouteContext) {
         location: location || null,
         startTime,
         endTime,
+        recurrence: body.recurrence,
       },
     });
 

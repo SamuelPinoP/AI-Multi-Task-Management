@@ -1,7 +1,12 @@
+import { Recurrence } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
+
+function isValidRecurrence(value: unknown): value is Recurrence {
+  return typeof value === "string" && Object.values(Recurrence).includes(value as Recurrence);
+}
 
 function parseDateTime(value: unknown, fieldName: string) {
   if (typeof value !== "string" || !value.trim()) {
@@ -74,6 +79,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    if (body.recurrence && !isValidRecurrence(body.recurrence)) {
+      return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
+    }
+
     const description = typeof body.description === "string" ? body.description.trim() : "";
     const location = typeof body.location === "string" ? body.location.trim() : "";
 
@@ -84,6 +93,7 @@ export async function POST(req: Request) {
         location: location || null,
         startTime,
         endTime,
+        recurrence: isValidRecurrence(body.recurrence) ? body.recurrence : Recurrence.NONE,
         userId: user.id,
       },
     });

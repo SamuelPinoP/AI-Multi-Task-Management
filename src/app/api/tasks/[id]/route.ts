@@ -1,4 +1,4 @@
-import { Priority, TaskStatus } from "@prisma/client";
+import { Priority, Recurrence, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -14,6 +14,10 @@ function isValidStatus(value: unknown): value is TaskStatus {
 
 function isValidPriority(value: unknown): value is Priority {
   return typeof value === "string" && Object.values(Priority).includes(value as Priority);
+}
+
+function isValidRecurrence(value: unknown): value is Recurrence {
+  return typeof value === "string" && Object.values(Recurrence).includes(value as Recurrence);
 }
 
 export async function PATCH(req: Request, context: RouteContext) {
@@ -37,6 +41,10 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     if (!isValidPriority(body.priority)) {
       return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
+    }
+
+    if (!isValidRecurrence(body.recurrence)) {
+      return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
     }
 
     let dueDate: Date | null = null;
@@ -65,6 +73,7 @@ export async function PATCH(req: Request, context: RouteContext) {
         priority: body.priority,
         dueDate,
         completedAt: body.status === TaskStatus.DONE ? new Date() : null,
+        recurrence: body.recurrence,
       },
     });
 

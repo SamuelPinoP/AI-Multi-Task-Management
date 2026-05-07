@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
+type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+
 type EventItem = {
   id: string;
   title: string;
@@ -13,6 +15,7 @@ type EventItem = {
   endTime: string;
   createdAt: string;
   updatedAt: string;
+  recurrence: Recurrence;
 };
 
 function toInputDateTime(value: string) {
@@ -37,6 +40,12 @@ function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formatRecurrenceLabel(recurrence: Recurrence) {
+  if (recurrence === "NONE") return "No";
+  if (recurrence === "BIWEEKLY") return "every 2 weeks";
+  return recurrence.toLowerCase();
 }
 
 function getLocalDayStart(date: Date) {
@@ -71,12 +80,14 @@ export default function EventsPage() {
   const [location, setLocation] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [recurrence, setRecurrence] = useState<Recurrence>("NONE");
 
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editLocation, setEditLocation] = useState("");
   const [editStartTime, setEditStartTime] = useState("");
   const [editEndTime, setEditEndTime] = useState("");
+  const [editRecurrence, setEditRecurrence] = useState<Recurrence>("NONE");
 
   const visibleEvents = useMemo(() => {
     return [...events].sort(
@@ -216,6 +227,7 @@ export default function EventsPage() {
           location,
           startTime,
           endTime,
+          recurrence,
         }),
       });
 
@@ -229,6 +241,7 @@ export default function EventsPage() {
       setLocation("");
       setStartTime("");
       setEndTime("");
+      setRecurrence("NONE");
       await fetchEvents(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create event.");
@@ -244,6 +257,7 @@ export default function EventsPage() {
     setEditLocation(event.location ?? "");
     setEditStartTime(toInputDateTime(event.startTime));
     setEditEndTime(toInputDateTime(event.endTime));
+    setEditRecurrence(event.recurrence);
     setError("");
   }
 
@@ -254,6 +268,7 @@ export default function EventsPage() {
     setEditLocation("");
     setEditStartTime("");
     setEditEndTime("");
+    setEditRecurrence("NONE");
   }
 
   async function handleSaveEdit(eventId: string) {
@@ -285,6 +300,7 @@ export default function EventsPage() {
           location: editLocation,
           startTime: editStartTime,
           endTime: editEndTime,
+          recurrence: editRecurrence,
         }),
       });
 
@@ -396,6 +412,17 @@ export default function EventsPage() {
                 className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
               />
             </div>
+            <select
+              value={recurrence}
+              onChange={(e) => setRecurrence(e.target.value as Recurrence)}
+              className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
+            >
+              <option value="NONE">Does not repeat</option>
+              <option value="DAILY">Daily</option>
+              <option value="WEEKLY">Weekly</option>
+              <option value="BIWEEKLY">Every 2 weeks</option>
+              <option value="MONTHLY">Monthly</option>
+            </select>
             <button
               type="submit"
               disabled={loading}
@@ -568,6 +595,17 @@ export default function EventsPage() {
                             className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
                           />
                         </div>
+                        <select
+                          value={editRecurrence}
+                          onChange={(e) => setEditRecurrence(e.target.value as Recurrence)}
+                          className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
+                        >
+                          <option value="NONE">Does not repeat</option>
+                          <option value="DAILY">Daily</option>
+                          <option value="WEEKLY">Weekly</option>
+                          <option value="BIWEEKLY">Every 2 weeks</option>
+                          <option value="MONTHLY">Monthly</option>
+                        </select>
                         <div className="flex flex-wrap gap-2">
                           <button
                             onClick={() => void handleSaveEdit(event.id)}
@@ -588,13 +626,20 @@ export default function EventsPage() {
                       <>
                         <div className="flex items-start justify-between gap-3">
                           <h3 className="text-xl font-semibold">{event.title}</h3>
-                          {badgeText && (
-                            <span
-                              className={`rounded-full border border-current px-2.5 py-1 text-xs font-medium ${badgeStyles}`}
-                            >
-                              {badgeText}
-                            </span>
-                          )}
+                          <div className="flex flex-wrap items-center gap-2">
+                            {event.recurrence !== "NONE" && (
+                              <span className="rounded-full border border-violet-500 px-2.5 py-1 text-xs font-medium text-violet-700">
+                                Repeats {formatRecurrenceLabel(event.recurrence)}
+                              </span>
+                            )}
+                            {badgeText && (
+                              <span
+                                className={`rounded-full border border-current px-2.5 py-1 text-xs font-medium ${badgeStyles}`}
+                              >
+                                {badgeText}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         {event.description ? (
                           <p className="mt-2 text-gray-700">{event.description}</p>
@@ -611,6 +656,9 @@ export default function EventsPage() {
                         </p>
                         <p className="mt-1 text-sm text-gray-700">
                           End: {formatDateTime(event.endTime)}
+                        </p>
+                        <p className="mt-1 text-sm text-gray-700">
+                          Repeats: {formatRecurrenceLabel(event.recurrence)}
                         </p>
                         <div className="mt-4 flex gap-2">
                           <button
