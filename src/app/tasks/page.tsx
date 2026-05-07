@@ -5,7 +5,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
-type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
+type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 type TaskFilter = "ALL" | "ACTIVE" | "COMPLETED";
 type SortOption = "NEWEST" | "OLDEST" | "DUE_DATE_ASC" | "DUE_DATE_DESC";
 
@@ -38,6 +38,12 @@ function getTaskUrgency(task: Task): TaskUrgency {
   if (dayDiff === 0) return "DUE_TODAY";
   if (dayDiff <= 3) return "DUE_SOON";
   return "NONE";
+}
+
+function formatRecurrenceLabel(recurrence: Recurrence) {
+  if (recurrence === "NONE") return "No";
+  if (recurrence === "BIWEEKLY") return "every 2 weeks";
+  return recurrence.toLowerCase();
 }
 
 export default function TasksPage() {
@@ -339,7 +345,7 @@ export default function TasksPage() {
               </select>
               <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
               <select value={recurrence} onChange={(e) => setRecurrence(e.target.value as Recurrence)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black">
-                <option value="NONE">Does not repeat</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option>
+                <option value="NONE">Does not repeat</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="BIWEEKLY">Every 2 weeks</option><option value="MONTHLY">Monthly</option>
               </select>
             </div>
             <button type="submit" disabled={loading} className="rounded-xl bg-black px-5 py-3 text-white transition hover:opacity-90 disabled:opacity-50">{loading ? "Creating..." : "Create Task"}</button>
@@ -428,7 +434,7 @@ export default function TasksPage() {
                           <select value={editStatus} onChange={(e) => setEditStatus(e.target.value as TaskStatus)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="TODO">To Do</option><option value="IN_PROGRESS">In Progress</option><option value="DONE">Done</option></select>
                           <select value={editPriority} onChange={(e) => setEditPriority(e.target.value as Priority)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select>
                           <input type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
-                          <select value={editRecurrence} onChange={(e) => setEditRecurrence(e.target.value as Recurrence)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="NONE">Does not repeat</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option></select>
+                          <select value={editRecurrence} onChange={(e) => setEditRecurrence(e.target.value as Recurrence)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="NONE">Does not repeat</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="BIWEEKLY">Every 2 weeks</option><option value="MONTHLY">Monthly</option></select>
                         </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => void handleSaveEdit(task.id)} disabled={savingEdit} className="rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60">{savingEdit ? "Saving..." : "Save"}</button>
@@ -440,7 +446,7 @@ export default function TasksPage() {
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <h3 className="text-xl font-semibold">{task.title}</h3>
-                            {task.recurrence !== "NONE" && (<span className="mt-2 mr-2 inline-block rounded-full border border-violet-500 px-2.5 py-1 text-xs font-medium text-violet-700">Repeats {task.recurrence.toLowerCase()}</span>)}
+                            {task.recurrence !== "NONE" && (<span className="mt-2 mr-2 inline-block rounded-full border border-violet-500 px-2.5 py-1 text-xs font-medium text-violet-700">Repeats {formatRecurrenceLabel(task.recurrence)}</span>)}
                             {urgencyLabel && (
                               <span
                                 className={`mt-2 inline-block rounded-full border border-current px-2.5 py-1 text-xs font-medium ${urgencyLabelStyles}`}
@@ -460,7 +466,7 @@ export default function TasksPage() {
                           <span>Status: <strong>{task.status}</strong></span>
                           <span>Priority: <strong>{task.priority}</strong></span>
                           <span>Due: <strong>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}</strong></span>
-                          <span>Repeats: <strong>{task.recurrence === "NONE" ? "No" : task.recurrence.toLowerCase()}</strong></span>
+                          <span>Repeats: <strong>{formatRecurrenceLabel(task.recurrence)}</strong></span>
                         </div>
                       </>
                     )}

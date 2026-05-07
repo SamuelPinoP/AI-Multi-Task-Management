@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
+type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
 type EventItem = {
   id: string;
@@ -24,6 +24,12 @@ function formatDayKey(date: Date) {
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(new Date(value));
+}
+
+function formatRecurrenceLabel(recurrence: Recurrence) {
+  if (recurrence === "NONE") return "No";
+  if (recurrence === "BIWEEKLY") return "every 2 weeks";
+  return recurrence.toLowerCase();
 }
 
 export default function EventsCalendarPage() {
@@ -233,7 +239,7 @@ export default function EventsCalendarPage() {
                       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{event.location}</p>
                     )}
                     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                      Repeats: {event.recurrence === "NONE" ? "No" : event.recurrence.toLowerCase()}
+                      Repeats: {formatRecurrenceLabel(event.recurrence)}
                     </p>
                     {event.description && (
                       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">

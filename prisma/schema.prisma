@@ -104,5 +104,6 @@ enum Recurrence {
   NONE
   DAILY
   WEEKLY
+  BIWEEKLY
   MONTHLY
 }

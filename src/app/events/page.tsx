@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
-type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
+type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
 type EventItem = {
   id: string;
@@ -40,6 +40,12 @@ function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formatRecurrenceLabel(recurrence: Recurrence) {
+  if (recurrence === "NONE") return "No";
+  if (recurrence === "BIWEEKLY") return "every 2 weeks";
+  return recurrence.toLowerCase();
 }
 
 function getLocalDayStart(date: Date) {
@@ -414,6 +420,7 @@ export default function EventsPage() {
               <option value="NONE">Does not repeat</option>
               <option value="DAILY">Daily</option>
               <option value="WEEKLY">Weekly</option>
+              <option value="BIWEEKLY">Every 2 weeks</option>
               <option value="MONTHLY">Monthly</option>
             </select>
             <button
@@ -596,6 +603,7 @@ export default function EventsPage() {
                           <option value="NONE">Does not repeat</option>
                           <option value="DAILY">Daily</option>
                           <option value="WEEKLY">Weekly</option>
+                          <option value="BIWEEKLY">Every 2 weeks</option>
                           <option value="MONTHLY">Monthly</option>
                         </select>
                         <div className="flex flex-wrap gap-2">
@@ -621,7 +629,7 @@ export default function EventsPage() {
                           <div className="flex flex-wrap items-center gap-2">
                             {event.recurrence !== "NONE" && (
                               <span className="rounded-full border border-violet-500 px-2.5 py-1 text-xs font-medium text-violet-700">
-                                Repeats {event.recurrence.toLowerCase()}
+                                Repeats {formatRecurrenceLabel(event.recurrence)}
                               </span>
                             )}
                             {badgeText && (
@@ -650,7 +658,7 @@ export default function EventsPage() {
                           End: {formatDateTime(event.endTime)}
                         </p>
                         <p className="mt-1 text-sm text-gray-700">
-                          Repeats: {event.recurrence === "NONE" ? "No" : event.recurrence.toLowerCase()}
+                          Repeats: {formatRecurrenceLabel(event.recurrence)}
                         </p>
                         <div className="mt-4 flex gap-2">
                           <button
