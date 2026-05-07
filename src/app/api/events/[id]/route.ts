@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
+import { normalizeRecurrence, isValidEventRecurrence } from "@/lib/recurrence";
 import { NextResponse } from "next/server";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
@@ -56,7 +56,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       );
     }
 
-    if (!isValidRecurrence(body.recurrence)) {
+    if (!isValidEventRecurrence(body.recurrence)) {
       return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
     }
 

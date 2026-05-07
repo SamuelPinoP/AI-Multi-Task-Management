@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { formatRecurrenceLabel, normalizeRecurrence } from "@/lib/recurrence";
 
-type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
 
 type EventItem = {
   id: string;
@@ -415,7 +415,7 @@ export default function EventsPage() {
               <option value="NONE">Does not repeat</option>
               <option value="DAILY">Daily</option>
               <option value="WEEKLY">Weekly</option>
-              <option value="BIWEEKLY">Every 2 weeks</option>
+              
               <option value="MONTHLY">Monthly</option>
             </select>
             <button
@@ -598,7 +598,7 @@ export default function EventsPage() {
                           <option value="NONE">Does not repeat</option>
                           <option value="DAILY">Daily</option>
                           <option value="WEEKLY">Weekly</option>
-                          <option value="BIWEEKLY">Every 2 weeks</option>
+                          
                           <option value="MONTHLY">Monthly</option>
                         </select>
                         <div className="flex flex-wrap gap-2">

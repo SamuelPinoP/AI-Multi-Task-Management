@@ -24,3 +24,13 @@ export function formatRecurrenceLabel(value: unknown) {
   if (recurrence === Recurrence.BIWEEKLY) return "every 2 weeks";
   return recurrence.toLowerCase();
 }
+
+export const EVENT_RECURRENCE_VALUES = ["NONE", "DAILY", "WEEKLY", "MONTHLY"] as const;
+export type EventRecurrenceValue = (typeof EVENT_RECURRENCE_VALUES)[number];
+
+export function isValidEventRecurrence(value: unknown): value is EventRecurrenceValue {
+  return (
+    typeof value === "string" &&
+    EVENT_RECURRENCE_VALUES.includes(value as EventRecurrenceValue)
+  );
+}

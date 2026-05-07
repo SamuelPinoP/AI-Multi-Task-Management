@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
+import { normalizeRecurrence, isValidEventRecurrence } from "@/lib/recurrence";
 import { NextResponse } from "next/server";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    if (body.recurrence && !isValidRecurrence(body.recurrence)) {
+    if (body.recurrence && !isValidEventRecurrence(body.recurrence)) {
       return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
     }
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { formatRecurrenceLabel, normalizeRecurrence } from "@/lib/recurrence";
 
-type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
 
 type EventItem = {
   id: string;
@@ -14,6 +14,10 @@ type EventItem = {
   startTime: string;
   endTime: string;
   recurrence?: Recurrence | null;
+};
+
+type CalendarEventOccurrence = EventItem & {
+  occurrenceId: string;
 };
 
 function formatDayKey(date: Date) {
@@ -60,17 +64,6 @@ export default function EventsCalendarPage() {
     void loadEvents();
   }, []);
 
-  const eventsByDay = useMemo(() => {
-    return events.reduce<Record<string, EventItem[]>>((acc, event) => {
-      const key = formatDayKey(new Date(event.startTime));
-      if (!acc[key]) {
-        acc[key] = [];
-      }
-      acc[key].push(event);
-      return acc;
-    }, {});
-  }, [events]);
-
   const monthDays = useMemo(() => {
     const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
     const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0);
@@ -91,6 +84,65 @@ export default function EventsCalendarPage() {
 
     return days;
   }, [month]);
+
+  const eventsByDay = useMemo(() => {
+    if (monthDays.length === 0) return {};
+
+    const rangeStart = monthDays[0];
+    const rangeEnd = monthDays[monthDays.length - 1];
+    const daysMap: Record<string, CalendarEventOccurrence[]> = {};
+
+    function pushOccurrence(baseEvent: EventItem, occurrenceStart: Date) {
+      const duration = new Date(baseEvent.endTime).getTime() - new Date(baseEvent.startTime).getTime();
+      const occurrenceEnd = new Date(occurrenceStart.getTime() + duration);
+      const key = formatDayKey(occurrenceStart);
+
+      if (!daysMap[key]) daysMap[key] = [];
+      daysMap[key].push({
+        ...baseEvent,
+        occurrenceId: `${baseEvent.id}_${occurrenceStart.toISOString()}`,
+        startTime: occurrenceStart.toISOString(),
+        endTime: occurrenceEnd.toISOString(),
+      });
+    }
+
+    function addMonths(date: Date, count: number) {
+      const result = new Date(date);
+      const originalDay = result.getDate();
+      result.setDate(1);
+      result.setMonth(result.getMonth() + count);
+      const maxDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+      result.setDate(Math.min(originalDay, maxDay));
+      return result;
+    }
+
+    for (const event of events) {
+      const baseStart = new Date(event.startTime);
+      if (event.recurrence === "NONE") {
+        if (baseStart >= rangeStart && baseStart <= rangeEnd) {
+          pushOccurrence(event, baseStart);
+        }
+        continue;
+      }
+
+      const cursor = new Date(baseStart);
+      while (cursor <= rangeEnd) {
+        if (cursor >= rangeStart) {
+          pushOccurrence(event, new Date(cursor));
+        }
+        if (event.recurrence === "DAILY") {
+          cursor.setDate(cursor.getDate() + 1);
+        } else if (event.recurrence === "WEEKLY") {
+          cursor.setDate(cursor.getDate() + 7);
+        } else if (event.recurrence === "MONTHLY") {
+          const next = addMonths(cursor, 1);
+          cursor.setTime(next.getTime());
+        }
+      }
+    }
+
+    return daysMap;
+  }, [events, monthDays]);
 
   const selectedDayEvents = useMemo(() => {
     const dayEvents = eventsByDay[selectedDayKey] ?? [];
@@ -195,7 +247,7 @@ export default function EventsCalendarPage() {
                         <div className="mt-2 space-y-1">
                           {(eventsByDay[dayKey] ?? []).slice(0, 2).map((event) => (
                             <p
-                              key={event.id}
+                              key={event.occurrenceId}
                               className="truncate rounded bg-zinc-200/70 px-1.5 py-0.5 text-xs text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100"
                             >
                               {formatTime(event.startTime)} {event.title}
@@ -223,7 +275,7 @@ export default function EventsCalendarPage() {
               <div className="mt-4 space-y-3">
                 {selectedDayEvents.map((event) => (
                   <article
-                    key={event.id}
+                    key={event.occurrenceId}
                     className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700"
                   >
                     <p className="font-medium">{event.title}</p>
