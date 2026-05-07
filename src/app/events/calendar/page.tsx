@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { formatRecurrenceLabel, normalizeRecurrence } from "@/lib/recurrence";
+import {
+  expandRecurringEventsForRange,
+  formatRecurrenceLabel,
+  normalizeRecurrence,
+} from "@/lib/recurrence";
 
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
@@ -60,17 +64,6 @@ export default function EventsCalendarPage() {
     void loadEvents();
   }, []);
 
-  const eventsByDay = useMemo(() => {
-    return events.reduce<Record<string, EventItem[]>>((acc, event) => {
-      const key = formatDayKey(new Date(event.startTime));
-      if (!acc[key]) {
-        acc[key] = [];
-      }
-      acc[key].push(event);
-      return acc;
-    }, {});
-  }, [events]);
-
   const monthDays = useMemo(() => {
     const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
     const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0);
@@ -91,6 +84,31 @@ export default function EventsCalendarPage() {
 
     return days;
   }, [month]);
+
+  const visibleRange = useMemo(() => {
+    const start = new Date(monthDays[0]);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(monthDays[monthDays.length - 1]);
+    end.setHours(23, 59, 59, 999);
+
+    return { start, end };
+  }, [monthDays]);
+
+  const expandedEvents = useMemo(() => {
+    return expandRecurringEventsForRange(events, visibleRange.start, visibleRange.end);
+  }, [events, visibleRange]);
+
+  const eventsByDay = useMemo(() => {
+    return expandedEvents.reduce<Record<string, EventItem[]>>((acc, event) => {
+      const key = formatDayKey(new Date(event.startTime));
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(event);
+      return acc;
+    }, {});
+  }, [expandedEvents]);
 
   const selectedDayEvents = useMemo(() => {
     const dayEvents = eventsByDay[selectedDayKey] ?? [];
