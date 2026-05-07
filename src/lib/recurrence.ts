@@ -38,10 +38,10 @@ function isSameOrBefore(a: Date, b: Date) {
 
 function addByRecurrence(date: Date, recurrence: Recurrence) {
   const next = new Date(date);
-  if (recurrence === Recurrence.DAILY) next.setDate(next.getDate() + 1);
-  if (recurrence === Recurrence.WEEKLY) next.setDate(next.getDate() + 7);
-  if (recurrence === Recurrence.BIWEEKLY) next.setDate(next.getDate() + 14);
-  if (recurrence === Recurrence.MONTHLY) next.setMonth(next.getMonth() + 1);
+  if (recurrence === Recurrence.DAILY) next.setUTCDate(next.getUTCDate() + 1);
+  if (recurrence === Recurrence.WEEKLY) next.setUTCDate(next.getUTCDate() + 7);
+  if (recurrence === Recurrence.BIWEEKLY) next.setUTCDate(next.getUTCDate() + 14);
+  if (recurrence === Recurrence.MONTHLY) next.setUTCMonth(next.getUTCMonth() + 1);
   return next;
 }
 
@@ -64,7 +64,12 @@ export function expandRecurringEventsForRange<T extends RecurringEventBase>(
     let occurrenceStart = new Date(baseStart);
     const expanded: T[] = [];
 
+    let safetyCounter = 0;
+
     while (isSameOrBefore(occurrenceStart, rangeEnd)) {
+      safetyCounter += 1;
+      if (safetyCounter > 1000) break;
+
       if (occurrenceStart >= rangeStart) {
         const occurrenceEnd = new Date(occurrenceStart.getTime() + durationMs);
         expanded.push({
@@ -76,7 +81,6 @@ export function expandRecurringEventsForRange<T extends RecurringEventBase>(
       }
 
       occurrenceStart = addByRecurrence(occurrenceStart, recurrence);
-      if (occurrenceStart.getTime() === baseStart.getTime()) break;
     }
 
     return expanded;

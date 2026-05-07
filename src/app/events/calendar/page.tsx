@@ -86,8 +86,12 @@ export default function EventsCalendarPage() {
   }, [month]);
 
   const visibleRange = useMemo(() => {
-    const start = monthDays[0];
-    const end = monthDays[monthDays.length - 1];
+    const start = new Date(monthDays[0]);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(monthDays[monthDays.length - 1]);
+    end.setHours(23, 59, 59, 999);
+
     return { start, end };
   }, [monthDays]);
 
