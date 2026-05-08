@@ -272,7 +272,17 @@ export default function EventsCalendarPage() {
                     key={event.id}
                     className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700"
                   >
-                    <p className="font-medium">{event.title}</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="font-medium">{event.title}</p>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(event.sourceEventId ?? event.id)}
+                        disabled={deletingEventId === (event.sourceEventId ?? event.id)}
+                        className="inline-flex shrink-0 items-center rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {deletingEventId === (event.sourceEventId ?? event.id) ? "Deleting..." : "Delete"}
+                      </button>
+                    </div>
                     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
                       {formatTime(event.startTime)} - {formatTime(event.endTime)}
                     </p>
@@ -287,12 +297,6 @@ export default function EventsCalendarPage() {
                         {event.description}
                       </p>
                     )}
-                    <button
-                      onClick={() => setConfirmDeleteId(event.sourceEventId ?? event.id)}
-                      className="mt-3 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
-                    >
-                      Delete
-                    </button>
                   </article>
                 ))}
 
