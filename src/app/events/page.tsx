@@ -3,12 +3,17 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { formatRecurrenceLabel, normalizeRecurrence } from "@/lib/recurrence";
+import {
+  expandRecurringEventsForRange,
+  formatRecurrenceLabel,
+  normalizeRecurrence,
+} from "@/lib/recurrence";
 
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
 type EventItem = {
   id: string;
+  sourceEventId?: string;
   title: string;
   description: string | null;
   location: string | null;
@@ -110,17 +115,6 @@ export default function EventsPage() {
     ] as const;
   }, [visibleEvents]);
 
-  const eventsByDay = useMemo(() => {
-    return visibleEvents.reduce<Record<string, EventItem[]>>((acc, event) => {
-      const key = formatDayKey(new Date(event.startTime));
-      if (!acc[key]) {
-        acc[key] = [];
-      }
-      acc[key].push(event);
-      return acc;
-    }, {});
-  }, [visibleEvents]);
-
   const calendarDays = useMemo(() => {
     const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
     const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
@@ -137,6 +131,40 @@ export default function EventsPage() {
     }
     return days;
   }, [calendarMonth]);
+
+  const visibleCalendarRange = useMemo(() => {
+    const start = new Date(calendarDays[0]);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(calendarDays[calendarDays.length - 1]);
+    end.setHours(23, 59, 59, 999);
+
+    return { start, end };
+  }, [calendarDays]);
+
+  const expandedCalendarEvents = useMemo(() => {
+    const eventsWithSourceId = events.map((event) => ({
+      ...event,
+      sourceEventId: event.id,
+    }));
+
+    return expandRecurringEventsForRange(
+      eventsWithSourceId,
+      visibleCalendarRange.start,
+      visibleCalendarRange.end
+    );
+  }, [events, visibleCalendarRange]);
+
+  const eventsByDay = useMemo(() => {
+    return expandedCalendarEvents.reduce<Record<string, EventItem[]>>((acc, event) => {
+      const key = formatDayKey(new Date(event.startTime));
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(event);
+      return acc;
+    }, {});
+  }, [expandedCalendarEvents]);
 
   const selectedDayEvents = useMemo(() => {
     const eventsForDay = eventsByDay[selectedDayKey] ?? [];
