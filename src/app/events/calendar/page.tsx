@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   expandRecurringEventsForRange,
   formatRecurrenceLabel,
@@ -12,6 +13,7 @@ type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
 type EventItem = {
   id: string;
+  sourceEventId?: string;
   title: string;
   description: string | null;
   location: string | null;
@@ -40,6 +42,8 @@ export default function EventsCalendarPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDayKey, setSelectedDayKey] = useState(() => formatDayKey(new Date()));
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadEvents() {
@@ -47,7 +51,7 @@ export default function EventsCalendarPage() {
         setFetching(true);
         setError("");
 
-        const response = await fetch("/api/events");
+        const response = await fetch("/api/events", { cache: "no-store" });
         if (!response.ok) {
           throw new Error("Failed to fetch events");
         }
@@ -96,7 +100,11 @@ export default function EventsCalendarPage() {
   }, [monthDays]);
 
   const expandedEvents = useMemo(() => {
-    return expandRecurringEventsForRange(events, visibleRange.start, visibleRange.end);
+    const eventsWithSourceId = events.map((event) => ({
+      ...event,
+      sourceEventId: event.id,
+    }));
+    return expandRecurringEventsForRange(eventsWithSourceId, visibleRange.start, visibleRange.end);
   }, [events, visibleRange]);
 
   const eventsByDay = useMemo(() => {
@@ -123,6 +131,26 @@ export default function EventsCalendarPage() {
       new Date(year, monthNum - 1, day)
     );
   }, [selectedDayKey]);
+
+  async function handleDeleteEvent(eventId: string) {
+    try {
+      setDeletingEventId(eventId);
+      setError("");
+      const res = await fetch(`/api/events/${eventId}`, { method: "DELETE" });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Failed to delete event");
+      }
+
+      setEvents((prev) => prev.filter((event) => event.id !== eventId));
+      setConfirmDeleteId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete event.");
+    } finally {
+      setDeletingEventId(null);
+    }
+  }
 
   return (
     <main className="min-h-screen px-6 py-10">
@@ -244,7 +272,17 @@ export default function EventsCalendarPage() {
                     key={event.id}
                     className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700"
                   >
-                    <p className="font-medium">{event.title}</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="font-medium">{event.title}</p>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(event.sourceEventId ?? event.id)}
+                        disabled={deletingEventId === (event.sourceEventId ?? event.id)}
+                        className="inline-flex shrink-0 items-center rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {deletingEventId === (event.sourceEventId ?? event.id) ? "Deleting..." : "Delete"}
+                      </button>
+                    </div>
                     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
                       {formatTime(event.startTime)} - {formatTime(event.endTime)}
                     </p>
@@ -276,6 +314,21 @@ export default function EventsCalendarPage() {
           </div>
         </section>
       </div>
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        title="Delete event?"
+        message="This will move the event to Trash. You can restore it later from the Trash page."
+        confirmLabel="Move to Trash"
+        loading={deletingEventId !== null}
+        onCancel={() => {
+          if (deletingEventId) return;
+          setConfirmDeleteId(null);
+        }}
+        onConfirm={() => {
+          if (!confirmDeleteId) return;
+          void handleDeleteEvent(confirmDeleteId);
+        }}
+      />
     </main>
   );
 }
