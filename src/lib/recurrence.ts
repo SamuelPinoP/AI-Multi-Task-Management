@@ -66,7 +66,8 @@ export function expandRecurringEventsForRange<T extends RecurringEventBase>(
 
     let safetyCounter = 0;
 
-    while (isSameOrBefore(occurrenceStart, rangeEnd)) {
+    // Recurrence boundary uses the stored event endTime as the last allowed occurrence start.
+    while (isSameOrBefore(occurrenceStart, rangeEnd) && isSameOrBefore(occurrenceStart, baseEnd)) {
       safetyCounter += 1;
       if (safetyCounter > 1000) break;
 
