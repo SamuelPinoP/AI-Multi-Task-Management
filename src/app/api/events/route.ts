@@ -81,7 +81,19 @@ export async function POST(req: Request) {
     const description = typeof body.description === "string" ? body.description.trim() : "";
     const location = typeof body.location === "string" ? body.location.trim() : "";
 
-    const event = await prisma.event.create({ data: { title, description: description || null, location: location || null, startTime: startAt, endTime: endAt, hasStartTime: Boolean(startTimeParts), hasEndTime: Boolean(endTimeParts), recurrence: normalizeRecurrence(body.recurrence), userId: user.id } });
+    const event = await prisma.event.create({
+      data: {
+        title,
+        description: description || null,
+        location: location || null,
+        startTime: startAt,
+        endTime: endAt,
+        hasStartTime: Boolean(startTimeParts),
+        hasEndTime: Boolean(endTimeParts),
+        recurrence: normalizeRecurrence(body.recurrence),
+        user: { connect: { id: user.id } },
+      },
+    });
     return NextResponse.json(event, { status: 201 });
   } catch (error) {
     console.error("POST /api/events error:", error);
