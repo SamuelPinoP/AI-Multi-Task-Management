@@ -439,23 +439,35 @@ export default function EventsPage() {
               className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
             />
             <div className="grid gap-3 sm:grid-cols-2">
-              <input
+              <label className="space-y-1">
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Beginning date</span>
+                <input
                 type="date"
                 required
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
+                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
               />
-              <input
+              </label>
+              <label className="space-y-1">
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Beginning time</span>
+                <input
                 type="time"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
+                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
               />
+              </label>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
-              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
+              <label className="space-y-1">
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">End date</span>
+                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
+              </label>
+              <label className="space-y-1">
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">End time</span>
+                <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
+              </label>
             </div>
             <select
               value={recurrence}
@@ -627,12 +639,24 @@ export default function EventsPage() {
                           className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
                         />
                         <div className="grid gap-3 sm:grid-cols-2">
-                          <input type="date" required value={editStartDate} onChange={(e) => setEditStartDate(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black" />
-                          <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black" />
+                          <label className="space-y-1">
+                            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">Beginning date</span>
+                            <input type="date" required value={editStartDate} onChange={(e) => setEditStartDate(e.target.value)} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black" />
+                          </label>
+                          <label className="space-y-1">
+                            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">Beginning time</span>
+                            <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black" />
+                          </label>
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2">
-                          <input type="date" value={editEndDate} onChange={(e) => setEditEndDate(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black" />
-                          <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black" />
+                          <label className="space-y-1">
+                            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">End date</span>
+                            <input type="date" value={editEndDate} onChange={(e) => setEditEndDate(e.target.value)} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black" />
+                          </label>
+                          <label className="space-y-1">
+                            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">End time</span>
+                            <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black" />
+                          </label>
                         </div>
                         <select
                           value={editRecurrence}
