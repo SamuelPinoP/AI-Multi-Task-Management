@@ -58,6 +58,22 @@ function isEventToday(event: EventItem, now: Date) {
   return eventStart >= todayStart && eventStart < tomorrowStart;
 }
 
+
+function validateEventInput(input: {
+  title: string;
+  startDate: string;
+  startTime?: string;
+  endDate?: string;
+  endTime?: string;
+}) {
+  if (!input.title.trim()) return "Title is required.";
+  if (!input.startDate) return "Start date is required.";
+  if (input.endDate && input.endDate < input.startDate) return "End date cannot be before start date.";
+  if (input.endDate && input.endDate === input.startDate && input.startTime && input.endTime && input.endTime <= input.startTime) {
+    return "End time must be after start time when the dates are the same.";
+  }
+  return "";
+}
 export default function EventsPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [fetching, setFetching] = useState(true);
@@ -224,12 +240,11 @@ export default function EventsPage() {
   async function handleCreateEvent(e: FormEvent) {
     e.preventDefault();
 
-    if (!title.trim()) {
-      setError("Title is required.");
+    const createValidationError = validateEventInput({ title, startDate, startTime, endDate, endTime });
+    if (createValidationError) {
+      setError(createValidationError);
       return;
     }
-
-    if (!startDate) { setError("Start date is required."); return; }
 
     try {
       setLoading(true);
@@ -297,12 +312,17 @@ export default function EventsPage() {
   }
 
   async function handleSaveEdit(eventId: string) {
-    if (!editTitle.trim()) {
-      setError("Title is required.");
+    const editValidationError = validateEventInput({
+      title: editTitle,
+      startDate: editStartDate,
+      startTime: editStartTime,
+      endDate: editEndDate,
+      endTime: editEndTime,
+    });
+    if (editValidationError) {
+      setError(editValidationError);
       return;
     }
-
-    if (!editStartDate) { setError("Start date is required."); return; }
 
     try {
       setSavingEdit(true);
@@ -399,6 +419,7 @@ export default function EventsPage() {
 
           <form onSubmit={handleCreateEvent} className="space-y-4">
             <input
+              required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Event title"
