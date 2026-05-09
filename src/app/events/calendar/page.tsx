@@ -18,7 +18,9 @@ type EventItem = {
   description: string | null;
   location: string | null;
   startTime: string;
-  endTime: string;
+  endTime: string | null;
+  hasStartTime: boolean;
+  hasEndTime: boolean;
   recurrence?: Recurrence | null;
 };
 
@@ -244,7 +246,7 @@ export default function EventsCalendarPage() {
                               key={event.id}
                               className="truncate rounded bg-zinc-200/70 px-1.5 py-0.5 text-xs text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100"
                             >
-                              {formatTime(event.startTime)} {event.title}
+                              {event.hasStartTime ? formatTime(event.startTime) : "No time"} {event.title}
                             </p>
                           ))}
                           {eventCount > 2 && (
@@ -284,7 +286,7 @@ export default function EventsCalendarPage() {
                       </button>
                     </div>
                     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                      {formatTime(event.startTime)} - {formatTime(event.endTime)}
+                      {event.hasStartTime ? formatTime(event.startTime) : "Time not specified"}{event.endTime && event.hasEndTime ? ` - ${formatTime(event.endTime)}` : ""}
                     </p>
                     {event.location && (
                       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{event.location}</p>
