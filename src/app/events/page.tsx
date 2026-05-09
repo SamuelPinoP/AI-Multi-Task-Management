@@ -18,15 +18,13 @@ type EventItem = {
   description: string | null;
   location: string | null;
   startTime: string;
-  endTime: string;
+  endTime: string | null;
+  hasStartTime: boolean;
+  hasEndTime: boolean;
   createdAt: string;
   updatedAt: string;
   recurrence?: Recurrence | null;
 };
-
-function toInputDateTime(value: string) {
-  return new Date(value).toISOString().slice(0, 16);
-}
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -78,14 +76,18 @@ export default function EventsPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
+  const [startDate, setStartDate] = useState("");
   const [startTime, setStartTime] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [endTime, setEndTime] = useState("");
   const [recurrence, setRecurrence] = useState<Recurrence>("NONE");
 
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editLocation, setEditLocation] = useState("");
+  const [editStartDate, setEditStartDate] = useState("");
   const [editStartTime, setEditStartTime] = useState("");
+  const [editEndDate, setEditEndDate] = useState("");
   const [editEndTime, setEditEndTime] = useState("");
   const [editRecurrence, setEditRecurrence] = useState<Recurrence>("NONE");
 
@@ -105,7 +107,7 @@ export default function EventsPage() {
       return start > now && start <= soonBoundary && !isEventToday(event, now);
     });
     const later = visibleEvents.filter((event) => new Date(event.startTime) > soonBoundary);
-    const past = visibleEvents.filter((event) => new Date(event.endTime) < now);
+    const past = visibleEvents.filter((event) => event.endTime ? new Date(event.endTime) < now : false);
 
     return [
       { key: "TODAY", title: "Today", events: today },
@@ -227,15 +229,7 @@ export default function EventsPage() {
       return;
     }
 
-    if (!startTime || !endTime) {
-      setError("Start time and end time are required.");
-      return;
-    }
-
-    if (new Date(endTime) <= new Date(startTime)) {
-      setError("End time must be after start time.");
-      return;
-    }
+    if (!startDate) { setError("Start date is required."); return; }
 
     try {
       setLoading(true);
@@ -248,8 +242,10 @@ export default function EventsPage() {
           title,
           description,
           location,
-          startTime,
-          endTime,
+          startDate,
+          startTime: startTime || null,
+          endDate: endDate || null,
+          endTime: endTime || null,
           recurrence,
         }),
       });
@@ -262,7 +258,9 @@ export default function EventsPage() {
       setTitle("");
       setDescription("");
       setLocation("");
+      setStartDate("");
       setStartTime("");
+      setEndDate("");
       setEndTime("");
       setRecurrence("NONE");
       await fetchEvents(false);
@@ -278,8 +276,10 @@ export default function EventsPage() {
     setEditTitle(event.title);
     setEditDescription(event.description ?? "");
     setEditLocation(event.location ?? "");
-    setEditStartTime(toInputDateTime(event.startTime));
-    setEditEndTime(toInputDateTime(event.endTime));
+    const start = new Date(event.startTime);
+    setEditStartDate(start.toISOString().slice(0,10));
+    setEditStartTime(event.hasStartTime ? start.toISOString().slice(11,16) : "");
+    if (event.endTime) { const end = new Date(event.endTime); setEditEndDate(end.toISOString().slice(0,10)); setEditEndTime(event.hasEndTime ? end.toISOString().slice(11,16) : ""); } else { setEditEndDate(""); setEditEndTime(""); }
     setEditRecurrence(normalizeRecurrence(event.recurrence));
     setError("");
   }
@@ -289,7 +289,9 @@ export default function EventsPage() {
     setEditTitle("");
     setEditDescription("");
     setEditLocation("");
+    setEditStartDate("");
     setEditStartTime("");
+    setEditEndDate("");
     setEditEndTime("");
     setEditRecurrence("NONE");
   }
@@ -300,15 +302,7 @@ export default function EventsPage() {
       return;
     }
 
-    if (!editStartTime || !editEndTime) {
-      setError("Start time and end time are required.");
-      return;
-    }
-
-    if (new Date(editEndTime) <= new Date(editStartTime)) {
-      setError("End time must be after start time.");
-      return;
-    }
+    if (!editStartDate) { setError("Start date is required."); return; }
 
     try {
       setSavingEdit(true);
@@ -321,8 +315,10 @@ export default function EventsPage() {
           title: editTitle,
           description: editDescription,
           location: editLocation,
-          startTime: editStartTime,
-          endTime: editEndTime,
+          startDate: editStartDate,
+          startTime: editStartTime || null,
+          endDate: editEndDate || null,
+          endTime: editEndTime || null,
           recurrence: editRecurrence,
         }),
       });
@@ -423,17 +419,22 @@ export default function EventsPage() {
             />
             <div className="grid gap-3 sm:grid-cols-2">
               <input
-                type="datetime-local"
+                type="date"
+                required
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
+              />
+              <input
+                type="time"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
                 className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
               />
-              <input
-                type="datetime-local"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
-              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
+              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
             </div>
             <select
               value={recurrence}
@@ -535,7 +536,7 @@ export default function EventsPage() {
                   <li key={event.id} className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-3">
                     <p className="font-medium">{event.title}</p>
                     <p className="text-sm text-zinc-600 dark:text-zinc-300">
-                      {formatTime(event.startTime)} - {formatTime(event.endTime)}
+                      {event.hasStartTime ? formatTime(event.startTime) : "Time not specified"}{event.endTime && event.hasEndTime ? ` - ${formatTime(event.endTime)}` : ""}
                     </p>
                     {event.location && (
                       <p className="text-sm text-zinc-600 dark:text-zinc-300">
@@ -605,18 +606,12 @@ export default function EventsPage() {
                           className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
                         />
                         <div className="grid gap-3 sm:grid-cols-2">
-                          <input
-                            type="datetime-local"
-                            value={editStartTime}
-                            onChange={(e) => setEditStartTime(e.target.value)}
-                            className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
-                          />
-                          <input
-                            type="datetime-local"
-                            value={editEndTime}
-                            onChange={(e) => setEditEndTime(e.target.value)}
-                            className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
-                          />
+                          <input type="date" required value={editStartDate} onChange={(e) => setEditStartDate(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black" />
+                          <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black" />
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <input type="date" value={editEndDate} onChange={(e) => setEditEndDate(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black" />
+                          <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black" />
                         </div>
                         <select
                           value={editRecurrence}
@@ -678,7 +673,7 @@ export default function EventsPage() {
                           Start: {formatDateTime(event.startTime)}
                         </p>
                         <p className="mt-1 text-sm text-gray-700">
-                          End: {formatDateTime(event.endTime)}
+                          End: {event.endTime ? formatDateTime(event.endTime) : "Not specified"}
                         </p>
                         <p className="mt-1 text-sm text-gray-700">
                           Repeats: {formatRecurrenceLabel(event.recurrence)}

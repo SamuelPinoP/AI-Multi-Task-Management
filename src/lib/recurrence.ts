@@ -28,7 +28,9 @@ export function formatRecurrenceLabel(value: unknown) {
 export type RecurringEventBase = {
   id: string;
   startTime: string;
-  endTime: string;
+  endTime: string | null;
+  hasStartTime?: boolean;
+  hasEndTime?: boolean;
   recurrence?: Recurrence | null;
 };
 
@@ -59,15 +61,15 @@ export function expandRecurringEventsForRange<T extends RecurringEventBase>(
     }
 
     const baseStart = new Date(event.startTime);
-    const baseEnd = new Date(event.endTime);
-    const durationMs = baseEnd.getTime() - baseStart.getTime();
+    const hasEndBoundary = Boolean(event.endTime);
+    const baseEnd = hasEndBoundary ? new Date(event.endTime as string) : null;
+    const durationMs = baseEnd ? baseEnd.getTime() - baseStart.getTime() : 0;
     let occurrenceStart = new Date(baseStart);
     const expanded: T[] = [];
 
     let safetyCounter = 0;
 
-    // Recurrence boundary uses the stored event endTime as the last allowed occurrence start.
-    while (isSameOrBefore(occurrenceStart, rangeEnd) && isSameOrBefore(occurrenceStart, baseEnd)) {
+        while (isSameOrBefore(occurrenceStart, rangeEnd) && (!baseEnd || isSameOrBefore(occurrenceStart, baseEnd))) {
       safetyCounter += 1;
       if (safetyCounter > 1000) break;
 
@@ -77,7 +79,7 @@ export function expandRecurringEventsForRange<T extends RecurringEventBase>(
           ...event,
           id: `${event.id}-${occurrenceStart.toISOString()}`,
           startTime: occurrenceStart.toISOString(),
-          endTime: occurrenceEnd.toISOString(),
+          endTime: event.hasEndTime ? occurrenceEnd.toISOString() : null,
         });
       }
 
