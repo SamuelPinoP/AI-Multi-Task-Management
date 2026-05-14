@@ -24,7 +24,9 @@ type EventItem = {
   createdAt: string;
   updatedAt: string;
   recurrence?: Recurrence | null;
+  project: { id: string; name: string } | null;
 };
+type Project = { id: string; name: string };
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -97,6 +99,9 @@ export default function EventsPage() {
   const [endDate, setEndDate] = useState("");
   const [endTime, setEndTime] = useState("");
   const [recurrence, setRecurrence] = useState<Recurrence>("NONE");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectId, setProjectId] = useState("");
+  const [projectFilter, setProjectFilter] = useState("ALL");
 
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -106,12 +111,25 @@ export default function EventsPage() {
   const [editEndDate, setEditEndDate] = useState("");
   const [editEndTime, setEditEndTime] = useState("");
   const [editRecurrence, setEditRecurrence] = useState<Recurrence>("NONE");
+  const [editProjectId, setEditProjectId] = useState("");
 
   const visibleEvents = useMemo(() => {
-    return [...events].sort(
+    const filtered = events.filter((event) => {
+      if (projectFilter === "ALL") return true;
+      if (projectFilter === "NONE") return event.project === null;
+      return event.project?.id === projectFilter;
+    });
+    return [...filtered].sort(
       (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
     );
-  }, [events]);
+  }, [events, projectFilter]);
+
+  async function fetchProjects() {
+    const res = await fetch("/api/projects");
+    if (res.ok) {
+      setProjects((await res.json()) as Project[]);
+    }
+  }
 
   const eventSections = useMemo(() => {
     const now = new Date();
@@ -235,6 +253,12 @@ export default function EventsPage() {
     }
 
     void loadInitialEvents();
+    void (async () => {
+      const res = await fetch("/api/projects");
+      if (res.ok) {
+        setProjects((await res.json()) as Project[]);
+      }
+    })();
   }, []);
 
   async function handleCreateEvent(e: FormEvent) {
@@ -262,6 +286,7 @@ export default function EventsPage() {
           endDate: endDate || null,
           endTime: endTime || null,
           recurrence,
+          projectId: projectId || null,
         }),
       });
 
@@ -278,6 +303,7 @@ export default function EventsPage() {
       setEndDate("");
       setEndTime("");
       setRecurrence("NONE");
+      setProjectId("");
       await fetchEvents(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create event.");
@@ -296,6 +322,7 @@ export default function EventsPage() {
     setEditStartTime(event.hasStartTime ? start.toISOString().slice(11,16) : "");
     if (event.endTime) { const end = new Date(event.endTime); setEditEndDate(end.toISOString().slice(0,10)); setEditEndTime(event.hasEndTime ? end.toISOString().slice(11,16) : ""); } else { setEditEndDate(""); setEditEndTime(""); }
     setEditRecurrence(normalizeRecurrence(event.recurrence));
+    setEditProjectId(event.project?.id ?? "");
     setError("");
   }
 
@@ -309,6 +336,7 @@ export default function EventsPage() {
     setEditEndDate("");
     setEditEndTime("");
     setEditRecurrence("NONE");
+    setEditProjectId("");
   }
 
   async function handleSaveEdit(eventId: string) {
@@ -340,6 +368,7 @@ export default function EventsPage() {
           endDate: editEndDate || null,
           endTime: editEndTime || null,
           recurrence: editRecurrence,
+          projectId: editProjectId || null,
         }),
       });
 
@@ -480,6 +509,13 @@ export default function EventsPage() {
               <option value="BIWEEKLY">Every 2 weeks</option>
               <option value="MONTHLY">Monthly</option>
             </select>
+            <div className="flex gap-2">
+              <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3">
+                <option value="">No project</option>
+                {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+              </select>
+              <button type="button" onClick={async () => { const name = window.prompt("New project name"); if (!name?.trim()) return; await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }); await fetchProjects(); }} className="rounded-xl border border-zinc-300 px-4 py-3 text-sm">+ Project</button>
+            </div>
             <button
               type="submit"
               disabled={loading}
@@ -585,6 +621,13 @@ export default function EventsPage() {
 
         <section>
           <h2 className="mb-4 text-2xl font-semibold">Your Events</h2>
+          <div className="mb-4">
+            <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3">
+              <option value="ALL">All projects</option>
+              <option value="NONE">No project</option>
+              {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+            </select>
+          </div>
           {fetching ? (
             <p className="text-zinc-600 dark:text-zinc-300">Loading events...</p>
           ) : visibleEvents.length === 0 ? (
@@ -669,6 +712,10 @@ export default function EventsPage() {
                           <option value="BIWEEKLY">Every 2 weeks</option>
                           <option value="MONTHLY">Monthly</option>
                         </select>
+                        <select value={editProjectId} onChange={(e) => setEditProjectId(e.target.value)} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black">
+                          <option value="">No project</option>
+                          {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                        </select>
                         <div className="flex flex-wrap gap-2">
                           <button
                             onClick={() => void handleSaveEdit(event.id)}
@@ -690,6 +737,7 @@ export default function EventsPage() {
                         <div className="flex items-start justify-between gap-3">
                           <h3 className="text-xl font-semibold">{event.title}</h3>
                           <div className="flex flex-wrap items-center gap-2">
+                            {event.project && <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium">{event.project.name}</span>}
                             {event.recurrence !== "NONE" && (
                               <span className="rounded-full border border-violet-500 px-2.5 py-1 text-xs font-medium text-violet-700">
                                 Repeats {formatRecurrenceLabel(event.recurrence)}

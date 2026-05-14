@@ -34,11 +34,6 @@ export default function NotesPage() {
 
   const visibleNotes = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-
-    if (!normalizedQuery) {
-      return notes;
-    }
-
     return notes.filter((note) => {
       const titleMatches = note.title.toLowerCase().includes(normalizedQuery);
       const contentMatches = (note.content ?? "").toLowerCase().includes(normalizedQuery);
@@ -48,7 +43,8 @@ export default function NotesPage() {
           : projectFilter === "NONE"
             ? note.project === null
             : note.project?.id === projectFilter;
-      return (titleMatches || contentMatches) && filterMatches;
+      const searchMatches = normalizedQuery ? titleMatches || contentMatches : true;
+      return searchMatches && filterMatches;
     });
   }, [notes, searchQuery, projectFilter]);
 
