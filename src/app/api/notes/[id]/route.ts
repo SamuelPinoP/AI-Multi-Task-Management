@@ -18,9 +18,24 @@ export async function PATCH(req: Request, context: RouteContext) {
     const body = await req.json();
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const contentInput = typeof body.content === "string" ? body.content.trim() : "";
+    const projectId = typeof body.projectId === "string" && body.projectId.trim() ? body.projectId : null;
 
     if (!title) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
+    }
+
+    let projectIdToSave: string | null = null;
+    if (projectId) {
+      const project = await prisma.project.findFirst({
+        where: {
+          id: projectId,
+          user: { email: DEMO_USER_EMAIL },
+        },
+      });
+      if (!project) {
+        return NextResponse.json({ error: "Invalid project" }, { status: 400 });
+      }
+      projectIdToSave = project.id;
     }
 
     const updated = await prisma.note.updateMany({
@@ -34,6 +49,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       data: {
         title,
         content: contentInput || null,
+        projectId: projectIdToSave,
       },
     });
 
@@ -41,7 +57,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Note not found" }, { status: 404 });
     }
 
-    const note = await prisma.note.findUnique({ where: { id } });
+    const note = await prisma.note.findUnique({ where: { id }, include: { project: true } });
 
     return NextResponse.json(note, { status: 200 });
   } catch (error) {

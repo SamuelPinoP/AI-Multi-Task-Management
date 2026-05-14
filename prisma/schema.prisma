@@ -21,6 +21,22 @@ model User {
   tasks       Task[]
   weeklyGoals WeeklyGoal[]
   events      Event[]
+  projects    Project[]
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes     Note[]
+  tasks     Task[]
+  events    Event[]
+
+  @@unique([userId, name])
 }
 
 model Note {
@@ -33,6 +49,8 @@ model Note {
 
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 }
 
 model Task {
@@ -50,6 +68,8 @@ model Task {
 
   userId      String
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
 }
 
 model WeeklyGoal {
@@ -81,6 +101,8 @@ model Event {
 
   userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
 }
 
 enum TaskStatus {

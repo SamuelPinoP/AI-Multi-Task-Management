@@ -35,7 +35,7 @@ function mergeDateAndTime(date: Date, time: { hours: number; minutes: number } |
 
 export async function GET() { /* unchanged */
   try {
-    const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL }, include: { events: { where: { deletedAt: null }, orderBy: [{ startTime: "asc" }, { createdAt: "desc" }] } } });
+    const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL }, include: { events: { where: { deletedAt: null }, orderBy: [{ startTime: "asc" }, { createdAt: "desc" }], include: { project: true } } } });
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
     return NextResponse.json(user.events.map((event) => ({ ...event, recurrence: normalizeRecurrence(event.recurrence) })));
   } catch (error) {
@@ -47,6 +47,7 @@ export async function GET() { /* unchanged */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const projectId = typeof body.projectId === "string" && body.projectId.trim() ? body.projectId : null;
     const title = typeof body.title === "string" ? body.title.trim() : "";
     if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
 
@@ -80,6 +81,12 @@ export async function POST(req: Request) {
 
     const description = typeof body.description === "string" ? body.description.trim() : "";
     const location = typeof body.location === "string" ? body.location.trim() : "";
+    let projectIdToSave: string | null = null;
+    if (projectId) {
+      const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
+      if (!project) return NextResponse.json({ error: "Invalid project" }, { status: 400 });
+      projectIdToSave = project.id;
+    }
 
     const event = await prisma.event.create({
       data: {
@@ -91,8 +98,10 @@ export async function POST(req: Request) {
         hasStartTime: Boolean(startTimeParts),
         hasEndTime: Boolean(endTimeParts),
         recurrence: normalizeRecurrence(body.recurrence),
+        projectId: projectIdToSave,
         user: { connect: { id: user.id } },
       },
+      include: { project: true },
     });
     return NextResponse.json(event, { status: 201 });
   } catch (error) {

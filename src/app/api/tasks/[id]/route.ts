@@ -29,6 +29,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     }
 
     const body = await req.json();
+    const projectId = typeof body.projectId === "string" && body.projectId.trim() ? body.projectId : null;
 
     const title = typeof body.title === "string" ? body.title.trim() : "";
     if (!title) {
@@ -57,6 +58,16 @@ export async function PATCH(req: Request, context: RouteContext) {
     }
 
     const description = typeof body.description === "string" ? body.description.trim() : "";
+    let projectIdToSave: string | null = null;
+    if (projectId) {
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, user: { email: DEMO_USER_EMAIL } },
+      });
+      if (!project) {
+        return NextResponse.json({ error: "Invalid project" }, { status: 400 });
+      }
+      projectIdToSave = project.id;
+    }
 
     const updated = await prisma.task.updateMany({
       where: {
@@ -74,6 +85,7 @@ export async function PATCH(req: Request, context: RouteContext) {
         dueDate,
         completedAt: body.status === TaskStatus.DONE ? new Date() : null,
         recurrence: body.recurrence,
+        projectId: projectIdToSave,
       },
     });
 
@@ -81,7 +93,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    const task = await prisma.task.findUnique({ where: { id } });
+    const task = await prisma.task.findUnique({ where: { id }, include: { project: true } });
     return NextResponse.json(task, { status: 200 });
   } catch (error) {
     console.error("PATCH /api/tasks/[id] error:", error);

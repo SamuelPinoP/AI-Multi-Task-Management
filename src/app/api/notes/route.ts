@@ -11,6 +11,7 @@ export async function GET() {
         notes: {
           where: { deletedAt: null },
           orderBy: { createdAt: "desc" },
+          include: { project: true },
         },
       },
     });
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const contentInput = typeof body.content === "string" ? body.content.trim() : "";
+    const projectId = typeof body.projectId === "string" && body.projectId.trim() ? body.projectId : null;
 
     if (!title) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
@@ -44,12 +46,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    let projectConnect:
+      | {
+          connect: { id: string };
+        }
+      | undefined;
+
+    if (projectId) {
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, userId: user.id },
+      });
+
+      if (!project) {
+        return NextResponse.json({ error: "Invalid project" }, { status: 400 });
+      }
+
+      projectConnect = { connect: { id: project.id } };
+    }
+
     const note = await prisma.note.create({
       data: {
         title,
         content: contentInput || null,
         userId: user.id,
+        project: projectConnect,
       },
+      include: { project: true },
     });
 
     return NextResponse.json(note, { status: 201 });

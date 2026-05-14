@@ -24,6 +24,7 @@ export async function GET() {
         tasks: {
           where: { deletedAt: null },
           orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+          include: { project: true },
         },
       },
     });
@@ -44,6 +45,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const descriptionInput = typeof body.description === "string" ? body.description.trim() : "";
+    const projectId = typeof body.projectId === "string" && body.projectId.trim() ? body.projectId : null;
 
     if (!title) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
@@ -77,6 +79,14 @@ export async function POST(req: Request) {
     }
 
     const status = isValidStatus(body.status) ? body.status : TaskStatus.TODO;
+    let projectIdToSave: string | null = null;
+    if (projectId) {
+      const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
+      if (!project) {
+        return NextResponse.json({ error: "Invalid project" }, { status: 400 });
+      }
+      projectIdToSave = project.id;
+    }
 
     const task = await prisma.task.create({
       data: {
@@ -88,7 +98,9 @@ export async function POST(req: Request) {
         completedAt: status === TaskStatus.DONE ? new Date() : null,
         recurrence: isValidRecurrence(body.recurrence) ? body.recurrence : Recurrence.NONE,
         userId: user.id,
+        projectId: projectIdToSave,
       },
+      include: { project: true },
     });
 
     return NextResponse.json(task, { status: 201 });
