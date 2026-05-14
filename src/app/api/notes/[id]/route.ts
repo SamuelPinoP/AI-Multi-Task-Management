@@ -7,6 +7,15 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+function parseProjectId(input: unknown): string | null {
+  if (typeof input !== "string") {
+    return null;
+  }
+
+  const trimmed = input.trim();
+  return trimmed || null;
+}
+
 export async function PATCH(req: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
@@ -18,9 +27,26 @@ export async function PATCH(req: Request, context: RouteContext) {
     const body = await req.json();
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const contentInput = typeof body.content === "string" ? body.content.trim() : "";
+    const projectId = parseProjectId(body.projectId);
 
     if (!title) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL } });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    if (projectId) {
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, userId: user.id },
+      });
+
+      if (!project) {
+        return NextResponse.json({ error: "Invalid project" }, { status: 400 });
+      }
     }
 
     const updated = await prisma.note.updateMany({
@@ -34,6 +60,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       data: {
         title,
         content: contentInput || null,
+        projectId,
       },
     });
 
@@ -41,7 +68,10 @@ export async function PATCH(req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Note not found" }, { status: 404 });
     }
 
-    const note = await prisma.note.findUnique({ where: { id } });
+    const note = await prisma.note.findUnique({
+      where: { id },
+      include: { project: { select: { id: true, name: true, color: true } } },
+    });
 
     return NextResponse.json(note, { status: 200 });
   } catch (error) {
