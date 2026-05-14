@@ -9,7 +9,9 @@ type Note = {
   content: string | null;
   createdAt: string;
   updatedAt: string;
+  project: { id: string; name: string } | null;
 };
+type Project = { id: string; name: string };
 
 export default function NotesPage() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -25,6 +27,10 @@ export default function NotesPage() {
   const [error, setError] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectId, setProjectId] = useState("");
+  const [editProjectId, setEditProjectId] = useState("");
+  const [projectFilter, setProjectFilter] = useState("ALL");
 
   const visibleNotes = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -36,9 +42,23 @@ export default function NotesPage() {
     return notes.filter((note) => {
       const titleMatches = note.title.toLowerCase().includes(normalizedQuery);
       const contentMatches = (note.content ?? "").toLowerCase().includes(normalizedQuery);
-      return titleMatches || contentMatches;
+      const filterMatches =
+        projectFilter === "ALL"
+          ? true
+          : projectFilter === "NONE"
+            ? note.project === null
+            : note.project?.id === projectFilter;
+      return (titleMatches || contentMatches) && filterMatches;
     });
-  }, [notes, searchQuery]);
+  }, [notes, searchQuery, projectFilter]);
+
+  async function fetchProjects() {
+    const res = await fetch("/api/projects");
+    if (res.ok) {
+      const data = (await res.json()) as Project[];
+      setProjects(data);
+    }
+  }
 
   async function fetchNotes(showLoading = true) {
     try {
@@ -79,6 +99,13 @@ export default function NotesPage() {
     }
 
     void loadInitialNotes();
+    void (async () => {
+      const res = await fetch("/api/projects");
+      if (res.ok) {
+        const data = (await res.json()) as Project[];
+        setProjects(data);
+      }
+    })();
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -101,6 +128,7 @@ export default function NotesPage() {
         body: JSON.stringify({
           title,
           content,
+          projectId: projectId || null,
         }),
       });
 
@@ -111,6 +139,7 @@ export default function NotesPage() {
 
       setTitle("");
       setContent("");
+      setProjectId("");
       await fetchNotes();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not create note.";
@@ -124,6 +153,7 @@ export default function NotesPage() {
     setEditingNoteId(note.id);
     setEditTitle(note.title);
     setEditContent(note.content ?? "");
+    setEditProjectId(note.project?.id ?? "");
     setError("");
   }
 
@@ -131,6 +161,7 @@ export default function NotesPage() {
     setEditingNoteId(null);
     setEditTitle("");
     setEditContent("");
+    setEditProjectId("");
   }
 
   async function handleSaveEdit(noteId: string) {
@@ -151,6 +182,7 @@ export default function NotesPage() {
         body: JSON.stringify({
           title: editTitle,
           content: editContent,
+          projectId: editProjectId || null,
         }),
       });
 
@@ -224,6 +256,17 @@ export default function NotesPage() {
             </div>
 
             <div>
+              <label className="mb-2 block text-sm font-medium">Project (optional)</label>
+              <div className="flex gap-2">
+                <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3">
+                  <option value="">No project</option>
+                  {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                </select>
+                <button type="button" onClick={async () => { const name = window.prompt("New project name"); if (!name?.trim()) return; await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }); await fetchProjects(); }} className="rounded-xl border border-zinc-300 px-4 py-3 text-sm">+ Project</button>
+              </div>
+            </div>
+
+            <div>
               <label className="mb-2 block text-sm font-medium">Content (optional)</label>
               <textarea
                 value={content}
@@ -249,6 +292,7 @@ export default function NotesPage() {
         <section>
           <h2 className="mb-4 text-2xl font-semibold">Your Notes</h2>
           <div className="mb-4">
+            <div className="flex gap-2">
             <input
               type="text"
               value={searchQuery}
@@ -256,6 +300,12 @@ export default function NotesPage() {
               placeholder="Search notes by title or content..."
               className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
             />
+            <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3">
+              <option value="ALL">All projects</option>
+              <option value="NONE">No project</option>
+              {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+            </select>
+            </div>
           </div>
 
           {fetching ? (
@@ -290,6 +340,10 @@ export default function NotesPage() {
                           placeholder="Content (optional)"
                           className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
                         />
+                        <select value={editProjectId} onChange={(e) => setEditProjectId(e.target.value)} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2">
+                          <option value="">No project</option>
+                          {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                        </select>
                         <div className="flex gap-2">
                           <button
                             type="button"
@@ -313,6 +367,7 @@ export default function NotesPage() {
                       <>
                         <div className="flex items-start justify-between gap-4">
                           <h3 className="text-xl font-semibold">{note.title}</h3>
+                          {note.project && <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs">{note.project.name}</span>}
                           <div className="flex gap-2">
                             <button
                               type="button"

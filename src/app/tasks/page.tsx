@@ -19,7 +19,9 @@ type Task = {
   createdAt: string;
   updatedAt: string;
   recurrence: Recurrence;
+  project: { id: string; name: string } | null;
 };
+type Project = { id: string; name: string };
 
 type TaskUrgency = "OVERDUE" | "DUE_TODAY" | "DUE_SOON" | "NONE";
 
@@ -61,6 +63,10 @@ export default function TasksPage() {
   const [priorityFilter, setPriorityFilter] = useState<"ALL" | Priority>("ALL");
   const [sortBy, setSortBy] = useState<SortOption>("NEWEST");
   const [searchQuery, setSearchQuery] = useState("");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectId, setProjectId] = useState("");
+  const [editProjectId, setEditProjectId] = useState("");
+  const [projectFilter, setProjectFilter] = useState("ALL");
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -91,6 +97,11 @@ export default function TasksPage() {
         return titleMatches || descriptionMatches;
       })
       .filter((task) => {
+        if (projectFilter === "NONE") return task.project === null;
+        if (projectFilter !== "ALL") return task.project?.id === projectFilter;
+        return true;
+      })
+      .filter((task) => {
         if (filter === "ACTIVE") return task.status !== "DONE";
         if (filter === "COMPLETED") return task.status === "DONE";
         return true;
@@ -117,7 +128,12 @@ export default function TasksPage() {
     });
 
     return sorted;
-  }, [tasks, searchQuery, filter, priorityFilter, sortBy]);
+  }, [tasks, searchQuery, projectFilter, filter, priorityFilter, sortBy]);
+
+  async function fetchProjects() {
+    const res = await fetch("/api/projects");
+    if (res.ok) setProjects((await res.json()) as Project[]);
+  }
 
   const taskSections = useMemo(() => {
     const overdue = visibleTasks.filter((task) => getTaskUrgency(task) === "OVERDUE");
@@ -159,6 +175,12 @@ export default function TasksPage() {
     }
 
     void loadInitialTasks();
+    void (async () => {
+      const res = await fetch("/api/projects");
+      if (res.ok) {
+        setProjects((await res.json()) as Project[]);
+      }
+    })();
   }, []);
 
   async function handleCreateTask(e: FormEvent) {
@@ -183,6 +205,7 @@ export default function TasksPage() {
           priority,
           dueDate: dueDate || null,
           recurrence,
+          projectId: projectId || null,
         }),
       });
 
@@ -197,6 +220,7 @@ export default function TasksPage() {
       setPriority("MEDIUM");
       setDueDate("");
       setRecurrence("NONE");
+      setProjectId("");
       await fetchTasks(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not create task.";
@@ -214,6 +238,7 @@ export default function TasksPage() {
     setEditPriority(task.priority);
     setEditDueDate(task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : "");
     setEditRecurrence(task.recurrence);
+    setEditProjectId(task.project?.id ?? "");
     setError("");
   }
 
@@ -225,6 +250,7 @@ export default function TasksPage() {
     setEditPriority("MEDIUM");
     setEditDueDate("");
     setEditRecurrence("NONE");
+    setEditProjectId("");
   }
 
   async function handleSaveEdit(taskId: string) {
@@ -247,6 +273,7 @@ export default function TasksPage() {
           priority: editPriority,
           dueDate: editDueDate || null,
           recurrence: editRecurrence,
+          projectId: editProjectId || null,
         }),
       });
 
@@ -283,6 +310,7 @@ export default function TasksPage() {
           priority: task.priority,
           dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : null,
           recurrence: task.recurrence,
+          projectId: task.project?.id ?? null,
         }),
       });
 
@@ -348,6 +376,13 @@ export default function TasksPage() {
                 <option value="NONE">Does not repeat</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="BIWEEKLY">Every 2 weeks</option><option value="MONTHLY">Monthly</option>
               </select>
             </div>
+            <div className="flex gap-2">
+              <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3">
+                <option value="">No project</option>
+                {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+              </select>
+              <button type="button" onClick={async () => { const name = window.prompt("New project name"); if (!name?.trim()) return; await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }); await fetchProjects(); }} className="rounded-xl border border-zinc-300 px-4 py-3 text-sm">+ Project</button>
+            </div>
             <button type="submit" disabled={loading} className="rounded-xl bg-black px-5 py-3 text-white transition hover:opacity-90 disabled:opacity-50">{loading ? "Creating..." : "Create Task"}</button>
           </form>
           {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
@@ -379,6 +414,11 @@ export default function TasksPage() {
               <option value="OLDEST">Oldest First</option>
               <option value="DUE_DATE_ASC">Due Date (Soonest)</option>
               <option value="DUE_DATE_DESC">Due Date (Latest)</option>
+            </select>
+            <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm outline-none focus:border-black">
+              <option value="ALL">All Projects</option>
+              <option value="NONE">No Project</option>
+              {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
           </div>
 
@@ -436,6 +476,10 @@ export default function TasksPage() {
                           <input type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
                           <select value={editRecurrence} onChange={(e) => setEditRecurrence(e.target.value as Recurrence)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="NONE">Does not repeat</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="BIWEEKLY">Every 2 weeks</option><option value="MONTHLY">Monthly</option></select>
                         </div>
+                        <select value={editProjectId} onChange={(e) => setEditProjectId(e.target.value)} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3">
+                          <option value="">No project</option>
+                          {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                        </select>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => void handleSaveEdit(task.id)} disabled={savingEdit} className="rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60">{savingEdit ? "Saving..." : "Save"}</button>
                           <button type="button" onClick={cancelEditing} disabled={savingEdit} className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm font-medium text-gray-700">Cancel</button>
@@ -446,6 +490,7 @@ export default function TasksPage() {
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <h3 className="text-xl font-semibold">{task.title}</h3>
+                            {task.project && <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs">{task.project.name}</span>}
                             {task.recurrence !== "NONE" && (<span className="mt-2 mr-2 inline-block rounded-full border border-violet-500 px-2.5 py-1 text-xs font-medium text-violet-700">Repeats {formatRecurrenceLabel(task.recurrence)}</span>)}
                             {urgencyLabel && (
                               <span
