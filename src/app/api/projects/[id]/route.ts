@@ -7,6 +7,46 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+
+export async function GET(_req: Request, context: RouteContext) {
+  try {
+    const { id } = await context.params;
+
+    if (!id) {
+      return NextResponse.json({ error: "Project id is required" }, { status: 400 });
+    }
+
+    const project = await prisma.project.findFirst({
+      where: {
+        id,
+        user: { email: DEMO_USER_EMAIL },
+      },
+      include: {
+        notes: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            title: true,
+            content: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(project);
+  } catch (error) {
+    console.error("GET /api/projects/[id] error:", error);
+    return NextResponse.json({ error: "Failed to fetch project" }, { status: 500 });
+  }
+}
+
 export async function PATCH(req: Request, context: RouteContext) {
   try {
     const { id } = await context.params;

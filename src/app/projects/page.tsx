@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
 type Project = {
@@ -10,6 +11,8 @@ type Project = {
   createdAt: string;
   updatedAt: string;
 };
+
+const DEFAULT_COLOR = "#6366f1";
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -169,42 +172,24 @@ export default function ProjectsPage() {
           <form onSubmit={handleCreateProject} className="space-y-4">
             <div>
               <label className="mb-2 block text-sm font-medium">Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Project name"
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black dark:border-zinc-700"
-              />
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Project name" className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black dark:border-zinc-700" />
             </div>
 
             <div>
               <label className="mb-2 block text-sm font-medium">Description (optional)</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Project description"
-                rows={4}
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black dark:border-zinc-700"
-              />
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Project description" rows={4} className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black dark:border-zinc-700" />
             </div>
 
             <div>
               <label className="mb-2 block text-sm font-medium">Color (optional)</label>
-              <input
-                type="text"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                placeholder="e.g. #6366F1 or blue"
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black dark:border-zinc-700"
-              />
+              <div className="flex items-center gap-3">
+                <input type="color" value={color || DEFAULT_COLOR} onChange={(e) => setColor(e.target.value)} className="h-11 w-16 cursor-pointer rounded-lg border border-zinc-300 bg-transparent p-1 dark:border-zinc-700" />
+                <button type="button" onClick={() => setColor("")} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700">Clear</button>
+                <span className="text-sm text-zinc-500">{color || "No color selected"}</span>
+              </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-xl bg-black px-5 py-3 text-white transition hover:opacity-90 disabled:opacity-50"
-            >
+            <button type="submit" disabled={loading} className="rounded-xl bg-black px-5 py-3 text-white transition hover:opacity-90 disabled:opacity-50">
               {loading ? "Creating..." : "Create Project"}
             </button>
           </form>
@@ -229,63 +214,34 @@ export default function ProjectsPage() {
                   <article key={project.id} className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800">
                     {isEditing ? (
                       <div className="space-y-3">
-                        <input
-                          type="text"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          className="w-full rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700"
-                        />
-                        <textarea
-                          value={editDescription}
-                          onChange={(e) => setEditDescription(e.target.value)}
-                          rows={3}
-                          className="w-full rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700"
-                        />
-                        <input
-                          type="text"
-                          value={editColor}
-                          onChange={(e) => setEditColor(e.target.value)}
-                          placeholder="Color"
-                          className="w-full rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700"
-                        />
+                        <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700" />
+                        <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} className="w-full rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700" />
+                        <div className="flex items-center gap-3">
+                          <input type="color" value={editColor || DEFAULT_COLOR} onChange={(e) => setEditColor(e.target.value)} className="h-10 w-14 cursor-pointer rounded-lg border border-zinc-300 bg-transparent p-1 dark:border-zinc-700" />
+                          <button type="button" onClick={() => setEditColor("")} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700">Clear</button>
+                          <span className="text-sm text-zinc-500">{editColor || "No color selected"}</span>
+                        </div>
                         <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void handleUpdateProject(project.id)}
-                            disabled={savingEdit}
-                            className="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
-                          >
+                          <button type="button" onClick={() => void handleUpdateProject(project.id)} disabled={savingEdit} className="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-50">
                             {savingEdit ? "Saving..." : "Save"}
                           </button>
-                          <button
-                            type="button"
-                            onClick={cancelEditing}
-                            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-700"
-                          >
-                            Cancel
-                          </button>
+                          <button type="button" onClick={cancelEditing} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-700">Cancel</button>
                         </div>
                       </div>
                     ) : (
                       <>
-                        <h3 className="text-xl font-semibold">{project.name}</h3>
-                        {project.description && <p className="mt-2 text-zinc-700 dark:text-zinc-300">{project.description}</p>}
-                        {project.color && <p className="mt-1 text-sm text-zinc-500">Color: {project.color}</p>}
+                        <Link href={`/projects/${project.id}`} className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500">
+                          <h3 className="text-xl font-semibold">{project.name}</h3>
+                          {project.description && <p className="mt-2 text-zinc-700 dark:text-zinc-300">{project.description}</p>}
+                        </Link>
+                        <div className="mt-3 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+                          <span className="inline-block h-3 w-3 rounded-full border border-zinc-300 dark:border-zinc-700" style={{ backgroundColor: project.color || "transparent" }} />
+                          <span>{project.color || "No color"}</span>
+                        </div>
 
                         <div className="mt-4 flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => startEditing(project)}
-                            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-700"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleDeleteProject(project.id)}
-                            disabled={isDeleting}
-                            className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white disabled:opacity-50"
-                          >
+                          <button type="button" onClick={() => startEditing(project)} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-700">Edit</button>
+                          <button type="button" onClick={() => void handleDeleteProject(project.id)} disabled={isDeleting} className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white disabled:opacity-50">
                             {isDeleting ? "Deleting..." : "Delete"}
                           </button>
                         </div>
