@@ -20,6 +20,15 @@ function isValidRecurrence(value: unknown): value is Recurrence {
   return typeof value === "string" && Object.values(Recurrence).includes(value as Recurrence);
 }
 
+function parseProjectId(input: unknown): string | null {
+  if (typeof input !== "string") {
+    return null;
+  }
+
+  const trimmed = input.trim();
+  return trimmed || null;
+}
+
 export async function PATCH(req: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
@@ -57,6 +66,23 @@ export async function PATCH(req: Request, context: RouteContext) {
     }
 
     const description = typeof body.description === "string" ? body.description.trim() : "";
+    const projectId = parseProjectId(body.projectId);
+
+    const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL } });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    if (projectId) {
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, userId: user.id },
+      });
+
+      if (!project) {
+        return NextResponse.json({ error: "Invalid project" }, { status: 400 });
+      }
+    }
 
     const updated = await prisma.task.updateMany({
       where: {
@@ -74,6 +100,7 @@ export async function PATCH(req: Request, context: RouteContext) {
         dueDate,
         completedAt: body.status === TaskStatus.DONE ? new Date() : null,
         recurrence: body.recurrence,
+        projectId,
       },
     });
 
@@ -81,7 +108,14 @@ export async function PATCH(req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    const task = await prisma.task.findUnique({ where: { id } });
+    const task = await prisma.task.findUnique({
+      where: { id },
+      include: {
+        project: {
+          select: { id: true, name: true, color: true },
+        },
+      },
+    });
     return NextResponse.json(task, { status: 200 });
   } catch (error) {
     console.error("PATCH /api/tasks/[id] error:", error);

@@ -9,6 +9,12 @@ type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 type TaskFilter = "ALL" | "ACTIVE" | "COMPLETED";
 type SortOption = "NEWEST" | "OLDEST" | "DUE_DATE_ASC" | "DUE_DATE_DESC";
 
+type Project = {
+  id: string;
+  name: string;
+  color: string | null;
+};
+
 type Task = {
   id: string;
   title: string;
@@ -19,6 +25,8 @@ type Task = {
   createdAt: string;
   updatedAt: string;
   recurrence: Recurrence;
+  projectId: string | null;
+  project: Project | null;
 };
 
 type TaskUrgency = "OVERDUE" | "DUE_TODAY" | "DUE_SOON" | "NONE";
@@ -48,6 +56,7 @@ function formatRecurrenceLabel(recurrence: Recurrence) {
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [fetching, setFetching] = useState(true);
   const [loading, setLoading] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -61,6 +70,7 @@ export default function TasksPage() {
   const [priorityFilter, setPriorityFilter] = useState<"ALL" | Priority>("ALL");
   const [sortBy, setSortBy] = useState<SortOption>("NEWEST");
   const [searchQuery, setSearchQuery] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -68,6 +78,7 @@ export default function TasksPage() {
   const [priority, setPriority] = useState<Priority>("MEDIUM");
   const [dueDate, setDueDate] = useState("");
   const [recurrence, setRecurrence] = useState<Recurrence>("NONE");
+  const [projectId, setProjectId] = useState("");
 
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -75,6 +86,7 @@ export default function TasksPage() {
   const [editPriority, setEditPriority] = useState<Priority>("MEDIUM");
   const [editDueDate, setEditDueDate] = useState("");
   const [editRecurrence, setEditRecurrence] = useState<Recurrence>("NONE");
+  const [editProjectId, setEditProjectId] = useState("");
 
   const visibleTasks = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -98,6 +110,10 @@ export default function TasksPage() {
       .filter((task) => {
         if (priorityFilter === "ALL") return true;
         return task.priority === priorityFilter;
+      })
+      .filter((task) => {
+        if (!projectFilter) return true;
+        return task.projectId === projectFilter;
       });
 
     const sorted = [...filtered].sort((a, b) => {
@@ -117,7 +133,7 @@ export default function TasksPage() {
     });
 
     return sorted;
-  }, [tasks, searchQuery, filter, priorityFilter, sortBy]);
+  }, [tasks, searchQuery, filter, priorityFilter, sortBy, projectFilter]);
 
   const taskSections = useMemo(() => {
     const overdue = visibleTasks.filter((task) => getTaskUrgency(task) === "OVERDUE");
@@ -153,9 +169,23 @@ export default function TasksPage() {
     }
   }
 
+  async function fetchProjects() {
+    try {
+      const res = await fetch("/api/projects");
+      if (!res.ok) {
+        throw new Error("Failed to fetch projects");
+      }
+
+      const data = (await res.json()) as Project[];
+      setProjects(data);
+    } catch {
+      setError("Could not load projects.");
+    }
+  }
+
   useEffect(() => {
     async function loadInitialTasks() {
-      await fetchTasks();
+      await Promise.all([fetchTasks(), fetchProjects()]);
     }
 
     void loadInitialTasks();
@@ -183,6 +213,7 @@ export default function TasksPage() {
           priority,
           dueDate: dueDate || null,
           recurrence,
+          projectId,
         }),
       });
 
@@ -197,6 +228,7 @@ export default function TasksPage() {
       setPriority("MEDIUM");
       setDueDate("");
       setRecurrence("NONE");
+      setProjectId("");
       await fetchTasks(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not create task.";
@@ -214,6 +246,7 @@ export default function TasksPage() {
     setEditPriority(task.priority);
     setEditDueDate(task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : "");
     setEditRecurrence(task.recurrence);
+    setEditProjectId(task.projectId ?? "");
     setError("");
   }
 
@@ -225,6 +258,7 @@ export default function TasksPage() {
     setEditPriority("MEDIUM");
     setEditDueDate("");
     setEditRecurrence("NONE");
+    setEditProjectId("");
   }
 
   async function handleSaveEdit(taskId: string) {
@@ -247,6 +281,7 @@ export default function TasksPage() {
           priority: editPriority,
           dueDate: editDueDate || null,
           recurrence: editRecurrence,
+          projectId: editProjectId,
         }),
       });
 
@@ -283,6 +318,7 @@ export default function TasksPage() {
           priority: task.priority,
           dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : null,
           recurrence: task.recurrence,
+          projectId: task.projectId ?? "",
         }),
       });
 
@@ -336,7 +372,7 @@ export default function TasksPage() {
           <form onSubmit={handleCreateTask} className="space-y-4">
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Task title" className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (optional)" rows={4} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
-            <div className="grid gap-3 sm:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-5">
               <select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black">
                 <option value="TODO">To Do</option><option value="IN_PROGRESS">In Progress</option><option value="DONE">Done</option>
               </select>
@@ -346,6 +382,10 @@ export default function TasksPage() {
               <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
               <select value={recurrence} onChange={(e) => setRecurrence(e.target.value as Recurrence)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black">
                 <option value="NONE">Does not repeat</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="BIWEEKLY">Every 2 weeks</option><option value="MONTHLY">Monthly</option>
+              </select>
+              <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black">
+                <option value="">No project</option>
+                {projects.map((project) => (<option key={project.id} value={project.id}>{project.name}</option>))}
               </select>
             </div>
             <button type="submit" disabled={loading} className="rounded-xl bg-black px-5 py-3 text-white transition hover:opacity-90 disabled:opacity-50">{loading ? "Creating..." : "Create Task"}</button>
@@ -373,6 +413,10 @@ export default function TasksPage() {
               <option value="LOW">Low Priority</option>
               <option value="MEDIUM">Medium Priority</option>
               <option value="HIGH">High Priority</option>
+            </select>
+            <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm outline-none focus:border-black">
+              <option value="">All Projects</option>
+              {projects.map((project) => (<option key={project.id} value={project.id}>{project.name}</option>))}
             </select>
             <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortOption)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm outline-none focus:border-black">
               <option value="NEWEST">Newest First</option>
@@ -430,11 +474,12 @@ export default function TasksPage() {
                       <div className="space-y-3">
                         <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2 outline-none focus:border-black" />
                         <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={4} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
-                        <div className="grid gap-3 sm:grid-cols-4">
+                        <div className="grid gap-3 sm:grid-cols-5">
                           <select value={editStatus} onChange={(e) => setEditStatus(e.target.value as TaskStatus)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="TODO">To Do</option><option value="IN_PROGRESS">In Progress</option><option value="DONE">Done</option></select>
                           <select value={editPriority} onChange={(e) => setEditPriority(e.target.value as Priority)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select>
                           <input type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
                           <select value={editRecurrence} onChange={(e) => setEditRecurrence(e.target.value as Recurrence)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="NONE">Does not repeat</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="BIWEEKLY">Every 2 weeks</option><option value="MONTHLY">Monthly</option></select>
+                          <select value={editProjectId} onChange={(e) => setEditProjectId(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="">No project</option>{projects.map((project) => (<option key={project.id} value={project.id}>{project.name}</option>))}</select>
                         </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => void handleSaveEdit(task.id)} disabled={savingEdit} className="rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60">{savingEdit ? "Saving..." : "Save"}</button>
@@ -447,6 +492,7 @@ export default function TasksPage() {
                           <div>
                             <h3 className="text-xl font-semibold">{task.title}</h3>
                             {task.recurrence !== "NONE" && (<span className="mt-2 mr-2 inline-block rounded-full border border-violet-500 px-2.5 py-1 text-xs font-medium text-violet-700">Repeats {formatRecurrenceLabel(task.recurrence)}</span>)}
+                            {task.project && (<span className="mt-2 mr-2 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium" style={{ borderColor: task.project.color ?? undefined }}><span className="h-2 w-2 rounded-full" style={{ backgroundColor: task.project.color ?? "currentColor" }} />{task.project.name}</span>)}
                             {urgencyLabel && (
                               <span
                                 className={`mt-2 inline-block rounded-full border border-current px-2.5 py-1 text-xs font-medium ${urgencyLabelStyles}`}

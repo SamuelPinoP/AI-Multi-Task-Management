@@ -16,6 +16,15 @@ function isValidRecurrence(value: unknown): value is Recurrence {
   return typeof value === "string" && Object.values(Recurrence).includes(value as Recurrence);
 }
 
+function parseProjectId(input: unknown): string | null {
+  if (typeof input !== "string") {
+    return null;
+  }
+
+  const trimmed = input.trim();
+  return trimmed || null;
+}
+
 export async function GET() {
   try {
     const user = await prisma.user.findUnique({
@@ -24,6 +33,11 @@ export async function GET() {
         tasks: {
           where: { deletedAt: null },
           orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+          include: {
+            project: {
+              select: { id: true, name: true, color: true },
+            },
+          },
         },
       },
     });
@@ -44,6 +58,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const descriptionInput = typeof body.description === "string" ? body.description.trim() : "";
+    const projectId = parseProjectId(body.projectId);
 
     if (!title) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
@@ -76,6 +91,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    if (projectId) {
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, userId: user.id },
+      });
+
+      if (!project) {
+        return NextResponse.json({ error: "Invalid project" }, { status: 400 });
+      }
+    }
+
     const status = isValidStatus(body.status) ? body.status : TaskStatus.TODO;
 
     const task = await prisma.task.create({
@@ -88,6 +113,12 @@ export async function POST(req: Request) {
         completedAt: status === TaskStatus.DONE ? new Date() : null,
         recurrence: isValidRecurrence(body.recurrence) ? body.recurrence : Recurrence.NONE,
         userId: user.id,
+        projectId,
+      },
+      include: {
+        project: {
+          select: { id: true, name: true, color: true },
+        },
       },
     });
 

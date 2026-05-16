@@ -26,6 +26,18 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
           content: true,
         },
       },
+      tasks: {
+        where: { deletedAt: null },
+        orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          status: true,
+          priority: true,
+          dueDate: true,
+        },
+      },
       events: {
         where: { deletedAt: null },
         orderBy: { startTime: "asc" },
@@ -84,6 +96,30 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
             </div>
           )}
         </section>
+
+        <section className="mt-8">
+          <h2 className="mb-4 text-2xl font-semibold">Assigned Tasks</h2>
+          {project.tasks.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-zinc-300 p-5 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
+              No tasks are assigned to this project yet.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {project.tasks.map((task) => (
+                <article key={task.id} className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800">
+                  <h3 className="text-lg font-semibold">{task.title}</h3>
+                  <p className="mt-2 text-zinc-700 dark:text-zinc-300">{task.description || "No description."}</p>
+                  <div className="mt-3 flex flex-wrap gap-3 text-sm text-zinc-600 dark:text-zinc-300">
+                    <span>Status: <strong>{task.status}</strong></span>
+                    <span>Priority: <strong>{task.priority}</strong></span>
+                    <span>Due: <strong>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}</strong></span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
         <section className="mt-8">
           <h2 className="mb-4 text-2xl font-semibold">Assigned Events</h2>
           {project.events.length === 0 ? (
