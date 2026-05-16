@@ -24,7 +24,10 @@ type EventItem = {
   createdAt: string;
   updatedAt: string;
   recurrence?: Recurrence | null;
+  projectId?: string | null;
+  project?: Project | null;
 };
+type Project = { id: string; name: string; color: string | null };
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -76,6 +79,7 @@ function validateEventInput(input: {
 }
 export default function EventsPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [fetching, setFetching] = useState(true);
   const [loading, setLoading] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -97,6 +101,7 @@ export default function EventsPage() {
   const [endDate, setEndDate] = useState("");
   const [endTime, setEndTime] = useState("");
   const [recurrence, setRecurrence] = useState<Recurrence>("NONE");
+  const [projectId, setProjectId] = useState("");
 
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -106,12 +111,14 @@ export default function EventsPage() {
   const [editEndDate, setEditEndDate] = useState("");
   const [editEndTime, setEditEndTime] = useState("");
   const [editRecurrence, setEditRecurrence] = useState<Recurrence>("NONE");
+  const [editProjectId, setEditProjectId] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
 
   const visibleEvents = useMemo(() => {
-    return [...events].sort(
+    return events.filter((event) => !projectFilter || event.projectId === projectFilter).sort(
       (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
     );
-  }, [events]);
+  }, [events, projectFilter]);
 
   const eventSections = useMemo(() => {
     const now = new Date();
@@ -228,10 +235,16 @@ export default function EventsPage() {
       setFetching(false);
     }
   }
+  async function fetchProjects() {
+    const res = await fetch("/api/projects");
+    if (!res.ok) throw new Error("Failed to fetch projects");
+    const data = (await res.json()) as Project[];
+    setProjects(data);
+  }
 
   useEffect(() => {
     async function loadInitialEvents() {
-      await fetchEvents();
+      await Promise.all([fetchEvents(), fetchProjects()]);
     }
 
     void loadInitialEvents();
@@ -262,6 +275,7 @@ export default function EventsPage() {
           endDate: endDate || null,
           endTime: endTime || null,
           recurrence,
+          projectId,
         }),
       });
 
@@ -278,6 +292,7 @@ export default function EventsPage() {
       setEndDate("");
       setEndTime("");
       setRecurrence("NONE");
+      setProjectId("");
       await fetchEvents(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create event.");
@@ -296,6 +311,7 @@ export default function EventsPage() {
     setEditStartTime(event.hasStartTime ? start.toISOString().slice(11,16) : "");
     if (event.endTime) { const end = new Date(event.endTime); setEditEndDate(end.toISOString().slice(0,10)); setEditEndTime(event.hasEndTime ? end.toISOString().slice(11,16) : ""); } else { setEditEndDate(""); setEditEndTime(""); }
     setEditRecurrence(normalizeRecurrence(event.recurrence));
+    setEditProjectId(event.projectId ?? "");
     setError("");
   }
 
@@ -309,6 +325,7 @@ export default function EventsPage() {
     setEditEndDate("");
     setEditEndTime("");
     setEditRecurrence("NONE");
+    setEditProjectId("");
   }
 
   async function handleSaveEdit(eventId: string) {
@@ -340,6 +357,7 @@ export default function EventsPage() {
           endDate: editEndDate || null,
           endTime: editEndTime || null,
           recurrence: editRecurrence,
+          projectId: editProjectId,
         }),
       });
 
@@ -470,6 +488,16 @@ export default function EventsPage() {
               </label>
             </div>
             <select
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
+            >
+              <option value="">No project</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>{project.name}</option>
+              ))}
+            </select>
+            <select
               value={recurrence}
               onChange={(e) => setRecurrence(e.target.value as Recurrence)}
               className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
@@ -585,6 +613,18 @@ export default function EventsPage() {
 
         <section>
           <h2 className="mb-4 text-2xl font-semibold">Your Events</h2>
+          <div className="mb-4">
+            <select
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 outline-none focus:border-black dark:border-zinc-700 sm:max-w-xs"
+            >
+              <option value="">All projects</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>{project.name}</option>
+              ))}
+            </select>
+          </div>
           {fetching ? (
             <p className="text-zinc-600 dark:text-zinc-300">Loading events...</p>
           ) : visibleEvents.length === 0 ? (
@@ -659,6 +699,16 @@ export default function EventsPage() {
                           </label>
                         </div>
                         <select
+                          value={editProjectId}
+                          onChange={(e) => setEditProjectId(e.target.value)}
+                          className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
+                        >
+                          <option value="">No project</option>
+                          {projects.map((project) => (
+                            <option key={project.id} value={project.id}>{project.name}</option>
+                          ))}
+                        </select>
+                        <select
                           value={editRecurrence}
                           onChange={(e) => setEditRecurrence(e.target.value as Recurrence)}
                           className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
@@ -700,6 +750,11 @@ export default function EventsPage() {
                                 className={`rounded-full border border-current px-2.5 py-1 text-xs font-medium ${badgeStyles}`}
                               >
                                 {badgeText}
+                              </span>
+                            )}
+                            {event.project && (
+                              <span className="rounded-full border px-2.5 py-1 text-xs font-medium text-zinc-700" style={{ borderColor: event.project.color ?? undefined }}>
+                                {event.project.name}
                               </span>
                             )}
                           </div>

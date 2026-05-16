@@ -3,6 +3,12 @@ import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
 import { NextResponse } from "next/server";
 const DEMO_USER_EMAIL = "samuel@example.com";
 type RouteContext = { params: Promise<{ id: string }> };
+function parseProjectId(input: unknown): string | null {
+  if (input === null || input === undefined) return null;
+  if (typeof input !== "string") return null;
+  const trimmed = input.trim();
+  return trimmed || null;
+}
 
 function parseDate(value: unknown, fieldName: string) { if (typeof value !== "string" || !value.trim()) return { error: `${fieldName} is required` }; const parsed = new Date(`${value}T00:00:00`); if (Number.isNaN(parsed.getTime())) return { error: `Invalid ${fieldName.toLowerCase()}` }; return { value: parsed }; }
 function parseOptionalDate(value: unknown, fieldName: string) { if (value === null || value === undefined || value === "") return { value: null }; if (typeof value !== "string") return { error: `Invalid ${fieldName.toLowerCase()}` }; const parsed = new Date(`${value}T00:00:00`); if (Number.isNaN(parsed.getTime())) return { error: `Invalid ${fieldName.toLowerCase()}` }; return { value: parsed }; }
@@ -27,11 +33,21 @@ export async function PATCH(req: Request, context: RouteContext) {
     if (endDate && startTimeParts && endTimeParts && endDate.toDateString() === startDate.toDateString()) { const s = startTimeParts.hours*60+startTimeParts.minutes; const e = endTimeParts.hours*60+endTimeParts.minutes; if (e <= s) return NextResponse.json({ error: "End time must be after start time when dates are the same" }, { status: 400 }); }
     if (!isValidRecurrence(body.recurrence)) return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
 
+    const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL } });
+    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
     const description = typeof body.description === "string" ? body.description.trim() : "";
     const location = typeof body.location === "string" ? body.location.trim() : "";
-    const updated = await prisma.event.updateMany({ where: { id, deletedAt: null, user: { email: DEMO_USER_EMAIL } }, data: { title, description: description || null, location: location || null, startTime: mergeDateAndTime(startDate, startTimeParts), endTime: endDate ? mergeDateAndTime(endDate, endTimeParts) : null, hasStartTime: Boolean(startTimeParts), hasEndTime: Boolean(endTimeParts), recurrence: normalizeRecurrence(body.recurrence) } });
+    const projectId = parseProjectId(body.projectId);
+
+    if (projectId) {
+      const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
+      if (!project) return NextResponse.json({ error: "Invalid project" }, { status: 400 });
+    }
+
+    const updated = await prisma.event.updateMany({ where: { id, deletedAt: null, user: { email: DEMO_USER_EMAIL } }, data: { title, description: description || null, location: location || null, startTime: mergeDateAndTime(startDate, startTimeParts), endTime: endDate ? mergeDateAndTime(endDate, endTimeParts) : null, hasStartTime: Boolean(startTimeParts), hasEndTime: Boolean(endTimeParts), recurrence: normalizeRecurrence(body.recurrence), projectId } });
     if (updated.count === 0) return NextResponse.json({ error: "Event not found" }, { status: 404 });
-    const event = await prisma.event.findUnique({ where: { id } });
+    const event = await prisma.event.findUnique({ where: { id }, include: { project: { select: { id: true, name: true, color: true } } } });
     return NextResponse.json(event ? { ...event, recurrence: normalizeRecurrence(event.recurrence) } : null, { status: 200 });
   } catch (error) { console.error("PATCH /api/events/[id] error:", error); return NextResponse.json({ error: "Failed to update event" }, { status: 500 }); }
 }
