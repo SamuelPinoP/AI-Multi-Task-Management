@@ -3,6 +3,12 @@ import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
 import { NextResponse } from "next/server";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
+function parseProjectId(input: unknown): string | null {
+  if (input === null || input === undefined) return null;
+  if (typeof input !== "string") return null;
+  const trimmed = input.trim();
+  return trimmed || null;
+}
 
 function parseDate(value: unknown, fieldName: string) {
   if (typeof value !== "string" || !value.trim()) return { error: `${fieldName} is required` };
@@ -35,7 +41,7 @@ function mergeDateAndTime(date: Date, time: { hours: number; minutes: number } |
 
 export async function GET() { /* unchanged */
   try {
-    const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL }, include: { events: { where: { deletedAt: null }, orderBy: [{ startTime: "asc" }, { createdAt: "desc" }] } } });
+    const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL }, include: { events: { where: { deletedAt: null }, orderBy: [{ startTime: "asc" }, { createdAt: "desc" }], include: { project: { select: { id: true, name: true, color: true } } } } } });
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
     return NextResponse.json(user.events.map((event) => ({ ...event, recurrence: normalizeRecurrence(event.recurrence) })));
   } catch (error) {
@@ -80,6 +86,12 @@ export async function POST(req: Request) {
 
     const description = typeof body.description === "string" ? body.description.trim() : "";
     const location = typeof body.location === "string" ? body.location.trim() : "";
+    const projectId = parseProjectId(body.projectId);
+
+    if (projectId) {
+      const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
+      if (!project) return NextResponse.json({ error: "Invalid project" }, { status: 400 });
+    }
 
     const event = await prisma.event.create({
       data: {
@@ -92,7 +104,9 @@ export async function POST(req: Request) {
         hasEndTime: Boolean(endTimeParts),
         recurrence: normalizeRecurrence(body.recurrence),
         user: { connect: { id: user.id } },
+        project: projectId ? { connect: { id: projectId } } : undefined,
       },
+      include: { project: { select: { id: true, name: true, color: true } } },
     });
     return NextResponse.json(event, { status: 201 });
   } catch (error) {

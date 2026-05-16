@@ -26,6 +26,19 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
           content: true,
         },
       },
+      events: {
+        where: { deletedAt: null },
+        orderBy: { startTime: "asc" },
+        select: {
+          id: true,
+          title: true,
+          startTime: true,
+          endTime: true,
+          hasStartTime: true,
+          hasEndTime: true,
+          recurrence: true,
+        },
+      },
     },
   });
 
@@ -66,6 +79,34 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
                 <article key={note.id} className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800">
                   <h3 className="text-lg font-semibold">{note.title}</h3>
                   <p className="mt-2 text-zinc-700 dark:text-zinc-300">{note.content || "No content."}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+        <section className="mt-8">
+          <h2 className="mb-4 text-2xl font-semibold">Assigned Events</h2>
+          {project.events.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-zinc-300 p-5 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
+              No events are assigned to this project yet.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {project.events.map((event) => (
+                <article key={event.id} className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-lg font-semibold">{event.title}</h3>
+                    <span className="inline-flex items-center rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700">
+                      Project event
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
+                    {new Date(event.startTime).toLocaleString()}
+                    {event.endTime ? ` → ${new Date(event.endTime).toLocaleString()}` : ""}
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                    Recurrence: {event.recurrence}
+                  </p>
                 </article>
               ))}
             </div>
