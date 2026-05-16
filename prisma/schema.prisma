@@ -33,7 +33,9 @@ model Note {
   deletedAt DateTime?
 
   userId    String
+  projectId String?
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 }
 
 model Task {
@@ -94,6 +96,7 @@ model Project {
 
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes       Note[]
 }
 
 enum TaskStatus {
