@@ -104,7 +104,7 @@ export async function POST(req: Request) {
         hasEndTime: Boolean(endTimeParts),
         recurrence: normalizeRecurrence(body.recurrence),
         user: { connect: { id: user.id } },
-        projectId,
+        project: projectId ? { connect: { id: projectId } } : undefined,
       },
       include: { project: { select: { id: true, name: true, color: true } } },
     });

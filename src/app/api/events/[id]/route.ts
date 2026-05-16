@@ -45,9 +45,27 @@ export async function PATCH(req: Request, context: RouteContext) {
       if (!project) return NextResponse.json({ error: "Invalid project" }, { status: 400 });
     }
 
-    const updated = await prisma.event.updateMany({ where: { id, deletedAt: null, user: { email: DEMO_USER_EMAIL } }, data: { title, description: description || null, location: location || null, startTime: mergeDateAndTime(startDate, startTimeParts), endTime: endDate ? mergeDateAndTime(endDate, endTimeParts) : null, hasStartTime: Boolean(startTimeParts), hasEndTime: Boolean(endTimeParts), recurrence: normalizeRecurrence(body.recurrence), projectId } });
-    if (updated.count === 0) return NextResponse.json({ error: "Event not found" }, { status: 404 });
-    const event = await prisma.event.findUnique({ where: { id }, include: { project: { select: { id: true, name: true, color: true } } } });
+    const existingEvent = await prisma.event.findFirst({
+      where: { id, deletedAt: null, user: { email: DEMO_USER_EMAIL } },
+      select: { id: true },
+    });
+    if (!existingEvent) return NextResponse.json({ error: "Event not found" }, { status: 404 });
+
+    const event = await prisma.event.update({
+      where: { id },
+      data: {
+        title,
+        description: description || null,
+        location: location || null,
+        startTime: mergeDateAndTime(startDate, startTimeParts),
+        endTime: endDate ? mergeDateAndTime(endDate, endTimeParts) : null,
+        hasStartTime: Boolean(startTimeParts),
+        hasEndTime: Boolean(endTimeParts),
+        recurrence: normalizeRecurrence(body.recurrence),
+        project: projectId ? { connect: { id: projectId } } : { disconnect: true },
+      },
+      include: { project: { select: { id: true, name: true, color: true } } },
+    });
     return NextResponse.json(event ? { ...event, recurrence: normalizeRecurrence(event.recurrence) } : null, { status: 200 });
   } catch (error) { console.error("PATCH /api/events/[id] error:", error); return NextResponse.json({ error: "Failed to update event" }, { status: 500 }); }
 }
