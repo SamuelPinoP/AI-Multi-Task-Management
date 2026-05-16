@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { ProjectCalendar } from "@/components/project-calendar";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
 
@@ -118,6 +119,18 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
               ))}
             </div>
           )}
+        </section>
+
+        <section className="mt-8">
+          <h2 className="mb-4 text-2xl font-semibold">Project Calendar</h2>
+          <ProjectCalendar
+            projectColor={project.color}
+            events={project.events.map((event) => ({
+              ...event,
+              startTime: event.startTime.toISOString(),
+              endTime: event.endTime ? event.endTime.toISOString() : null,
+            }))}
+          />
         </section>
 
         <section className="mt-8">
