@@ -28,6 +28,8 @@ type EventItem = {
   project?: Project | null;
 };
 type Project = { id: string; name: string; color: string | null };
+const ALL_PROJECTS_FILTER = "ALL";
+const NO_PROJECT_FILTER = "NO_PROJECT";
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -112,13 +114,21 @@ export default function EventsPage() {
   const [editEndTime, setEditEndTime] = useState("");
   const [editRecurrence, setEditRecurrence] = useState<Recurrence>("NONE");
   const [editProjectId, setEditProjectId] = useState("");
-  const [projectFilter, setProjectFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS_FILTER);
 
   const visibleEvents = useMemo(() => {
-    return events.filter((event) => !projectFilter || event.projectId === projectFilter).sort(
+    return events.filter((event) => {
+      if (projectFilter === ALL_PROJECTS_FILTER) return true;
+      if (projectFilter === NO_PROJECT_FILTER) return event.projectId === null || event.projectId === undefined;
+      return event.projectId === projectFilter;
+    }).sort(
       (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
     );
   }, [events, projectFilter]);
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === projectFilter) ?? null,
+    [projects, projectFilter]
+  );
 
   const eventSections = useMemo(() => {
     const now = new Date();
@@ -180,7 +190,7 @@ export default function EventsPage() {
     );
   }, [events, visibleCalendarRange]);
 
-  const eventsByDay = useMemo(() => {
+  const calendarEventsByDay = useMemo(() => {
     return expandedCalendarEvents.reduce<Record<string, EventItem[]>>((acc, event) => {
       const key = formatDayKey(new Date(event.startTime));
       if (!acc[key]) {
@@ -191,12 +201,30 @@ export default function EventsPage() {
     }, {});
   }, [expandedCalendarEvents]);
 
+  const selectedProjectCalendarEventsByDay = useMemo(() => {
+    if (projectFilter === ALL_PROJECTS_FILTER || projectFilter === NO_PROJECT_FILTER) {
+      return {} as Record<string, EventItem[]>;
+    }
+    return expandedCalendarEvents.reduce<Record<string, EventItem[]>>((acc, event) => {
+      if (event.projectId !== projectFilter) return acc;
+      const key = formatDayKey(new Date(event.startTime));
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(event);
+      return acc;
+    }, {});
+  }, [expandedCalendarEvents, projectFilter]);
+
   const selectedDayEvents = useMemo(() => {
-    const eventsForDay = eventsByDay[selectedDayKey] ?? [];
+    let eventsForDay = calendarEventsByDay[selectedDayKey] ?? [];
+    if (projectFilter === NO_PROJECT_FILTER) {
+      eventsForDay = eventsForDay.filter((event) => event.projectId === null || event.projectId === undefined);
+    }
     return [...eventsForDay].sort(
       (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
     );
-  }, [eventsByDay, selectedDayKey]);
+  }, [calendarEventsByDay, selectedDayKey, projectFilter]);
 
   const selectedDayLabel = useMemo(() => {
     const [year, month, day] = selectedDayKey.split("-").map(Number);
@@ -554,7 +582,12 @@ export default function EventsPage() {
           <div className="grid grid-cols-7 gap-2">
             {calendarDays.map((day) => {
               const dayKey = formatDayKey(day);
-              const eventCount = eventsByDay[dayKey]?.length ?? 0;
+              const totalEventCount = calendarEventsByDay[dayKey]?.length ?? 0;
+              const selectedProjectCount = selectedProjectCalendarEventsByDay[dayKey]?.length ?? 0;
+              const noProjectCount = (calendarEventsByDay[dayKey] ?? []).filter(
+                (event) => event.projectId === null || event.projectId === undefined
+              ).length;
+              const eventCount = projectFilter === NO_PROJECT_FILTER ? noProjectCount : totalEventCount;
               const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
               const isSelected = dayKey === selectedDayKey;
               const isToday = dayKey === formatDayKey(new Date());
@@ -578,9 +611,16 @@ export default function EventsPage() {
                     )}
                   </div>
                   {eventCount > 0 && (
-                    <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">
-                      {eventCount === 1 ? "1 event" : `${eventCount} events`}
-                    </p>
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs text-zinc-600 dark:text-zinc-300">
+                        {eventCount === 1 ? "1 event" : `${eventCount} events`}
+                      </p>
+                      {selectedProject && selectedProjectCount > 0 && (
+                        <p className="text-xs" style={{ color: selectedProject.color ?? undefined }}>
+                          {selectedProjectCount} in {selectedProject.name}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </button>
               );
@@ -594,7 +634,21 @@ export default function EventsPage() {
             ) : (
               <ul className="space-y-3">
                 {selectedDayEvents.map((event) => (
-                  <li key={event.id} className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-3">
+                  <li
+                    key={event.id}
+                    className={`rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 ${
+                      projectFilter !== ALL_PROJECTS_FILTER &&
+                      projectFilter !== NO_PROJECT_FILTER &&
+                      event.projectId !== projectFilter
+                        ? "opacity-55"
+                        : ""
+                    }`}
+                    style={
+                      selectedProject && event.projectId === selectedProject.id
+                        ? { borderLeftWidth: 4, borderLeftColor: selectedProject.color ?? "#18181b" }
+                        : undefined
+                    }
+                  >
                     <p className="font-medium">{event.title}</p>
                     <p className="text-sm text-zinc-600 dark:text-zinc-300">
                       {event.hasStartTime ? formatTime(event.startTime) : "Time not specified"}{event.endTime && event.hasEndTime ? ` - ${formatTime(event.endTime)}` : ""}
@@ -619,7 +673,8 @@ export default function EventsPage() {
               onChange={(e) => setProjectFilter(e.target.value)}
               className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 outline-none focus:border-black dark:border-zinc-700 sm:max-w-xs"
             >
-              <option value="">All projects</option>
+              <option value={ALL_PROJECTS_FILTER}>All projects</option>
+              <option value={NO_PROJECT_FILTER}>No project</option>
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>{project.name}</option>
               ))}
