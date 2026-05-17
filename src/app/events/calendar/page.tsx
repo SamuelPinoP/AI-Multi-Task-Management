@@ -22,7 +22,12 @@ type EventItem = {
   hasStartTime: boolean;
   hasEndTime: boolean;
   recurrence?: Recurrence | null;
+  projectId?: string | null;
+  project?: Project | null;
 };
+type Project = { id: string; name: string; color: string | null };
+const ALL_PROJECTS_FILTER = "ALL";
+const NO_PROJECT_FILTER = "NO_PROJECT";
 
 function formatDayKey(date: Date) {
   const year = date.getFullYear();
@@ -37,6 +42,8 @@ function formatTime(value: string) {
 
 export default function EventsCalendarPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS_FILTER);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState("");
   const [month, setMonth] = useState(() => {
@@ -58,8 +65,15 @@ export default function EventsCalendarPage() {
           throw new Error("Failed to fetch events");
         }
 
-        const data = (await response.json()) as EventItem[];
-        setEvents(data.map((event) => ({ ...event, recurrence: normalizeRecurrence(event.recurrence) })));
+        const [eventsData, projectsData] = await Promise.all([
+          response.json() as Promise<EventItem[]>,
+          fetch("/api/projects", { cache: "no-store" }).then(async (res) => {
+            if (!res.ok) throw new Error("Failed to fetch projects");
+            return res.json() as Promise<Project[]>;
+          }),
+        ]);
+        setEvents(eventsData.map((event) => ({ ...event, recurrence: normalizeRecurrence(event.recurrence) })));
+        setProjects(projectsData);
       } catch {
         setError("Could not load events for the calendar.");
       } finally {
@@ -108,9 +122,20 @@ export default function EventsCalendarPage() {
     }));
     return expandRecurringEventsForRange(eventsWithSourceId, visibleRange.start, visibleRange.end);
   }, [events, visibleRange]);
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === projectFilter) ?? null,
+    [projects, projectFilter]
+  );
+  const filteredExpandedEvents = useMemo(() => {
+    return expandedEvents.filter((event) => {
+      if (projectFilter === ALL_PROJECTS_FILTER) return true;
+      if (projectFilter === NO_PROJECT_FILTER) return event.projectId === null || event.projectId === undefined;
+      return event.projectId === projectFilter;
+    });
+  }, [expandedEvents, projectFilter]);
 
   const eventsByDay = useMemo(() => {
-    return expandedEvents.reduce<Record<string, EventItem[]>>((acc, event) => {
+    return filteredExpandedEvents.reduce<Record<string, EventItem[]>>((acc, event) => {
       const key = formatDayKey(new Date(event.startTime));
       if (!acc[key]) {
         acc[key] = [];
@@ -118,7 +143,7 @@ export default function EventsCalendarPage() {
       acc[key].push(event);
       return acc;
     }, {});
-  }, [expandedEvents]);
+  }, [filteredExpandedEvents]);
 
   const selectedDayEvents = useMemo(() => {
     const dayEvents = eventsByDay[selectedDayKey] ?? [];
@@ -183,6 +208,19 @@ export default function EventsCalendarPage() {
               }).format(month)}
             </h2>
             <div className="flex items-center gap-2">
+              <select
+                value={projectFilter}
+                onChange={(e) => setProjectFilter(e.target.value)}
+                className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              >
+                <option value={ALL_PROJECTS_FILTER}>All projects</option>
+                <option value={NO_PROJECT_FILTER}>No project</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
               <button
                 onClick={() => setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
                 className="rounded-lg border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
@@ -244,7 +282,12 @@ export default function EventsCalendarPage() {
                           {(eventsByDay[dayKey] ?? []).slice(0, 2).map((event) => (
                             <p
                               key={event.id}
-                              className="truncate rounded bg-zinc-200/70 px-1.5 py-0.5 text-xs text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100"
+                              className="truncate rounded border-l-2 bg-zinc-200/70 px-1.5 py-0.5 text-xs text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100"
+                              style={
+                                selectedProject && event.projectId === selectedProject.id
+                                  ? { borderLeftColor: selectedProject.color ?? "#18181b" }
+                                  : undefined
+                              }
                             >
                               {event.hasStartTime ? formatTime(event.startTime) : "No time"} {event.title}
                             </p>
@@ -273,6 +316,11 @@ export default function EventsCalendarPage() {
                   <article
                     key={event.id}
                     className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700"
+                    style={
+                      selectedProject && event.projectId === selectedProject.id
+                        ? { borderLeftWidth: 4, borderLeftColor: selectedProject.color ?? "#18181b" }
+                        : undefined
+                    }
                   >
                     <div className="flex items-start justify-between gap-3">
                       <p className="font-medium">{event.title}</p>
