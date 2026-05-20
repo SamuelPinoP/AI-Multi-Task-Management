@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
 import { NextResponse } from "next/server";
+import { createActivity } from "@/lib/activity";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
 function parseProjectId(input: unknown): string | null {
@@ -108,6 +109,15 @@ export async function POST(req: Request) {
       },
       include: { project: { select: { id: true, name: true, color: true } } },
     });
+    void createActivity({
+      userId: user.id,
+      action: "CREATED_EVENT",
+      message: `Created event: “${event.title}”`,
+      entityType: "EVENT",
+      entityId: event.id,
+      projectId: event.projectId,
+    });
+
     return NextResponse.json(event, { status: 201 });
   } catch (error) {
     console.error("POST /api/events error:", error);

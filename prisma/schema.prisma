@@ -22,6 +22,7 @@ model User {
   weeklyGoals WeeklyGoal[]
   events      Event[]
   projects    Project[]
+  activities  Activity[]
 }
 
 model Note {
@@ -103,6 +104,39 @@ model Project {
   notes       Note[]
   tasks       Task[]
   events      Event[]
+  activities  Activity[]
+}
+
+
+model Activity {
+  id         String             @id @default(cuid())
+  action     ActivityAction
+  message    String
+  entityType ActivityEntityType
+  entityId   String?
+  createdAt  DateTime           @default(now())
+
+  userId     String
+  projectId  String?
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project    Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
+}
+
+enum ActivityAction {
+  CREATED_NOTE
+  CREATED_TASK
+  COMPLETED_TASK
+  CREATED_EVENT
+  CREATED_PROJECT
+  DELETED_ITEM
+  RESTORED_ITEM
+}
+
+enum ActivityEntityType {
+  NOTE
+  TASK
+  EVENT
+  PROJECT
 }
 
 enum TaskStatus {

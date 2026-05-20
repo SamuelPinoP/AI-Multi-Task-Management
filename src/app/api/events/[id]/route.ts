@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
 import { NextResponse } from "next/server";
+import { createActivity } from "@/lib/activity";
 const DEMO_USER_EMAIL = "samuel@example.com";
 type RouteContext = { params: Promise<{ id: string }> };
 function parseProjectId(input: unknown): string | null {
@@ -72,8 +73,11 @@ export async function PATCH(req: Request, context: RouteContext) {
 
 export async function DELETE(_req: Request, context: RouteContext) { /* unchanged */
   try { const { id } = await context.params; if (!id) return NextResponse.json({ error: "Event id is required" }, { status: 400 });
+    const existingEvent = await prisma.event.findFirst({ where: { id, deletedAt: null, user: { email: DEMO_USER_EMAIL } }, select: { id: true, title: true, userId: true, projectId: true } });
+    if (!existingEvent) return NextResponse.json({ error: "Event not found" }, { status: 404 });
     const deleted = await prisma.event.updateMany({ where: { id, deletedAt: null, user: { email: DEMO_USER_EMAIL } }, data: { deletedAt: new Date() } });
     if (deleted.count === 0) return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    void createActivity({ userId: existingEvent.userId, action: "DELETED_ITEM", message: `Deleted event: “${existingEvent.title}”`, entityType: "EVENT", entityId: existingEvent.id, projectId: existingEvent.projectId });
     return NextResponse.json({ message: "Event moved to trash" }, { status: 200 });
   } catch (error) { console.error("DELETE /api/events/[id] error:", error); return NextResponse.json({ error: "Failed to delete event" }, { status: 500 }); }
 }

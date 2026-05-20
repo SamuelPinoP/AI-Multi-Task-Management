@@ -1,6 +1,7 @@
 import { Priority, Recurrence, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { createActivity } from "@/lib/activity";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
 
@@ -120,6 +121,15 @@ export async function POST(req: Request) {
           select: { id: true, name: true, color: true },
         },
       },
+    });
+
+    void createActivity({
+      userId: user.id,
+      action: status === TaskStatus.DONE ? "COMPLETED_TASK" : "CREATED_TASK",
+      message: `${status === TaskStatus.DONE ? "Completed task" : "Created task"}: “${task.title}”`,
+      entityType: "TASK",
+      entityId: task.id,
+      projectId: task.projectId,
     });
 
     return NextResponse.json(task, { status: 201 });

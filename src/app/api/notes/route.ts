@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { createActivity } from "@/lib/activity";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
 
@@ -81,6 +82,15 @@ export async function POST(req: Request) {
           select: { id: true, name: true, color: true },
         },
       },
+    });
+
+    void createActivity({
+      userId: user.id,
+      action: "CREATED_NOTE",
+      message: `Created note: “${note.title}”`,
+      entityType: "NOTE",
+      entityId: note.id,
+      projectId: note.projectId,
     });
 
     return NextResponse.json(note, { status: 201 });
