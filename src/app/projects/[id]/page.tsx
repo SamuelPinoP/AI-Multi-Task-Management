@@ -59,9 +59,18 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
     notFound();
   }
 
+  const now = new Date();
+  const totalNotes = project.notes.length;
+  const totalTasks = project.tasks.length;
+  const completedTasks = project.tasks.filter((task) => task.status === "DONE").length;
+  const activeTasks = project.tasks.filter((task) => task.status !== "DONE").length;
+  const overdueTasks = project.tasks.filter((task) => task.status !== "DONE" && task.dueDate && task.dueDate < now).length;
+  const upcomingEvents = project.events.filter((event) => event.startTime >= now).length;
+  const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
   return (
     <main className="min-h-screen px-6 py-10">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-6xl">
         <Link href="/projects" className="mb-6 inline-block text-sm underline">
           ← Back to projects
         </Link>
@@ -77,6 +86,43 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
           <div className="mt-4 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
             <span className="inline-block h-3 w-3 rounded-full border border-zinc-300 dark:border-zinc-700" style={{ backgroundColor: project.color || "transparent" }} />
             <span>{project.color || "No color"}</span>
+          </div>
+        </section>
+
+        <section className="mt-8">
+          <h2 className="mb-4 text-2xl font-semibold">Project Progress Summary</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <article className="rounded-2xl border border-zinc-200 p-4 shadow-sm dark:border-zinc-800">
+              <p className="text-sm text-zinc-500">Total Notes</p>
+              <p className="mt-2 text-2xl font-semibold">{totalNotes}</p>
+            </article>
+            <article className="rounded-2xl border border-zinc-200 p-4 shadow-sm dark:border-zinc-800">
+              <p className="text-sm text-zinc-500">Total Tasks</p>
+              <p className="mt-2 text-2xl font-semibold">{totalTasks}</p>
+            </article>
+            <article className="rounded-2xl border border-zinc-200 p-4 shadow-sm dark:border-zinc-800">
+              <p className="text-sm text-zinc-500">Completed Tasks</p>
+              <p className="mt-2 text-2xl font-semibold">{completedTasks}</p>
+            </article>
+            <article className="rounded-2xl border border-zinc-200 p-4 shadow-sm dark:border-zinc-800">
+              <p className="text-sm text-zinc-500">Active Tasks</p>
+              <p className="mt-2 text-2xl font-semibold">{activeTasks}</p>
+            </article>
+            <article className="rounded-2xl border border-zinc-200 p-4 shadow-sm dark:border-zinc-800">
+              <p className="text-sm text-zinc-500">Overdue Tasks</p>
+              <p className="mt-2 text-2xl font-semibold">{overdueTasks}</p>
+            </article>
+            <article className="rounded-2xl border border-zinc-200 p-4 shadow-sm dark:border-zinc-800">
+              <p className="text-sm text-zinc-500">Upcoming Events</p>
+              <p className="mt-2 text-2xl font-semibold">{upcomingEvents}</p>
+            </article>
+            <article className="rounded-2xl border border-zinc-200 p-4 shadow-sm dark:border-zinc-800 sm:col-span-2 lg:col-span-2">
+              <p className="text-sm text-zinc-500">Task Completion</p>
+              <p className="mt-2 text-2xl font-semibold">{totalTasks === 0 ? "0%" : `${completionPercentage}%`}</p>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                {totalTasks === 0 ? "No tasks yet" : `${completedTasks} of ${totalTasks} tasks complete`}
+              </p>
+            </article>
           </div>
         </section>
 
