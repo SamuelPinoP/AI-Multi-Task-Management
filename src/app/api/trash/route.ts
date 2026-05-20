@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { createActivity } from "@/lib/activity";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
 
@@ -25,6 +26,16 @@ export async function PATCH(req: Request) {
 
   const where = { id, deletedAt: { not: null }, user: { email: DEMO_USER_EMAIL } };
 
+  const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL }, select: { id: true } });
+  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+  const item =
+    type === "note"
+      ? await prisma.note.findFirst({ where, select: { id: true, title: true, projectId: true } })
+      : type === "task"
+      ? await prisma.task.findFirst({ where, select: { id: true, title: true, projectId: true } })
+      : await prisma.event.findFirst({ where, select: { id: true, title: true, projectId: true } });
+
   const updated =
     type === "note"
       ? await prisma.note.updateMany({ where, data: { deletedAt: null } })
@@ -32,7 +43,16 @@ export async function PATCH(req: Request) {
       ? await prisma.task.updateMany({ where, data: { deletedAt: null } })
       : await prisma.event.updateMany({ where, data: { deletedAt: null } });
 
-  if (updated.count === 0) return NextResponse.json({ error: "Item not found" }, { status: 404 });
+  if (updated.count === 0 || !item) return NextResponse.json({ error: "Item not found" }, { status: 404 });
+
+  void createActivity({
+    userId: user.id,
+    action: "RESTORED_ITEM",
+    message: `Restored ${type}: “${item.title}”`,
+    entityType: type.toUpperCase() as "NOTE" | "TASK" | "EVENT",
+    entityId: item.id,
+    projectId: item.projectId,
+  });
 
   return NextResponse.json({ message: "Item restored" }, { status: 200 });
 }

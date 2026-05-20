@@ -68,13 +68,23 @@ export default async function DashboardPage() {
   const reminderRangeEnd = new Date(todayStart);
   reminderRangeEnd.setDate(reminderRangeEnd.getDate() + REMINDER_LOOKAHEAD_DAYS + 1);
 
-  const [recentNotes, upcomingTasks, reminderTasks, reminderEvents, totalNotes, totalTasks, activeTasks, completedTasks] =
+  const [recentNotes, recentActivities, upcomingTasks, reminderTasks, reminderEvents, totalNotes, totalTasks, activeTasks, completedTasks] =
     user
       ? await Promise.all([
           prisma.note.findMany({
             where: { userId: user.id, deletedAt: null },
             orderBy: { createdAt: "desc" },
             take: 5,
+          }),
+          prisma.activity.findMany({
+            where: { userId: user.id },
+            orderBy: { createdAt: "desc" },
+            take: 10,
+            include: {
+              project: {
+                select: { name: true, color: true },
+              },
+            },
           }),
           prisma.task.findMany({
             where: {
@@ -111,7 +121,7 @@ export default async function DashboardPage() {
           prisma.task.count({ where: { userId: user.id, deletedAt: null, status: { not: TaskStatus.DONE } } }),
           prisma.task.count({ where: { userId: user.id, deletedAt: null, status: TaskStatus.DONE } }),
         ])
-      : [[], [], [], [], 0, 0, 0, 0];
+      : [[], [], [], [], [], 0, 0, 0, 0];
 
   const overdueTasks = reminderTasks.filter((task) => task.dueDate && getTaskReminderGroup(task.dueDate, now) === "OVERDUE");
   const dueTodayTasks = reminderTasks.filter((task) => task.dueDate && getTaskReminderGroup(task.dueDate, now) === "DUE_TODAY");
@@ -217,6 +227,28 @@ export default async function DashboardPage() {
             <Link href="/events" className="rounded-xl border border-zinc-300 px-5 py-3 transition hover:bg-gray-50 dark:border-zinc-700">Go to Events</Link>
             <Link href="/trash" className="rounded-xl border border-zinc-300 px-5 py-3 transition hover:bg-gray-50 dark:border-zinc-700">Go to Trash</Link>
           </div>
+        </section>
+
+
+        <section className="mb-10 rounded-2xl border border-zinc-200 p-6 shadow-sm dark:border-zinc-800">
+          <h2 className="mb-4 text-2xl font-semibold">Recent Activity</h2>
+          {!user ? (
+            <p className="text-zinc-600 dark:text-zinc-300">Demo user not found.</p>
+          ) : recentActivities.length === 0 ? (
+            <p className="text-zinc-600 dark:text-zinc-300">No recent activity yet.</p>
+          ) : (
+            <ul className="space-y-3">
+              {recentActivities.map((activity) => (
+                <li key={activity.id} className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+                  <p className="font-medium">{activity.message}</p>
+                  <div className="mt-2 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                    <span>{formatDate(activity.createdAt)}</span>
+                    {activity.project ? <ProjectBadge project={activity.project} /> : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <div className="grid gap-6 lg:grid-cols-2">
