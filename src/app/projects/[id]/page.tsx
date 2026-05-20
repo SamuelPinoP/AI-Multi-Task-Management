@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ProjectCalendar } from "@/components/project-calendar";
+import { ProjectQuickActions } from "@/components/project-quick-actions";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
 
@@ -88,6 +89,8 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
             <span>{project.color || "No color"}</span>
           </div>
         </section>
+
+        <ProjectQuickActions projectId={project.id} />
 
         <section className="mt-8">
           <h2 className="mb-4 text-2xl font-semibold">Project Progress Summary</h2>
