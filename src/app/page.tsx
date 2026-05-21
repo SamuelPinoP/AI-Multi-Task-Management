@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { uiButtonClass, uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Recurrence, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { expandRecurringEventsForRange } from "@/lib/recurrence";
@@ -219,18 +220,18 @@ export default async function DashboardPage() {
           )}
         </section>
 
-        <section className="mb-10 rounded-2xl border border-zinc-200 p-6 shadow-sm dark:border-zinc-800">
+        <section className={`${uiCardClass} mb-10`}>
           <h2 className="mb-4 text-2xl font-semibold">Quick Actions</h2>
           <div className="flex flex-wrap gap-3">
-            <Link href="/notes" className="rounded-xl bg-zinc-900 px-5 py-3 text-white transition hover:opacity-90 dark:bg-zinc-100 dark:text-zinc-900">Go to Notes</Link>
-            <Link href="/tasks" className="rounded-xl border border-zinc-300 px-5 py-3 transition hover:bg-gray-50 dark:border-zinc-700">Go to Tasks</Link>
-            <Link href="/events" className="rounded-xl border border-zinc-300 px-5 py-3 transition hover:bg-gray-50 dark:border-zinc-700">Go to Events</Link>
-            <Link href="/trash" className="rounded-xl border border-zinc-300 px-5 py-3 transition hover:bg-gray-50 dark:border-zinc-700">Go to Trash</Link>
+            <Link href="/notes" className={uiPrimaryButtonClass}>Go to Notes</Link>
+            <Link href="/tasks" className={uiButtonClass}>Go to Tasks</Link>
+            <Link href="/events" className={uiButtonClass}>Go to Events</Link>
+            <Link href="/trash" className={uiButtonClass}>Go to Trash</Link>
           </div>
         </section>
 
 
-        <section className="mb-10 rounded-2xl border border-zinc-200 p-6 shadow-sm dark:border-zinc-800">
+        <section className={`${uiCardClass} mb-10`}>
           <h2 className="mb-4 text-2xl font-semibold">Recent Activity</h2>
           {!user ? (
             <p className="text-zinc-600 dark:text-zinc-300">Demo user not found.</p>

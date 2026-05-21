@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
@@ -189,17 +189,12 @@ export default function EventsCalendarPage() {
               Explore all events in a larger monthly view with day-by-day details.
             </p>
           </div>
-          <Link
-            href="/events"
-            className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium transition hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-          >
-            Back to Events
-          </Link>
+          <BackLink href="/events">Back to Events</BackLink>
         </div>
 
         {error && <p className="mb-6 text-sm text-red-600">{error}</p>}
 
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
+        <section className={uiCardClass}>
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-2xl font-semibold">
               {new Intl.DateTimeFormat("en-US", {
@@ -223,13 +218,13 @@ export default function EventsCalendarPage() {
               </select>
               <button
                 onClick={() => setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                className={uiButtonClass}
               >
                 Previous
               </button>
               <button
                 onClick={() => setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                className={uiButtonClass}
               >
                 Next
               </button>
