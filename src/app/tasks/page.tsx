@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
@@ -364,7 +365,12 @@ export default function TasksPage() {
     <>
     <main className="min-h-screen px-6 py-10">
       <div className="mx-auto max-w-4xl">
-        <h1 className="mb-2 text-4xl font-bold">Tasks</h1>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-4xl font-bold">Tasks</h1>
+          <Link href="/tasks/board" className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800">
+            Open Task Board
+          </Link>
+        </div>
         <p className="mb-8 text-zinc-600 dark:text-zinc-300">Create and manage your tasks for AI-Multi Task-Management.</p>
 
         <section className="mb-10 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
