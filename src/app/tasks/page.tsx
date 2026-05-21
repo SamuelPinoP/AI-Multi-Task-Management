@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { uiButtonClass, uiDangerButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
@@ -488,8 +489,8 @@ export default function TasksPage() {
                           <select value={editProjectId} onChange={(e) => setEditProjectId(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="">No project</option>{projects.map((project) => (<option key={project.id} value={project.id}>{project.name}</option>))}</select>
                         </div>
                         <div className="flex gap-2">
-                          <button type="button" onClick={() => void handleSaveEdit(task.id)} disabled={savingEdit} className="rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60">{savingEdit ? "Saving..." : "Save"}</button>
-                          <button type="button" onClick={cancelEditing} disabled={savingEdit} className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm font-medium text-gray-700">Cancel</button>
+                          <button type="button" onClick={() => void handleSaveEdit(task.id)} disabled={savingEdit} className={uiPrimaryButtonClass}>{savingEdit ? "Saving..." : "Save"}</button>
+                          <button type="button" onClick={cancelEditing} disabled={savingEdit} className={uiButtonClass}>Cancel</button>
                         </div>
                       </div>
                     ) : (
@@ -508,9 +509,9 @@ export default function TasksPage() {
                             )}
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            <button type="button" onClick={() => startEditing(task)} className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm font-medium text-gray-700">Edit</button>
+                            <button type="button" onClick={() => startEditing(task)} className={uiButtonClass}>Edit</button>
                             <button type="button" onClick={() => void handleToggleComplete(task)} disabled={isToggling} className="rounded-lg border border-green-300 px-3 py-1.5 text-sm font-medium text-green-700 disabled:opacity-60">{isToggling ? "Updating..." : task.status === "DONE" ? "Mark Incomplete" : "Mark Done"}</button>
-                            <button type="button" onClick={() => setConfirmDeleteId(task.id)} disabled={isDeleting} className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 disabled:opacity-60">{isDeleting ? "Deleting..." : "Delete"}</button>
+                            <button type="button" onClick={() => setConfirmDeleteId(task.id)} disabled={isDeleting} className={uiDangerButtonClass}>{isDeleting ? "Deleting..." : "Delete"}</button>
                           </div>
                         </div>
                         <p className="mt-2 text-gray-700">{task.description || "No description."}</p>

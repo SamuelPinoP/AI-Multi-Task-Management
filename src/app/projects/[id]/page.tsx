@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ProjectCalendar } from "@/components/project-calendar";
 import { ProjectQuickActions } from "@/components/project-quick-actions";
+import { BackLink, uiCardClass } from "@/components/ui";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
 
@@ -72,11 +72,9 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
   return (
     <main className="min-h-screen px-6 py-10">
       <div className="mx-auto max-w-6xl">
-        <Link href="/projects" className="mb-6 inline-block text-sm underline">
-          ← Back to projects
-        </Link>
+        <BackLink href="/projects" className="mb-6">Back to Projects</BackLink>
 
-        <section className="rounded-2xl border border-zinc-200 p-6 shadow-sm dark:border-zinc-800">
+        <section className={uiCardClass}>
           <h1 className="text-3xl font-bold">{project.name}</h1>
           <div className="mt-3"><span className="inline-flex items-center rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700">Status: {project.status.charAt(0) + project.status.slice(1).toLowerCase()}</span></div>
 
@@ -97,27 +95,27 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
         <section className="mt-8">
           <h2 className="mb-4 text-2xl font-semibold">Project Progress Summary</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <article className="rounded-2xl border border-zinc-200 p-4 shadow-sm dark:border-zinc-800">
+            <article className={uiCardClass.replace("p-6", "p-4")}>
               <p className="text-sm text-zinc-500">Total Notes</p>
               <p className="mt-2 text-2xl font-semibold">{totalNotes}</p>
             </article>
-            <article className="rounded-2xl border border-zinc-200 p-4 shadow-sm dark:border-zinc-800">
+            <article className={uiCardClass.replace("p-6", "p-4")}>
               <p className="text-sm text-zinc-500">Total Tasks</p>
               <p className="mt-2 text-2xl font-semibold">{totalTasks}</p>
             </article>
-            <article className="rounded-2xl border border-zinc-200 p-4 shadow-sm dark:border-zinc-800">
+            <article className={uiCardClass.replace("p-6", "p-4")}>
               <p className="text-sm text-zinc-500">Completed Tasks</p>
               <p className="mt-2 text-2xl font-semibold">{completedTasks}</p>
             </article>
-            <article className="rounded-2xl border border-zinc-200 p-4 shadow-sm dark:border-zinc-800">
+            <article className={uiCardClass.replace("p-6", "p-4")}>
               <p className="text-sm text-zinc-500">Active Tasks</p>
               <p className="mt-2 text-2xl font-semibold">{activeTasks}</p>
             </article>
-            <article className="rounded-2xl border border-zinc-200 p-4 shadow-sm dark:border-zinc-800">
+            <article className={uiCardClass.replace("p-6", "p-4")}>
               <p className="text-sm text-zinc-500">Overdue Tasks</p>
               <p className="mt-2 text-2xl font-semibold">{overdueTasks}</p>
             </article>
-            <article className="rounded-2xl border border-zinc-200 p-4 shadow-sm dark:border-zinc-800">
+            <article className={uiCardClass.replace("p-6", "p-4")}>
               <p className="text-sm text-zinc-500">Upcoming Events</p>
               <p className="mt-2 text-2xl font-semibold">{upcomingEvents}</p>
             </article>

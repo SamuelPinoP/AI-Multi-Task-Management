@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { uiPrimaryButtonClass } from "@/components/ui";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   expandRecurringEventsForRange,
@@ -440,7 +441,7 @@ export default function EventsPage() {
           <Link
             href="/events/calendar"
             aria-label="Open full calendar view"
-            className="inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+            className={`${uiPrimaryButtonClass} gap-2 py-2.5`}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"

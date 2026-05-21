@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
@@ -133,12 +133,10 @@ export default function TaskBoardPage() {
             <h1 className="text-4xl font-bold">Task Planning Board</h1>
             <p className="text-zinc-600 dark:text-zinc-300">Manage tasks visually by status.</p>
           </div>
-          <Link href="/tasks" className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800">
-            Back to Tasks List
-          </Link>
+          <BackLink href="/tasks">Back to Tasks List</BackLink>
         </div>
 
-        <div className="mb-6 rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
+        <div className={`${uiCardClass} mb-6 p-4`}>
           <label htmlFor="projectFilter" className="mb-2 block text-sm font-medium">Filter by project</label>
           <select id="projectFilter" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-black dark:border-zinc-700 sm:w-80">
             <option value="">All Projects</option>
@@ -192,7 +190,7 @@ export default function TaskBoardPage() {
 
                             <div className="mt-4 flex flex-wrap gap-2">
                               {STATUS_COLUMNS.filter((option) => option.status !== task.status).map((option) => (
-                                <button key={option.status} type="button" disabled={updatingTaskId === task.id} onClick={() => void moveTask(task, option.status)} className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium hover:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:hover:bg-zinc-800">
+                                <button key={option.status} type="button" disabled={updatingTaskId === task.id} onClick={() => void moveTask(task, option.status)} className={`${uiButtonClass} rounded-lg px-2.5 py-1.5 text-xs`}>
                                   Move to {option.title}
                                 </button>
                               ))}
