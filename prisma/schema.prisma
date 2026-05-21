@@ -96,6 +96,7 @@ model Project {
   name        String
   description String?
   color       String?
+  status      ProjectStatus @default(ACTIVE)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -149,6 +150,12 @@ enum Priority {
   LOW
   MEDIUM
   HIGH
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
 }
 
 enum GoalStatus {

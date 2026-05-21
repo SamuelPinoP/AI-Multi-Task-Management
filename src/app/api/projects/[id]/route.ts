@@ -1,3 +1,4 @@
+import { ProjectStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -7,6 +8,10 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+function parseProjectStatus(value: unknown): ProjectStatus | null {
+  if (typeof value !== "string") return null;
+  return Object.values(ProjectStatus).includes(value as ProjectStatus) ? (value as ProjectStatus) : null;
+}
 
 export async function GET(_req: Request, context: RouteContext) {
   try {
@@ -59,9 +64,25 @@ export async function PATCH(req: Request, context: RouteContext) {
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const descriptionInput = typeof body.description === "string" ? body.description.trim() : "";
     const colorInput = typeof body.color === "string" ? body.color.trim() : "";
+    const statusInput = parseProjectStatus(body.status);
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
+
+    const data: {
+      name: string;
+      description: string | null;
+      color: string | null;
+      status?: ProjectStatus;
+    } = {
+      name,
+      description: descriptionInput || null,
+      color: colorInput || null,
+    };
+
+    if (statusInput) {
+      data.status = statusInput;
     }
 
     const updated = await prisma.project.updateMany({
@@ -71,11 +92,7 @@ export async function PATCH(req: Request, context: RouteContext) {
           email: DEMO_USER_EMAIL,
         },
       },
-      data: {
-        name,
-        description: descriptionInput || null,
-        color: colorInput || null,
-      },
+      data,
     });
 
     if (updated.count === 0) {

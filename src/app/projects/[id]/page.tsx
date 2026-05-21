@@ -78,6 +78,8 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
 
         <section className="rounded-2xl border border-zinc-200 p-6 shadow-sm dark:border-zinc-800">
           <h1 className="text-3xl font-bold">{project.name}</h1>
+          <div className="mt-3"><span className="inline-flex items-center rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700">Status: {project.status.charAt(0) + project.status.slice(1).toLowerCase()}</span></div>
+
           {project.description ? (
             <p className="mt-2 text-zinc-700 dark:text-zinc-300">{project.description}</p>
           ) : (

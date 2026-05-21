@@ -1,15 +1,25 @@
+import { ProjectStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
 
-export async function GET() {
+function parseProjectStatus(value: unknown): ProjectStatus | null {
+  if (typeof value !== "string") return null;
+  return Object.values(ProjectStatus).includes(value as ProjectStatus) ? (value as ProjectStatus) : null;
+}
+
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const statusFilter = parseProjectStatus(searchParams.get("status"));
+
     const user = await prisma.user.findUnique({
       where: { email: DEMO_USER_EMAIL },
       include: {
         projects: {
+          where: statusFilter ? { status: statusFilter } : undefined,
           orderBy: { createdAt: "desc" },
         },
       },
