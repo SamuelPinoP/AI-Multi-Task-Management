@@ -21,7 +21,7 @@ function isValidRecurrence(value: unknown): value is Recurrence {
   return typeof value === "string" && Object.values(Recurrence).includes(value as Recurrence);
 }
 
-function parseProjectId(input: unknown): string | null {
+function parseId(input: unknown): string | null {
   if (typeof input !== "string") {
     return null;
   }
@@ -67,8 +67,8 @@ export async function PATCH(req: Request, context: RouteContext) {
     }
 
     const description = typeof body.description === "string" ? body.description.trim() : "";
-    const projectId = parseProjectId(body.projectId);
-    const assigneeId = parseProjectId(body.assigneeId);
+    const projectId = parseId(body.projectId);
+    let assigneeId = parseId(body.assigneeId);
 
     const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL } });
 
@@ -84,6 +84,21 @@ export async function PATCH(req: Request, context: RouteContext) {
       if (!project) {
         return NextResponse.json({ error: "Invalid project" }, { status: 400 });
       }
+    }
+
+    if (assigneeId && !projectId) {
+      return NextResponse.json({ error: "Assignee requires a project" }, { status: 400 });
+    }
+
+    if (assigneeId) {
+      const member = await prisma.projectMember.findFirst({ where: { id: assigneeId, projectId } });
+      if (!member) {
+        return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
+      }
+    }
+
+    if (!projectId) {
+      assigneeId = null;
     }
 
     const existingTask = await prisma.task.findFirst({

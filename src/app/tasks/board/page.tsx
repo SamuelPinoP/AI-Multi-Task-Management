@@ -25,6 +25,7 @@ type Task = {
   recurrence: Recurrence;
   projectId: string | null;
   project: Project | null;
+  assigneeId?: string | null;
   assignee: Member | null;
 };
 
@@ -110,6 +111,7 @@ export default function TaskBoardPage() {
           dueDate: task.dueDate,
           recurrence: task.recurrence,
           projectId: task.projectId ?? "",
+          assigneeId: task.projectId ? task.assignee?.id ?? "" : "",
         }),
       });
 

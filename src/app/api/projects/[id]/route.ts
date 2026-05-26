@@ -38,6 +38,10 @@ export async function GET(_req: Request, context: RouteContext) {
             updatedAt: true,
           },
         },
+        members: {
+          orderBy: { createdAt: "asc" },
+          include: { notes: { orderBy: { createdAt: "desc" }, select: { id: true, message: true, createdAt: true } } },
+        },
       },
     });
 
