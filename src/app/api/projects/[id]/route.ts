@@ -56,6 +56,14 @@ export async function GET(_req: Request, context: RouteContext) {
             },
           },
         },
+        comments: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            user: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        },
       },
     });
 
