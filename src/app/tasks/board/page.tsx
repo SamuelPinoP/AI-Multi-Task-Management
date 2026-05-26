@@ -13,6 +13,8 @@ type Project = {
   color: string | null;
 };
 
+type Member = { id: string; name: string; email: string | null; role: "OWNER" | "MEMBER" | "VIEWER" };
+
 type Task = {
   id: string;
   title: string;
@@ -23,6 +25,7 @@ type Task = {
   recurrence: Recurrence;
   projectId: string | null;
   project: Project | null;
+  assignee: Member | null;
 };
 
 const STATUS_COLUMNS: Array<{ status: TaskStatus; title: string }> = [
@@ -179,6 +182,7 @@ export default function TaskBoardPage() {
                             <div className="mt-3 flex flex-wrap gap-2">
                               <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">Priority: {task.priority}</span>
                               {task.dueDate && <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium">Due: {new Date(task.dueDate).toLocaleDateString()}</span>}
+                              {task.assignee && <span className="rounded-full border px-2.5 py-1 text-xs font-medium">Assigned to: {task.assignee.name}</span>}
                               {task.project && (
                                 <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium" style={{ borderColor: task.project.color ?? undefined }}>
                                   <span className="h-2 w-2 rounded-full" style={{ backgroundColor: task.project.color ?? "currentColor" }} />

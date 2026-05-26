@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ProjectCalendar } from "@/components/project-calendar";
 import { ProjectQuickActions } from "@/components/project-quick-actions";
 import { BackLink, uiCardClass } from "@/components/ui";
+import { ProjectTeamSection } from "@/components/project-team-section";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
 
@@ -38,8 +39,10 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
           status: true,
           priority: true,
           dueDate: true,
+          assignee: { select: { id: true, name: true, role: true } },
         },
       },
+      members: { orderBy: { createdAt: "asc" } },
       events: {
         where: { deletedAt: null },
         orderBy: { startTime: "asc" },
@@ -68,6 +71,10 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
   const overdueTasks = project.tasks.filter((task) => task.status !== "DONE" && task.dueDate && task.dueDate < now).length;
   const upcomingEvents = project.events.filter((event) => event.startTime >= now).length;
   const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const workload = new Map<string, { name: string; active: number; completed: number; overdue: number }>();
+  for (const member of project.members) workload.set(member.id, { name: member.name, active: 0, completed: 0, overdue: 0 });
+  workload.set("unassigned", { name: "Unassigned", active: 0, completed: 0, overdue: 0 });
+  for (const task of project.tasks) { const key = task.assignee?.id ?? "unassigned"; const item = workload.get(key); if (!item) continue; if (task.status === "DONE") item.completed += 1; else { item.active += 1; if (task.dueDate && task.dueDate < now) item.overdue += 1; } }
 
   return (
     <main className="min-h-screen px-6 py-10">
@@ -129,6 +136,13 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
           </div>
         </section>
 
+        <ProjectTeamSection projectId={project.id} initialMembers={project.members} />
+
+        <section className="mt-8">
+          <h2 className="mb-4 text-2xl font-semibold">Team Workload Summary</h2>
+          <div className="overflow-x-auto rounded-2xl border border-zinc-200 dark:border-zinc-800"><table className="min-w-full text-sm"><thead className="bg-zinc-100 dark:bg-zinc-900"><tr><th className="px-3 py-2 text-left">Member</th><th className="px-3 py-2 text-left">Active</th><th className="px-3 py-2 text-left">Completed</th><th className="px-3 py-2 text-left">Overdue</th></tr></thead><tbody>{Array.from(workload.values()).map((row)=><tr key={row.name} className="border-t border-zinc-200 dark:border-zinc-800"><td className="px-3 py-2">{row.name}</td><td className="px-3 py-2">{row.active}</td><td className="px-3 py-2">{row.completed}</td><td className="px-3 py-2">{row.overdue}</td></tr>)}</tbody></table></div>
+        </section>
+
         <section className="mt-8">
           <h2 className="mb-4 text-2xl font-semibold">Assigned Notes</h2>
           {project.notes.length === 0 ? (
@@ -147,6 +161,13 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
           )}
         </section>
 
+        <ProjectTeamSection projectId={project.id} initialMembers={project.members} />
+
+        <section className="mt-8">
+          <h2 className="mb-4 text-2xl font-semibold">Team Workload Summary</h2>
+          <div className="overflow-x-auto rounded-2xl border border-zinc-200 dark:border-zinc-800"><table className="min-w-full text-sm"><thead className="bg-zinc-100 dark:bg-zinc-900"><tr><th className="px-3 py-2 text-left">Member</th><th className="px-3 py-2 text-left">Active</th><th className="px-3 py-2 text-left">Completed</th><th className="px-3 py-2 text-left">Overdue</th></tr></thead><tbody>{Array.from(workload.values()).map((row)=><tr key={row.name} className="border-t border-zinc-200 dark:border-zinc-800"><td className="px-3 py-2">{row.name}</td><td className="px-3 py-2">{row.active}</td><td className="px-3 py-2">{row.completed}</td><td className="px-3 py-2">{row.overdue}</td></tr>)}</tbody></table></div>
+        </section>
+
         <section className="mt-8">
           <h2 className="mb-4 text-2xl font-semibold">Assigned Tasks</h2>
           {project.tasks.length === 0 ? (
@@ -163,11 +184,19 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
                     <span>Status: <strong>{task.status}</strong></span>
                     <span>Priority: <strong>{task.priority}</strong></span>
                     <span>Due: <strong>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}</strong></span>
+                    <span>Assigned to: <strong>{task.assignee?.name ?? "Unassigned"}</strong></span>
                   </div>
                 </article>
               ))}
             </div>
           )}
+        </section>
+
+        <ProjectTeamSection projectId={project.id} initialMembers={project.members} />
+
+        <section className="mt-8">
+          <h2 className="mb-4 text-2xl font-semibold">Team Workload Summary</h2>
+          <div className="overflow-x-auto rounded-2xl border border-zinc-200 dark:border-zinc-800"><table className="min-w-full text-sm"><thead className="bg-zinc-100 dark:bg-zinc-900"><tr><th className="px-3 py-2 text-left">Member</th><th className="px-3 py-2 text-left">Active</th><th className="px-3 py-2 text-left">Completed</th><th className="px-3 py-2 text-left">Overdue</th></tr></thead><tbody>{Array.from(workload.values()).map((row)=><tr key={row.name} className="border-t border-zinc-200 dark:border-zinc-800"><td className="px-3 py-2">{row.name}</td><td className="px-3 py-2">{row.active}</td><td className="px-3 py-2">{row.completed}</td><td className="px-3 py-2">{row.overdue}</td></tr>)}</tbody></table></div>
         </section>
 
         <section className="mt-8">
@@ -180,6 +209,13 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
               endTime: event.endTime ? event.endTime.toISOString() : null,
             }))}
           />
+        </section>
+
+        <ProjectTeamSection projectId={project.id} initialMembers={project.members} />
+
+        <section className="mt-8">
+          <h2 className="mb-4 text-2xl font-semibold">Team Workload Summary</h2>
+          <div className="overflow-x-auto rounded-2xl border border-zinc-200 dark:border-zinc-800"><table className="min-w-full text-sm"><thead className="bg-zinc-100 dark:bg-zinc-900"><tr><th className="px-3 py-2 text-left">Member</th><th className="px-3 py-2 text-left">Active</th><th className="px-3 py-2 text-left">Completed</th><th className="px-3 py-2 text-left">Overdue</th></tr></thead><tbody>{Array.from(workload.values()).map((row)=><tr key={row.name} className="border-t border-zinc-200 dark:border-zinc-800"><td className="px-3 py-2">{row.name}</td><td className="px-3 py-2">{row.active}</td><td className="px-3 py-2">{row.completed}</td><td className="px-3 py-2">{row.overdue}</td></tr>)}</tbody></table></div>
         </section>
 
         <section className="mt-8">

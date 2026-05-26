@@ -68,6 +68,7 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     const description = typeof body.description === "string" ? body.description.trim() : "";
     const projectId = parseProjectId(body.projectId);
+    const assigneeId = parseProjectId(body.assigneeId);
 
     const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL } });
 
@@ -115,6 +116,7 @@ export async function PATCH(req: Request, context: RouteContext) {
         completedAt: body.status === TaskStatus.DONE ? new Date() : null,
         recurrence: body.recurrence,
         projectId,
+        assigneeId,
       },
     });
 
@@ -127,6 +129,9 @@ export async function PATCH(req: Request, context: RouteContext) {
       include: {
         project: {
           select: { id: true, name: true, color: true },
+        },
+        assignee: {
+          select: { id: true, name: true, email: true, role: true },
         },
       },
     });
