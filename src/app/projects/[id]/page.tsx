@@ -4,6 +4,7 @@ import { ProjectCalendar } from "@/components/project-calendar";
 import { ProjectQuickActions } from "@/components/project-quick-actions";
 import { BackLink, uiCardClass } from "@/components/ui";
 import { ProjectTeamSection } from "@/components/project-team-section";
+import { ProjectAssignedTasksSection } from "@/components/project-assigned-tasks-section";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
 
@@ -21,7 +22,7 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
       tasks: {
         where: { deletedAt: null },
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-        select: { id: true, title: true, description: true, status: true, priority: true, dueDate: true, assignee: { select: { id: true, name: true, role: true } } },
+        select: { id: true, title: true, description: true, status: true, priority: true, dueDate: true, recurrence: true, assignee: { select: { id: true, name: true, role: true } } },
       },
       members: { orderBy: { createdAt: "asc" }, include: { notes: { orderBy: { createdAt: "desc" }, select: { id: true, message: true, createdAt: true, visibility: true, createdByUserId: true } } } },
       events: {
@@ -86,7 +87,14 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
 
         <section className="mt-8"><h2 className="mb-4 text-2xl font-semibold">Assigned Notes</h2>{project.notes.length === 0 ? <p className="rounded-2xl border border-dashed border-zinc-300 p-5 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">No notes are assigned to this project yet.</p> : <div className="space-y-4">{project.notes.map((note) => <article key={note.id} className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800"><h3 className="text-lg font-semibold">{note.title}</h3><p className="mt-2 text-zinc-700 dark:text-zinc-300">{note.content || "No content."}</p></article>)}</div>}</section>
 
-        <section className="mt-8"><h2 className="mb-4 text-2xl font-semibold">Assigned Tasks</h2>{project.tasks.length === 0 ? <p className="rounded-2xl border border-dashed border-zinc-300 p-5 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">No tasks are assigned to this project yet.</p> : <div className="space-y-4">{project.tasks.map((task) => <article key={task.id} className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800"><h3 className="text-lg font-semibold">{task.title}</h3><p className="mt-2 text-zinc-700 dark:text-zinc-300">{task.description || "No description."}</p><div className="mt-3 flex flex-wrap gap-3 text-sm text-zinc-600 dark:text-zinc-300"><span>Status: <strong>{task.status}</strong></span><span>Priority: <strong>{task.priority}</strong></span><span>Due: <strong>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}</strong></span><span>Assigned to: <strong>{task.assignee?.name ?? "Unassigned"}</strong></span></div></article>)}</div>}</section>
+        <ProjectAssignedTasksSection
+          projectId={project.id}
+          tasks={project.tasks.map((task) => ({
+            ...task,
+            dueDate: task.dueDate ? task.dueDate.toISOString() : null,
+          }))}
+          members={project.members.map((member) => ({ id: member.id, name: member.name }))}
+        />
 
         <section className="mt-8"><h2 className="mb-4 text-2xl font-semibold">Project Calendar</h2><ProjectCalendar projectColor={project.color} events={project.events.map((event) => ({ ...event, startTime: event.startTime.toISOString(), endTime: event.endTime ? event.endTime.toISOString() : null }))} /></section>
 
