@@ -12,6 +12,7 @@ const links = [
   { href: "/tasks", label: "Tasks" },
   { href: "/events", label: "Events" },
   { href: "/projects", label: "Projects" },
+  { href: "/planner", label: "Planner" },
   { href: "/trash", label: "Trash" },
 ];
 
