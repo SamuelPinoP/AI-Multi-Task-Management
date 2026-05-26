@@ -23,7 +23,7 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
         select: { id: true, title: true, description: true, status: true, priority: true, dueDate: true, assignee: { select: { id: true, name: true, role: true } } },
       },
-      members: { orderBy: { createdAt: "asc" }, include: { notes: { orderBy: { createdAt: "desc" }, select: { id: true, message: true, createdAt: true } } } },
+      members: { orderBy: { createdAt: "asc" }, include: { notes: { orderBy: { createdAt: "desc" }, select: { id: true, message: true, createdAt: true, visibility: true, createdByUserId: true } } } },
       events: {
         where: { deletedAt: null }, orderBy: { startTime: "asc" },
         select: { id: true, title: true, startTime: true, endTime: true, hasStartTime: true, hasEndTime: true, recurrence: true },

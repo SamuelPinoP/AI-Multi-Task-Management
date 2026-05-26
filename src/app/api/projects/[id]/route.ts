@@ -21,10 +21,13 @@ export async function GET(_req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Project id is required" }, { status: 400 });
     }
 
+    const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL }, select: { id: true } });
+    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
     const project = await prisma.project.findFirst({
       where: {
         id,
-        user: { email: DEMO_USER_EMAIL },
+        userId: user.id,
       },
       include: {
         notes: {
@@ -40,7 +43,18 @@ export async function GET(_req: Request, context: RouteContext) {
         },
         members: {
           orderBy: { createdAt: "asc" },
-          include: { notes: { orderBy: { createdAt: "desc" }, select: { id: true, message: true, createdAt: true } } },
+          include: {
+            notes: {
+              where: {
+                OR: [
+                  { visibility: "TEAM" },
+                  { createdByUserId: user.id },
+                ],
+              },
+              orderBy: { createdAt: "desc" },
+              select: { id: true, message: true, createdAt: true, visibility: true, createdByUserId: true },
+            },
+          },
         },
       },
     });
