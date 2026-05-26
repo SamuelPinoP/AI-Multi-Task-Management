@@ -5,6 +5,7 @@ import { ProjectQuickActions } from "@/components/project-quick-actions";
 import { BackLink, uiCardClass } from "@/components/ui";
 import { ProjectTeamSection } from "@/components/project-team-section";
 import { ProjectAssignedTasksSection } from "@/components/project-assigned-tasks-section";
+import { ProjectDiscussionSection } from "@/components/project-discussion-section";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
 
@@ -28,6 +29,10 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
       events: {
         where: { deletedAt: null }, orderBy: { startTime: "asc" },
         select: { id: true, title: true, startTime: true, endTime: true, hasStartTime: true, hasEndTime: true, recurrence: true },
+      },
+      comments: {
+        orderBy: { createdAt: "asc" },
+        include: { user: { select: { name: true, email: true } } },
       },
     },
   });
@@ -94,6 +99,18 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
             dueDate: task.dueDate ? task.dueDate.toISOString() : null,
           }))}
           members={project.members.map((member) => ({ id: member.id, name: member.name }))}
+        />
+
+        <ProjectDiscussionSection
+          projectId={project.id}
+          projectColor={project.color}
+          initialComments={project.comments.map((comment) => ({
+            id: comment.id,
+            message: comment.message,
+            createdAt: comment.createdAt.toISOString(),
+            updatedAt: comment.updatedAt.toISOString(),
+            author: { name: comment.user.name, email: comment.user.email },
+          }))}
         />
 
         <section className="mt-8"><h2 className="mb-4 text-2xl font-semibold">Project Calendar</h2><ProjectCalendar projectColor={project.color} events={project.events.map((event) => ({ ...event, startTime: event.startTime.toISOString(), endTime: event.endTime ? event.endTime.toISOString() : null }))} /></section>

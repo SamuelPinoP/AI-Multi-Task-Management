@@ -24,6 +24,7 @@ model User {
   projects    Project[]
   activities  Activity[]
   projectMemberNotes ProjectMemberNote[] @relation("ProjectMemberNoteAuthor")
+  projectComments ProjectComment[]
 }
 
 model Note {
@@ -110,6 +111,22 @@ model Project {
   members     ProjectMember[]
   events      Event[]
   activities  Activity[]
+  comments    ProjectComment[]
+}
+
+model ProjectComment {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  message   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([userId])
 }
 
 model ProjectMember {
