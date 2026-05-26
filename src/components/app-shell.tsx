@@ -7,6 +7,7 @@ import { GlobalCommandCenter } from "./global-command-center";
 
 const links = [
   { href: "/", label: "Dashboard" },
+  { href: "/today", label: "Today" },
   { href: "/notes", label: "Notes" },
   { href: "/tasks", label: "Tasks" },
   { href: "/events", label: "Events" },
@@ -22,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
           <p className="font-semibold">AI-Multi Task-Management</p>
-          <nav className="flex flex-wrap items-center gap-2">
+          <nav className="flex flex-1 flex-wrap items-center justify-end gap-2">
             <GlobalCommandCenter />
             {links.map((link) => {
               const active = pathname === link.href;
@@ -40,7 +41,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
-            <ThemeToggle />
+            <div className="shrink-0"><ThemeToggle /></div>
           </nav>
         </div>
       </header>
