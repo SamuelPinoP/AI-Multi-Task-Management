@@ -31,6 +31,7 @@ type Task = {
   recurrence: Recurrence;
   projectId: string | null;
   project: Project | null;
+  assigneeId?: string | null;
   assignee: Member | null;
 };
 
@@ -84,6 +85,8 @@ export default function TasksPage() {
   const [dueDate, setDueDate] = useState("");
   const [recurrence, setRecurrence] = useState<Recurrence>("NONE");
   const [projectId, setProjectId] = useState("");
+  const [assigneeId, setAssigneeId] = useState("");
+  const [membersByProject, setMembersByProject] = useState<Record<string, Member[]>>({});
 
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -92,6 +95,7 @@ export default function TasksPage() {
   const [editDueDate, setEditDueDate] = useState("");
   const [editRecurrence, setEditRecurrence] = useState<Recurrence>("NONE");
   const [editProjectId, setEditProjectId] = useState("");
+  const [editAssigneeId, setEditAssigneeId] = useState("");
 
   const visibleTasks = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -174,6 +178,14 @@ export default function TasksPage() {
     }
   }
 
+  async function fetchMembers(projectIdToLoad: string) {
+    if (!projectIdToLoad || membersByProject[projectIdToLoad]) return;
+    const res = await fetch(`/api/projects/${projectIdToLoad}`);
+    if (!res.ok) return;
+    const project = (await res.json()) as { members?: Member[] };
+    setMembersByProject((prev) => ({ ...prev, [projectIdToLoad]: project.members ?? [] }));
+  }
+
   async function fetchProjects() {
     try {
       const res = await fetch("/api/projects");
@@ -219,7 +231,7 @@ export default function TasksPage() {
           dueDate: dueDate || null,
           recurrence,
           projectId,
-          assigneeId: "",
+          assigneeId,
         }),
       });
 
@@ -235,6 +247,7 @@ export default function TasksPage() {
       setDueDate("");
       setRecurrence("NONE");
       setProjectId("");
+      setAssigneeId("");
       await fetchTasks(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not create task.";
@@ -253,6 +266,8 @@ export default function TasksPage() {
     setEditDueDate(task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : "");
     setEditRecurrence(task.recurrence);
     setEditProjectId(task.projectId ?? "");
+    setEditAssigneeId(task.assignee?.id ?? "");
+    if (task.projectId) void fetchMembers(task.projectId);
     setError("");
   }
 
@@ -265,6 +280,7 @@ export default function TasksPage() {
     setEditDueDate("");
     setEditRecurrence("NONE");
     setEditProjectId("");
+    setEditAssigneeId("");
   }
 
   async function handleSaveEdit(taskId: string) {
@@ -288,6 +304,7 @@ export default function TasksPage() {
           dueDate: editDueDate || null,
           recurrence: editRecurrence,
           projectId: editProjectId,
+          assigneeId: editProjectId ? editAssigneeId : "",
         }),
       });
 
@@ -325,6 +342,7 @@ export default function TasksPage() {
           dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : null,
           recurrence: task.recurrence,
           projectId: task.projectId ?? "",
+          assigneeId: task.projectId ? task.assignee?.id ?? "" : "",
         }),
       });
 
@@ -394,9 +412,13 @@ export default function TasksPage() {
               <select value={recurrence} onChange={(e) => setRecurrence(e.target.value as Recurrence)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black">
                 <option value="NONE">Does not repeat</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="BIWEEKLY">Every 2 weeks</option><option value="MONTHLY">Monthly</option>
               </select>
-              <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black">
+              <select value={projectId} onChange={(e) => { const value = e.target.value; setProjectId(value); setAssigneeId(""); if (value) void fetchMembers(value); }} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black">
                 <option value="">No project</option>
                 {projects.map((project) => (<option key={project.id} value={project.id}>{project.name}</option>))}
+              </select>
+              <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} onFocus={() => { if (projectId) void fetchMembers(projectId); }} disabled={!projectId} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black">
+                <option value="">Unassigned</option>
+                {(membersByProject[projectId] ?? []).map((member) => (<option key={member.id} value={member.id}>{member.name}</option>))}
               </select>
             </div>
             <button type="submit" disabled={loading} className="rounded-xl bg-black px-5 py-3 text-white transition hover:opacity-90 disabled:opacity-50">{loading ? "Creating..." : "Create Task"}</button>
@@ -490,7 +512,8 @@ export default function TasksPage() {
                           <select value={editPriority} onChange={(e) => setEditPriority(e.target.value as Priority)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select>
                           <input type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black" />
                           <select value={editRecurrence} onChange={(e) => setEditRecurrence(e.target.value as Recurrence)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="NONE">Does not repeat</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="BIWEEKLY">Every 2 weeks</option><option value="MONTHLY">Monthly</option></select>
-                          <select value={editProjectId} onChange={(e) => setEditProjectId(e.target.value)} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="">No project</option>{projects.map((project) => (<option key={project.id} value={project.id}>{project.name}</option>))}</select>
+                          <select value={editProjectId} onChange={(e) => { const value = e.target.value; setEditProjectId(value); setEditAssigneeId(""); if (value) void fetchMembers(value); }} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="">No project</option>{projects.map((project) => (<option key={project.id} value={project.id}>{project.name}</option>))}</select>
+                          <select value={editAssigneeId} onChange={(e) => setEditAssigneeId(e.target.value)} onFocus={() => { if (editProjectId) void fetchMembers(editProjectId); }} disabled={!editProjectId} className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"><option value="">Unassigned</option>{(membersByProject[editProjectId] ?? []).map((member) => (<option key={member.id} value={member.id}>{member.name}</option>))}</select>
                         </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => void handleSaveEdit(task.id)} disabled={savingEdit} className={uiPrimaryButtonClass}>{savingEdit ? "Saving..." : "Save"}</button>
