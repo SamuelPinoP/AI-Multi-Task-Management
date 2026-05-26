@@ -4,7 +4,8 @@ import { FormEvent, useMemo, useState } from "react";
 import { uiButtonClass, uiCardClass, uiDangerButtonClass } from "@/components/ui";
 
 type Role = "OWNER" | "MEMBER" | "VIEWER";
-type MemberNote = { id: string; message: string; createdAt: string };
+type NoteVisibility = "TEAM" | "PRIVATE";
+type MemberNote = { id: string; message: string; createdAt: string; visibility: NoteVisibility; createdByUserId: string };
 type Member = { id: string; name: string; email: string | null; role: Role; notes: MemberNote[] };
 
 export function ProjectTeamSection({ projectId, initialMembers, workloadRows }: { projectId: string; initialMembers: Member[]; workloadRows: Array<[string, { name: string; active: number; completed: number; overdue: number }]> }) {
@@ -14,6 +15,7 @@ export function ProjectTeamSection({ projectId, initialMembers, workloadRows }: 
   const [role, setRole] = useState<Role>("MEMBER");
   const [error, setError] = useState("");
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [visibilityDrafts, setVisibilityDrafts] = useState<Record<string, NoteVisibility>>({});
 
   const workloadById = useMemo(() => new Map(workloadRows), [workloadRows]);
 
@@ -34,12 +36,21 @@ export function ProjectTeamSection({ projectId, initialMembers, workloadRows }: 
 
   async function addNote(memberId: string) {
     const message = noteDrafts[memberId]?.trim() ?? "";
-    if (!message) return;
-    const res = await fetch(`/api/projects/${projectId}/members/${memberId}/notes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }) });
-    if (!res.ok) return setError("Could not add member note");
+    if (!message) {
+      setError("Member note message is required.");
+      return;
+    }
+    const visibility = visibilityDrafts[memberId] ?? "TEAM";
+    const res = await fetch(`/api/projects/${projectId}/members/${memberId}/notes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message, visibility }) });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      return setError(data?.error || "Could not add member note");
+    }
     const note = (await res.json()) as MemberNote;
     setMembers((prev) => prev.map((member) => member.id === memberId ? { ...member, notes: [note, ...member.notes] } : member));
     setNoteDrafts((prev) => ({ ...prev, [memberId]: "" }));
+    setVisibilityDrafts((prev) => ({ ...prev, [memberId]: "TEAM" }));
+    setError("");
   }
 
   return <section className="mt-8"><h2 className="mb-4 text-2xl font-semibold">Team / Members</h2>
@@ -60,8 +71,15 @@ export function ProjectTeamSection({ projectId, initialMembers, workloadRows }: 
               <span className="ml-auto text-xs text-zinc-600">Active: {memberWorkload.active} • Completed: {memberWorkload.completed} • Overdue: {memberWorkload.overdue}</span>
               {m.role!=="OWNER"&&<button className={`${uiDangerButtonClass} px-2 py-0.5 text-xs`} onClick={()=>void removeMember(m.id)}>Remove</button>}
             </div>
-            <div className="mt-2 flex gap-2"><input value={noteDrafts[m.id] ?? ""} onChange={(e) => setNoteDrafts((prev) => ({ ...prev, [m.id]: e.target.value }))} placeholder={`Add note for ${m.name}`} className="w-full rounded-lg border px-3 py-1.5 text-sm" /><button type="button" className={`${uiButtonClass} px-3 py-1.5 text-xs`} onClick={() => void addNote(m.id)}>Add note</button></div>
-            {m.notes.length > 0 ? <ul className="mt-2 space-y-1 text-xs text-zinc-600">{m.notes.map((note) => <li key={note.id} className="rounded border px-2 py-1">{note.message} <span className="text-zinc-400">• {new Date(note.createdAt).toLocaleString()}</span></li>)}</ul> : <p className="mt-2 text-xs text-zinc-500">No member notes yet.</p>}
+            <div className="mt-2 flex gap-2">
+              <input value={noteDrafts[m.id] ?? ""} onChange={(e) => setNoteDrafts((prev) => ({ ...prev, [m.id]: e.target.value }))} placeholder={`Add note for ${m.name}`} className="w-full rounded-lg border px-3 py-1.5 text-sm" />
+              <select value={visibilityDrafts[m.id] ?? "TEAM"} onChange={(e) => setVisibilityDrafts((prev) => ({ ...prev, [m.id]: e.target.value as NoteVisibility }))} className="rounded-lg border px-2 py-1.5 text-xs">
+                <option value="TEAM">Team note</option>
+                <option value="PRIVATE">Private note</option>
+              </select>
+              <button type="button" className={`${uiButtonClass} px-3 py-1.5 text-xs`} onClick={() => void addNote(m.id)}>Add note</button>
+            </div>
+            {m.notes.length > 0 ? <ul className="mt-2 space-y-1 text-xs text-zinc-600">{m.notes.map((note) => <li key={note.id} className="rounded border px-2 py-1">{note.message} {note.visibility === "PRIVATE" ? <span className="ml-1 rounded border border-purple-300 bg-purple-50 px-1 py-0.5 text-[10px] font-semibold text-purple-700">Private</span> : null}<span className="text-zinc-400"> • {new Date(note.createdAt).toLocaleString()}</span></li>)}</ul> : <p className="mt-2 text-xs text-zinc-500">No member notes yet.</p>}
           </article>;
         })}
       </div>

@@ -23,6 +23,7 @@ model User {
   events      Event[]
   projects    Project[]
   activities  Activity[]
+  projectMemberNotes ProjectMemberNote[] @relation("ProjectMemberNoteAuthor")
 }
 
 model Note {
@@ -132,12 +133,21 @@ model ProjectMemberNote {
   id        String   @id @default(cuid())
   memberId  String
   message   String
+  visibility ProjectMemberNoteVisibility @default(TEAM)
+  createdByUserId String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   member    ProjectMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  createdByUser User @relation("ProjectMemberNoteAuthor", fields: [createdByUserId], references: [id], onDelete: Cascade)
 
   @@index([memberId])
+  @@index([createdByUserId])
+}
+
+enum ProjectMemberNoteVisibility {
+  TEAM
+  PRIVATE
 }
 
 model Activity {
