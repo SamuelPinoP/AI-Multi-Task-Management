@@ -17,6 +17,8 @@ type Project = {
   color: string | null;
 };
 
+type Member = { id: string; name: string; email: string | null; role: "OWNER" | "MEMBER" | "VIEWER" };
+
 type Task = {
   id: string;
   title: string;
@@ -29,6 +31,7 @@ type Task = {
   recurrence: Recurrence;
   projectId: string | null;
   project: Project | null;
+  assignee: Member | null;
 };
 
 type TaskUrgency = "OVERDUE" | "DUE_TODAY" | "DUE_SOON" | "NONE";
@@ -216,6 +219,7 @@ export default function TasksPage() {
           dueDate: dueDate || null,
           recurrence,
           projectId,
+          assigneeId: "",
         }),
       });
 
@@ -499,7 +503,8 @@ export default function TasksPage() {
                           <div>
                             <h3 className="text-xl font-semibold">{task.title}</h3>
                             {task.recurrence !== "NONE" && (<span className="mt-2 mr-2 inline-block rounded-full border border-violet-500 px-2.5 py-1 text-xs font-medium text-violet-700">Repeats {formatRecurrenceLabel(task.recurrence)}</span>)}
-                            {task.project && (<span className="mt-2 mr-2 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium" style={{ borderColor: task.project.color ?? undefined }}><span className="h-2 w-2 rounded-full" style={{ backgroundColor: task.project.color ?? "currentColor" }} />{task.project.name}</span>)}
+                            {task.assignee && <span className="rounded-full border px-2.5 py-1 text-xs font-medium">Assigned to: {task.assignee.name}</span>}
+                              {task.project && (<span className="mt-2 mr-2 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium" style={{ borderColor: task.project.color ?? undefined }}><span className="h-2 w-2 rounded-full" style={{ backgroundColor: task.project.color ?? "currentColor" }} />{task.project.name}</span>)}
                             {urgencyLabel && (
                               <span
                                 className={`mt-2 inline-block rounded-full border border-current px-2.5 py-1 text-xs font-medium ${urgencyLabelStyles}`}
