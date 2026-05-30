@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ProjectCalendar } from "@/components/project-calendar";
 import { ProjectQuickActions } from "@/components/project-quick-actions";
-import { BackLink, uiCardClass } from "@/components/ui";
+import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
 import { ProjectTeamSection } from "@/components/project-team-section";
 import { ProjectAssignedTasksSection } from "@/components/project-assigned-tasks-section";
 import { ProjectChatPanel } from "@/components/project-chat-panel";
@@ -65,7 +66,15 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
   return (
     <main className="min-h-screen px-6 py-10">
       <div className="mx-auto max-w-6xl">
-        <BackLink href="/projects" className="mb-6">Back to Projects</BackLink>
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <BackLink href="/projects">Back to Projects</BackLink>
+          <Link href={`/projects/${project.id}/chat`} className={`${uiButtonClass} gap-2 px-3 py-1.5 text-sm`}>
+            <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+              <path d="M4.5 6.5h11M4.5 10h7M4.5 13.5h5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>Chat</span>
+          </Link>
+        </div>
 
         <section className={uiCardClass}>
           <h1 className="text-3xl font-bold">{project.name}</h1>
