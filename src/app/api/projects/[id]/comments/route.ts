@@ -6,7 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { createActivity } from "@/lib/activity";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const STANDARD_FILE_SIZE_LIMIT = 10 * 1024 * 1024;
+const VIDEO_FILE_SIZE_LIMIT = 100 * 1024 * 1024;
 const MAX_FILES_PER_MESSAGE = 5;
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "project-chat");
 const PUBLIC_UPLOAD_PATH = "/uploads/project-chat";
@@ -79,6 +80,19 @@ function isAllowedFile(file: File) {
   return Boolean(extension) && ALLOWED_EXTENSIONS.has(extension) && !BLOCKED_EXTENSIONS.has(extension);
 }
 
+function isVideoFile(file: File) {
+  const extension = path.extname(file.name).toLowerCase();
+  return file.type.startsWith("video/") || [".mp4", ".mov", ".webm", ".m4v"].includes(extension);
+}
+
+function fileSizeLimit(file: File) {
+  return isVideoFile(file) ? VIDEO_FILE_SIZE_LIMIT : STANDARD_FILE_SIZE_LIMIT;
+}
+
+function formatLimit(size: number) {
+  return `${size / (1024 * 1024)} MB`;
+}
+
 function safeOriginalName(name: string) {
   return path.basename(name).replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 180) || "attachment";
 }
@@ -137,9 +151,12 @@ export async function POST(req: Request, context: RouteContext) {
       return NextResponse.json({ error: `Please attach ${MAX_FILES_PER_MESSAGE} files or fewer per message.` }, { status: 400 });
     }
 
-    const oversizedFile = files.find((file) => file.size > MAX_FILE_SIZE);
+    const oversizedFile = files.find((file) => file.size > fileSizeLimit(file));
     if (oversizedFile) {
-      return NextResponse.json({ error: `${oversizedFile.name} is larger than the 10 MB file limit.` }, { status: 400 });
+      return NextResponse.json(
+        { error: `${oversizedFile.name} is ${formatLimit(oversizedFile.size)} and exceeds the ${formatLimit(fileSizeLimit(oversizedFile))} limit for this file type.` },
+        { status: 400 },
+      );
     }
 
     const unsafeFile = files.find((file) => !isAllowedFile(file));
