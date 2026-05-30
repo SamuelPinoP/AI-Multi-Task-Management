@@ -5,7 +5,7 @@ import { ProjectQuickActions } from "@/components/project-quick-actions";
 import { BackLink, uiCardClass } from "@/components/ui";
 import { ProjectTeamSection } from "@/components/project-team-section";
 import { ProjectAssignedTasksSection } from "@/components/project-assigned-tasks-section";
-import { ProjectDiscussionSection } from "@/components/project-discussion-section";
+import { ProjectChatPanel } from "@/components/project-chat-panel";
 
 const DEMO_USER_EMAIL = "samuel@example.com";
 
@@ -101,9 +101,8 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
           members={project.members.map((member) => ({ id: member.id, name: member.name }))}
         />
 
-        <ProjectDiscussionSection
+        <ProjectChatPanel
           projectId={project.id}
-          projectColor={project.color}
           initialComments={project.comments.map((comment) => ({
             id: comment.id,
             message: comment.message,
