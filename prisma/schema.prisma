@@ -120,6 +120,7 @@ model ProjectComment {
   projectId String
   userId    String
   message   String
+  pinned    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
