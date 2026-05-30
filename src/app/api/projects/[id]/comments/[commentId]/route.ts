@@ -8,6 +8,7 @@ type RouteContext = { params: Promise<{ id: string; commentId: string }> };
 function serializeComment(comment: {
   id: string;
   message: string;
+  pinned: boolean;
   createdAt: Date;
   updatedAt: Date;
   user: { name: string | null; email: string };
@@ -24,6 +25,7 @@ function serializeComment(comment: {
   return {
     id: comment.id,
     message: comment.message,
+    pinned: comment.pinned,
     createdAt: comment.createdAt.toISOString(),
     updatedAt: comment.updatedAt.toISOString(),
     author: { name: comment.user.name, email: comment.user.email },
@@ -48,7 +50,7 @@ async function getOwnedProjectComment(projectId: string, commentId: string) {
 
   const comment = await prisma.projectComment.findFirst({
     where: { id: commentId, projectId: project.id },
-    select: { id: true, projectId: true, userId: true, message: true, _count: { select: { attachments: true } } },
+    select: { id: true, projectId: true, userId: true, message: true, pinned: true, updatedAt: true, _count: { select: { attachments: true } } },
   });
 
   if (!comment) return { error: NextResponse.json({ error: "Comment not found" }, { status: 404 }) };
@@ -64,7 +66,14 @@ export async function PATCH(req: Request, context: RouteContext) {
     if ("error" in result) return result.error;
 
     const body = await req.json().catch(() => ({}));
-    const message = typeof body.message === "string" ? body.message.trim() : "";
+    const hasMessageUpdate = typeof body.message === "string";
+    const hasPinnedUpdate = typeof body.pinned === "boolean";
+
+    if (!hasMessageUpdate && !hasPinnedUpdate) {
+      return NextResponse.json({ error: "Message or pinned state is required" }, { status: 400 });
+    }
+
+    const message = hasMessageUpdate ? body.message.trim() : result.comment.message;
 
     if (!message && result.comment._count.attachments === 0) {
       return NextResponse.json({ error: "Edited message cannot be empty unless it has attachments." }, { status: 400 });
@@ -72,7 +81,10 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     const updatedComment = await prisma.projectComment.update({
       where: { id: result.comment.id },
-      data: { message },
+      data: {
+        ...(hasMessageUpdate ? { message } : {}),
+        ...(hasPinnedUpdate ? { pinned: body.pinned, ...(!hasMessageUpdate ? { updatedAt: result.comment.updatedAt } : {}) } : {}),
+      },
       include: {
         user: { select: { name: true, email: true } },
         attachments: { orderBy: { createdAt: "asc" } },

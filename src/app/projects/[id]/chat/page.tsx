@@ -64,6 +64,7 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
           initialComments={project.comments.map((comment) => ({
             id: comment.id,
             message: comment.message,
+            pinned: comment.pinned,
             createdAt: comment.createdAt.toISOString(),
             updatedAt: comment.updatedAt.toISOString(),
             author: { name: comment.user.name, email: comment.user.email },

@@ -17,6 +17,7 @@ type ProjectCommentAttachment = {
 type ProjectComment = {
   id: string;
   message: string;
+  pinned: boolean;
   createdAt: string;
   updatedAt: string;
   author: { name: string | null; email: string };
@@ -69,6 +70,22 @@ function getFileKind(fileType: string, fileName: string) {
 
 function isEdited(comment: ProjectComment) {
   return new Date(comment.updatedAt).getTime() - new Date(comment.createdAt).getTime() > 1000;
+}
+
+function PinIcon({ filled = false, className = "h-3.5 w-3.5" }: { filled?: boolean; className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.7" className={className}>
+      <path d="M6.75 3.25h6.5l-1.1 5.1 2.35 2.35v1.05H10.8L10 17l-.8-5.25H5.5V10.7l2.35-2.35-1.1-5.1Z" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PaperclipIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+      <path d="m7.25 10.75 4.7-4.7a2.35 2.35 0 0 1 3.32 3.32l-5.55 5.55a4 4 0 0 1-5.66-5.66l5.75-5.75" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 function AttachmentCard({ attachment }: { attachment: ProjectCommentAttachment }) {
@@ -200,6 +217,7 @@ export function ProjectChatWorkspace({
       id: `pending-${Date.now()}`,
       message: trimmed,
       createdAt: now,
+      pinned: false,
       updatedAt: now,
       author: currentUser,
       attachments: optimisticAttachments,
@@ -306,26 +324,76 @@ export function ProjectChatWorkspace({
     }
   }
 
+  const pinnedComments = comments
+    .filter((comment) => comment.pinned && !comment.id.startsWith("pending-"))
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 3);
+
+  function jumpToComment(commentId: string) {
+    document.getElementById(`comment-${commentId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  async function togglePinned(comment: ProjectComment) {
+    const previousComments = comments;
+    const nextPinned = !comment.pinned;
+
+    setMutatingCommentId(comment.id);
+    setError("");
+    setComments((prev) => prev.map((item) => (item.id === comment.id ? { ...item, pinned: nextPinned } : item)));
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/comments/${comment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pinned: nextPinned }),
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setComments(previousComments);
+        setError(data?.error || "Could not update pinned message.");
+        return;
+      }
+
+      const updated = (await res.json()) as ProjectComment;
+      setComments((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    } finally {
+      setMutatingCommentId(null);
+    }
+  }
+
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-xl shadow-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
-        <div className="border-b border-zinc-200 bg-zinc-50/80 px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-900/70 sm:px-6">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-              {comments.length} message{comments.length === 1 ? "" : "s"}
-            </p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Attachments support 10 MB files or 100 MB videos.</p>
-          </div>
-        </div>
+        {pinnedComments.length > 0 ? (
+          <section className="bg-white/95 px-4 py-3 dark:bg-zinc-950 sm:px-6" aria-label="Pinned messages">
+            <div className="mx-auto max-w-5xl rounded-2xl bg-amber-50/80 p-3 ring-1 ring-amber-200/70 dark:bg-amber-950/20 dark:ring-amber-900/60">
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">
+                <PinIcon filled className="h-3.5 w-3.5" />
+                Pinned messages
+              </div>
+              <div className="grid gap-2 md:grid-cols-3">
+                {pinnedComments.map((comment) => (
+                  <button
+                    key={comment.id}
+                    type="button"
+                    onClick={() => jumpToComment(comment.id)}
+                    className="min-w-0 rounded-xl bg-white/85 px-3 py-2 text-left text-sm shadow-sm transition hover:-translate-y-0.5 hover:bg-white dark:bg-zinc-900/80 dark:hover:bg-zinc-900"
+                  >
+                    <span className="block truncate font-medium text-zinc-900 dark:text-zinc-100">{comment.author.name || comment.author.email}</span>
+                    <span className="mt-1 block truncate text-xs text-zinc-600 dark:text-zinc-300">{comment.message || `${comment.attachments.length} attachment${comment.attachments.length === 1 ? "" : "s"}`}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+        ) : null}
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-zinc-100/70 px-4 py-5 dark:bg-zinc-950 sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-5xl flex-col gap-4">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-zinc-100/60 px-4 py-6 dark:bg-zinc-950 sm:px-6 lg:px-8">
+          <div className="mx-auto flex max-w-5xl flex-col gap-5">
             {comments.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-zinc-300 bg-white/80 p-8 text-center shadow-sm dark:border-zinc-700 dark:bg-zinc-900/70">
+              <div className="rounded-3xl bg-white/80 p-8 text-center shadow-sm ring-1 ring-zinc-200/70 dark:bg-zinc-900/70 dark:ring-zinc-800/70">
                 <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">No messages yet.</p>
-                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-                  Start the project conversation with an update, decision, blocker, handoff note, or file attachment.
-                </p>
               </div>
             ) : (
               comments.map((comment) => {
@@ -336,12 +404,13 @@ export function ProjectChatWorkspace({
 
                 return (
                   <article
+                    id={`comment-${comment.id}`}
                     key={comment.id}
-                    className={`rounded-2xl border bg-white p-4 text-sm shadow-sm shadow-zinc-200/70 dark:bg-zinc-900 dark:shadow-none sm:p-5 ${
-                      isPending ? "border-zinc-300 opacity-80 dark:border-zinc-700" : "border-zinc-200 dark:border-zinc-800"
+                    className={`rounded-3xl bg-white/95 p-4 text-sm shadow-sm shadow-zinc-200/60 ring-1 transition dark:bg-zinc-900/80 dark:shadow-none sm:p-5 ${
+                      isPending ? "opacity-80 ring-zinc-300 dark:ring-zinc-700" : comment.pinned ? "ring-amber-200 dark:ring-amber-900/70" : "ring-zinc-200/70 dark:ring-zinc-800/70"
                     }`}
                   >
-                    <div className="flex flex-col gap-2 border-b border-zinc-100 pb-3 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex items-center gap-2">
                         <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold uppercase text-white dark:bg-zinc-100 dark:text-zinc-900">
                           {(comment.author.name || comment.author.email).slice(0, 1)}
@@ -352,12 +421,33 @@ export function ProjectChatWorkspace({
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                        {comment.pinned ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                            <PinIcon filled />
+                            Pinned
+                          </span>
+                        ) : null}
                         {isPending ? <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">Sending</span> : null}
                         {isMutating ? <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">Saving</span> : null}
                         {isEdited(comment) ? <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">Edited</span> : null}
                         <time dateTime={comment.createdAt}>{new Date(comment.createdAt).toLocaleString()}</time>
                         {isOwnMessage ? (
                           <span className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => void togglePinned(comment)}
+                              disabled={isMutating}
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium transition disabled:opacity-50 ${
+                                comment.pinned
+                                  ? "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-950"
+                                  : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                              }`}
+                              aria-label={comment.pinned ? "Unpin message" : "Pin message"}
+                              title={comment.pinned ? "Unpin message" : "Pin message"}
+                            >
+                              <PinIcon filled={comment.pinned} />
+                              <span>{comment.pinned ? "Unpin" : "Pin"}</span>
+                            </button>
                             <button
                               type="button"
                               onClick={() => startEditing(comment)}
@@ -439,14 +529,14 @@ export function ProjectChatWorkspace({
           }}
         >
           <div className="mx-auto max-w-5xl">
-            <label htmlFor="project-chat-message" className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-              Add to the discussion
+            <label htmlFor="project-chat-message" className="sr-only">
+              Message
             </label>
             <div
-              className={`mt-2 rounded-2xl border transition ${
+              className={`rounded-3xl bg-zinc-50/80 ring-1 transition dark:bg-zinc-900/70 ${
                 isDragging
-                  ? "border-zinc-500 bg-zinc-100 ring-4 ring-zinc-200 dark:border-zinc-400 dark:bg-zinc-900 dark:ring-zinc-800"
-                  : "border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900"
+                  ? "ring-4 ring-zinc-300 dark:ring-zinc-700"
+                  : "ring-zinc-200 focus-within:ring-zinc-400 dark:ring-zinc-800 dark:focus-within:ring-zinc-600"
               }`}
               onDragEnter={(event) => {
                 event.preventDefault();
@@ -466,21 +556,21 @@ export function ProjectChatWorkspace({
                   setMessage(e.target.value);
                   if (error) setError("");
                 }}
-                placeholder="Write an update, or attach files below..."
+                placeholder="Write a message..."
                 rows={3}
-                className="w-full resize-none rounded-2xl border-0 bg-transparent px-4 py-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                className="w-full resize-none rounded-3xl border-0 bg-transparent px-4 py-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
               />
               {selectedAttachments.length > 0 ? (
-                <div className="border-t border-zinc-200 px-3 py-3 dark:border-zinc-800">
+                <div className="px-3 pb-3">
                   <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto pr-1">
                     {selectedAttachments.map((attachment) => (
-                      <div key={attachment.id} className="flex max-w-full items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-950">
+                      <div key={attachment.id} className="flex max-w-full items-center gap-2 rounded-full bg-white px-3 py-2 text-xs shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-950 dark:ring-zinc-800">
                         <span className="max-w-52 truncate font-medium text-zinc-800 dark:text-zinc-100">{attachment.file.name}</span>
                         <span className="shrink-0 text-zinc-500">{formatFileSize(attachment.file.size)}</span>
                         <button
                           type="button"
                           onClick={() => removeSelectedAttachment(attachment.id)}
-                          className="shrink-0 rounded-full px-1.5 py-0.5 font-semibold text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                          className="shrink-0 rounded-full px-1.5 py-0.5 font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                           aria-label={`Remove ${attachment.file.name}`}
                         >
                           ×
@@ -490,25 +580,27 @@ export function ProjectChatWorkspace({
                   </div>
                 </div>
               ) : null}
-              <div className="flex flex-col gap-2 border-t border-zinc-200 px-3 py-3 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Drop files here or attach up to {MAX_FILES_PER_MESSAGE} files. Files: 10 MB each. Videos: 100 MB each.
-                </p>
-                <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileChange} />
-                <button type="button" className={`${uiButtonClass} w-full px-3 py-1.5 text-xs sm:w-auto`} onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>
-                  Attach files
-                </button>
-              </div>
             </div>
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              {error ? (
-                <p className="text-sm font-medium text-red-600 dark:text-red-400">{error}</p>
-              ) : (
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">Send text, files, or both. Empty messages without attachments are not sent.</span>
-              )}
-              <button type="submit" className={`${uiPrimaryButtonClass} w-full sm:w-auto`} disabled={isSubmitting}>
-                {isSubmitting ? "Sending..." : "Send message"}
-              </button>
+              <div className="min-h-5">
+                {error ? <p className="text-sm font-medium text-red-600 dark:text-red-400">{error}</p> : null}
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileChange} />
+                <button
+                  type="button"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-zinc-600 shadow-sm ring-1 ring-zinc-200 transition hover:-translate-y-0.5 hover:text-zinc-950 hover:ring-zinc-300 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:text-zinc-50 dark:hover:ring-zinc-700"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSubmitting}
+                  aria-label="Attach files"
+                  title="Attach files"
+                >
+                  <PaperclipIcon />
+                </button>
+                <button type="submit" className={`${uiPrimaryButtonClass} h-10`} disabled={isSubmitting}>
+                  {isSubmitting ? "Sending..." : "Send message"}
+                </button>
+              </div>
             </div>
           </div>
         </form>
