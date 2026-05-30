@@ -62,6 +62,7 @@ export async function GET(_req: Request, context: RouteContext) {
             user: {
               select: { id: true, name: true, email: true },
             },
+            attachments: { orderBy: { createdAt: "asc" } },
           },
         },
       },

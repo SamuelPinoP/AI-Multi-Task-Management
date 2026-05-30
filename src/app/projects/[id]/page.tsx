@@ -33,7 +33,7 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
       },
       comments: {
         orderBy: { createdAt: "asc" },
-        include: { user: { select: { name: true, email: true } } },
+        include: { user: { select: { name: true, email: true } }, attachments: { orderBy: { createdAt: "asc" } } },
       },
     },
   });
@@ -66,10 +66,15 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
   return (
     <main className="min-h-screen px-6 py-10">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <BackLink href="/projects">Back to Projects</BackLink>
-          <Link href={`/projects/${project.id}/chat`} className={`${uiButtonClass} gap-2 px-3 py-1.5 text-sm`}>
-            <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+        <div className="relative mb-6 flex flex-col gap-3 sm:min-h-11 sm:flex-row sm:items-center sm:justify-center">
+          <div className="sm:absolute sm:left-0">
+            <BackLink href="/projects">Back to Projects</BackLink>
+          </div>
+          <Link
+            href={`/projects/${project.id}/chat`}
+            className={`${uiButtonClass} w-full gap-2 rounded-2xl border-zinc-400 bg-zinc-100 px-5 py-2.5 text-base font-semibold shadow-sm hover:bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:bg-zinc-700 sm:w-auto sm:min-w-36`}
+          >
+            <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
               <path d="M4.5 6.5h11M4.5 10h7M4.5 13.5h5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span>Chat</span>
@@ -118,6 +123,15 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
             createdAt: comment.createdAt.toISOString(),
             updatedAt: comment.updatedAt.toISOString(),
             author: { name: comment.user.name, email: comment.user.email },
+            attachments: comment.attachments.map((attachment) => ({
+              id: attachment.id,
+              fileName: attachment.fileName,
+              originalName: attachment.originalName,
+              fileType: attachment.fileType,
+              fileSize: attachment.fileSize,
+              url: attachment.url,
+              createdAt: attachment.createdAt.toISOString(),
+            })),
           }))}
         />
 

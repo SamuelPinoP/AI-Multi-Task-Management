@@ -7,6 +7,7 @@ type ProjectComment = {
   createdAt: string;
   updatedAt: string;
   author: { name: string | null; email: string };
+  attachments: { id: string; originalName: string }[];
 };
 
 export function ProjectChatPanel({
@@ -47,7 +48,16 @@ export function ProjectChatPanel({
           ) : (
             recentPreview.map((comment) => (
               <article key={comment.id} className="rounded-xl border border-zinc-200 p-3 text-sm dark:border-zinc-800">
-                <p className="line-clamp-2 whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">{comment.message}</p>
+                {comment.message ? (
+                  <p className="line-clamp-2 whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">{comment.message}</p>
+                ) : (
+                  <p className="text-zinc-600 dark:text-zinc-300">File-only message</p>
+                )}
+                {comment.attachments.length > 0 ? (
+                  <p className="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    {comment.attachments.length} attachment{comment.attachments.length === 1 ? "" : "s"}
+                  </p>
+                ) : null}
                 <p className="mt-1 text-xs text-zinc-500">
                   {comment.author.name || comment.author.email} • {new Date(comment.createdAt).toLocaleString()}
                 </p>
