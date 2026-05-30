@@ -28,7 +28,7 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
       status: true,
       comments: {
         orderBy: { createdAt: "asc" },
-        include: { user: { select: { name: true, email: true } } },
+        include: { user: { select: { name: true, email: true } }, attachments: { orderBy: { createdAt: "asc" } } },
       },
     },
   });
@@ -66,6 +66,15 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
             createdAt: comment.createdAt.toISOString(),
             updatedAt: comment.updatedAt.toISOString(),
             author: { name: comment.user.name, email: comment.user.email },
+            attachments: comment.attachments.map((attachment) => ({
+              id: attachment.id,
+              fileName: attachment.fileName,
+              originalName: attachment.originalName,
+              fileType: attachment.fileType,
+              fileSize: attachment.fileSize,
+              url: attachment.url,
+              createdAt: attachment.createdAt.toISOString(),
+            })),
           }))}
         />
       </div>
