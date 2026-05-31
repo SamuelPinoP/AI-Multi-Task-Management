@@ -1,11 +1,23 @@
 import Link from "next/link";
-import { uiButtonClass, uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
+import { uiCardClass } from "@/components/ui";
 import { Recurrence, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePageUser } from "@/lib/auth";
 import { expandRecurringEventsForRange } from "@/lib/recurrence";
 
 const REMINDER_LOOKAHEAD_DAYS = 7;
+
+const workspaceFeatures = [
+  { href: "/notes", title: "Notes", description: "Capture ideas, meeting notes, and project context.", countKey: "notes", accent: "from-sky-500 to-cyan-500" },
+  { href: "/tasks", title: "Tasks", description: "Plan, prioritize, assign, and complete work.", countKey: "tasks", accent: "from-emerald-500 to-teal-500" },
+  { href: "/events", title: "Events", description: "Schedule time-sensitive plans and recurring events.", countKey: "events", accent: "from-violet-500 to-fuchsia-500" },
+  { href: "/projects", title: "Projects", description: "Organize notes, tasks, teams, and discussions by workspace.", countKey: "projects", accent: "from-amber-500 to-orange-500" },
+  { href: "/events/calendar", title: "Calendar", description: "Review deadlines and events in a calendar view.", countKey: "events", accent: "from-indigo-500 to-blue-500" },
+  { href: "/tasks/board", title: "Task Board", description: "Move work through todo, in-progress, and done lanes.", countKey: "activeTasks", accent: "from-rose-500 to-pink-500" },
+  { href: "/planner", title: "Planner", description: "Shape weekly goals and turn intentions into action.", countKey: "weeklyGoals", accent: "from-lime-500 to-emerald-500" },
+  { href: "/roadmap", title: "Roadmap", description: "See longer-range project direction and progress.", countKey: "projects", accent: "from-purple-500 to-indigo-500" },
+  { href: "/trash", title: "Trash", description: "Restore or permanently review deleted workspace items.", countKey: "trash", accent: "from-zinc-500 to-slate-500" },
+] as const;
 
 type TaskReminderGroup = "OVERDUE" | "DUE_TODAY" | "UPCOMING";
 type EventReminderGroup = "TODAY" | "UPCOMING";
@@ -66,8 +78,21 @@ export default async function DashboardPage() {
   const reminderRangeEnd = new Date(todayStart);
   reminderRangeEnd.setDate(reminderRangeEnd.getDate() + REMINDER_LOOKAHEAD_DAYS + 1);
 
-  const [recentNotes, recentActivities, upcomingTasks, reminderTasks, reminderEvents, totalNotes, totalTasks, activeTasks, completedTasks] =
-    user
+  const [
+    recentNotes,
+    recentActivities,
+    upcomingTasks,
+    reminderTasks,
+    reminderEvents,
+    totalNotes,
+    totalTasks,
+    activeTasks,
+    completedTasks,
+    totalEvents,
+    totalProjects,
+    totalWeeklyGoals,
+    totalTrashItems,
+  ] = user
       ? await Promise.all([
           prisma.note.findMany({
             where: { userId: user.id, deletedAt: null },
@@ -118,8 +143,26 @@ export default async function DashboardPage() {
           prisma.task.count({ where: { userId: user.id, deletedAt: null } }),
           prisma.task.count({ where: { userId: user.id, deletedAt: null, status: { not: TaskStatus.DONE } } }),
           prisma.task.count({ where: { userId: user.id, deletedAt: null, status: TaskStatus.DONE } }),
+          prisma.event.count({ where: { userId: user.id, deletedAt: null } }),
+          prisma.project.count({ where: { userId: user.id } }),
+          prisma.weeklyGoal.count({ where: { userId: user.id } }),
+          Promise.all([
+            prisma.note.count({ where: { userId: user.id, deletedAt: { not: null } } }),
+            prisma.task.count({ where: { userId: user.id, deletedAt: { not: null } } }),
+            prisma.event.count({ where: { userId: user.id, deletedAt: { not: null } } }),
+          ]).then((counts) => counts.reduce((total, count) => total + count, 0)),
         ])
-      : [[], [], [], [], [], 0, 0, 0, 0];
+      : [[], [], [], [], [], 0, 0, 0, 0, 0, 0, 0, 0];
+
+  const featureCounts = {
+    notes: totalNotes,
+    tasks: totalTasks,
+    activeTasks,
+    events: totalEvents,
+    projects: totalProjects,
+    weeklyGoals: totalWeeklyGoals,
+    trash: totalTrashItems,
+  };
 
   const overdueTasks = reminderTasks.filter((task) => task.dueDate && getTaskReminderGroup(task.dueDate, now) === "OVERDUE");
   const dueTodayTasks = reminderTasks.filter((task) => task.dueDate && getTaskReminderGroup(task.dueDate, now) === "DUE_TODAY");
@@ -154,10 +197,20 @@ export default async function DashboardPage() {
   return (
     <main className="min-h-screen px-6 py-10">
       <div className="mx-auto max-w-5xl">
-        <h1 className="mb-2 text-4xl font-bold">Dashboard</h1>
-        <p className="mb-8 text-zinc-600 dark:text-zinc-300">
-          Welcome to AI-Multi Task-Management. Here&apos;s a quick look at your productivity.
-        </p>
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">{user.isGuest ? "Guest mode" : "Workspace"}</p>
+            <h1 className="text-4xl font-bold">Dashboard</h1>
+            <p className="mt-2 text-zinc-600 dark:text-zinc-300">
+              Welcome to AI-Multi Task-Management. Here&apos;s a quick look at your productivity.
+            </p>
+          </div>
+          {user.isGuest ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
+              You&apos;re using a database-backed guest workspace. Keep this browser session to keep access.
+            </div>
+          ) : null}
+        </div>
 
         <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
@@ -218,15 +271,35 @@ export default async function DashboardPage() {
         </section>
 
         <section className={`${uiCardClass} mb-10`}>
-          <h2 className="mb-4 text-2xl font-semibold">Quick Actions</h2>
-          <div className="flex flex-wrap gap-3">
-            <Link href="/notes" className={uiPrimaryButtonClass}>Go to Notes</Link>
-            <Link href="/tasks" className={uiButtonClass}>Go to Tasks</Link>
-            <Link href="/events" className={uiButtonClass}>Go to Events</Link>
-            <Link href="/trash" className={uiButtonClass}>Go to Trash</Link>
+          <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Navigation hub</p>
+              <h2 className="text-2xl font-semibold">Open your workspace tools</h2>
+            </div>
+            <p className="max-w-xl text-sm text-zinc-600 dark:text-zinc-300">
+              Major destinations live here as clear feature cards so the top bar can stay focused on search, today, account, and theme controls.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {workspaceFeatures.map((feature) => (
+              <Link
+                key={feature.href}
+                href={feature.href}
+                className="group rounded-2xl border border-zinc-200 bg-zinc-50/80 p-4 transition hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-950/40 dark:hover:border-zinc-700 dark:hover:bg-zinc-900 dark:hover:shadow-none"
+              >
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <span className={`h-10 w-10 rounded-2xl bg-gradient-to-br ${feature.accent} shadow-sm`} aria-hidden="true" />
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-zinc-600 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800">
+                    {featureCounts[feature.countKey]}
+                  </span>
+                </div>
+                <h3 className="text-lg font-semibold group-hover:underline group-hover:underline-offset-4">{feature.title}</h3>
+                <p className="mt-2 min-h-10 text-sm leading-5 text-zinc-600 dark:text-zinc-300">{feature.description}</p>
+                <p className="mt-4 text-sm font-medium text-zinc-950 dark:text-zinc-50">Open {feature.title} →</p>
+              </Link>
+            ))}
           </div>
         </section>
-
 
         <section className={`${uiCardClass} mb-10`}>
           <h2 className="mb-4 text-2xl font-semibold">Recent Activity</h2>

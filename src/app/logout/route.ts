@@ -1,12 +1,20 @@
-import { clearSession } from "@/lib/auth";
+import { clearSession, getSafeRedirectPath } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
-export async function GET() {
-  await clearSession();
-  redirect("/login?error=logged-out");
+function getLogoutRedirect(request: Request) {
+  const url = new URL(request.url);
+  const nextPath = getSafeRedirectPath(url.searchParams.get("next"));
+
+  if (nextPath !== "/") return nextPath;
+  return "/login?error=logged-out";
 }
 
-export async function POST() {
+export async function GET(request: Request) {
   await clearSession();
-  redirect("/login?error=logged-out");
+  redirect(getLogoutRedirect(request));
+}
+
+export async function POST(request: Request) {
+  await clearSession();
+  redirect(getLogoutRedirect(request));
 }
