@@ -5,9 +5,9 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 
-import { DEMO_USER_EMAIL, SESSION_COOKIE_NAME } from "@/lib/auth-constants";
+import { DEMO_USER_EMAIL, GUEST_USER_EMAIL_DOMAIN, SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 
-export { DEMO_USER_EMAIL, SESSION_COOKIE_NAME };
+export { DEMO_USER_EMAIL, GUEST_USER_EMAIL_DOMAIN, SESSION_COOKIE_NAME };
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const PASSWORD_KEYLEN = 64;
 
@@ -15,6 +15,7 @@ export type AuthUser = {
   id: string;
   name: string | null;
   email: string;
+  isGuest: boolean;
 };
 
 function normalizeEmail(email: string) {
@@ -49,6 +50,11 @@ function getSessionExpiresAt() {
   return new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
 }
 
+export function getSafeRedirectPath(nextPath: string | null | undefined) {
+  if (!nextPath || !nextPath.startsWith("/") || nextPath.startsWith("//")) return "/";
+  return nextPath;
+}
+
 export async function createSession(userId: string) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = getSessionExpiresAt();
@@ -72,6 +78,20 @@ export async function createSession(userId: string) {
   });
 }
 
+export async function createGuestSession() {
+  const guestId = crypto.randomUUID();
+  const user = await prisma.user.create({
+    data: {
+      email: `guest-${guestId}@${GUEST_USER_EMAIL_DOMAIN}`,
+      name: "Guest Workspace",
+      isGuest: true,
+    },
+    select: { id: true },
+  });
+
+  await createSession(user.id);
+}
+
 export async function clearSession() {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
@@ -88,7 +108,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
   const session = await prisma.session.findUnique({
     where: { token },
-    include: { user: { select: { id: true, name: true, email: true } } },
+    include: { user: { select: { id: true, name: true, email: true, isGuest: true } } },
   });
 
   if (!session || session.expiresAt <= new Date()) {
