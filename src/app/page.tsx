@@ -412,16 +412,15 @@ export default async function DashboardPage() {
           <div className="grid gap-5 md:grid-cols-[1.2fr_0.8fr] md:items-center">
             <div>
               <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                Workspace hub
+                Productivity snapshot
               </p>
               <h2 className="mt-1 text-2xl font-semibold">
-                Navigation moved to the sidebar
+                Keep the day in focus
               </h2>
               <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                Notes, Tasks, Events, Projects, Calendar, Task Board, Planner,
-                Roadmap, and Trash now live in the larger left navigation. Use
-                the dashboard for a balanced summary, reminders, and recent
-                activity instead of repeating every destination.
+                Use this dashboard to scan current workload, upcoming reminders,
+                recent changes, and the newest notes without repeating every
+                workspace destination.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
