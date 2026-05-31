@@ -2,8 +2,8 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/ui";
 import { ProjectChatWorkspace } from "@/components/project-chat-workspace";
 import { prisma } from "@/lib/prisma";
+import { requirePageUser } from "@/lib/auth";
 
-const DEMO_USER_EMAIL = "samuel@example.com";
 
 type ProjectChatPageProps = {
   params: Promise<{ id: string }>;
@@ -12,12 +12,7 @@ type ProjectChatPageProps = {
 export default async function ProjectChatPage({ params }: ProjectChatPageProps) {
   const { id } = await params;
 
-  const user = await prisma.user.findUnique({
-    where: { email: DEMO_USER_EMAIL },
-    select: { id: true, name: true, email: true },
-  });
-
-  if (!user) notFound();
+  const user = await requirePageUser();
 
   const project = await prisma.project.findFirst({
     where: { id, userId: user.id },

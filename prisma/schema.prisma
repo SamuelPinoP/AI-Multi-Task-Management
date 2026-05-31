@@ -17,6 +17,8 @@ model User {
   name                      String?
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
+  passwordHash              String?
+  sessions                  Session[]
   notes                     Note[]
   tasks                     Task[]
   weeklyGoals               WeeklyGoal[]
@@ -26,6 +28,18 @@ model User {
   projectMemberNotes        ProjectMemberNote[]        @relation("ProjectMemberNoteAuthor")
   projectComments           ProjectComment[]
   projectCommentAttachments ProjectCommentAttachment[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Note {

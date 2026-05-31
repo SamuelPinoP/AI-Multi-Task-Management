@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { requirePageUser } from "@/lib/auth";
 import { ProjectCalendar } from "@/components/project-calendar";
 import { ProjectQuickActions } from "@/components/project-quick-actions";
 import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
@@ -8,17 +9,17 @@ import { ProjectTeamSection } from "@/components/project-team-section";
 import { ProjectAssignedTasksSection } from "@/components/project-assigned-tasks-section";
 import { ProjectChatPanel } from "@/components/project-chat-panel";
 
-const DEMO_USER_EMAIL = "samuel@example.com";
 
 type ProjectDetailPageProps = {
   params: Promise<{ id: string }>;
 };
 
 export default async function ProjectDetailPage({ params }: ProjectDetailPageProps) {
+  const user = await requirePageUser();
   const { id } = await params;
 
   const project = await prisma.project.findFirst({
-    where: { id, user: { email: DEMO_USER_EMAIL } },
+    where: { id, userId: user.id },
     include: {
       notes: { where: { deletedAt: null }, orderBy: { createdAt: "desc" }, select: { id: true, title: true, content: true } },
       tasks: {
@@ -102,7 +103,17 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
         </section>
 
         <ProjectQuickActions projectId={project.id} />
-        <ProjectTeamSection projectId={project.id} initialMembers={project.members} workloadRows={Array.from(workload.entries())} />
+        <ProjectTeamSection
+          projectId={project.id}
+          initialMembers={project.members.map((member) => ({
+            ...member,
+            notes: member.notes.map((note) => ({
+              ...note,
+              createdAt: note.createdAt.toISOString(),
+            })),
+          }))}
+          workloadRows={Array.from(workload.entries())}
+        />
 
         <section className="mt-8"><h2 className="mb-4 text-2xl font-semibold">Assigned Notes</h2>{project.notes.length === 0 ? <p className="rounded-2xl border border-dashed border-zinc-300 p-5 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">No notes are assigned to this project yet.</p> : <div className="space-y-4">{project.notes.map((note) => <article key={note.id} className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800"><h3 className="text-lg font-semibold">{note.title}</h3><p className="mt-2 text-zinc-700 dark:text-zinc-300">{note.content || "No content."}</p></article>)}</div>}</section>
 

@@ -24,6 +24,7 @@ type EventItem = {
   sourceEventId?: string;
   title: string;
   startTime: string;
+  endTime: string | null;
   recurrence?: Recurrence | null;
   projectId?: string | null;
   project?: Project | null;
@@ -125,7 +126,7 @@ export default function RoadmapPage() {
     rangeEnd.setHours(23, 59, 59, 999);
 
     return expandRecurringEventsForRange(
-      events.map((event) => ({ ...event, sourceEventId: event.id })),
+      events.map((event) => ({ ...event, endTime: event.endTime ?? null, sourceEventId: event.id })),
       rangeStart,
       rangeEnd
     );

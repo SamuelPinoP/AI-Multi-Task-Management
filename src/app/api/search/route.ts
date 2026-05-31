@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
-const DEMO_USER_EMAIL = "samuel@example.com";
 const MAX_RESULTS_PER_TYPE = 8;
 
 function normalizeQuery(input: string | null) {
@@ -13,14 +13,8 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const query = normalizeQuery(searchParams.get("q"));
 
-    const user = await prisma.user.findUnique({
-      where: { email: DEMO_USER_EMAIL },
-      select: { id: true },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
+    const user = await requireApiUser();
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
     if (!query) {
       return NextResponse.json({ projects: [], notes: [], tasks: [], events: [] });

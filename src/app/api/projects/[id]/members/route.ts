@@ -1,8 +1,8 @@
 import { ProjectMemberRole } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/auth";
 
-const DEMO_USER_EMAIL = "samuel@example.com";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -27,9 +27,9 @@ export async function POST(req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL } });
+    const user = await requireApiUser();
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
     const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });

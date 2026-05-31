@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/auth";
 
-const DEMO_USER_EMAIL = "samuel@example.com";
 
 type RouteContext = { params: Promise<{ id: string; commentId: string }> };
 
@@ -42,8 +42,8 @@ function serializeComment(comment: {
 }
 
 async function getOwnedProjectComment(projectId: string, commentId: string) {
-  const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL }, select: { id: true } });
-  if (!user) return { error: NextResponse.json({ error: "User not found" }, { status: 404 }) };
+  const user = await requireApiUser();
+  if (!user) return { error: NextResponse.json({ error: "Authentication required" }, { status: 401 }) };
 
   const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id }, select: { id: true } });
   if (!project) return { error: NextResponse.json({ error: "Project not found" }, { status: 404 }) };

@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/auth";
 import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 
-const DEMO_USER_EMAIL = "samuel@example.com";
 function parseProjectId(input: unknown): string | null {
   if (input === null || input === undefined) return null;
   if (typeof input !== "string") return null;
@@ -42,7 +42,9 @@ function mergeDateAndTime(date: Date, time: { hours: number; minutes: number } |
 
 export async function GET() { /* unchanged */
   try {
-    const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL }, include: { events: { where: { deletedAt: null }, orderBy: [{ startTime: "asc" }, { createdAt: "desc" }], include: { project: { select: { id: true, name: true, color: true } } } } } });
+    const authUser = await requireApiUser();
+    if (!authUser) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    const user = await prisma.user.findUnique({ where: { id: authUser.id }, include: { events: { where: { deletedAt: null }, orderBy: [{ startTime: "asc" }, { createdAt: "desc" }], include: { project: { select: { id: true, name: true, color: true } } } } } });
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
     return NextResponse.json(user.events.map((event) => ({ ...event, recurrence: normalizeRecurrence(event.recurrence) })));
   } catch (error) {
@@ -81,8 +83,8 @@ export async function POST(req: Request) {
     const startAt = mergeDateAndTime(startDate, startTimeParts);
     const endAt = endDate ? mergeDateAndTime(endDate, endTimeParts) : null;
 
-    const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL } });
-    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    const user = await requireApiUser();
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     if (body.recurrence && !isValidRecurrence(body.recurrence)) return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
 
     const description = typeof body.description === "string" ? body.description.trim() : "";

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { ThemeToggle } from "./theme-provider";
 import { GlobalCommandCenter } from "./global-command-center";
 
@@ -20,19 +21,31 @@ const utilityLinks = [
   { href: "/trash", label: "Trash" },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+const publicPaths = new Set(["/login", "/signup"]);
+
+type ShellUser = { name: string | null; email: string } | null;
+
+export function AppShell({ children, currentUser }: { children: React.ReactNode; currentUser: ShellUser }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const isPublicPage = publicPaths.has(pathname);
+
+  useEffect(() => {
+    if (!currentUser && !isPublicPage) {
+      router.replace("/login");
+    }
+  }, [currentUser, isPublicPage, router]);
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
-          <p className="shrink-0 font-semibold">AI-Multi Task-Management</p>
+          <Link href={currentUser ? "/" : "/login"} className="shrink-0 font-semibold">AI-Multi Task-Management</Link>
 
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
-            <div className="shrink-0"><GlobalCommandCenter /></div>
+            {currentUser ? <div className="shrink-0"><GlobalCommandCenter /></div> : null}
 
-            <nav className="hidden min-w-0 flex-1 items-center gap-1 md:flex">
+            {currentUser ? <nav className="hidden min-w-0 flex-1 items-center gap-1 md:flex">
               <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 {primaryLinks.map((link) => {
                   const active = pathname === link.href;
@@ -70,7 +83,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   );
                 })}
               </div>
-            </nav>
+            </nav> : null}
+
+            {currentUser ? (
+              <div className="hidden shrink-0 items-center gap-2 rounded-full bg-zinc-100 px-3 py-1.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 lg:flex">
+                <span className="max-w-28 truncate font-medium">{currentUser.name || currentUser.email}</span>
+                {currentUser.name ? <span className="max-w-36 truncate text-zinc-500 dark:text-zinc-400">{currentUser.email}</span> : null}
+              </div>
+            ) : null}
+
+            {currentUser ? (
+              <Link href="/logout" className="shrink-0 rounded-lg px-2.5 py-2 text-sm text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                Logout
+              </Link>
+            ) : null}
 
             <div className="shrink-0">
               <ThemeToggle />
@@ -78,7 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <div className="border-t border-zinc-200 px-4 py-2 md:hidden dark:border-zinc-800 sm:px-6">
+        {currentUser ? <div className="border-t border-zinc-200 px-4 py-2 md:hidden dark:border-zinc-800 sm:px-6">
           <nav className="flex items-center gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             {[...primaryLinks, ...utilityLinks].map((link) => {
               const active = pathname === link.href;
@@ -97,7 +123,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
-        </div>
+        </div> : null}
       </header>
       {children}
     </div>
