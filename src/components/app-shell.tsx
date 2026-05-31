@@ -83,9 +83,9 @@ function TopBarLink({
 
 function SidebarNavigation({ pathname }: { pathname: string }) {
   return (
-    <aside className="hidden min-h-[calc(100vh-4.25rem)] w-80 shrink-0 border-r border-zinc-200/80 bg-white/85 px-5 py-6 shadow-[12px_0_30px_-28px_rgba(39,39,42,0.55)] dark:border-zinc-800/80 dark:bg-zinc-950/75 lg:block xl:w-[22rem]">
+    <aside className="sticky top-[4.25rem] hidden h-[calc(100vh-4.25rem)] w-80 shrink-0 self-start p-4 lg:block xl:w-[22rem]">
       <nav
-        className="sticky top-24 flex min-h-[calc(100vh-10rem)] flex-col gap-4"
+        className="flex h-full flex-col gap-4 rounded-[2rem] bg-zinc-100/80 p-4 shadow-inner shadow-white/70 dark:bg-zinc-900/70 dark:shadow-black/10"
         aria-label="Main workspace navigation"
       >
         {workspaceLinks.map((link) => {
@@ -96,21 +96,13 @@ function SidebarNavigation({ pathname }: { pathname: string }) {
               key={link.href}
               href={link.href}
               aria-current={active ? "page" : undefined}
-              className={`group relative flex min-h-24 flex-1 items-center overflow-hidden rounded-3xl border px-6 py-6 text-left text-xl font-semibold tracking-tight transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-700 dark:focus-visible:outline-zinc-300 ${
+              className={`group flex flex-1 items-center justify-center rounded-[1.75rem] px-6 py-7 text-center text-2xl font-semibold tracking-tight transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-700 dark:focus-visible:outline-zinc-300 ${
                 active
-                  ? "border-zinc-900 bg-zinc-900 text-white shadow-xl shadow-zinc-300/70 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950 dark:shadow-none"
-                  : "border-zinc-200 bg-white text-zinc-800 shadow-sm shadow-zinc-200/60 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-zinc-50 hover:shadow-lg hover:shadow-zinc-200/80 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 dark:shadow-none dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
+                  ? "bg-zinc-800 text-white shadow-xl shadow-zinc-300/70 ring-1 ring-zinc-700/20 dark:bg-zinc-100 dark:text-zinc-950 dark:shadow-none dark:ring-white/10"
+                  : "bg-zinc-200/80 text-zinc-800 shadow-sm shadow-zinc-300/60 hover:-translate-y-0.5 hover:bg-zinc-300/80 hover:text-zinc-950 hover:shadow-lg hover:shadow-zinc-300/70 dark:bg-zinc-800/80 dark:text-zinc-100 dark:shadow-none dark:hover:bg-zinc-700/90 dark:hover:text-white"
               }`}
             >
-              <span
-                className={`absolute inset-y-6 left-0 w-1.5 rounded-r-full transition ${
-                  active
-                    ? "bg-white/90 dark:bg-zinc-950/80"
-                    : "bg-transparent group-hover:bg-zinc-300 dark:group-hover:bg-zinc-700"
-                }`}
-                aria-hidden="true"
-              />
-              <span className="relative">{link.label}</span>
+              {link.label}
             </Link>
           );
         })}
@@ -144,13 +136,6 @@ export function AppShell({
     <div className="min-h-screen overflow-x-hidden bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
         <div className="mx-auto flex max-w-[104rem] items-center gap-3 px-4 py-3 sm:px-6">
-          <Link
-            href={currentUser ? "/" : "/login"}
-            className="min-w-0 max-w-[13rem] shrink truncate font-semibold tracking-tight sm:max-w-none sm:shrink-0"
-          >
-            AI-Multi Task-Management
-          </Link>
-
           {currentUser ? (
             <div className="hidden min-w-0 flex-1 items-center gap-2 overflow-x-auto whitespace-nowrap rounded-full px-1 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden lg:flex">
               <div className="shrink-0">
@@ -247,7 +232,7 @@ export function AppShell({
       {showWorkspaceShell ? (
         <div className="mx-auto flex w-full max-w-[104rem] items-start">
           <SidebarNavigation pathname={pathname} />
-          <div className="min-w-0 flex-1">{children}</div>
+          <main className="min-w-0 flex-1">{children}</main>
         </div>
       ) : (
         children
