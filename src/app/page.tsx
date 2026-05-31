@@ -8,11 +8,6 @@ import { expandRecurringEventsForRange } from "@/lib/recurrence";
 const REMINDER_LOOKAHEAD_DAYS = 7;
 
 const workspaceFeatures = [
-  { href: "/notes", title: "Notes", description: "Capture ideas, meeting notes, and project context.", countKey: "notes", accent: "from-sky-500 to-cyan-500" },
-  { href: "/tasks", title: "Tasks", description: "Plan, prioritize, assign, and complete work.", countKey: "tasks", accent: "from-emerald-500 to-teal-500" },
-  { href: "/events", title: "Events", description: "Schedule time-sensitive plans and recurring events.", countKey: "events", accent: "from-violet-500 to-fuchsia-500" },
-  { href: "/projects", title: "Projects", description: "Organize notes, tasks, teams, and discussions by workspace.", countKey: "projects", accent: "from-amber-500 to-orange-500" },
-  { href: "/events/calendar", title: "Calendar", description: "Review deadlines and events in a calendar view.", countKey: "events", accent: "from-indigo-500 to-blue-500" },
   { href: "/tasks/board", title: "Task Board", description: "Move work through todo, in-progress, and done lanes.", countKey: "activeTasks", accent: "from-rose-500 to-pink-500" },
   { href: "/planner", title: "Planner", description: "Shape weekly goals and turn intentions into action.", countKey: "weeklyGoals", accent: "from-lime-500 to-emerald-500" },
   { href: "/roadmap", title: "Roadmap", description: "See longer-range project direction and progress.", countKey: "projects", accent: "from-purple-500 to-indigo-500" },
@@ -273,14 +268,14 @@ export default async function DashboardPage() {
         <section className={`${uiCardClass} mb-10`}>
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Navigation hub</p>
-              <h2 className="text-2xl font-semibold">Open your workspace tools</h2>
+              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Workspace hub</p>
+              <h2 className="text-2xl font-semibold">Secondary tools and system areas</h2>
             </div>
             <p className="max-w-xl text-sm text-zinc-600 dark:text-zinc-300">
-              Major destinations live here as clear feature cards so the top bar can stay focused on search, today, account, and theme controls.
+              Notes, Tasks, Events, Projects, and Calendar now stay available in the persistent sidebar. These cards keep supporting tools easy to find without crowding the app shell.
             </p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {workspaceFeatures.map((feature) => (
               <Link
                 key={feature.href}
