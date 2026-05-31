@@ -2,9 +2,9 @@ import Link from "next/link";
 import { Priority, Recurrence, TaskStatus } from "@prisma/client";
 import { uiCardClass } from "@/components/ui";
 import { prisma } from "@/lib/prisma";
+import { requirePageUser } from "@/lib/auth";
 import { expandRecurringEventsForRange, normalizeRecurrence } from "@/lib/recurrence";
 
-const DEMO_USER_EMAIL = "samuel@example.com";
 const FOCUS_LIMIT = 8;
 const TODAY_TASK_LIMIT = 5;
 
@@ -81,7 +81,7 @@ function ProjectBadge({ project }: { project: { name: string; color: string | nu
 }
 
 export default async function PlannerPage() {
-  const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL }, select: { id: true } });
+  const user = await requirePageUser();
   const now = new Date();
   const todayStart = getLocalDayStart(now);
   const tomorrowStart = new Date(todayStart);

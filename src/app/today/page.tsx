@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { requirePageUser } from "@/lib/auth";
 import { normalizeRecurrence } from "@/lib/recurrence";
 import { TodayWorkspace } from "@/components/today-workspace";
 
-const DEMO_USER_EMAIL = "samuel@example.com";
 
 export default async function TodayPage() {
-  const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL }, select: { id: true } });
+  const user = await requirePageUser();
 
   const [tasks, events] = user
     ? await Promise.all([

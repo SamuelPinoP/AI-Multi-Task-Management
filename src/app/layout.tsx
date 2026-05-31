@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { ThemeInitScript, ThemeProvider } from "@/components/theme-provider";
+import { getCurrentUser } from "@/lib/auth";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,11 +20,13 @@ export const metadata: Metadata = {
   description: "AI productivity app for notes, tasks, and events.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const currentUser = await getCurrentUser();
+
   return (
     <html
       lang="en"
@@ -33,7 +36,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
         <ThemeInitScript />
         <ThemeProvider>
-          <AppShell>{children}</AppShell>
+          <AppShell currentUser={currentUser}>{children}</AppShell>
         </ThemeProvider>
       </body>
     </html>

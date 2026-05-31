@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/auth";
 import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
-const DEMO_USER_EMAIL = "samuel@example.com";
 type RouteContext = { params: Promise<{ id: string }> };
 function parseProjectId(input: unknown): string | null {
   if (input === null || input === undefined) return null;
@@ -34,8 +34,8 @@ export async function PATCH(req: Request, context: RouteContext) {
     if (endDate && startTimeParts && endTimeParts && endDate.toDateString() === startDate.toDateString()) { const s = startTimeParts.hours*60+startTimeParts.minutes; const e = endTimeParts.hours*60+endTimeParts.minutes; if (e <= s) return NextResponse.json({ error: "End time must be after start time when dates are the same" }, { status: 400 }); }
     if (!isValidRecurrence(body.recurrence)) return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
 
-    const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL } });
-    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    const user = await requireApiUser();
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
     const description = typeof body.description === "string" ? body.description.trim() : "";
     const location = typeof body.location === "string" ? body.location.trim() : "";
@@ -47,7 +47,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     }
 
     const existingEvent = await prisma.event.findFirst({
-      where: { id, deletedAt: null, user: { email: DEMO_USER_EMAIL } },
+      where: { id, deletedAt: null, userId: user.id },
       select: { id: true },
     });
     if (!existingEvent) return NextResponse.json({ error: "Event not found" }, { status: 404 });
@@ -71,13 +71,37 @@ export async function PATCH(req: Request, context: RouteContext) {
   } catch (error) { console.error("PATCH /api/events/[id] error:", error); return NextResponse.json({ error: "Failed to update event" }, { status: 500 }); }
 }
 
-export async function DELETE(_req: Request, context: RouteContext) { /* unchanged */
-  try { const { id } = await context.params; if (!id) return NextResponse.json({ error: "Event id is required" }, { status: 400 });
-    const existingEvent = await prisma.event.findFirst({ where: { id, deletedAt: null, user: { email: DEMO_USER_EMAIL } }, select: { id: true, title: true, userId: true, projectId: true } });
+export async function DELETE(_req: Request, context: RouteContext) {
+  try {
+    const user = await requireApiUser();
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+
+    const { id } = await context.params;
+    if (!id) return NextResponse.json({ error: "Event id is required" }, { status: 400 });
+
+    const existingEvent = await prisma.event.findFirst({
+      where: { id, deletedAt: null, userId: user.id },
+      select: { id: true, title: true, userId: true, projectId: true },
+    });
     if (!existingEvent) return NextResponse.json({ error: "Event not found" }, { status: 404 });
-    const deleted = await prisma.event.updateMany({ where: { id, deletedAt: null, user: { email: DEMO_USER_EMAIL } }, data: { deletedAt: new Date() } });
+
+    const deleted = await prisma.event.updateMany({
+      where: { id, deletedAt: null, userId: user.id },
+      data: { deletedAt: new Date() },
+    });
     if (deleted.count === 0) return NextResponse.json({ error: "Event not found" }, { status: 404 });
-    void createActivity({ userId: existingEvent.userId, action: "DELETED_ITEM", message: `Deleted event: “${existingEvent.title}”`, entityType: "EVENT", entityId: existingEvent.id, projectId: existingEvent.projectId });
+
+    void createActivity({
+      userId: existingEvent.userId,
+      action: "DELETED_ITEM",
+      message: `Deleted event: “${existingEvent.title}”`,
+      entityType: "EVENT",
+      entityId: existingEvent.id,
+      projectId: existingEvent.projectId,
+    });
     return NextResponse.json({ message: "Event moved to trash" }, { status: 200 });
-  } catch (error) { console.error("DELETE /api/events/[id] error:", error); return NextResponse.json({ error: "Failed to delete event" }, { status: 500 }); }
+  } catch (error) {
+    console.error("DELETE /api/events/[id] error:", error);
+    return NextResponse.json({ error: "Failed to delete event" }, { status: 500 });
+  }
 }

@@ -2,9 +2,9 @@ import Link from "next/link";
 import { uiButtonClass, uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Recurrence, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { requirePageUser } from "@/lib/auth";
 import { expandRecurringEventsForRange } from "@/lib/recurrence";
 
-const DEMO_USER_EMAIL = "samuel@example.com";
 const REMINDER_LOOKAHEAD_DAYS = 7;
 
 type TaskReminderGroup = "OVERDUE" | "DUE_TODAY" | "UPCOMING";
@@ -59,10 +59,7 @@ function ProjectBadge({ project }: { project: { name: string; color: string | nu
 }
 
 export default async function DashboardPage() {
-  const user = await prisma.user.findUnique({
-    where: { email: DEMO_USER_EMAIL },
-    select: { id: true },
-  });
+  const user = await requirePageUser();
 
   const now = new Date();
   const todayStart = getLocalDayStart(now);

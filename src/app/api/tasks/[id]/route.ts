@@ -1,9 +1,9 @@
 import { Priority, Recurrence, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 
-const DEMO_USER_EMAIL = "samuel@example.com";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -32,6 +32,9 @@ function parseId(input: unknown): string | null {
 
 export async function PATCH(req: Request, context: RouteContext) {
   try {
+    const user = await requireApiUser();
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+
     const { id } = await context.params;
 
     if (!id) {
@@ -70,12 +73,6 @@ export async function PATCH(req: Request, context: RouteContext) {
     const projectId = parseId(body.projectId);
     let assigneeId = parseId(body.assigneeId);
 
-    const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL } });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
     if (projectId) {
       const project = await prisma.project.findFirst({
         where: { id: projectId, userId: user.id },
@@ -91,7 +88,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     }
 
     if (assigneeId) {
-      const member = await prisma.projectMember.findFirst({ where: { id: assigneeId, projectId } });
+      const member = await prisma.projectMember.findFirst({ where: { id: assigneeId, projectId: projectId as string } });
       if (!member) {
         return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
       }
@@ -105,7 +102,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       where: {
         id,
         deletedAt: null,
-        user: { email: DEMO_USER_EMAIL },
+        userId: user.id,
       },
       select: { id: true, status: true, title: true, userId: true },
     });
@@ -118,9 +115,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       where: {
         id,
         deletedAt: null,
-        user: {
-          email: DEMO_USER_EMAIL,
-        },
+        userId: user.id,
       },
       data: {
         title,
@@ -170,6 +165,9 @@ export async function PATCH(req: Request, context: RouteContext) {
 
 export async function DELETE(_req: Request, context: RouteContext) {
   try {
+    const user = await requireApiUser();
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+
     const { id } = await context.params;
 
     if (!id) {
@@ -177,7 +175,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
     }
 
     const existingTask = await prisma.task.findFirst({
-      where: { id, deletedAt: null, user: { email: DEMO_USER_EMAIL } },
+      where: { id, deletedAt: null, userId: user.id },
       select: { id: true, title: true, userId: true, projectId: true },
     });
 
@@ -189,9 +187,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
       where: {
         id,
         deletedAt: null,
-        user: {
-          email: DEMO_USER_EMAIL,
-        },
+        userId: user.id,
       },
       data: {
         deletedAt: new Date(),

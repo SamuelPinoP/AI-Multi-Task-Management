@@ -3,9 +3,9 @@ import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/auth";
 import { createActivity } from "@/lib/activity";
 
-const DEMO_USER_EMAIL = "samuel@example.com";
 const STANDARD_FILE_SIZE_LIMIT = 10 * 1024 * 1024;
 const VIDEO_FILE_SIZE_LIMIT = 100 * 1024 * 1024;
 const MAX_FILES_PER_MESSAGE = 5;
@@ -164,8 +164,8 @@ export async function POST(req: Request, context: RouteContext) {
       return NextResponse.json({ error: `${unsafeFile.name} is not an allowed attachment type.` }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL } });
-    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    const user = await requireApiUser();
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
     const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id }, select: { id: true, name: true } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });

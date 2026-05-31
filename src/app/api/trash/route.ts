@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 
-const DEMO_USER_EMAIL = "samuel@example.com";
 
 export async function GET() {
-  const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL }, select: { id: true } });
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+  const user = await requireApiUser();
+  if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
   const [notes, tasks, events] = await Promise.all([
     prisma.note.findMany({ where: { userId: user.id, deletedAt: { not: null } }, orderBy: { deletedAt: "desc" } }),
@@ -24,10 +24,10 @@ export async function PATCH(req: Request) {
 
   if (!id || !type) return NextResponse.json({ error: "Type and id are required" }, { status: 400 });
 
-  const where = { id, deletedAt: { not: null }, user: { email: DEMO_USER_EMAIL } };
+  const user = await requireApiUser();
+  if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
-  const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL }, select: { id: true } });
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+  const where = { id, deletedAt: { not: null }, userId: user.id };
 
   const item =
     type === "note"
@@ -59,8 +59,8 @@ export async function PATCH(req: Request) {
 
 
 export async function DELETE() {
-  const user = await prisma.user.findUnique({ where: { email: DEMO_USER_EMAIL }, select: { id: true } });
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+  const user = await requireApiUser();
+  if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
   const [notes, tasks, events] = await Promise.all([
     prisma.note.deleteMany({ where: { userId: user.id, deletedAt: { not: null } } }),

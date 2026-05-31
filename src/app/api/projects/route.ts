@@ -1,9 +1,8 @@
 import { ProjectStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
-
-const DEMO_USER_EMAIL = "samuel@example.com";
 
 function parseProjectStatus(value: unknown): ProjectStatus | null {
   if (typeof value !== "string") return null;
@@ -12,24 +11,18 @@ function parseProjectStatus(value: unknown): ProjectStatus | null {
 
 export async function GET(req: Request) {
   try {
+    const user = await requireApiUser();
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+
     const { searchParams } = new URL(req.url);
     const statusFilter = parseProjectStatus(searchParams.get("status"));
 
-    const user = await prisma.user.findUnique({
-      where: { email: DEMO_USER_EMAIL },
-      include: {
-        projects: {
-          where: statusFilter ? { status: statusFilter } : undefined,
-          orderBy: { createdAt: "desc" },
-        },
-      },
+    const projects = await prisma.project.findMany({
+      where: { userId: user.id, ...(statusFilter ? { status: statusFilter } : {}) },
+      orderBy: { createdAt: "desc" },
     });
 
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    return NextResponse.json(user.projects);
+    return NextResponse.json(projects);
   } catch (error) {
     console.error("GET /api/projects error:", error);
     return NextResponse.json({ error: "Failed to fetch projects" }, { status: 500 });
@@ -38,6 +31,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const user = await requireApiUser();
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+
     const body = await req.json();
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const descriptionInput = typeof body.description === "string" ? body.description.trim() : "";
@@ -45,14 +41,6 @@ export async function POST(req: Request) {
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: DEMO_USER_EMAIL },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     const project = await prisma.project.create({
