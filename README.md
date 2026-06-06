@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI-Multi Task-Management
+
+AI-Multi Task-Management is a Next.js App Router application for team task management, notes, projects, calendars, project chat, search, trash, planning views, recurrence, guest mode, authentication, and dark mode.
 
 ## Getting Started
 
-First, run the development server:
+Install dependencies:
+
+```bash
+npm install
+```
+
+Create a local environment file from the safe example:
+
+```bash
+cp .env.example .env
+```
+
+Set `DATABASE_URL` in `.env` to your own local PostgreSQL database. Do not commit `.env` or real database credentials.
+
+```env
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
+```
+
+Prepare Prisma and the local database:
+
+```bash
+npx prisma validate
+npx prisma generate
+npx prisma migrate dev
+```
+
+Run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) with your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Database configuration
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Local development
 
-## Learn More
+Local development uses Prisma 7 with PostgreSQL. Runtime database access reads the server-only `DATABASE_URL` environment variable. Keep this value in `.env` for local development and never use a `NEXT_PUBLIC_` prefix for database secrets.
 
-To learn more about Next.js, take a look at the following resources:
+Required local variable:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```env
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Useful local commands:
 
-## Deploy on Vercel
+```bash
+npx prisma validate
+npx prisma generate
+npx prisma migrate dev
+npm run build
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Hosted deployment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+For Vercel or another hosting provider, create a hosted PostgreSQL database with Neon, Supabase, Railway, or a similar provider. Add the production connection string as a server-side environment variable in the hosting provider settings:
+
+```env
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
+```
+
+Do not commit hosted credentials to Git. Do not expose database credentials to browser code, and do not name this variable with a `NEXT_PUBLIC_` prefix.
+
+Before or during production deployment, run Prisma generation and apply production migrations:
+
+```bash
+npx prisma validate
+npx prisma generate
+npx prisma migrate deploy
+npm run build
+```
+
+## Deployment readiness notes
+
+- The app is not fully deployment-ready until project chat attachments are moved away from local `public/uploads/project-chat` storage to durable hosted storage.
+- Fresh production migration baseline still needs verification if the migration folder lacks an initial base-table migration. The current migrations should be reviewed against an empty hosted database before relying on `prisma migrate deploy` in production.
+- Keep `.env`, `.env.local`, and any other real secret files out of Git. This repository intentionally commits only `.env.example` with placeholder values.
