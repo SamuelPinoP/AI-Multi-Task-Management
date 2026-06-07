@@ -78,6 +78,10 @@ npx prisma migrate deploy
 npm run build
 ```
 
+## Font strategy
+
+The app uses local system font stacks for sans-serif and monospace text instead of `next/font/google`. This avoids network-dependent Google Fonts fetching during local, CI, and hosted production builds.
+
 ## Deployment readiness notes
 
 - The app is not fully deployment-ready until project chat attachments are moved away from local `public/uploads/project-chat` storage to durable hosted storage.
