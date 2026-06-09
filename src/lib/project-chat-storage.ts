@@ -20,20 +20,7 @@ export type ProjectChatStoredAttachmentForDelete = Pick<ProjectChatStoredAttachm
 
 type StorageProvider = "local" | "vercel-blob";
 
-type VercelBlobModule = {
-  put: (
-    pathname: string,
-    body: File,
-    options: {
-      access: "public";
-      addRandomSuffix: boolean;
-      contentType: string;
-      token: string;
-      multipart?: boolean;
-    },
-  ) => Promise<{ pathname: string; url: string }>;
-  del: (urlOrPathname: string, options: { token: string }) => Promise<unknown>;
-};
+type VercelBlobModule = typeof import("@vercel/blob");
 
 export class ProjectChatStorageConfigError extends Error {
   constructor(message: string) {
