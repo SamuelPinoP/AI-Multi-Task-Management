@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
+import { projectAccessWhereForProject } from "@/lib/project-access";
 
 
 type RouteContext = {
@@ -75,7 +76,7 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     if (projectId) {
       const project = await prisma.project.findFirst({
-        where: { id: projectId, userId: user.id },
+        where: projectAccessWhereForProject(projectId, user.id),
       });
 
       if (!project) {

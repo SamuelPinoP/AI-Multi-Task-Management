@@ -3,6 +3,7 @@ import { BackLink } from "@/components/ui";
 import { ProjectChatWorkspace } from "@/components/project-chat-workspace";
 import { prisma } from "@/lib/prisma";
 import { requirePageUser } from "@/lib/auth";
+import { projectAccessWhereForProject } from "@/lib/project-access";
 
 
 type ProjectChatPageProps = {
@@ -15,7 +16,7 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
   const user = await requirePageUser();
 
   const project = await prisma.project.findFirst({
-    where: { id, userId: user.id },
+    where: projectAccessWhereForProject(id, user.id),
     select: {
       id: true,
       name: true,

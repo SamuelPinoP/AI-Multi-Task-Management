@@ -3,6 +3,7 @@ import { Recurrence, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePageUser } from "@/lib/auth";
 import { expandRecurringEventsForRange } from "@/lib/recurrence";
+import { projectAccessWhere } from "@/lib/project-access";
 
 const REMINDER_LOOKAHEAD_DAYS = 7;
 
@@ -162,7 +163,7 @@ export default async function DashboardPage() {
           where: { userId: user.id, deletedAt: null, status: TaskStatus.DONE },
         }),
         prisma.event.count({ where: { userId: user.id, deletedAt: null } }),
-        prisma.project.count({ where: { userId: user.id } }),
+        prisma.project.count({ where: projectAccessWhere(user.id) }),
       ])
     : [[], [], [], [], [], 0, 0, 0, 0, 0, 0];
 

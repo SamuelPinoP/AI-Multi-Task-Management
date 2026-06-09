@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { createActivity } from "@/lib/activity";
+import { projectAccessWhereForProject } from "@/lib/project-access";
 import {
   isProjectChatStorageConfigError,
   saveProjectChatAttachments,
@@ -134,7 +135,7 @@ export async function POST(req: Request, context: RouteContext) {
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
-    const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id }, select: { id: true, name: true } });
+    const project = await prisma.project.findFirst({ where: projectAccessWhereForProject(projectId, user.id), select: { id: true, name: true } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
     const storedAttachments = await saveProjectChatAttachments(files);

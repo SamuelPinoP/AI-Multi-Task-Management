@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
+import { projectAccessWhereForProject } from "@/lib/project-access";
 
 
 function isValidStatus(value: unknown): value is TaskStatus {
@@ -70,7 +71,7 @@ export async function POST(req: Request) {
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
     if (projectId) {
-      const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
+      const project = await prisma.project.findFirst({ where: projectAccessWhereForProject(projectId, user.id) });
       if (!project) return NextResponse.json({ error: "Invalid project" }, { status: 400 });
     }
 

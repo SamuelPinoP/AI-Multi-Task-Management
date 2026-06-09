@@ -12,23 +12,26 @@ datasource db {
 }
 
 model User {
-  id                        String                     @id @default(cuid())
-  email                     String                     @unique
-  name                      String?
-  isGuest                   Boolean                    @default(false)
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
-  passwordHash              String?
-  sessions                  Session[]
-  notes                     Note[]
-  tasks                     Task[]
-  weeklyGoals               WeeklyGoal[]
-  events                    Event[]
-  projects                  Project[]
-  activities                Activity[]
-  projectMemberNotes        ProjectMemberNote[]        @relation("ProjectMemberNoteAuthor")
-  projectComments           ProjectComment[]
-  projectCommentAttachments ProjectCommentAttachment[]
+  id                         String                     @id @default(cuid())
+  email                      String                     @unique
+  name                       String?
+  isGuest                    Boolean                    @default(false)
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+  passwordHash               String?
+  sessions                   Session[]
+  notes                      Note[]
+  tasks                      Task[]
+  weeklyGoals                WeeklyGoal[]
+  events                     Event[]
+  projects                   Project[]
+  projectMemberships         ProjectMember[]
+  sentProjectInvitations     ProjectInvitation[]        @relation("ProjectInvitationInviter")
+  receivedProjectInvitations ProjectInvitation[]        @relation("ProjectInvitationInvitee")
+  activities                 Activity[]
+  projectMemberNotes         ProjectMemberNote[]        @relation("ProjectMemberNoteAuthor")
+  projectComments            ProjectComment[]
+  projectCommentAttachments  ProjectCommentAttachment[]
 }
 
 model Session {
@@ -120,14 +123,15 @@ model Project {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  userId     String
-  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  notes      Note[]
-  tasks      Task[]
-  members    ProjectMember[]
-  events     Event[]
-  activities Activity[]
-  comments   ProjectComment[]
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes       Note[]
+  tasks       Task[]
+  members     ProjectMember[]
+  invitations ProjectInvitation[]
+  events      Event[]
+  activities  Activity[]
+  comments    ProjectComment[]
 }
 
 model ProjectComment {
@@ -168,6 +172,7 @@ model ProjectCommentAttachment {
 model ProjectMember {
   id        String            @id @default(cuid())
   projectId String
+  userId    String?
   name      String
   email     String?
   role      ProjectMemberRole @default(MEMBER)
@@ -175,10 +180,34 @@ model ProjectMember {
   updatedAt DateTime          @updatedAt
 
   project Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
   tasks   Task[]
   notes   ProjectMemberNote[]
 
+  @@unique([projectId, userId])
   @@index([projectId])
+  @@index([userId])
+}
+
+model ProjectInvitation {
+  id            String                  @id @default(cuid())
+  projectId     String
+  inviterUserId String
+  invitedEmail  String
+  invitedUserId String?
+  status        ProjectInvitationStatus @default(PENDING)
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  inviterUser User    @relation("ProjectInvitationInviter", fields: [inviterUserId], references: [id], onDelete: Cascade)
+  invitedUser User?   @relation("ProjectInvitationInvitee", fields: [invitedUserId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, invitedEmail, status])
+  @@index([projectId])
+  @@index([inviterUserId])
+  @@index([invitedUserId])
+  @@index([invitedEmail])
 }
 
 model ProjectMemberNote {
@@ -261,6 +290,12 @@ enum ProjectMemberRole {
   OWNER
   MEMBER
   VIEWER
+}
+
+enum ProjectInvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
 }
 
 enum Recurrence {
