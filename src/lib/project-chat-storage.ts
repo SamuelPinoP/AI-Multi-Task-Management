@@ -4,7 +4,6 @@ import { randomUUID } from "crypto";
 import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 
-const DEFAULT_LOCAL_UPLOAD_DIR = "public/uploads/project-chat";
 const DEFAULT_PUBLIC_UPLOAD_PATH = "/uploads/project-chat";
 const DEFAULT_BLOB_PREFIX = "project-chat";
 
@@ -64,9 +63,10 @@ function safePublicPrefix(prefix: string) {
   return `/${trimmed.replace(/^\/+|\/+$/g, "")}`;
 }
 
+const LOCAL_UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "project-chat");
+
 function localUploadDir() {
-  const configuredDir = process.env.PROJECT_CHAT_LOCAL_UPLOAD_DIR?.trim() || DEFAULT_LOCAL_UPLOAD_DIR;
-  return path.resolve(/*turbopackIgnore: true*/ process.cwd(), configuredDir);
+  return LOCAL_UPLOAD_DIR;
 }
 
 function blobPrefix() {

@@ -122,14 +122,12 @@ Use local storage when running the app on your machine:
 
 ```env
 PROJECT_CHAT_STORAGE_PROVIDER="local"
-PROJECT_CHAT_LOCAL_UPLOAD_DIR="public/uploads/project-chat"
 PROJECT_CHAT_PUBLIC_UPLOAD_PATH="/uploads/project-chat"
 ```
 
 - `PROJECT_CHAT_STORAGE_PROVIDER` selects the attachment backend. In development only, omitting it falls back to `local`.
-- `PROJECT_CHAT_LOCAL_UPLOAD_DIR` controls where files are written on disk.
 - `PROJECT_CHAT_PUBLIC_UPLOAD_PATH` controls the public URL prefix saved in attachment metadata.
-- The defaults above preserve existing local URLs such as `/uploads/project-chat/<filename>`.
+- Local files are written to `public/uploads/project-chat`, preserving existing local URLs such as `/uploads/project-chat/<filename>`.
 
 To test local uploads:
 
