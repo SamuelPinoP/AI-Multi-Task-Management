@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { deleteProjectChatAttachments } from "@/lib/project-chat-storage";
 
-
 type RouteContext = { params: Promise<{ id: string; commentId: string }> };
 
 function serializeComment(comment: {
