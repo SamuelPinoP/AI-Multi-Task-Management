@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
+import { deleteProjectChatAttachments } from "@/lib/project-chat-storage";
 
 
 type RouteContext = { params: Promise<{ id: string; commentId: string }> };
@@ -50,7 +51,16 @@ async function getOwnedProjectComment(projectId: string, commentId: string) {
 
   const comment = await prisma.projectComment.findFirst({
     where: { id: commentId, projectId: project.id },
-    select: { id: true, projectId: true, userId: true, message: true, pinned: true, updatedAt: true, _count: { select: { attachments: true } } },
+    select: {
+      id: true,
+      projectId: true,
+      userId: true,
+      message: true,
+      pinned: true,
+      updatedAt: true,
+      attachments: { select: { fileName: true, url: true } },
+      _count: { select: { attachments: true } },
+    },
   });
 
   if (!comment) return { error: NextResponse.json({ error: "Comment not found" }, { status: 404 }) };
@@ -103,6 +113,15 @@ export async function DELETE(_req: Request, context: RouteContext) {
     const { id: projectId, commentId } = await context.params;
     const result = await getOwnedProjectComment(projectId, commentId);
     if ("error" in result) return result.error;
+
+    try {
+      await deleteProjectChatAttachments(result.comment.attachments);
+    } catch (storageError) {
+      console.warn(
+        `Could not delete one or more stored attachments for project comment ${result.comment.id}. The comment metadata will still be deleted.`,
+        storageError,
+      );
+    }
 
     await prisma.projectComment.delete({ where: { id: result.comment.id } });
 
