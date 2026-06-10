@@ -182,7 +182,17 @@ Public Vercel Blob attachment URLs are accessible to anyone who has the URL. Pri
 
 ## Vercel deployment readiness audit
 
-Use this checklist before promoting a Vercel deployment.
+Use this checklist before promoting a Vercel deployment. A shorter step-by-step runbook is also available in [`DEPLOYMENT_CHECKLIST.md`](DEPLOYMENT_CHECKLIST.md).
+
+### First Vercel deploy checklist
+
+1. Create a hosted PostgreSQL database and add its connection string to Vercel as the server-side `DATABASE_URL`.
+2. Create or connect a Vercel Blob store, then add `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"` and the server-only `BLOB_READ_WRITE_TOKEN`.
+3. Set `SIGNUP_ENABLED="false"` and `GUEST_LOGIN_ENABLED="false"` for the first public deployment unless public signup or guest workspaces are intentional.
+4. Set Vercel's Build Command to `npm run vercel-build`.
+5. Deploy; the build validates Prisma, generates Prisma Client, runs `prisma migrate deploy`, and then runs `next build`.
+6. After deployment, test login, disabled signup/guest states, project creation, project chat attachments, and comment deletion.
+
 
 ### Environment variables
 
