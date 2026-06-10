@@ -52,7 +52,9 @@ export default function NotesPage() {
       }
 
       const titleMatches = note.title.toLowerCase().includes(normalizedQuery);
-      const contentMatches = (note.content ?? "").toLowerCase().includes(normalizedQuery);
+      const contentMatches = (note.content ?? "")
+        .toLowerCase()
+        .includes(normalizedQuery);
       return titleMatches || contentMatches;
     });
   }, [notes, projectFilter, searchQuery]);
@@ -134,7 +136,8 @@ export default function NotesPage() {
       setProjectId("");
       await fetchNotes();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not create note.";
+      const message =
+        err instanceof Error ? err.message : "Could not create note.";
       setError(message);
     } finally {
       setLoading(false);
@@ -186,11 +189,12 @@ export default function NotesPage() {
       const updatedNote = (await res.json()) as Note;
 
       setNotes((prevNotes) =>
-        prevNotes.map((note) => (note.id === noteId ? updatedNote : note))
+        prevNotes.map((note) => (note.id === noteId ? updatedNote : note)),
       );
       cancelEditing();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not update note.";
+      const message =
+        err instanceof Error ? err.message : "Could not update note.";
       setError(message);
     } finally {
       setSavingEdit(false);
@@ -216,7 +220,8 @@ export default function NotesPage() {
         cancelEditing();
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not delete note.";
+      const message =
+        err instanceof Error ? err.message : "Could not delete note.";
       setError(message);
     } finally {
       setDeletingNoteId(null);
@@ -248,7 +253,9 @@ export default function NotesPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium">Content (optional)</label>
+                <label className="mb-2 block text-sm font-medium">
+                  Content (optional)
+                </label>
                 <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
@@ -259,7 +266,9 @@ export default function NotesPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium">Project (optional)</label>
+                <label className="mb-2 block text-sm font-medium">
+                  Project (optional)
+                </label>
                 <select
                   value={projectId}
                   onChange={(e) => setProjectId(e.target.value)}
@@ -311,11 +320,23 @@ export default function NotesPage() {
             </div>
 
             {fetching ? (
-              <p className="text-zinc-600 dark:text-zinc-300">Loading notes...</p>
+              <p className="text-zinc-600 dark:text-zinc-300">
+                Loading notes...
+              </p>
             ) : notes.length === 0 ? (
-              <p className="text-zinc-600 dark:text-zinc-300">No notes yet.</p>
+              <div className="rounded-3xl border border-dashed border-zinc-300 bg-white/70 p-8 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
+                <h3 className="text-lg font-semibold">No notes yet.</h3>
+                <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
+                  Capture a meeting recap, class takeaway, research source, or
+                  project decision using the form above. You can optionally
+                  attach it to a project for easier review later.
+                </p>
+              </div>
             ) : visibleNotes.length === 0 ? (
-              <p className="text-zinc-600 dark:text-zinc-300">No notes match your filters.</p>
+              <p className="rounded-2xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
+                No notes match your filters. Try clearing the search text or
+                selecting All projects.
+              </p>
             ) : (
               <div className="space-y-4">
                 {visibleNotes.map((note) => {
@@ -377,7 +398,9 @@ export default function NotesPage() {
                         <>
                           <div className="flex items-start justify-between gap-4">
                             <div>
-                              <h3 className="text-xl font-semibold">{note.title}</h3>
+                              <h3 className="text-xl font-semibold">
+                                {note.title}
+                              </h3>
                               {note.project ? (
                                 <span className="mt-2 inline-flex rounded-full border border-zinc-300 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
                                   {note.project.name}
@@ -404,7 +427,9 @@ export default function NotesPage() {
                           </div>
 
                           {note.content ? (
-                            <p className="mt-2 whitespace-pre-wrap text-gray-700">{note.content}</p>
+                            <p className="mt-2 whitespace-pre-wrap text-gray-700">
+                              {note.content}
+                            </p>
                           ) : (
                             <p className="mt-2 text-gray-400">No content.</p>
                           )}

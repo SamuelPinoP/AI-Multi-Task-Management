@@ -109,7 +109,8 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isPublicPage = publicPaths.has(pathname);
+  const isLoggedOutLanding = !currentUser && pathname === "/";
+  const isPublicPage = publicPaths.has(pathname) || isLoggedOutLanding;
   const displayName = currentUser?.isGuest
     ? "Guest Workspace"
     : currentUser?.name || currentUser?.email;
