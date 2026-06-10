@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createGuestSession, createSession, getCurrentUser, getSafeRedirectPath, normalizeAuthEmail, verifyPassword } from "@/lib/auth";
+import { createGuestSession, createSession, getCurrentUser, getSafeRedirectPath, isGuestLoginEnabled, normalizeAuthEmail, verifyPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 
@@ -34,6 +34,8 @@ async function guestAction(formData: FormData) {
   const currentUser = await getCurrentUser();
   const nextPath = getSafeRedirectPath(String(formData.get("next") || ""));
 
+  if (!isGuestLoginEnabled()) redirect(`/login?error=guest-disabled&next=${encodeURIComponent(nextPath)}`);
+
   if (!currentUser) {
     await createGuestSession();
   }
@@ -46,6 +48,7 @@ function getErrorMessage(error: string | undefined) {
   if (error === "created") return "Account created. Please sign in.";
   if (error === "logged-out") return "You have been logged out.";
   if (error === "invalid") return "Invalid email or password.";
+  if (error === "guest-disabled") return "Guest access is disabled for this deployment.";
   return null;
 }
 
@@ -56,6 +59,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const { error, next } = await searchParams;
   const nextPath = getSafeRedirectPath(next);
   const errorMessage = getErrorMessage(error);
+  const guestLoginEnabled = isGuestLoginEnabled();
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 items-center px-4 py-12">
@@ -91,27 +95,29 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </p>
         </div>
 
-        <aside className="rounded-3xl border border-zinc-200 bg-gradient-to-br from-zinc-950 to-zinc-800 p-6 text-white shadow-sm dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-950">
-          <div className="flex h-full flex-col justify-between gap-8">
-            <div className="space-y-3">
-              <span className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-medium ring-1 ring-white/15">No signup needed</span>
-              <h2 className="text-3xl font-semibold tracking-tight">Start planning in a guest workspace.</h2>
-              <p className="text-sm leading-6 text-zinc-300">
-                Continue as a guest to create notes, tasks, projects, calendar events, discussions, and assignments right away. Your data is saved in the database and scoped to your guest session cookie.
-              </p>
-            </div>
+        {guestLoginEnabled ? (
+          <aside className="rounded-3xl border border-zinc-200 bg-gradient-to-br from-zinc-950 to-zinc-800 p-6 text-white shadow-sm dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-950">
+            <div className="flex h-full flex-col justify-between gap-8">
+              <div className="space-y-3">
+                <span className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-medium ring-1 ring-white/15">No signup needed</span>
+                <h2 className="text-3xl font-semibold tracking-tight">Start planning in a guest workspace.</h2>
+                <p className="text-sm leading-6 text-zinc-300">
+                  Continue as a guest to create notes, tasks, projects, calendar events, discussions, and assignments right away. Your data is saved in the database and scoped to your guest session cookie.
+                </p>
+              </div>
 
-            <form action={guestAction} className="space-y-3">
-              <input type="hidden" name="next" value={nextPath} />
-              <button type="submit" className="inline-flex w-full items-center justify-center rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:-translate-y-0.5 hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-                Continue as Guest
-              </button>
-              <p className="text-xs text-zinc-400">
-                Guest access persists until the session expires or you log out. You can still create a full account anytime.
-              </p>
-            </form>
-          </div>
-        </aside>
+              <form action={guestAction} className="space-y-3">
+                <input type="hidden" name="next" value={nextPath} />
+                <button type="submit" className="inline-flex w-full items-center justify-center rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:-translate-y-0.5 hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+                  Continue as Guest
+                </button>
+                <p className="text-xs text-zinc-400">
+                  Guest access persists until the session expires or you log out. You can still create a full account anytime.
+                </p>
+              </form>
+            </div>
+          </aside>
+        ) : null}
       </section>
     </main>
   );
