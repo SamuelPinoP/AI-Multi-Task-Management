@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { expandRecurringEventsForRange, formatRecurrenceLabel, normalizeRecurrence } from "@/lib/recurrence";
+import {
+  expandRecurringEventsForRange,
+  formatRecurrenceLabel,
+  normalizeRecurrence,
+} from "@/lib/recurrence";
 import { uiButtonClass, uiCardClass } from "@/components/ui";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
@@ -56,7 +60,10 @@ function getDayDiffFromToday(value: string, todayStart: Date) {
   return Math.floor((date.getTime() - todayStart.getTime()) / 86400000);
 }
 
-function getRoadmapBucket(value: string, kind: "TASK" | "EVENT"): RoadmapBucket {
+function getRoadmapBucket(
+  value: string,
+  kind: "TASK" | "EVENT",
+): RoadmapBucket {
   const todayStart = getLocalDayStart(new Date());
   const dayDiff = getDayDiffFromToday(value, todayStart);
   if (dayDiff < 0) return "OVERDUE";
@@ -68,14 +75,18 @@ function getRoadmapBucket(value: string, kind: "TASK" | "EVENT"): RoadmapBucket 
 }
 
 function formatDateLabel(value: string) {
-  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 export default function RoadmapPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectFilter, setProjectFilter] = useState<RoadmapProjectFilter>("ALL");
+  const [projectFilter, setProjectFilter] =
+    useState<RoadmapProjectFilter>("ALL");
   const [typeFilter, setTypeFilter] = useState<RoadmapTypeFilter>("ALL");
   const [loading, setLoading] = useState(true);
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
@@ -99,7 +110,12 @@ export default function RoadmapPage() {
       const projectsData = (await projectsRes.json()) as Project[];
 
       setTasks(tasksData);
-      setEvents(eventsData.map((event) => ({ ...event, recurrence: normalizeRecurrence(event.recurrence) })));
+      setEvents(
+        eventsData.map((event) => ({
+          ...event,
+          recurrence: normalizeRecurrence(event.recurrence),
+        })),
+      );
       setProjects(projectsData);
     } catch {
       setError("Could not load roadmap.");
@@ -126,9 +142,13 @@ export default function RoadmapPage() {
     rangeEnd.setHours(23, 59, 59, 999);
 
     return expandRecurringEventsForRange(
-      events.map((event) => ({ ...event, endTime: event.endTime ?? null, sourceEventId: event.id })),
+      events.map((event) => ({
+        ...event,
+        endTime: event.endTime ?? null,
+        sourceEventId: event.id,
+      })),
       rangeStart,
-      rangeEnd
+      rangeEnd,
     );
   }, [events]);
 
@@ -179,7 +199,11 @@ export default function RoadmapPage() {
 
   const sectionedItems = useMemo(() => {
     const sections: Record<RoadmapBucket, RoadmapItem[]> = {
-      OVERDUE: [], TODAY: [], THIS_WEEK: [], NEXT_WEEK: [], LATER: [],
+      OVERDUE: [],
+      TODAY: [],
+      THIS_WEEK: [],
+      NEXT_WEEK: [],
+      LATER: [],
     };
 
     combinedItems.forEach((item) => {
@@ -194,7 +218,9 @@ export default function RoadmapPage() {
     const overdue = sectionedItems.OVERDUE.length;
     const today = sectionedItems.TODAY.length;
     const thisWeek = sectionedItems.THIS_WEEK.length;
-    const upcomingEvents = eventItems.filter((item) => new Date(item.when) >= getLocalDayStart(new Date())).length;
+    const upcomingEvents = eventItems.filter(
+      (item) => new Date(item.when) >= getLocalDayStart(new Date()),
+    ).length;
     return { overdue, today, thisWeek, upcomingEvents };
   }, [sectionedItems, eventItems]);
 
@@ -213,7 +239,11 @@ export default function RoadmapPage() {
     }
   }
 
-  const sections: Array<{ key: RoadmapBucket; title: string; items: RoadmapItem[] }> = [
+  const sections: Array<{
+    key: RoadmapBucket;
+    title: string;
+    items: RoadmapItem[];
+  }> = [
     { key: "OVERDUE", title: "Overdue", items: sectionedItems.OVERDUE },
     { key: "TODAY", title: "Today", items: sectionedItems.TODAY },
     { key: "THIS_WEEK", title: "This Week", items: sectionedItems.THIS_WEEK },
@@ -221,69 +251,187 @@ export default function RoadmapPage() {
     { key: "LATER", title: "Later", items: sectionedItems.LATER },
   ];
 
-  return <main className="min-h-screen px-6 py-10"><div className="mx-auto max-w-6xl space-y-8">
-    <header>
-      <h1 className="text-4xl font-bold">Roadmap</h1>
-      <p className="mt-2 text-zinc-600 dark:text-zinc-300">Plan upcoming tasks and events across projects.</p>
-    </header>
+  return (
+    <main className="min-h-screen px-6 py-10">
+      <div className="mx-auto max-w-6xl space-y-8">
+        <header>
+          <h1 className="text-4xl font-bold">Roadmap</h1>
+          <p className="mt-2 text-zinc-600 dark:text-zinc-300">
+            Plan upcoming tasks and events across projects. This view helps
+            reviewers see deadlines, events, status, priority, and project
+            context at a glance.
+          </p>
+        </header>
 
-    <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <article className={uiCardClass}><p className="text-sm text-zinc-500">Overdue items</p><p className="mt-2 text-3xl font-bold text-red-600">{summary.overdue}</p></article>
-      <article className={uiCardClass}><p className="text-sm text-zinc-500">Due today</p><p className="mt-2 text-3xl font-bold">{summary.today}</p></article>
-      <article className={uiCardClass}><p className="text-sm text-zinc-500">This week</p><p className="mt-2 text-3xl font-bold">{summary.thisWeek}</p></article>
-      <article className={uiCardClass}><p className="text-sm text-zinc-500">Upcoming events</p><p className="mt-2 text-3xl font-bold">{summary.upcomingEvents}</p></article>
-    </section>
-
-    <section className={`${uiCardClass} flex flex-col gap-4 md:flex-row md:items-center`}>
-      <label className="flex items-center gap-2 text-sm">Project
-        <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-          <option value="ALL">All projects</option>
-          <option value="NONE">No project</option>
-          {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-        </select>
-      </label>
-      <label className="flex items-center gap-2 text-sm">Type
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as RoadmapTypeFilter)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-          <option value="ALL">All</option><option value="TASKS">Tasks</option><option value="EVENTS">Events</option>
-        </select>
-      </label>
-    </section>
-
-    {loading ? <p>Loading roadmap...</p> : (
-      <section className="space-y-6">
-        {sections.map((section) => (
-          <article key={section.key} className={uiCardClass}>
-            <div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-semibold">{section.title}</h2><span className="text-sm text-zinc-500">{section.items.length} items</span></div>
-            {section.items.length === 0 ? <p className="text-sm text-zinc-500">Nothing here yet.</p> : (
-              <div className="space-y-3">{section.items.map((item) => (
-                <div key={item.id} className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium">{item.title}</p>
-                      <p className="text-sm text-zinc-600 dark:text-zinc-300">{formatDateLabel(item.when)}</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className={`rounded-full px-2 py-1 ${item.kind === "TASK" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200" : "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-200"}`}>{item.kind === "TASK" ? "Task" : "Event"}</span>
-                      {item.taskPriority && <span className="rounded-full bg-zinc-100 px-2 py-1 dark:bg-zinc-800">Priority: {item.taskPriority}</span>}
-                      {item.taskStatus && <span className="rounded-full bg-zinc-100 px-2 py-1 dark:bg-zinc-800">Status: {item.taskStatus.replace("_", " ")}</span>}
-                      {item.kind === "EVENT" && item.recurrence && item.recurrence !== "NONE" && <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">Repeats {formatRecurrenceLabel(item.recurrence)}</span>}
-                      {item.project ? <span className="rounded-full border px-2 py-1" style={{ borderColor: item.project.color ?? undefined }}>{item.project.name}</span> : <span className="rounded-full border border-zinc-300 px-2 py-1 text-zinc-500 dark:border-zinc-700">No project</span>}
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {item.kind === "TASK" && item.taskId ? <>
-                      <Link href="/tasks" className={uiButtonClass}>Open Tasks</Link>
-                      <button onClick={() => void markTaskDone(item.taskId as string)} disabled={updatingTaskId === item.taskId} className={uiButtonClass}>{updatingTaskId === item.taskId ? "Marking..." : "Mark Done"}</button>
-                    </> : <Link href="/events" className={uiButtonClass}>Open Events</Link>}
-                    {item.project && <Link href={`/projects/${item.project.id}`} className={uiButtonClass}>Open Project</Link>}
-                  </div>
-                </div>
-              ))}</div>
-            )}
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <article className={uiCardClass}>
+            <p className="text-sm text-zinc-500">Overdue items</p>
+            <p className="mt-2 text-3xl font-bold text-red-600">
+              {summary.overdue}
+            </p>
           </article>
-        ))}
-      </section>
-    )}
-    {error && <p className="text-sm text-red-600">{error}</p>}
-  </div></main>;
+          <article className={uiCardClass}>
+            <p className="text-sm text-zinc-500">Due today</p>
+            <p className="mt-2 text-3xl font-bold">{summary.today}</p>
+          </article>
+          <article className={uiCardClass}>
+            <p className="text-sm text-zinc-500">This week</p>
+            <p className="mt-2 text-3xl font-bold">{summary.thisWeek}</p>
+          </article>
+          <article className={uiCardClass}>
+            <p className="text-sm text-zinc-500">Upcoming events</p>
+            <p className="mt-2 text-3xl font-bold">{summary.upcomingEvents}</p>
+          </article>
+        </section>
+
+        <section
+          className={`${uiCardClass} flex flex-col gap-4 md:flex-row md:items-center`}
+        >
+          <label className="flex items-center gap-2 text-sm">
+            Project
+            <select
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            >
+              <option value="ALL">All projects</option>
+              <option value="NONE">No project</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            Type
+            <select
+              value={typeFilter}
+              onChange={(e) =>
+                setTypeFilter(e.target.value as RoadmapTypeFilter)
+              }
+              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            >
+              <option value="ALL">All</option>
+              <option value="TASKS">Tasks</option>
+              <option value="EVENTS">Events</option>
+            </select>
+          </label>
+        </section>
+
+        {loading ? (
+          <p>Loading roadmap...</p>
+        ) : (
+          <section className="space-y-6">
+            {sections.map((section) => (
+              <article key={section.key} className={uiCardClass}>
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-xl font-semibold">{section.title}</h2>
+                  <span className="text-sm text-zinc-500">
+                    {section.items.length} items
+                  </span>
+                </div>
+                {section.items.length === 0 ? (
+                  <p className="text-sm text-zinc-500">
+                    Nothing scheduled in this bucket yet. Tasks with due dates
+                    and events will appear here automatically.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {section.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="font-medium">{item.title}</p>
+                            <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                              {formatDateLabel(item.when)}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <span
+                              className={`rounded-full px-2 py-1 ${item.kind === "TASK" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200" : "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-200"}`}
+                            >
+                              {item.kind === "TASK" ? "Task" : "Event"}
+                            </span>
+                            {item.taskPriority && (
+                              <span className="rounded-full bg-zinc-100 px-2 py-1 dark:bg-zinc-800">
+                                Priority: {item.taskPriority}
+                              </span>
+                            )}
+                            {item.taskStatus && (
+                              <span className="rounded-full bg-zinc-100 px-2 py-1 dark:bg-zinc-800">
+                                Status: {item.taskStatus.replace("_", " ")}
+                              </span>
+                            )}
+                            {item.kind === "EVENT" &&
+                              item.recurrence &&
+                              item.recurrence !== "NONE" && (
+                                <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+                                  Repeats{" "}
+                                  {formatRecurrenceLabel(item.recurrence)}
+                                </span>
+                              )}
+                            {item.project ? (
+                              <span
+                                className="rounded-full border px-2 py-1"
+                                style={{
+                                  borderColor: item.project.color ?? undefined,
+                                }}
+                              >
+                                {item.project.name}
+                              </span>
+                            ) : (
+                              <span className="rounded-full border border-zinc-300 px-2 py-1 text-zinc-500 dark:border-zinc-700">
+                                No project
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {item.kind === "TASK" && item.taskId ? (
+                            <>
+                              <Link href="/tasks" className={uiButtonClass}>
+                                Open Tasks
+                              </Link>
+                              <button
+                                onClick={() =>
+                                  void markTaskDone(item.taskId as string)
+                                }
+                                disabled={updatingTaskId === item.taskId}
+                                className={uiButtonClass}
+                              >
+                                {updatingTaskId === item.taskId
+                                  ? "Marking..."
+                                  : "Mark Done"}
+                              </button>
+                            </>
+                          ) : (
+                            <Link href="/events" className={uiButtonClass}>
+                              Open Events
+                            </Link>
+                          )}
+                          {item.project && (
+                            <Link
+                              href={`/projects/${item.project.id}`}
+                              className={uiButtonClass}
+                            >
+                              Open Project
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            ))}
+          </section>
+        )}
+        {error && <p className="text-sm text-red-600">{error}</p>}
+      </div>
+    </main>
+  );
 }

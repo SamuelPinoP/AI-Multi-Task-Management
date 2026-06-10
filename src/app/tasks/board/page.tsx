@@ -13,7 +13,12 @@ type Project = {
   color: string | null;
 };
 
-type Member = { id: string; name: string; email: string | null; role: "OWNER" | "MEMBER" | "VIEWER" };
+type Member = {
+  id: string;
+  name: string;
+  email: string | null;
+  role: "OWNER" | "MEMBER" | "VIEWER";
+};
 
 type Task = {
   id: string;
@@ -39,15 +44,25 @@ function getLocalDayStart(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-function getDueIndicator(task: Task): { label: string; className: string } | null {
+function getDueIndicator(
+  task: Task,
+): { label: string; className: string } | null {
   if (!task.dueDate || task.status === "DONE") return null;
 
   const dueDate = getLocalDayStart(new Date(task.dueDate));
   const today = getLocalDayStart(new Date());
   const dayDiff = Math.floor((dueDate.getTime() - today.getTime()) / 86400000);
 
-  if (dayDiff < 0) return { label: "Overdue", className: "border-red-200 bg-red-50 text-red-700" };
-  if (dayDiff === 0) return { label: "Due Today", className: "border-amber-200 bg-amber-50 text-amber-700" };
+  if (dayDiff < 0)
+    return {
+      label: "Overdue",
+      className: "border-red-200 bg-red-50 text-red-700",
+    };
+  if (dayDiff === 0)
+    return {
+      label: "Due Today",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+    };
   return null;
 }
 
@@ -60,7 +75,10 @@ export default function TaskBoardPage() {
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
   const filteredTasks = useMemo(
-    () => tasks.filter((task) => !projectFilter || task.projectId === projectFilter),
+    () =>
+      tasks.filter(
+        (task) => !projectFilter || task.projectId === projectFilter,
+      ),
     [tasks, projectFilter],
   );
 
@@ -70,7 +88,10 @@ export default function TaskBoardPage() {
         setFetching(true);
         setError("");
 
-        const [tasksRes, projectsRes] = await Promise.all([fetch("/api/tasks"), fetch("/api/projects")]);
+        const [tasksRes, projectsRes] = await Promise.all([
+          fetch("/api/tasks"),
+          fetch("/api/projects"),
+        ]);
 
         if (!tasksRes.ok) {
           throw new Error("Failed to fetch tasks");
@@ -80,7 +101,10 @@ export default function TaskBoardPage() {
           throw new Error("Failed to fetch projects");
         }
 
-        const [tasksData, projectsData] = (await Promise.all([tasksRes.json(), projectsRes.json()])) as [Task[], Project[]];
+        const [tasksData, projectsData] = (await Promise.all([
+          tasksRes.json(),
+          projectsRes.json(),
+        ])) as [Task[], Project[]];
         setTasks(tasksData);
         setProjects(projectsData);
       } catch {
@@ -111,7 +135,7 @@ export default function TaskBoardPage() {
           dueDate: task.dueDate,
           recurrence: task.recurrence,
           projectId: task.projectId ?? "",
-          assigneeId: task.projectId ? task.assignee?.id ?? "" : "",
+          assigneeId: task.projectId ? (task.assignee?.id ?? "") : "",
         }),
       });
 
@@ -121,9 +145,14 @@ export default function TaskBoardPage() {
       }
 
       const updatedTask = (await res.json()) as Task;
-      setTasks((prev) => prev.map((currentTask) => (currentTask.id === task.id ? updatedTask : currentTask)));
+      setTasks((prev) =>
+        prev.map((currentTask) =>
+          currentTask.id === task.id ? updatedTask : currentTask,
+        ),
+      );
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not update task.";
+      const message =
+        err instanceof Error ? err.message : "Could not update task.";
       setError(message);
     } finally {
       setUpdatingTaskId(null);
@@ -136,17 +165,31 @@ export default function TaskBoardPage() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-4xl font-bold">Task Planning Board</h1>
-            <p className="text-zinc-600 dark:text-zinc-300">Manage tasks visually by status.</p>
+            <p className="text-zinc-600 dark:text-zinc-300">
+              Manage tasks visually by status.
+            </p>
           </div>
           <BackLink href="/tasks">Back to Tasks List</BackLink>
         </div>
 
         <div className={`${uiCardClass} mb-6 p-4`}>
-          <label htmlFor="projectFilter" className="mb-2 block text-sm font-medium">Filter by project</label>
-          <select id="projectFilter" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-black dark:border-zinc-700 sm:w-80">
+          <label
+            htmlFor="projectFilter"
+            className="mb-2 block text-sm font-medium"
+          >
+            Filter by project
+          </label>
+          <select
+            id="projectFilter"
+            value={projectFilter}
+            onChange={(e) => setProjectFilter(e.target.value)}
+            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-black dark:border-zinc-700 sm:w-80"
+          >
             <option value="">All Projects</option>
             {projects.map((project) => (
-              <option key={project.id} value={project.id}>{project.name}</option>
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
             ))}
           </select>
         </div>
@@ -158,18 +201,26 @@ export default function TaskBoardPage() {
         ) : (
           <div className="grid gap-4 lg:grid-cols-3">
             {STATUS_COLUMNS.map((column) => {
-              const columnTasks = filteredTasks.filter((task) => task.status === column.status);
+              const columnTasks = filteredTasks.filter(
+                (task) => task.status === column.status,
+              );
 
               return (
-                <section key={column.status} className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+                <section
+                  key={column.status}
+                  className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40"
+                >
                   <div className="mb-4 flex items-center justify-between">
                     <h2 className="text-lg font-semibold">{column.title}</h2>
-                    <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium dark:bg-zinc-700">{columnTasks.length}</span>
+                    <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium dark:bg-zinc-700">
+                      {columnTasks.length}
+                    </span>
                   </div>
 
                   {columnTasks.length === 0 ? (
                     <p className="rounded-xl border border-dashed border-zinc-300 px-3 py-5 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-                      No tasks in this column.
+                      No tasks in this column yet. Move tasks here from another
+                      status or create a task from the Tasks page.
                     </p>
                   ) : (
                     <div className="space-y-3">
@@ -177,26 +228,70 @@ export default function TaskBoardPage() {
                         const dueIndicator = getDueIndicator(task);
 
                         return (
-                          <article key={task.id} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+                          <article
+                            key={task.id}
+                            className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+                          >
                             <h3 className="font-semibold">{task.title}</h3>
-                            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{task.description || "No description."}</p>
+                            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                              {task.description || "No description."}
+                            </p>
 
                             <div className="mt-3 flex flex-wrap gap-2">
-                              <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">Priority: {task.priority}</span>
-                              {task.dueDate && <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium">Due: {new Date(task.dueDate).toLocaleDateString()}</span>}
-                              {task.assignee && <span className="rounded-full border px-2.5 py-1 text-xs font-medium">Assigned to: {task.assignee.name}</span>}
+                              <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                                Priority: {task.priority}
+                              </span>
+                              {task.dueDate && (
+                                <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium">
+                                  Due:{" "}
+                                  {new Date(task.dueDate).toLocaleDateString()}
+                                </span>
+                              )}
+                              {task.assignee && (
+                                <span className="rounded-full border px-2.5 py-1 text-xs font-medium">
+                                  Assigned to: {task.assignee.name}
+                                </span>
+                              )}
                               {task.project && (
-                                <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium" style={{ borderColor: task.project.color ?? undefined }}>
-                                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: task.project.color ?? "currentColor" }} />
+                                <span
+                                  className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium"
+                                  style={{
+                                    borderColor:
+                                      task.project.color ?? undefined,
+                                  }}
+                                >
+                                  <span
+                                    className="h-2 w-2 rounded-full"
+                                    style={{
+                                      backgroundColor:
+                                        task.project.color ?? "currentColor",
+                                    }}
+                                  />
                                   {task.project.name}
                                 </span>
                               )}
-                              {dueIndicator && <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${dueIndicator.className}`}>{dueIndicator.label}</span>}
+                              {dueIndicator && (
+                                <span
+                                  className={`rounded-full border px-2.5 py-1 text-xs font-medium ${dueIndicator.className}`}
+                                >
+                                  {dueIndicator.label}
+                                </span>
+                              )}
                             </div>
 
                             <div className="mt-4 flex flex-wrap gap-2">
-                              {STATUS_COLUMNS.filter((option) => option.status !== task.status).map((option) => (
-                                <button key={option.status} type="button" disabled={updatingTaskId === task.id} onClick={() => void moveTask(task, option.status)} className={`${uiButtonClass} rounded-lg px-2.5 py-1.5 text-xs`}>
+                              {STATUS_COLUMNS.filter(
+                                (option) => option.status !== task.status,
+                              ).map((option) => (
+                                <button
+                                  key={option.status}
+                                  type="button"
+                                  disabled={updatingTaskId === task.id}
+                                  onClick={() =>
+                                    void moveTask(task, option.status)
+                                  }
+                                  className={`${uiButtonClass} rounded-lg px-2.5 py-1.5 text-xs`}
+                                >
                                   Move to {option.title}
                                 </button>
                               ))}
