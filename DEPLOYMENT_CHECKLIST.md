@@ -1,0 +1,81 @@
+# First Vercel Deploy Checklist
+
+Use this checklist before the first production deployment of AI-Multi Task-Management to Vercel with hosted PostgreSQL and Vercel Blob.
+
+## Vercel project settings
+
+1. Create or select the Vercel project for this repository.
+2. Set the Vercel **Build Command** to:
+
+   ```bash
+   npm run vercel-build
+   ```
+
+3. Leave the normal install command as Vercel's default unless you have a specific package-manager reason to override it.
+
+## Required production environment variables
+
+Add these in Vercel Project Settings → Environment Variables for the production environment. Keep every value server-side only; none of these variables should use a `NEXT_PUBLIC_` prefix.
+
+```env
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
+PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"
+BLOB_READ_WRITE_TOKEN="your-vercel-blob-read-write-token"
+SIGNUP_ENABLED="false"
+GUEST_LOGIN_ENABLED="false"
+```
+
+- `DATABASE_URL` must point at the hosted PostgreSQL database that should receive production migrations.
+- `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"` is recommended for Vercel because local filesystem uploads are not durable in serverless production.
+- `BLOB_READ_WRITE_TOKEN` is a server-only Vercel Blob secret. Never commit it, never expose it to client code, and never rename it with a `NEXT_PUBLIC_` prefix.
+- `SIGNUP_ENABLED="false"` is recommended for the first public deployment unless public account creation is intentional.
+- `GUEST_LOGIN_ENABLED="false"` is recommended for the first public deployment unless public guest workspaces are intentional.
+
+Optional production variable:
+
+```env
+PROJECT_CHAT_BLOB_PREFIX="project-chat"
+```
+
+## Database and migrations
+
+The Vercel Build Command runs:
+
+```bash
+prisma validate && prisma generate && prisma migrate deploy && next build
+```
+
+This means Prisma Client is generated during the build, and pending migrations are applied with Prisma's production-safe `migrate deploy` command before `next build` runs. Use an empty or properly backed-up hosted PostgreSQL database for the first deployment. Do not run destructive reset commands, such as `prisma migrate reset`, against production.
+
+If you prefer to separate migrations from the Vercel build step, run the same Prisma commands from a trusted machine or CI environment with the production `DATABASE_URL`, then deploy with the same migration state.
+
+## Vercel Blob setup
+
+1. Create or connect a Vercel Blob store for the Vercel project.
+2. Add the Blob read/write token as `BLOB_READ_WRITE_TOKEN` in Vercel environment variables.
+3. Set `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"`.
+4. Redeploy after changing Blob-related environment variables.
+
+In production, the app will not silently fall back to local Project Chat attachment storage when `PROJECT_CHAT_STORAGE_PROVIDER` is omitted. Explicitly setting `PROJECT_CHAT_STORAGE_PROVIDER="local"` is allowed, but it is not recommended on Vercel because files written to the serverless filesystem are not durable.
+
+## Troubleshooting
+
+### Missing `DATABASE_URL`
+
+Prisma validation, generation, migration, or runtime database access can fail if `DATABASE_URL` is missing. Add a hosted PostgreSQL connection string in Vercel and redeploy.
+
+### Migration failure
+
+`prisma migrate deploy` is non-destructive, but it can fail if the database is unreachable, credentials are wrong, required SSL settings are missing from the provider URL, or the database schema has drifted from the repository migrations. Check Vercel build logs, confirm the exact production `DATABASE_URL`, and inspect migration status from a trusted machine before retrying.
+
+### Missing `BLOB_READ_WRITE_TOKEN`
+
+Project Chat attachment upload/delete requests fail when `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"` is selected without `BLOB_READ_WRITE_TOKEN`. Add the server-only Vercel Blob token and redeploy.
+
+### Blob provider misconfiguration
+
+If `PROJECT_CHAT_STORAGE_PROVIDER` has any value other than `local` or `vercel-blob`, attachment storage requests fail with a configuration error. Use `vercel-blob` for Vercel production.
+
+### Disabled signup or guest login
+
+When `SIGNUP_ENABLED="false"`, public signup is unavailable by design. When `GUEST_LOGIN_ENABLED="false"`, guest login is unavailable by design. Re-enable either only if you intentionally want public account creation or guest workspaces.
