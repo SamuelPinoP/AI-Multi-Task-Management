@@ -111,9 +111,10 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     include: { user: { select: { id: true, name: true, email: true, isGuest: true } } },
   });
 
-  if (!session || session.expiresAt <= new Date()) {
-    if (session) await prisma.session.deleteMany({ where: { token } });
-    cookieStore.delete(SESSION_COOKIE_NAME);
+  if (!session) return null;
+
+  if (session.expiresAt <= new Date()) {
+    await prisma.session.deleteMany({ where: { token } });
     return null;
   }
 

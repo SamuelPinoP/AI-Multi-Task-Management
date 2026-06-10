@@ -2,6 +2,7 @@ import { ProjectStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import { getProjectAccessForUser, projectAccessWhereForProject } from "@/lib/project-access";
 
 
 type RouteContext = {
@@ -25,10 +26,7 @@ export async function GET(_req: Request, context: RouteContext) {
     }
 
     const project = await prisma.project.findFirst({
-      where: {
-        id,
-        userId: user.id,
-      },
+      where: projectAccessWhereForProject(id, user.id),
       include: {
         notes: {
           where: { deletedAt: null },
@@ -44,6 +42,7 @@ export async function GET(_req: Request, context: RouteContext) {
         members: {
           orderBy: { createdAt: "asc" },
           include: {
+            user: { select: { id: true, name: true, email: true } },
             notes: {
               where: {
                 OR: [
@@ -55,6 +54,11 @@ export async function GET(_req: Request, context: RouteContext) {
               select: { id: true, message: true, createdAt: true, visibility: true, createdByUserId: true },
             },
           },
+        },
+        invitations: {
+          where: { status: "PENDING" },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, invitedEmail: true, status: true, createdAt: true, invitedUser: { select: { id: true, name: true, email: true } } },
         },
         comments: {
           orderBy: { createdAt: "asc" },
@@ -72,7 +76,13 @@ export async function GET(_req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    return NextResponse.json(project);
+    const access = getProjectAccessForUser(project, user.id);
+    return NextResponse.json({
+      ...project,
+      invitations: access?.accessLevel === "OWNER" ? project.invitations : [],
+      accessLevel: access?.accessLevel ?? "OWNER",
+      memberRole: access?.memberRole ?? "OWNER",
+    });
   } catch (error) {
     console.error("GET /api/projects/[id] error:", error);
     return NextResponse.json({ error: "Failed to fetch project" }, { status: 500 });

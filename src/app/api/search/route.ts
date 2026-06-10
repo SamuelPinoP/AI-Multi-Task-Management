@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import { projectAccessWhere } from "@/lib/project-access";
 
 const MAX_RESULTS_PER_TYPE = 8;
 
@@ -25,8 +26,10 @@ export async function GET(req: Request) {
     const [projects, notes, tasks, events] = await Promise.all([
       prisma.project.findMany({
         where: {
-          userId: user.id,
-          OR: [{ name: whereContains }, { description: whereContains }],
+          AND: [
+            projectAccessWhere(user.id),
+            { OR: [{ name: whereContains }, { description: whereContains }] },
+          ],
         },
         select: { id: true, name: true, color: true },
         orderBy: { createdAt: "desc" },

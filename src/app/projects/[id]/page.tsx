@@ -8,6 +8,7 @@ import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
 import { ProjectTeamSection } from "@/components/project-team-section";
 import { ProjectAssignedTasksSection } from "@/components/project-assigned-tasks-section";
 import { ProjectChatPanel } from "@/components/project-chat-panel";
+import { getProjectAccessForUser, projectAccessWhereForProject } from "@/lib/project-access";
 
 
 type ProjectDetailPageProps = {
@@ -19,7 +20,7 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
   const { id } = await params;
 
   const project = await prisma.project.findFirst({
-    where: { id, userId: user.id },
+    where: projectAccessWhereForProject(id, user.id),
     include: {
       notes: { where: { deletedAt: null }, orderBy: { createdAt: "desc" }, select: { id: true, title: true, content: true } },
       tasks: {
@@ -27,10 +28,25 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
         select: { id: true, title: true, description: true, status: true, priority: true, dueDate: true, recurrence: true, assignee: { select: { id: true, name: true, role: true } } },
       },
-      members: { orderBy: { createdAt: "asc" }, include: { notes: { orderBy: { createdAt: "desc" }, select: { id: true, message: true, createdAt: true, visibility: true, createdByUserId: true } } } },
+      members: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          notes: {
+            where: { OR: [{ visibility: "TEAM" }, { createdByUserId: user.id }] },
+            orderBy: { createdAt: "desc" },
+            select: { id: true, message: true, createdAt: true, visibility: true, createdByUserId: true },
+          },
+        },
+      },
       events: {
         where: { deletedAt: null }, orderBy: { startTime: "asc" },
         select: { id: true, title: true, startTime: true, endTime: true, hasStartTime: true, hasEndTime: true, recurrence: true },
+      },
+      invitations: {
+        where: { status: "PENDING" },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, invitedEmail: true, status: true, createdAt: true, invitedUser: { select: { name: true, email: true } } },
       },
       comments: {
         orderBy: { createdAt: "asc" },
@@ -41,6 +57,8 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
 
   if (!project) notFound();
 
+  const access = getProjectAccessForUser(project, user.id);
+  const isOwner = access?.accessLevel === "OWNER";
   const now = new Date();
   const totalNotes = project.notes.length;
   const totalTasks = project.tasks.length;
@@ -84,7 +102,8 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
 
         <section className={uiCardClass}>
           <h1 className="text-3xl font-bold">{project.name}</h1>
-          <div className="mt-3"><span className="inline-flex items-center rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700">Status: {project.status.charAt(0) + project.status.slice(1).toLowerCase()}</span></div>
+          <div className="mt-3"><span className="inline-flex items-center rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700">Status: {project.status.charAt(0) + project.status.slice(1).toLowerCase()}</span>
+            <span className="inline-flex items-center rounded-full border border-blue-300 bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200">{isOwner ? "Owner" : "Shared with me"}</span></div>
           {project.description ? <p className="mt-2 text-zinc-700 dark:text-zinc-300">{project.description}</p> : <p className="mt-2 text-zinc-500">No description.</p>}
           <div className="mt-4 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300"><span className="inline-block h-3 w-3 rounded-full border border-zinc-300 dark:border-zinc-700" style={{ backgroundColor: project.color || "transparent" }} /><span>{project.color || "No color"}</span></div>
         </section>
@@ -113,6 +132,11 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
             })),
           }))}
           workloadRows={Array.from(workload.entries())}
+          isOwner={isOwner}
+          pendingInvitations={project.invitations.map((invitation) => ({
+            ...invitation,
+            createdAt: invitation.createdAt.toISOString(),
+          }))}
         />
 
         <section className="mt-8"><h2 className="mb-4 text-2xl font-semibold">Assigned Notes</h2>{project.notes.length === 0 ? <p className="rounded-2xl border border-dashed border-zinc-300 p-5 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">No notes are assigned to this project yet.</p> : <div className="space-y-4">{project.notes.map((note) => <article key={note.id} className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800"><h3 className="text-lg font-semibold">{note.title}</h3><p className="mt-2 text-zinc-700 dark:text-zinc-300">{note.content || "No content."}</p></article>)}</div>}</section>

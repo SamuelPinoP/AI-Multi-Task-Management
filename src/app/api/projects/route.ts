@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
+import { projectAccessWhere, getProjectAccessForUser } from "@/lib/project-access";
 
 function parseProjectStatus(value: unknown): ProjectStatus | null {
   if (typeof value !== "string") return null;
@@ -18,11 +19,22 @@ export async function GET(req: Request) {
     const statusFilter = parseProjectStatus(searchParams.get("status"));
 
     const projects = await prisma.project.findMany({
-      where: { userId: user.id, ...(statusFilter ? { status: statusFilter } : {}) },
+      where: {
+        AND: [
+          projectAccessWhere(user.id),
+          statusFilter ? { status: statusFilter } : {},
+        ],
+      },
+      include: { members: { where: { userId: user.id }, select: { userId: true, role: true } } },
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(projects);
+    return NextResponse.json(projects.map((project) => {
+      const access = getProjectAccessForUser(project, user.id);
+      const { members, ...projectData } = project;
+      void members;
+      return { ...projectData, accessLevel: access?.accessLevel ?? "OWNER", memberRole: access?.memberRole ?? "OWNER" };
+    }));
   } catch (error) {
     console.error("GET /api/projects error:", error);
     return NextResponse.json({ error: "Failed to fetch projects" }, { status: 500 });

@@ -3,6 +3,7 @@ import { requireApiUser } from "@/lib/auth";
 import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
+import { projectAccessWhereForProject } from "@/lib/project-access";
 
 function parseProjectId(input: unknown): string | null {
   if (input === null || input === undefined) return null;
@@ -92,7 +93,7 @@ export async function POST(req: Request) {
     const projectId = parseProjectId(body.projectId);
 
     if (projectId) {
-      const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
+      const project = await prisma.project.findFirst({ where: projectAccessWhereForProject(projectId, user.id) });
       if (!project) return NextResponse.json({ error: "Invalid project" }, { status: 400 });
     }
 

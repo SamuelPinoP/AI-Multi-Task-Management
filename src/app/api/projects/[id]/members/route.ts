@@ -1,7 +1,7 @@
 import { ProjectMemberRole } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireApiUser } from "@/lib/auth";
+import { normalizeAuthEmail, requireApiUser } from "@/lib/auth";
 
 
 type RouteContext = {
@@ -17,7 +17,7 @@ export async function POST(req: Request, context: RouteContext) {
     const { id: projectId } = await context.params;
     const body = await req.json();
     const name = typeof body.name === "string" ? body.name.trim() : "";
-    const emailInput = typeof body.email === "string" ? body.email.trim() : "";
+    const emailInput = typeof body.email === "string" ? normalizeAuthEmail(body.email) : "";
 
     if (!name) {
       return NextResponse.json({ error: "Member name is required" }, { status: 400 });
@@ -37,9 +37,12 @@ export async function POST(req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
+    const linkedUser = emailInput ? await prisma.user.findUnique({ where: { email: emailInput }, select: { id: true } }) : null;
+
     const member = await prisma.projectMember.create({
       data: {
         projectId,
+        userId: linkedUser?.id ?? null,
         name,
         email: emailInput || null,
         role: body.role,
