@@ -30,6 +30,7 @@ GUEST_LOGIN_ENABLED="false"
 - `BLOB_READ_WRITE_TOKEN` is a server-only Vercel Blob secret. Never commit it, never expose it to client code, and never rename it with a `NEXT_PUBLIC_` prefix.
 - `SIGNUP_ENABLED="false"` is recommended for the first public deployment unless public account creation is intentional.
 - `GUEST_LOGIN_ENABLED="false"` is recommended for the first public deployment unless public guest workspaces are intentional.
+- `SIGNUP_ENABLED` and `GUEST_LOGIN_ENABLED` must be exactly `"true"` or `"false"` if present; ambiguous values fail deployment validation.
 
 Optional production variable:
 
@@ -37,15 +38,25 @@ Optional production variable:
 PROJECT_CHAT_BLOB_PREFIX="project-chat"
 ```
 
+## Deployment environment validation
+
+Run the deployment validator before the first Vercel deploy and after changing environment variables:
+
+```bash
+npm run validate:deploy-env
+```
+
+The same check runs automatically at the start of `npm run vercel-build`. It fails with beginner-friendly messages for missing `DATABASE_URL`, missing `BLOB_READ_WRITE_TOKEN` when `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"`, unsupported storage provider values, and unsafe Vercel production local-storage configuration. It prints variable names and guidance only; it does not print secret values.
+
 ## Database and migrations
 
 The Vercel Build Command runs:
 
 ```bash
-prisma validate && prisma generate && prisma migrate deploy && next build
+npm run validate:deploy-env && prisma validate && prisma generate && prisma migrate deploy && next build
 ```
 
-This means Prisma Client is generated during the build, and pending migrations are applied with Prisma's production-safe `migrate deploy` command before `next build` runs. Use an empty or properly backed-up hosted PostgreSQL database for the first deployment. Do not run destructive reset commands, such as `prisma migrate reset`, against production.
+This means deployment environment variables are checked first, Prisma Client is generated during the build, and pending migrations are applied with Prisma's production-safe `migrate deploy` command before `next build` runs. Use an empty or properly backed-up hosted PostgreSQL database for the first deployment. Do not run destructive reset commands, such as `prisma migrate reset`, against production.
 
 If you prefer to separate migrations from the Vercel build step, run the same Prisma commands from a trusted machine or CI environment with the production `DATABASE_URL`, then deploy with the same migration state.
 
@@ -62,7 +73,7 @@ In production, the app will not silently fall back to local Project Chat attachm
 
 ### Missing `DATABASE_URL`
 
-Prisma validation, generation, migration, or runtime database access can fail if `DATABASE_URL` is missing. Add a hosted PostgreSQL connection string in Vercel and redeploy.
+`npm run validate:deploy-env` fails before Prisma runs if `DATABASE_URL` is missing. Add a hosted PostgreSQL connection string in Vercel and redeploy.
 
 ### Migration failure
 
@@ -70,11 +81,11 @@ Prisma validation, generation, migration, or runtime database access can fail if
 
 ### Missing `BLOB_READ_WRITE_TOKEN`
 
-Project Chat attachment upload/delete requests fail when `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"` is selected without `BLOB_READ_WRITE_TOKEN`. Add the server-only Vercel Blob token and redeploy.
+`npm run validate:deploy-env` fails when `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"` is selected without `BLOB_READ_WRITE_TOKEN`. Add the server-only Vercel Blob token and redeploy.
 
 ### Blob provider misconfiguration
 
-If `PROJECT_CHAT_STORAGE_PROVIDER` has any value other than `local` or `vercel-blob`, attachment storage requests fail with a configuration error. Use `vercel-blob` for Vercel production.
+If `PROJECT_CHAT_STORAGE_PROVIDER` has any value other than `local` or `vercel-blob`, `npm run validate:deploy-env` fails with a configuration error. Use `vercel-blob` for Vercel production.
 
 ### Disabled signup or guest login
 
