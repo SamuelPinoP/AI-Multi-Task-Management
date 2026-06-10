@@ -82,11 +82,19 @@ Before or during production deployment, run Prisma generation and apply producti
 npm run vercel-build
 ```
 
-That script runs:
+That script runs deployment environment validation before Prisma and Next.js build steps:
 
 ```bash
-prisma validate && prisma generate && prisma migrate deploy && next build
+npm run validate:deploy-env && prisma validate && prisma generate && prisma migrate deploy && next build
 ```
+
+You can run the validation by itself before deploying:
+
+```bash
+npm run validate:deploy-env
+```
+
+The validator checks required deployment variables without printing secret values.
 
 ## Font strategy
 
@@ -115,6 +123,7 @@ Do not run destructive reset commands, such as `npx prisma migrate reset`, again
 For future hosted PostgreSQL deployment on Vercel, Neon, Supabase, Railway, or a similar provider, set the hosted database connection string as a server-side `DATABASE_URL`, then run the same non-destructive production commands during deployment or from a trusted machine/CI environment:
 
 ```bash
+npm run validate:deploy-env
 npx prisma validate
 npx prisma generate
 npx prisma migrate deploy
@@ -190,7 +199,7 @@ Use this checklist before promoting a Vercel deployment. A shorter step-by-step 
 2. Create or connect a Vercel Blob store, then add `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"` and the server-only `BLOB_READ_WRITE_TOKEN`.
 3. Set `SIGNUP_ENABLED="false"` and `GUEST_LOGIN_ENABLED="false"` for the first public deployment unless public signup or guest workspaces are intentional.
 4. Set Vercel's Build Command to `npm run vercel-build`.
-5. Deploy; the build validates Prisma, generates Prisma Client, runs `prisma migrate deploy`, and then runs `next build`.
+5. Deploy; the build validates deployment environment variables, validates Prisma, generates Prisma Client, runs `prisma migrate deploy`, and then runs `next build`.
 6. After deployment, test login, disabled signup/guest states, project creation, project chat attachments, and comment deletion.
 
 
@@ -214,7 +223,15 @@ SIGNUP_ENABLED="false"
 GUEST_LOGIN_ENABLED="false"
 ```
 
-`SIGNUP_ENABLED` and `GUEST_LOGIN_ENABLED` default to enabled when omitted. Leave them enabled only if public account creation and public guest workspaces are intentional for the hosted environment.
+`SIGNUP_ENABLED` and `GUEST_LOGIN_ENABLED` default to enabled when omitted. If either is set, use exactly `"true"` or `"false"`; the deployment validator rejects ambiguous values such as `"maybe"`. Leave them enabled only if public account creation and public guest workspaces are intentional for the hosted environment.
+
+Run the deployment environment validator any time you change hosted variables:
+
+```bash
+npm run validate:deploy-env
+```
+
+The validator fails clearly for missing `DATABASE_URL`, missing `BLOB_READ_WRITE_TOKEN` when Vercel Blob is selected, unsupported `PROJECT_CHAT_STORAGE_PROVIDER` values, and unsafe Vercel production local-storage configuration. It reports variable names only and does not print secret values.
 
 ### Migrations and build command
 
@@ -224,7 +241,7 @@ Vercel's Build Command should be:
 npm run vercel-build
 ```
 
-The script validates Prisma, generates the client, applies pending production migrations with `prisma migrate deploy`, and then runs `next build`. Run the same command from a trusted machine or CI environment before the first production deployment if you want to separate migration execution from Vercel's build step.
+The script runs `npm run validate:deploy-env`, validates Prisma, generates the client, applies pending production migrations with `prisma migrate deploy`, and then runs `next build`. Run the same command from a trusted machine or CI environment before the first production deployment if you want to separate migration execution from Vercel's build step.
 
 Do not use `prisma migrate dev`, `prisma migrate reset`, or destructive reset commands against production. Verify the migration chain once against a separate empty PostgreSQL database before connecting the first real hosted database.
 
