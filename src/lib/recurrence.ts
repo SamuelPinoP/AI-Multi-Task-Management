@@ -1,5 +1,3 @@
-import { Recurrence } from "@prisma/client";
-
 export const RECURRENCE_VALUES = [
   "NONE",
   "DAILY",
@@ -10,18 +8,18 @@ export const RECURRENCE_VALUES = [
 
 export type RecurrenceValue = (typeof RECURRENCE_VALUES)[number];
 
-export function isValidRecurrence(value: unknown): value is Recurrence {
+export function isValidRecurrence(value: unknown): value is RecurrenceValue {
   return typeof value === "string" && RECURRENCE_VALUES.includes(value as RecurrenceValue);
 }
 
-export function normalizeRecurrence(value: unknown): Recurrence {
-  return isValidRecurrence(value) ? value : Recurrence.NONE;
+export function normalizeRecurrence(value: unknown): RecurrenceValue {
+  return isValidRecurrence(value) ? value : "NONE";
 }
 
 export function formatRecurrenceLabel(value: unknown) {
   const recurrence = normalizeRecurrence(value);
-  if (recurrence === Recurrence.NONE) return "No";
-  if (recurrence === Recurrence.BIWEEKLY) return "every 2 weeks";
+  if (recurrence === "NONE") return "No";
+  if (recurrence === "BIWEEKLY") return "every 2 weeks";
   return recurrence.toLowerCase();
 }
 
@@ -31,19 +29,19 @@ export type RecurringEventBase = {
   endTime: string | null;
   hasStartTime?: boolean;
   hasEndTime?: boolean;
-  recurrence?: Recurrence | null;
+  recurrence?: RecurrenceValue | null;
 };
 
 function isSameOrBefore(a: Date, b: Date) {
   return a.getTime() <= b.getTime();
 }
 
-function addByRecurrence(date: Date, recurrence: Recurrence) {
+function addByRecurrence(date: Date, recurrence: RecurrenceValue) {
   const next = new Date(date);
-  if (recurrence === Recurrence.DAILY) next.setUTCDate(next.getUTCDate() + 1);
-  if (recurrence === Recurrence.WEEKLY) next.setUTCDate(next.getUTCDate() + 7);
-  if (recurrence === Recurrence.BIWEEKLY) next.setUTCDate(next.getUTCDate() + 14);
-  if (recurrence === Recurrence.MONTHLY) next.setUTCMonth(next.getUTCMonth() + 1);
+  if (recurrence === "DAILY") next.setUTCDate(next.getUTCDate() + 1);
+  if (recurrence === "WEEKLY") next.setUTCDate(next.getUTCDate() + 7);
+  if (recurrence === "BIWEEKLY") next.setUTCDate(next.getUTCDate() + 14);
+  if (recurrence === "MONTHLY") next.setUTCMonth(next.getUTCMonth() + 1);
   return next;
 }
 
@@ -54,7 +52,7 @@ export function expandRecurringEventsForRange<T extends RecurringEventBase>(
 ): T[] {
   return events.flatMap((event) => {
     const recurrence = normalizeRecurrence(event.recurrence);
-    if (recurrence === Recurrence.NONE) {
+    if (recurrence === "NONE") {
       const eventStart = new Date(event.startTime);
       if (eventStart < rangeStart || eventStart > rangeEnd) return [];
       return [event];
@@ -69,7 +67,7 @@ export function expandRecurringEventsForRange<T extends RecurringEventBase>(
 
     let safetyCounter = 0;
 
-        while (isSameOrBefore(occurrenceStart, rangeEnd) && (!baseEnd || isSameOrBefore(occurrenceStart, baseEnd))) {
+    while (isSameOrBefore(occurrenceStart, rangeEnd) && (!baseEnd || isSameOrBefore(occurrenceStart, baseEnd))) {
       safetyCounter += 1;
       if (safetyCounter > 1000) break;
 

@@ -11,6 +11,20 @@ export { DEMO_USER_EMAIL, GUEST_USER_EMAIL_DOMAIN, SESSION_COOKIE_NAME };
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const PASSWORD_KEYLEN = 64;
 
+function envFlagEnabled(name: string, defaultValue = true) {
+  const value = process.env[name]?.trim().toLowerCase();
+  if (value === undefined || value === "") return defaultValue;
+  return !["0", "false", "no", "off"].includes(value);
+}
+
+export function isGuestLoginEnabled() {
+  return envFlagEnabled("GUEST_LOGIN_ENABLED");
+}
+
+export function isPublicSignupEnabled() {
+  return envFlagEnabled("SIGNUP_ENABLED");
+}
+
 export type AuthUser = {
   id: string;
   name: string | null;
@@ -79,6 +93,10 @@ export async function createSession(userId: string) {
 }
 
 export async function createGuestSession() {
+  if (!isGuestLoginEnabled()) {
+    throw new Error("Guest login is disabled.");
+  }
+
   const guestId = crypto.randomUUID();
   const user = await prisma.user.create({
     data: {
