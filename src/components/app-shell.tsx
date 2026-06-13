@@ -122,8 +122,12 @@ export function AppShell({
     }
   }, [currentUser, isPublicPage, router]);
 
+  const shellLayoutClass = showWorkspaceShell
+    ? "flex min-h-screen flex-col overflow-x-hidden bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 lg:h-screen lg:overflow-hidden"
+    : "flex min-h-screen flex-col overflow-x-hidden bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100";
+
   return (
-    <div className="flex min-h-screen flex-col overflow-x-hidden bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 lg:h-screen lg:overflow-hidden">
+    <div className={shellLayoutClass}>
       <header className="sticky top-0 z-20 shrink-0 border-b border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
         <div className="mx-auto flex max-w-[104rem] items-center gap-3 px-4 py-3 sm:px-6">
           {currentUser ? (
