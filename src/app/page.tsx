@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Recurrence, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
-  createGuestSession,
   getCurrentUser,
   isGuestLoginEnabled,
   isPublicSignupEnabled,
@@ -54,14 +52,6 @@ const demoFeatures = [
   "Task board, Today, Planner, and Roadmap views",
 ];
 
-async function guestLandingAction() {
-  "use server";
-
-  if (!isGuestLoginEnabled()) return;
-  await createGuestSession();
-  redirect("/");
-}
-
 function LandingPage({
   signupEnabled,
   guestLoginEnabled,
@@ -109,7 +99,7 @@ function LandingPage({
                 </span>
               )}
               {guestLoginEnabled ? (
-                <form action={guestLandingAction}>
+                <form action="/api/auth/guest" method="post">
                   <button
                     type="submit"
                     className="inline-flex w-full items-center justify-center rounded-xl border border-zinc-300 bg-white/80 px-5 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:-translate-y-0.5 hover:bg-white dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-50 dark:hover:bg-zinc-900 sm:w-auto"
