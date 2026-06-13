@@ -98,7 +98,12 @@ export function ProjectTeamSection({
     });
     const data = (await res.json().catch(() => null)) as
       | PendingInvitation
-      | { error?: string }
+      | {
+          invitation?: PendingInvitation;
+          email?: { status: "disabled" | "sent" | "failed"; message: string };
+          message?: string;
+          error?: string;
+        }
       | null;
     if (!res.ok) {
       setInviteMessage("");
@@ -108,12 +113,19 @@ export function ProjectTeamSection({
           : "Could not send invitation",
       );
     }
-    setInvitations((prev) => [data as PendingInvitation, ...prev]);
+    const invitation =
+      data && "invitation" in data && data.invitation
+        ? data.invitation
+        : (data as PendingInvitation);
+    const message =
+      data && "message" in data && data.message
+        ? data.message
+        : "Invitation created. The user can accept it from their Projects page.";
+
+    setInvitations((prev) => [invitation, ...prev]);
     setInviteEmail("");
     setError("");
-    setInviteMessage(
-      "Invitation created. The user can accept it from their Projects page.",
-    );
+    setInviteMessage(message);
   }
 
   async function removeMember(memberId: string) {

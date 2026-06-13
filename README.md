@@ -189,6 +189,25 @@ Existing local attachments do not automatically migrate to Vercel Blob. Old rows
 
 Public Vercel Blob attachment URLs are accessible to anyone who has the URL. Private or protected attachment downloads would require a future signed-download flow or an auth-protected download route instead of direct public URLs.
 
+
+## Optional invitation email notifications
+
+Project invitations always create an in-app pending invitation for existing registered users. Email notifications are optional and disabled by default, so local development and production deployments continue to work without any email provider configuration.
+
+To enable Resend-backed invitation emails, set these server-only variables in `.env` or in Vercel Project Settings → Environment Variables:
+
+```env
+EMAIL_PROVIDER="resend"
+RESEND_API_KEY="re_your_resend_api_key"
+EMAIL_FROM="AI-Multi Task-Management <noreply@example.com>"
+APP_BASE_URL="https://your-production-app.example.com"
+```
+
+- `EMAIL_PROVIDER` may be omitted or set to `"disabled"` to keep email off.
+- `RESEND_API_KEY` and `EMAIL_FROM` are required only when `EMAIL_PROVIDER="resend"`. Keep them server-only, never commit them, and never expose them with a `NEXT_PUBLIC_` prefix.
+- `APP_BASE_URL` is optional but recommended so invitation emails contain the correct absolute link to the app's Projects page.
+- If email sending is disabled or fails, the in-app invitation remains created and the owner sees a status message explaining whether email was sent, disabled, or failed.
+
 ## Vercel deployment readiness audit
 
 Use this checklist before promoting a Vercel deployment. A shorter step-by-step runbook is also available in [`DEPLOYMENT_CHECKLIST.md`](DEPLOYMENT_CHECKLIST.md).
@@ -197,10 +216,11 @@ Use this checklist before promoting a Vercel deployment. A shorter step-by-step 
 
 1. Create a hosted PostgreSQL database and add its connection string to Vercel as the server-side `DATABASE_URL`.
 2. Create or connect a Vercel Blob store, then add `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"` and the server-only `BLOB_READ_WRITE_TOKEN`.
-3. Set `SIGNUP_ENABLED="false"` and `GUEST_LOGIN_ENABLED="false"` for the first public deployment unless public signup or guest workspaces are intentional.
-4. Set Vercel's Build Command to `npm run vercel-build`.
-5. Deploy; the build validates deployment environment variables, validates Prisma, generates Prisma Client, runs `prisma migrate deploy`, and then runs `next build`.
-6. After deployment, test login, disabled signup/guest states, project creation, project chat attachments, and comment deletion.
+3. Optionally configure invitation email notifications with `EMAIL_PROVIDER="resend"`, `RESEND_API_KEY`, `EMAIL_FROM`, and `APP_BASE_URL`; omit these or use `EMAIL_PROVIDER="disabled"` to keep in-app-only invitations.
+4. Set `SIGNUP_ENABLED="false"` and `GUEST_LOGIN_ENABLED="false"` for the first public deployment unless public signup or guest workspaces are intentional.
+5. Set Vercel's Build Command to `npm run vercel-build`.
+6. Deploy; the build validates deployment environment variables, validates Prisma, generates Prisma Client, runs `prisma migrate deploy`, and then runs `next build`.
+7. After deployment, test login, disabled signup/guest states, project creation, project chat attachments, invitation creation, and comment deletion.
 
 
 ### Environment variables
@@ -221,9 +241,20 @@ Recommended production controls:
 PROJECT_CHAT_BLOB_PREFIX="project-chat"
 SIGNUP_ENABLED="false"
 GUEST_LOGIN_ENABLED="false"
+APP_BASE_URL="https://your-production-app.example.com"
 ```
 
-`SIGNUP_ENABLED` and `GUEST_LOGIN_ENABLED` default to enabled when omitted. If either is set, use exactly `"true"` or `"false"`; the deployment validator rejects ambiguous values such as `"maybe"`. Leave them enabled only if public account creation and public guest workspaces are intentional for the hosted environment.
+Optional invitation email provider:
+
+```env
+EMAIL_PROVIDER="disabled"
+# Or enable Resend:
+# EMAIL_PROVIDER="resend"
+# RESEND_API_KEY="re_your_resend_api_key"
+# EMAIL_FROM="AI-Multi Task-Management <noreply@example.com>"
+```
+
+`EMAIL_PROVIDER` may be omitted or set to `"disabled"`; in-app invitations continue to work without email. If `EMAIL_PROVIDER="resend"`, deployment validation requires server-only `RESEND_API_KEY` and `EMAIL_FROM` and rejects invalid provider values without printing secret values. `SIGNUP_ENABLED` and `GUEST_LOGIN_ENABLED` default to enabled when omitted. If either is set, use exactly `"true"` or `"false"`; the deployment validator rejects ambiguous values such as `"maybe"`. Leave them enabled only if public account creation and public guest workspaces are intentional for the hosted environment.
 
 Run the deployment environment validator any time you change hosted variables:
 
@@ -231,7 +262,7 @@ Run the deployment environment validator any time you change hosted variables:
 npm run validate:deploy-env
 ```
 
-The validator fails clearly for missing `DATABASE_URL`, missing `BLOB_READ_WRITE_TOKEN` when Vercel Blob is selected, unsupported `PROJECT_CHAT_STORAGE_PROVIDER` values, and unsafe Vercel production local-storage configuration. It reports variable names only and does not print secret values.
+The validator fails clearly for missing `DATABASE_URL`, missing `BLOB_READ_WRITE_TOKEN` when Vercel Blob is selected, unsupported `PROJECT_CHAT_STORAGE_PROVIDER` values, invalid `EMAIL_PROVIDER` values, missing Resend variables when email is enabled, and unsafe Vercel production local-storage configuration. It reports variable names only and does not print secret values.
 
 ### Migrations and build command
 
@@ -266,7 +297,7 @@ Use Vercel Blob for production Project Chat attachments. Local storage writes to
 - Authentication uses HTTP-only, `sameSite=lax`, production-secure cookies and server-side sessions, but there is no built-in IP/user rate limiting for login, signup, guest creation, or attachment upload endpoints. Add Vercel WAF/rate limits or an application limiter before public launch.
 - Project Chat attachment validation limits extension and size, but files are served from public Vercel Blob URLs. Do not use the current storage flow for confidential files without adding protected downloads.
 - Do not run `npm run seed` against production unless you intentionally want the demo account and sample data from `prisma/seed.ts`.
-- Keep `.env`, `.env.local`, Vercel database URLs, and Blob tokens out of Git. This repository intentionally commits only `.env.example` with placeholders.
+- Keep `.env`, `.env.local`, Vercel database URLs, Blob tokens, Resend API keys, and email sender secrets out of Git. This repository intentionally commits only `.env.example` with placeholders.
 
 ### README and runbook status
 
