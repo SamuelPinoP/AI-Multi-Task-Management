@@ -1,60 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  createGuestSession,
-  createSession,
   getCurrentUser,
   getSafeRedirectPath,
   isGuestLoginEnabled,
   isPublicSignupEnabled,
-  normalizeAuthEmail,
-  verifyPassword,
 } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
-
-async function loginAction(formData: FormData) {
-  "use server";
-
-  const email = normalizeAuthEmail(String(formData.get("email") || ""));
-  const password = String(formData.get("password") || "");
-  const nextPath = getSafeRedirectPath(String(formData.get("next") || ""));
-
-  if (!email || !password) {
-    redirect(`/login?error=missing&next=${encodeURIComponent(nextPath)}`);
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, passwordHash: true, isGuest: true },
-  });
-
-  if (!user || user.isGuest || !verifyPassword(password, user.passwordHash)) {
-    redirect(`/login?error=invalid&next=${encodeURIComponent(nextPath)}`);
-  }
-
-  await createSession(user.id);
-  redirect(nextPath);
-}
-
-async function guestAction(formData: FormData) {
-  "use server";
-
-  const currentUser = await getCurrentUser();
-  const nextPath = getSafeRedirectPath(String(formData.get("next") || ""));
-
-  if (!isGuestLoginEnabled()) {
-    redirect(
-      `/login?error=guest-disabled&next=${encodeURIComponent(nextPath)}`,
-    );
-  }
-
-  if (!currentUser) {
-    await createGuestSession();
-  }
-
-  redirect(nextPath);
-}
 
 function getErrorMessage(error: string | undefined) {
   if (error === "missing") return "Enter your email and password.";
@@ -108,7 +60,11 @@ export default async function LoginPage({
             </p>
           ) : null}
 
-          <form action={loginAction} className="mt-6 space-y-4">
+          <form
+            action="/api/auth/login"
+            method="post"
+            className="mt-6 space-y-4"
+          >
             <input type="hidden" name="next" value={nextPath} />
             <div>
               <label htmlFor="email" className="text-sm font-medium">
@@ -178,7 +134,11 @@ export default async function LoginPage({
                 </p>
               </div>
 
-              <form action={guestAction} className="space-y-3">
+              <form
+                action="/api/auth/guest"
+                method="post"
+                className="space-y-3"
+              >
                 <input type="hidden" name="next" value={nextPath} />
                 <button
                   type="submit"

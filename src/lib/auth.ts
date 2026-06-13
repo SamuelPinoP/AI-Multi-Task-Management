@@ -11,6 +11,15 @@ export { DEMO_USER_EMAIL, GUEST_USER_EMAIL_DOMAIN, SESSION_COOKIE_NAME };
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const PASSWORD_KEYLEN = 64;
 
+type SessionCookieOptions = {
+  httpOnly: true;
+  sameSite: "lax";
+  secure: boolean;
+  path: "/";
+  maxAge: number;
+  expires: Date;
+};
+
 function envFlagEnabled(name: string, defaultValue = true) {
   const value = process.env[name]?.trim().toLowerCase();
   if (value === undefined || value === "") return defaultValue;
@@ -69,7 +78,18 @@ export function getSafeRedirectPath(nextPath: string | null | undefined) {
   return nextPath;
 }
 
-export async function createSession(userId: string) {
+export function getSessionCookieOptions(expiresAt: Date): SessionCookieOptions {
+  return {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: SESSION_MAX_AGE_SECONDS,
+    expires: expiresAt,
+  };
+}
+
+export async function createSessionRecord(userId: string) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = getSessionExpiresAt();
 
@@ -81,24 +101,27 @@ export async function createSession(userId: string) {
     },
   });
 
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: SESSION_MAX_AGE_SECONDS,
-    expires: expiresAt,
-  });
+  return { token, expiresAt };
 }
 
-export async function createGuestSession() {
+export async function createSession(userId: string) {
+  const { token, expiresAt } = await createSessionRecord(userId);
+
+  const cookieStore = await cookies();
+  cookieStore.set(
+    SESSION_COOKIE_NAME,
+    token,
+    getSessionCookieOptions(expiresAt),
+  );
+}
+
+export async function createGuestUser() {
   if (!isGuestLoginEnabled()) {
     throw new Error("Guest login is disabled.");
   }
 
   const guestId = crypto.randomUUID();
-  const user = await prisma.user.create({
+  return prisma.user.create({
     data: {
       email: `guest-${guestId}@${GUEST_USER_EMAIL_DOMAIN}`,
       name: "Guest Workspace",
@@ -106,7 +129,10 @@ export async function createGuestSession() {
     },
     select: { id: true },
   });
+}
 
+export async function createGuestSession() {
+  const user = await createGuestUser();
   await createSession(user.id);
 }
 
