@@ -2,6 +2,7 @@
 import "dotenv/config";
 
 const ALLOWED_STORAGE_PROVIDERS = new Set(["local", "vercel-blob"]);
+const ALLOWED_EMAIL_PROVIDERS = new Set(["disabled", "resend"]);
 const BOOLEAN_ENV_NAMES = ["SIGNUP_ENABLED", "GUEST_LOGIN_ENABLED"];
 
 function cleanEnvValue(name) {
@@ -29,6 +30,9 @@ const isVercelProduction = isVercelProductionEnvironment();
 const databaseUrl = cleanEnvValue("DATABASE_URL");
 const storageProvider = cleanEnvValue("PROJECT_CHAT_STORAGE_PROVIDER");
 const blobToken = cleanEnvValue("BLOB_READ_WRITE_TOKEN");
+const emailProvider = cleanEnvValue("EMAIL_PROVIDER")?.toLowerCase();
+const resendApiKey = cleanEnvValue("RESEND_API_KEY");
+const emailFrom = cleanEnvValue("EMAIL_FROM");
 
 if (!databaseUrl) {
   addMissing(errors, "DATABASE_URL");
@@ -48,6 +52,17 @@ if (!storageProvider) {
     errors.push(message);
   } else {
     warnings.push(message);
+  }
+}
+
+if (emailProvider !== undefined && !ALLOWED_EMAIL_PROVIDERS.has(emailProvider)) {
+  errors.push('Invalid EMAIL_PROVIDER. Omit it, use "disabled", or use "resend".');
+} else if (emailProvider === "resend") {
+  if (!resendApiKey) {
+    errors.push('Missing RESEND_API_KEY for EMAIL_PROVIDER="resend". Add it as a server-side secret environment variable.');
+  }
+  if (!emailFrom) {
+    errors.push('Missing EMAIL_FROM for EMAIL_PROVIDER="resend". Add a verified sender address as a server-side environment variable.');
   }
 }
 

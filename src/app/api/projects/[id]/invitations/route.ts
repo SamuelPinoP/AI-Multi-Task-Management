@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeAuthEmail, requireApiUser } from "@/lib/auth";
+import { sendProjectInvitationEmail } from "@/lib/email";
 
 const INVITATION_SELECT = {
   id: true,
@@ -48,7 +49,7 @@ export async function POST(req: Request, context: RouteContext) {
       return NextResponse.json({ error: "You cannot invite yourself" }, { status: 400 });
     }
 
-    const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id }, select: { id: true } });
+    const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id }, select: { id: true, name: true } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
     const invitedUser = await prisma.user.findUnique({ where: { email: invitedEmail }, select: { id: true, name: true, email: true } });
@@ -78,7 +79,15 @@ export async function POST(req: Request, context: RouteContext) {
       select: INVITATION_SELECT,
     });
 
-    return NextResponse.json(invitation, { status: 201 });
+    const email = await sendProjectInvitationEmail({
+      to: invitedUser.email,
+      inviterName: user.name,
+      inviterEmail: user.email,
+      projectName: project.name,
+      fallbackOrigin: new URL(req.url).origin,
+    });
+
+    return NextResponse.json({ invitation, email, message: email.message }, { status: 201 });
   } catch (error) {
     console.error("POST /api/projects/[id]/invitations error:", error);
     return NextResponse.json({ error: "Failed to create project invitation" }, { status: 500 });

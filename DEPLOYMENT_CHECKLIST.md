@@ -32,11 +32,24 @@ GUEST_LOGIN_ENABLED="false"
 - `GUEST_LOGIN_ENABLED="false"` is recommended for the first public deployment unless public guest workspaces are intentional.
 - `SIGNUP_ENABLED` and `GUEST_LOGIN_ENABLED` must be exactly `"true"` or `"false"` if present; ambiguous values fail deployment validation.
 
-Optional production variable:
+Optional production variables:
 
 ```env
 PROJECT_CHAT_BLOB_PREFIX="project-chat"
+APP_BASE_URL="https://your-production-app.example.com"
+EMAIL_PROVIDER="disabled"
 ```
+
+Optional Resend invitation email variables:
+
+```env
+EMAIL_PROVIDER="resend"
+RESEND_API_KEY="re_your_resend_api_key"
+EMAIL_FROM="AI-Multi Task-Management <noreply@example.com>"
+APP_BASE_URL="https://your-production-app.example.com"
+```
+
+Invitation email notifications are disabled when `EMAIL_PROVIDER` is omitted or set to `"disabled"`. In-app invitations continue to work either way. If Resend is enabled, keep `RESEND_API_KEY` and `EMAIL_FROM` server-only with no `NEXT_PUBLIC_` prefix.
 
 ## Deployment environment validation
 
@@ -46,7 +59,7 @@ Run the deployment validator before the first Vercel deploy and after changing e
 npm run validate:deploy-env
 ```
 
-The same check runs automatically at the start of `npm run vercel-build`. It fails with beginner-friendly messages for missing `DATABASE_URL`, missing `BLOB_READ_WRITE_TOKEN` when `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"`, unsupported storage provider values, and unsafe Vercel production local-storage configuration. It prints variable names and guidance only; it does not print secret values.
+The same check runs automatically at the start of `npm run vercel-build`. It fails with beginner-friendly messages for missing `DATABASE_URL`, missing `BLOB_READ_WRITE_TOKEN` when `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"`, unsupported storage provider values, invalid email provider values, missing Resend variables when email is enabled, and unsafe Vercel production local-storage configuration. It prints variable names and guidance only; it does not print secret values.
 
 ## Database and migrations
 
@@ -86,6 +99,10 @@ In production, the app will not silently fall back to local Project Chat attachm
 ### Blob provider misconfiguration
 
 If `PROJECT_CHAT_STORAGE_PROVIDER` has any value other than `local` or `vercel-blob`, `npm run validate:deploy-env` fails with a configuration error. Use `vercel-blob` for Vercel production.
+
+### Invitation email configuration
+
+`EMAIL_PROVIDER` may be omitted or set to `"disabled"` for in-app-only invitations. If `EMAIL_PROVIDER="resend"`, `npm run validate:deploy-env` requires both `RESEND_API_KEY` and `EMAIL_FROM`. If `EMAIL_PROVIDER` is any other value, validation fails clearly without printing secret values.
 
 ### Disabled signup or guest login
 
