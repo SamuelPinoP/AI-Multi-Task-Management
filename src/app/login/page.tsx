@@ -13,6 +13,7 @@ function getErrorMessage(error: string | undefined) {
   if (error === "created") return "Account created. Please sign in.";
   if (error === "logged-out") return "You have been logged out.";
   if (error === "invalid") return "Invalid email or password.";
+  if (error === "reset") return "Password reset. Please sign in with your new password.";
   if (error === "guest-disabled")
     return "Guest access is disabled for this deployment.";
   return null;
@@ -31,7 +32,7 @@ export default async function LoginPage({
   const errorMessage = getErrorMessage(error);
   const guestLoginEnabled = isGuestLoginEnabled();
   const signupEnabled = isPublicSignupEnabled();
-  const isSuccessMessage = error === "created" || error === "logged-out";
+  const isSuccessMessage = error === "created" || error === "logged-out" || error === "reset";
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 items-center px-4 py-12">
@@ -91,6 +92,11 @@ export default async function LoginPage({
                 required
                 className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
               />
+            </div>
+            <div className="flex justify-end">
+              <Link href="/forgot-password" className="text-sm font-medium text-zinc-950 underline underline-offset-4 dark:text-zinc-50">
+                Forgot password?
+              </Link>
             </div>
             <button
               type="submit"

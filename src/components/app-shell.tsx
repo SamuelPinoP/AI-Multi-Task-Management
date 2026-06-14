@@ -38,7 +38,7 @@ const mobileLinks: NavLinkItem[] = [
   ...toolLinks,
 ];
 
-const publicPaths = new Set(["/login", "/signup"]);
+const publicPaths = new Set(["/login", "/signup", "/forgot-password", "/reset-password"]);
 
 type ShellUser = {
   name: string | null;
