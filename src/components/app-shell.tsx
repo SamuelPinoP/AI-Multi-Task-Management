@@ -169,12 +169,14 @@ export function AppShell({
             ) : null}
 
             {currentUser ? (
-              <Link
-                href="/logout"
-                className="shrink-0 rounded-full px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              >
-                Logout
-              </Link>
+              <form action="/api/auth/logout" method="post" className="shrink-0">
+                <button
+                  type="submit"
+                  className="rounded-full px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  Logout
+                </button>
+              </form>
             ) : null}
 
             <div className="shrink-0">
