@@ -12,9 +12,11 @@ async function signupAction(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   const email = normalizeAuthEmail(String(formData.get("email") || ""));
   const password = String(formData.get("password") || "");
+  const confirmPassword = String(formData.get("confirmPassword") || "");
 
-  if (!name || !email || !password) redirect("/signup?error=missing");
-  if (password.length < 8) redirect("/signup?error=password");
+  if (!name || !email || !password || !confirmPassword) redirect("/signup?error=missing");
+  if (password !== confirmPassword) redirect(`/signup?error=mismatch&email=${encodeURIComponent(email)}`);
+  if (password.length < 8) redirect(`/signup?error=password&email=${encodeURIComponent(email)}`);
 
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (existing) redirect("/signup?error=exists");
@@ -33,16 +35,18 @@ async function signupAction(formData: FormData) {
 function getErrorMessage(error: string | undefined) {
   if (error === "missing") return "Name, email, and password are required.";
   if (error === "password") return "Password must be at least 8 characters.";
+  if (error === "mismatch") return "Password and confirm password must match.";
   if (error === "exists") return "An account with that email already exists.";
   if (error === "disabled") return "Public signup is disabled for this deployment.";
   return null;
 }
 
-export default async function SignupPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function SignupPage({ searchParams }: { searchParams: Promise<{ error?: string; email?: string }> }) {
   const currentUser = await getCurrentUser();
   if (currentUser) redirect("/");
 
-  const { error } = await searchParams;
+  const { error, email } = await searchParams;
+  const invitedEmail = email ? normalizeAuthEmail(email) : "";
   const errorMessage = getErrorMessage(error);
   const signupEnabled = isPublicSignupEnabled();
 
@@ -65,11 +69,15 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
             </div>
             <div>
               <label htmlFor="email" className="text-sm font-medium">Email</label>
-              <input id="email" name="email" type="email" autoComplete="email" required className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600" />
+              <input id="email" name="email" type="email" autoComplete="email" defaultValue={invitedEmail} required className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600" />
             </div>
             <div>
               <label htmlFor="password" className="text-sm font-medium">Password</label>
               <input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600" />
+            </div>
+            <div>
+              <label htmlFor="confirmPassword" className="text-sm font-medium">Confirm password</label>
+              <input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" minLength={8} required className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600" />
             </div>
             <button type="submit" className={`${uiPrimaryButtonClass} w-full justify-center`}>Create account</button>
           </form>

@@ -53,12 +53,9 @@ export async function POST(req: Request, context: RouteContext) {
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
     const invitedUser = await prisma.user.findUnique({ where: { email: invitedEmail }, select: { id: true, name: true, email: true } });
-    if (!invitedUser) {
-      return NextResponse.json({ error: "Only existing registered users can be invited in this version" }, { status: 404 });
-    }
 
     const existingMember = await prisma.projectMember.findFirst({
-      where: { projectId, OR: [{ userId: invitedUser.id }, { email: invitedEmail }] },
+      where: { projectId, OR: [{ email: invitedEmail }, ...(invitedUser ? [{ userId: invitedUser.id }] : [])] },
       select: { id: true },
     });
     if (existingMember) return NextResponse.json({ error: "This user is already a project member" }, { status: 409 });
@@ -74,13 +71,13 @@ export async function POST(req: Request, context: RouteContext) {
         projectId,
         inviterUserId: user.id,
         invitedEmail,
-        invitedUserId: invitedUser.id,
+        invitedUserId: invitedUser?.id,
       },
       select: INVITATION_SELECT,
     });
 
     const email = await sendProjectInvitationEmail({
-      to: invitedUser.email,
+      to: invitedEmail,
       inviterName: user.name,
       inviterEmail: user.email,
       projectName: project.name,
