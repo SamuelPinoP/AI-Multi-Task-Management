@@ -22,3 +22,14 @@ AI-Multi Task-Management is a full-stack productivity and collaboration platform
 - Storage: Vercel Blob
 - Deployment: Vercel
 - Email: Resend optional, in-app invitations supported without email
+
+## Screenshots
+
+### Dashboard
+![Dashboard screenshot](docs/screenshots/dashboard.png)
+
+### Projects
+![Projects screenshot](docs/screenshots/projects.png)
+
+### Project Chat
+![Project chat screenshot](docs/screenshots/project-chat.png)
