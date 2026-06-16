@@ -1,386 +1,139 @@
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { Priority, Recurrence, TaskStatus } from "@prisma/client";
-import { uiCardClass } from "@/components/ui";
-import { prisma } from "@/lib/prisma";
+import { uiButtonClass, uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 import { requirePageUser } from "@/lib/auth";
-import {
-  expandRecurringEventsForRange,
-  normalizeRecurrence,
-} from "@/lib/recurrence";
+import { createActivity } from "@/lib/activity";
+import { prisma } from "@/lib/prisma";
+import { projectAccessWhereForProject } from "@/lib/project-access";
+import { generateSmartPlanner, type PlannerPriority, type PlannerSuggestion } from "@/lib/smart-planner";
 
-const FOCUS_LIMIT = 8;
-const TODAY_TASK_LIMIT = 5;
-
-type PlannerTask = {
-  id: string;
-  title: string;
-  dueDate: Date | null;
-  status: TaskStatus;
-  priority: Priority;
-  project: { name: string; color: string | null } | null;
-};
-
-function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
+function priorityClass(priority: PlannerPriority) {
+  if (priority === "HIGH") return "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-200";
+  if (priority === "MEDIUM") return "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-200";
+  return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200";
 }
 
-function getLocalDayStart(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
+async function createTaskFromSuggestion(formData: FormData) {
+  "use server";
 
-function getDayDiff(target: Date, now: Date) {
-  const targetStart = getLocalDayStart(target);
-  const nowStart = getLocalDayStart(now);
-  return Math.floor((targetStart.getTime() - nowStart.getTime()) / 86400000);
-}
+  const user = await requirePageUser();
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const priorityInput = String(formData.get("priority") ?? "MEDIUM");
+  const projectId = String(formData.get("projectId") ?? "").trim() || null;
 
-function getTaskScore(task: PlannerTask, now: Date) {
-  let score = 0;
-  const dayDiff = task.dueDate ? getDayDiff(task.dueDate, now) : null;
+  if (!title) return;
+  const priority = Object.values(Priority).includes(priorityInput as Priority) ? (priorityInput as Priority) : Priority.MEDIUM;
 
-  if (dayDiff !== null) {
-    if (dayDiff < 0) score += 120;
-    else if (dayDiff === 0) score += 90;
-    else if (dayDiff <= 2) score += 50;
-    else if (dayDiff <= 7) score += 25;
+  if (projectId) {
+    const project = await prisma.project.findFirst({ where: projectAccessWhereForProject(projectId, user.id), select: { id: true } });
+    if (!project) return;
   }
 
-  if (task.priority === Priority.HIGH) score += 35;
-  if (task.priority === Priority.MEDIUM) score += 15;
-  if (task.status === TaskStatus.IN_PROGRESS) score += 10;
+  const task = await prisma.task.create({
+    data: { title, description: description || null, priority, status: TaskStatus.TODO, recurrence: Recurrence.NONE, userId: user.id, projectId },
+  });
 
-  return score;
+  void createActivity({ userId: user.id, action: "CREATED_TASK", message: `Created task from Smart Planner: “${task.title}”`, entityType: "TASK", entityId: task.id, projectId });
+  revalidatePath("/planner");
+  revalidatePath("/tasks");
 }
 
-function getTaskUrgencyLabel(task: PlannerTask, now: Date) {
-  if (!task.dueDate) return "No due date";
-  const dayDiff = getDayDiff(task.dueDate, now);
-  if (dayDiff < 0) return "Overdue";
-  if (dayDiff === 0) return "Due today";
-  if (dayDiff <= 2) return "Due soon";
-  return "Upcoming";
-}
-
-function getPlanReason(tasks: PlannerTask[], now: Date) {
-  const overdueHigh = tasks.some(
-    (task) =>
-      task.dueDate &&
-      getDayDiff(task.dueDate, now) < 0 &&
-      task.priority === Priority.HIGH,
-  );
-  if (overdueHigh) return "Start with overdue high-priority work.";
-
-  const dueToday = tasks.some(
-    (task) => task.dueDate && getDayDiff(task.dueDate, now) === 0,
-  );
-  if (dueToday) return "Handle due-today tasks before lower urgency work.";
-
-  const highPriority = tasks.some((task) => task.priority === Priority.HIGH);
-  if (highPriority)
-    return "Prioritize high-priority items to reduce risk later in the week.";
-
-  return "No urgent tasks today; make steady progress on active work.";
-}
-
-function ProjectBadge({
-  project,
-}: {
-  project: { name: string; color: string | null } | null;
-}) {
-  if (!project)
-    return (
-      <span className="text-xs text-zinc-500 dark:text-zinc-400">
-        No project
-      </span>
-    );
+function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
-      style={
-        project.color
-          ? { borderColor: project.color, color: project.color }
-          : undefined
-      }
-    >
-      {project.name}
-    </span>
+    <div className="rounded-2xl border border-zinc-200 bg-white/80 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
+      <p className="text-2xl font-bold">{value}</p>
+      <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">{label}</p>
+    </div>
+  );
+}
+
+function SuggestionCard({ suggestion }: { suggestion: PlannerSuggestion }) {
+  return (
+    <article className="rounded-2xl border border-zinc-200 bg-white/75 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-950/35">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${priorityClass(suggestion.priority)}`}>{suggestion.priority}</span>
+            <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{suggestion.kind}</span>
+            {suggestion.related ? <span className="text-xs text-zinc-500 dark:text-zinc-400">Related: {suggestion.related.label}</span> : null}
+          </div>
+          <h3 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">{suggestion.title}</h3>
+          <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">{suggestion.reason}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+          {suggestion.actionHref ? <Link href={suggestion.actionHref} className={uiButtonClass}>Open</Link> : null}
+          {suggestion.canCreateTask ? (
+            <form action={createTaskFromSuggestion}>
+              <input type="hidden" name="title" value={suggestion.suggestedTaskTitle ?? suggestion.title} />
+              <input type="hidden" name="description" value={suggestion.suggestedTaskDescription ?? suggestion.reason} />
+              <input type="hidden" name="priority" value={suggestion.priority} />
+              <input type="hidden" name="projectId" value={suggestion.projectId ?? ""} />
+              <button type="submit" className={uiPrimaryButtonClass}>Create task</button>
+            </form>
+          ) : null}
+        </div>
+      </div>
+    </article>
   );
 }
 
 export default async function PlannerPage() {
   const user = await requirePageUser();
-  const now = new Date();
-  const todayStart = getLocalDayStart(now);
-  const tomorrowStart = new Date(todayStart);
-  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-
-  const [activeTasks, plannerEvents, projects] = user
-    ? await Promise.all([
-        prisma.task.findMany({
-          where: {
-            userId: user.id,
-            deletedAt: null,
-            status: { not: TaskStatus.DONE },
-          },
-          include: { project: { select: { name: true, color: true } } },
-        }),
-        prisma.event.findMany({
-          where: { userId: user.id, deletedAt: null },
-          orderBy: { startTime: "asc" },
-          include: { project: { select: { name: true, color: true } } },
-        }),
-        prisma.project.findMany({
-          where: { userId: user.id },
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            tasks: {
-              where: { deletedAt: null },
-              select: { id: true, status: true, dueDate: true },
-            },
-            events: {
-              where: { deletedAt: null, startTime: { gte: todayStart } },
-              select: { id: true },
-            },
-          },
-        }),
-      ])
-    : [[], [], []];
-
-  const activeEvents = plannerEvents.filter(
-    (event) => event.deletedAt === null,
-  );
-  const recurringCandidates = activeEvents.map((event) => ({
-    ...event,
-    startTime: event.startTime.toISOString(),
-    endTime: event.endTime ? event.endTime.toISOString() : null,
-    recurrence: normalizeRecurrence(event.recurrence ?? Recurrence.NONE),
-  }));
-  const todaysEvents = expandRecurringEventsForRange(
-    recurringCandidates,
-    todayStart,
-    tomorrowStart,
-  ).sort(
-    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
-  );
-
-  const scoredTasks = activeTasks
-    .map((task) => ({
-      ...task,
-      score: getTaskScore(task, now),
-      urgencyLabel: getTaskUrgencyLabel(task, now),
-    }))
-    .sort(
-      (a, b) =>
-        b.score - a.score ||
-        Number(b.priority === Priority.HIGH) -
-          Number(a.priority === Priority.HIGH),
-    );
-
-  const recommendedFocusTasks = scoredTasks.slice(0, FOCUS_LIMIT);
-  const suggestedTodayTasks = scoredTasks.slice(0, TODAY_TASK_LIMIT);
-  const planReason = getPlanReason(suggestedTodayTasks, now);
-
-  const projectInsights = projects
-    .map((project) => {
-      const activeTaskCount = project.tasks.filter(
-        (task) => task.status !== TaskStatus.DONE,
-      ).length;
-      const completedTaskCount = project.tasks.filter(
-        (task) => task.status === TaskStatus.DONE,
-      ).length;
-      const overdueTaskCount = project.tasks.filter(
-        (task) =>
-          task.status !== TaskStatus.DONE &&
-          task.dueDate &&
-          getDayDiff(task.dueDate, now) < 0,
-      ).length;
-      const completionPercent =
-        project.tasks.length === 0
-          ? 0
-          : Math.round((completedTaskCount / project.tasks.length) * 100);
-      const needsAttention = overdueTaskCount > 0 || activeTaskCount >= 5;
-      return {
-        ...project,
-        activeTaskCount,
-        overdueTaskCount,
-        upcomingEventCount: project.events.length,
-        completionPercent,
-        needsAttention,
-      };
-    })
-    .sort(
-      (a, b) =>
-        Number(b.needsAttention) - Number(a.needsAttention) ||
-        b.overdueTaskCount - a.overdueTaskCount,
-    );
+  const planner = await generateSmartPlanner(user.id);
+  const hasSuggestions = planner.sections.some((section) => section.suggestions.length > 0);
 
   return (
-    <main className="min-h-screen px-6 py-10">
-      <div className="mx-auto max-w-5xl space-y-8">
-        <header>
-          <h1 className="text-4xl font-bold">Smart Planner</h1>
-          <p className="mt-2 text-zinc-600 dark:text-zinc-300">
-            Rule-based planning using your tasks, events, projects, due dates,
-            priority, and status.
-          </p>
+    <main className="min-h-screen px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-8">
+        <header className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.92),rgba(244,244,245,0.78))] p-6 shadow-sm dark:border-zinc-800 dark:bg-[radial-gradient(circle_at_top_left,rgba(96,165,250,0.16),transparent_34%),linear-gradient(135deg,rgba(24,24,27,0.95),rgba(9,9,11,0.82))] sm:p-8">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700 dark:text-blue-300">Rule-based productivity assistant</p>
+              <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">Smart Daily Planner</h1>
+              <p className="mt-3 text-base leading-7 text-zinc-600 dark:text-zinc-300">A deterministic planning engine analyzes your accessible tasks, events, active projects, recent notes, project chat, and activity—without sending data to a paid external AI service.</p>
+            </div>
+            <div className="rounded-2xl border border-zinc-200 bg-white/75 p-4 text-sm text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300">
+              Generated {planner.generatedAt.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+            </div>
+          </div>
         </header>
-        {!user ? (
-          <section className={uiCardClass}>Demo user not found.</section>
+
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <StatCard label="Overdue" value={planner.stats.overdueTasks} />
+          <StatCard label="Due today" value={planner.stats.dueTodayTasks} />
+          <StatCard label="Due soon" value={planner.stats.dueSoonTasks} />
+          <StatCard label="Events" value={planner.stats.upcomingEvents} />
+          <StatCard label="Projects" value={planner.stats.activeProjects} />
+          <StatCard label="Notes" value={planner.stats.recentNotes} />
+        </section>
+
+        {!hasSuggestions ? (
+          <section className={uiCardClass}>
+            <h2 className="text-2xl font-semibold">Your plan is clear</h2>
+            <p className="mt-2 text-zinc-600 dark:text-zinc-300">No urgent recommendations were found. Add tasks with due dates, create events, or connect notes to projects to receive richer planning suggestions.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href="/tasks" className={uiPrimaryButtonClass}>Add tasks</Link>
+              <Link href="/events" className={uiButtonClass}>Schedule events</Link>
+            </div>
+          </section>
         ) : (
-          <>
-            <section className={uiCardClass}>
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 className="text-2xl font-semibold">
-                  Recommended Focus List
-                </h2>
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Top {FOCUS_LIMIT}
-                </span>
-              </div>
-              {recommendedFocusTasks.length === 0 ? (
-                <p className="text-zinc-600 dark:text-zinc-300">
-                  No active tasks to recommend right now. Create tasks with
-                  priorities and due dates to populate this focus list.
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {recommendedFocusTasks.map((task) => (
-                    <li
-                      key={task.id}
-                      className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="font-medium">{task.title}</p>
-                        <span className="rounded-lg bg-zinc-100 px-2 py-1 text-xs dark:bg-zinc-800">
-                          {task.urgencyLabel}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                        {task.dueDate
-                          ? `Due ${formatDate(task.dueDate)}`
-                          : "No due date"}{" "}
-                        · {task.priority} · {task.status.replace("_", " ")}
-                      </p>
-                      <div className="mt-2">
-                        <ProjectBadge project={task.project} />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-            <section className="grid gap-6 lg:grid-cols-2">
-              <article className={uiCardClass}>
-                <h2 className="mb-3 text-2xl font-semibold">
-                  Suggested Today Plan
-                </h2>
-                <p className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200">
-                  {planReason}
-                </p>
-                <h3 className="mt-4 text-lg font-medium">
-                  Today&apos;s Events
-                </h3>
-                {todaysEvents.length === 0 ? (
-                  <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                    No events scheduled today. Add events to see your day
-                    alongside suggested tasks.
-                  </p>
+          <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+            {planner.sections.map((section) => (
+              <section key={section.key} className={`${uiCardClass} space-y-4`}>
+                <div>
+                  <h2 className="text-2xl font-semibold">{section.title}</h2>
+                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{section.description}</p>
+                </div>
+                {section.suggestions.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-zinc-300 p-5 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">No recommendations in this section right now.</div>
                 ) : (
-                  <ul className="mt-2 space-y-2">
-                    {todaysEvents.map((event) => (
-                      <li
-                        key={event.id}
-                        className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800"
-                      >
-                        <p className="font-medium">{event.title}</p>
-                        <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                          {formatDate(new Date(event.startTime))}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="space-y-3">{section.suggestions.map((suggestion) => <SuggestionCard key={suggestion.id} suggestion={suggestion} />)}</div>
                 )}
-                <h3 className="mt-5 text-lg font-medium">Suggested Tasks</h3>
-                {suggestedTodayTasks.length === 0 ? (
-                  <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                    No active tasks to schedule today. Add or update task due
-                    dates to generate a suggested plan.
-                  </p>
-                ) : (
-                  <ol className="mt-2 space-y-2">
-                    {suggestedTodayTasks.map((task) => (
-                      <li
-                        key={task.id}
-                        className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800"
-                      >
-                        <p className="font-medium">{task.title}</p>
-                        <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                          {task.priority} · {task.status.replace("_", " ")} ·{" "}
-                          {task.urgencyLabel}
-                        </p>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </article>
-              <article className={uiCardClass}>
-                <h2 className="mb-3 text-2xl font-semibold">
-                  Project Workload
-                </h2>
-                {projectInsights.length === 0 ? (
-                  <p className="text-zinc-600 dark:text-zinc-300">
-                    No projects available yet. Create a project to see workload,
-                    overdue items, upcoming events, and completion here.
-                  </p>
-                ) : (
-                  <ul className="space-y-3">
-                    {projectInsights.map((project) => (
-                      <li
-                        key={project.id}
-                        className={`rounded-xl border p-4 ${project.needsAttention ? "border-amber-300 bg-amber-50/50 dark:border-amber-900/60 dark:bg-amber-950/20" : "border-zinc-200 dark:border-zinc-800"}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <Link
-                              href={`/projects/${project.id}`}
-                              className="font-medium hover:underline"
-                            >
-                              {project.name}
-                            </Link>
-                            <div className="mt-2">
-                              <ProjectBadge
-                                project={{
-                                  name: project.name,
-                                  color: project.color,
-                                }}
-                              />
-                            </div>
-                          </div>
-                          {project.needsAttention ? (
-                            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                              Needs attention
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-600 dark:text-zinc-300">
-                          <p>Active tasks: {project.activeTaskCount}</p>
-                          <p>Overdue tasks: {project.overdueTaskCount}</p>
-                          <p>Upcoming events: {project.upcomingEventCount}</p>
-                          <p>Completed: {project.completionPercent}%</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </article>
-            </section>
-          </>
+              </section>
+            ))}
+          </div>
         )}
       </div>
     </main>

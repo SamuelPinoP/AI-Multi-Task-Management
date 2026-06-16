@@ -7,11 +7,12 @@ AI-Multi Task-Management is a full-stack productivity and collaboration platform
 ## Key Features
 
 - Secure authentication with signup, login, logout, sessions, and password reset
-- Notes, tasks, events, projects, calendars, planning views, and trash recovery
+- Notes, tasks, events, projects, calendars, a rule-based Smart Daily Planner, and trash recovery
 - Project collaboration with invitations and role-based access
 - Project chat with file attachments using Vercel Blob storage
 - PostgreSQL database modeled with Prisma migrations
 - Production deployment on Vercel with Neon PostgreSQL and server-side environment validation
+- Smart Daily Planner that analyzes overdue tasks, due-today work, upcoming events, active projects, recent notes, and project follow-up signals without relying on a paid external AI service
 - Dark mode and responsive UI
 
 ## Tech Stack
