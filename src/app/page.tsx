@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
-import { Recurrence, TaskStatus } from "@prisma/client";
+import { ProjectStatus, Recurrence, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   getCurrentUser,
@@ -11,6 +11,18 @@ import { expandRecurringEventsForRange } from "@/lib/recurrence";
 import { projectAccessWhere } from "@/lib/project-access";
 
 const REMINDER_LOOKAHEAD_DAYS = 7;
+
+const analyticsAccentClasses = {
+  zinc: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200",
+  emerald:
+    "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
+  amber:
+    "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
+  red: "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300",
+  blue: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
+  violet:
+    "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300",
+} as const;
 
 const landingFeatures = [
   {
@@ -178,6 +190,20 @@ function LandingPage({
 type TaskReminderGroup = "OVERDUE" | "DUE_TODAY" | "UPCOMING";
 type EventReminderGroup = "TODAY" | "UPCOMING";
 
+function getAccessibleTaskWhere(userId: string) {
+  return {
+    deletedAt: null,
+    OR: [{ userId }, { project: projectAccessWhere(userId) }],
+  };
+}
+
+function getAccessibleEventWhere(userId: string) {
+  return {
+    deletedAt: null,
+    OR: [{ userId }, { project: projectAccessWhere(userId) }],
+  };
+}
+
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -245,6 +271,41 @@ function ProjectBadge({
   );
 }
 
+function AnalyticsCard({
+  label,
+  value,
+  description,
+  accent,
+}: {
+  label: string;
+  value: number;
+  description: string;
+  accent: keyof typeof analyticsAccentClasses;
+}) {
+  return (
+    <article className="rounded-2xl border border-zinc-200 bg-white/95 p-5 shadow-sm shadow-zinc-200/60 transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+            {label}
+          </p>
+          <p className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+            {value}
+          </p>
+        </div>
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${analyticsAccentClasses[accent]}`}
+        >
+          Live
+        </span>
+      </div>
+      <p className="mt-3 text-sm leading-5 text-zinc-600 dark:text-zinc-300">
+        {description}
+      </p>
+    </article>
+  );
+}
+
 export default async function DashboardPage() {
   const user = await getCurrentUser();
 
@@ -270,12 +331,11 @@ export default async function DashboardPage() {
     upcomingTasks,
     reminderTasks,
     reminderEvents,
-    totalNotes,
     totalTasks,
     activeTasks,
     completedTasks,
     totalEvents,
-    totalProjects,
+    activeProjects,
   ] = await Promise.all([
     prisma.note.findMany({
       where: { userId: user.id, deletedAt: null },
@@ -283,7 +343,9 @@ export default async function DashboardPage() {
       take: 5,
     }),
     prisma.activity.findMany({
-      where: { userId: user.id },
+      where: {
+        OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }],
+      },
       orderBy: { createdAt: "desc" },
       take: 10,
       include: {
@@ -294,8 +356,7 @@ export default async function DashboardPage() {
     }),
     prisma.task.findMany({
       where: {
-        userId: user.id,
-        deletedAt: null,
+        ...getAccessibleTaskWhere(user.id),
         dueDate: { not: null },
         status: { not: TaskStatus.DONE },
       },
@@ -305,8 +366,7 @@ export default async function DashboardPage() {
     }),
     prisma.task.findMany({
       where: {
-        userId: user.id,
-        deletedAt: null,
+        ...getAccessibleTaskWhere(user.id),
         dueDate: { not: null },
         status: { not: TaskStatus.DONE },
       },
@@ -319,27 +379,24 @@ export default async function DashboardPage() {
     }),
     prisma.event.findMany({
       where: {
-        userId: user.id,
-        deletedAt: null,
+        ...getAccessibleEventWhere(user.id),
         startTime: { gte: todayStart },
       },
       orderBy: { startTime: "asc" },
       include: { project: { select: { name: true, color: true } } },
     }),
-    prisma.note.count({ where: { userId: user.id, deletedAt: null } }),
-    prisma.task.count({ where: { userId: user.id, deletedAt: null } }),
+    prisma.task.count({ where: getAccessibleTaskWhere(user.id) }),
     prisma.task.count({
       where: {
-        userId: user.id,
-        deletedAt: null,
+        ...getAccessibleTaskWhere(user.id),
         status: { not: TaskStatus.DONE },
       },
     }),
     prisma.task.count({
-      where: { userId: user.id, deletedAt: null, status: TaskStatus.DONE },
+      where: { ...getAccessibleTaskWhere(user.id), status: TaskStatus.DONE },
     }),
-    prisma.event.count({ where: { userId: user.id, deletedAt: null } }),
-    prisma.project.count({ where: projectAccessWhere(user.id) }),
+    prisma.event.count({ where: getAccessibleEventWhere(user.id) }),
+    prisma.project.count({ where: { ...projectAccessWhere(user.id), status: ProjectStatus.ACTIVE } }),
   ]);
 
   const overdueTasks = reminderTasks.filter(
@@ -382,6 +439,61 @@ export default async function DashboardPage() {
     (event) => getEventReminderGroup(event.startTime, now) === "UPCOMING",
   );
 
+  const accessibleProjectActivity = recentActivities.filter(
+    (activity) => activity.projectId !== null,
+  );
+
+  const dashboardAnalytics = [
+    {
+      label: "Total tasks",
+      value: totalTasks,
+      description: "All non-trashed tasks you own or can access through shared projects.",
+      accent: "zinc" as const,
+    },
+    {
+      label: "Completed tasks",
+      value: completedTasks,
+      description: "Tasks marked done across your personal and accessible project work.",
+      accent: "emerald" as const,
+    },
+    {
+      label: "Incomplete tasks",
+      value: activeTasks,
+      description: "Open tasks still in todo or in-progress states.",
+      accent: "amber" as const,
+    },
+    {
+      label: "Overdue tasks",
+      value: overdueTasks.length,
+      description: "Incomplete tasks with due dates before today.",
+      accent: "red" as const,
+    },
+    {
+      label: "Due soon",
+      value: upcomingReminderTasks.length + dueTodayTasks.length,
+      description: `Tasks due today or within the next ${REMINDER_LOOKAHEAD_DAYS} days.`,
+      accent: "blue" as const,
+    },
+    {
+      label: "Upcoming events",
+      value: todayEvents.length + upcomingEvents.length,
+      description: `Calendar events starting within the next ${REMINDER_LOOKAHEAD_DAYS} days.`,
+      accent: "violet" as const,
+    },
+    {
+      label: "Active projects",
+      value: activeProjects,
+      description: "Active project workspaces you own or have been invited to access.",
+      accent: "emerald" as const,
+    },
+    {
+      label: "Project activity",
+      value: accessibleProjectActivity.length,
+      description: "Recent project-linked updates visible under your access rules.",
+      accent: "zinc" as const,
+    },
+  ];
+
   const hasUrgentReminders =
     overdueTasks.length > 0 ||
     dueTodayTasks.length > 0 ||
@@ -411,23 +523,23 @@ export default async function DashboardPage() {
           ) : null}
         </div>
 
-        <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { label: "Total Notes", value: totalNotes },
-            { label: "Total Tasks", value: totalTasks },
-            { label: "Active Tasks", value: activeTasks },
-            { label: "Completed Tasks", value: completedTasks },
-          ].map((item) => (
-            <article
-              key={item.label}
-              className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800"
-            >
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                {item.label}
+        <section className="mb-8">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                Analytics
               </p>
-              <p className="mt-2 text-3xl font-semibold">{item.value}</p>
-            </article>
-          ))}
+              <h2 className="text-2xl font-semibold">Productivity at a glance</h2>
+            </div>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Personal work plus shared projects you can access
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {dashboardAnalytics.map((item) => (
+              <AnalyticsCard key={item.label} {...item} />
+            ))}
+          </div>
         </section>
 
         <section className="mb-8 rounded-2xl border border-zinc-200 p-6 shadow-sm dark:border-zinc-800">
@@ -598,7 +710,7 @@ export default async function DashboardPage() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               {[
                 { label: "Events", value: totalEvents },
-                { label: "Projects", value: totalProjects },
+                { label: "Active projects", value: activeProjects },
               ].map((item) => (
                 <div
                   key={item.label}
