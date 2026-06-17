@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { deleteProjectChatAttachments } from "@/lib/project-chat-storage";
-import { projectAccessWhereForProject } from "@/lib/project-access";
+import { getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 
 type RouteContext = { params: Promise<{ id: string; commentId: string }> };
 
@@ -46,7 +46,10 @@ async function getOwnedProjectComment(projectId: string, commentId: string) {
   const user = await requireApiUser();
   if (!user) return { error: NextResponse.json({ error: "Authentication required" }, { status: 401 }) };
 
-  const project = await prisma.project.findFirst({ where: projectAccessWhereForProject(projectId, user.id), select: { id: true } });
+  const access = await getProjectAccess(projectId, user.id);
+  if (!access) return { error: NextResponse.json({ error: "Project not found" }, { status: 404 }) };
+  if (!canEditProjectContent(access)) return { error: NextResponse.json(unauthorizedProjectResponse("change comments or attachments"), { status: 403 }) };
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
   if (!project) return { error: NextResponse.json({ error: "Project not found" }, { status: 404 }) };
 
   const comment = await prisma.projectComment.findFirst({

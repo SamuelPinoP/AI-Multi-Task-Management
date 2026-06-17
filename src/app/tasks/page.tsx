@@ -25,7 +25,7 @@ type Member = {
   id: string;
   name: string;
   email: string | null;
-  role: "OWNER" | "MEMBER" | "VIEWER";
+  role: "OWNER" | "EDITOR" | "VIEWER";
 };
 
 type Task = {

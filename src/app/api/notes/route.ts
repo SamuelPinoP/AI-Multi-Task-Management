@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
-import { projectAccessWhereForProject } from "@/lib/project-access";
+import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 
 
 function parseProjectId(input: unknown): string | null {
@@ -19,26 +19,13 @@ export async function GET() {
     const authUser = await requireApiUser();
     if (!authUser) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
-    const user = await prisma.user.findUnique({
-      where: { id: authUser.id },
-      include: {
-        notes: {
-          where: { deletedAt: null },
-          orderBy: { createdAt: "desc" },
-          include: {
-            project: {
-              select: { id: true, name: true, color: true },
-            },
-          },
-        },
-      },
+    const notes = await prisma.note.findMany({
+      where: { deletedAt: null, OR: [{ userId: authUser.id }, { project: projectAccessWhere(authUser.id) }] },
+      orderBy: { createdAt: "desc" },
+      include: { project: { select: { id: true, name: true, color: true } } },
     });
 
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    return NextResponse.json(user.notes);
+    return NextResponse.json(notes);
   } catch (error) {
     console.error("GET /api/notes error:", error);
     return NextResponse.json({ error: "Failed to fetch notes" }, { status: 500 });
@@ -60,13 +47,9 @@ export async function POST(req: Request) {
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
     if (projectId) {
-      const project = await prisma.project.findFirst({
-        where: projectAccessWhereForProject(projectId, user.id),
-      });
-
-      if (!project) {
-        return NextResponse.json({ error: "Invalid project" }, { status: 400 });
-      }
+      const access = await getProjectAccess(projectId, user.id);
+      if (!access) return NextResponse.json({ error: "Invalid project" }, { status: 400 });
+      if (!canEditProjectContent(access)) return NextResponse.json(unauthorizedProjectResponse("create notes"), { status: 403 });
     }
 
     const note = await prisma.note.create({

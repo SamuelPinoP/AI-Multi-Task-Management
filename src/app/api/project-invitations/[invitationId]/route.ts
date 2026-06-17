@@ -48,13 +48,13 @@ export async function PATCH(req: Request, context: RouteContext) {
 
       await tx.projectMember.upsert({
         where: { projectId_userId: { projectId: invitation.projectId, userId: user.id } },
-        update: { email: normalizeAuthEmail(user.email), name: user.name || user.email, role: "MEMBER" },
+        update: { email: normalizeAuthEmail(user.email), name: user.name || user.email, role: invitation.role },
         create: {
           projectId: invitation.projectId,
           userId: user.id,
           name: user.name || user.email,
           email: normalizeAuthEmail(user.email),
-          role: "MEMBER",
+          role: invitation.role,
         },
       });
 

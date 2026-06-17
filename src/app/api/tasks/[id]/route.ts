@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
-import { projectAccessWhereForProject } from "@/lib/project-access";
+import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 
 
 type RouteContext = {
@@ -75,13 +75,9 @@ export async function PATCH(req: Request, context: RouteContext) {
     let assigneeId = parseId(body.assigneeId);
 
     if (projectId) {
-      const project = await prisma.project.findFirst({
-        where: projectAccessWhereForProject(projectId, user.id),
-      });
-
-      if (!project) {
-        return NextResponse.json({ error: "Invalid project" }, { status: 400 });
-      }
+      const access = await getProjectAccess(projectId, user.id);
+      if (!access) return NextResponse.json({ error: "Invalid project" }, { status: 400 });
+      if (!canEditProjectContent(access)) return NextResponse.json(unauthorizedProjectResponse("edit tasks"), { status: 403 });
     }
 
     if (assigneeId && !projectId) {
@@ -100,24 +96,21 @@ export async function PATCH(req: Request, context: RouteContext) {
     }
 
     const existingTask = await prisma.task.findFirst({
-      where: {
-        id,
-        deletedAt: null,
-        userId: user.id,
-      },
-      select: { id: true, status: true, title: true, userId: true },
+      where: { id, deletedAt: null, OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }] },
+      select: { id: true, status: true, title: true, userId: true, projectId: true },
     });
 
     if (!existingTask) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
+    if (existingTask.projectId) {
+      const existingAccess = await getProjectAccess(existingTask.projectId, user.id);
+      if (!canEditProjectContent(existingAccess)) return NextResponse.json(unauthorizedProjectResponse("edit tasks"), { status: 403 });
+    }
+
     const updated = await prisma.task.updateMany({
-      where: {
-        id,
-        deletedAt: null,
-        userId: user.id,
-      },
+      where: { id, deletedAt: null },
       data: {
         title,
         description: description || null,
@@ -176,7 +169,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
     }
 
     const existingTask = await prisma.task.findFirst({
-      where: { id, deletedAt: null, userId: user.id },
+      where: { id, deletedAt: null, OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }] },
       select: { id: true, title: true, userId: true, projectId: true },
     });
 
@@ -184,12 +177,13 @@ export async function DELETE(_req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
+    if (existingTask.projectId) {
+      const existingAccess = await getProjectAccess(existingTask.projectId, user.id);
+      if (!canEditProjectContent(existingAccess)) return NextResponse.json(unauthorizedProjectResponse("delete tasks"), { status: 403 });
+    }
+
     const deleted = await prisma.task.updateMany({
-      where: {
-        id,
-        deletedAt: null,
-        userId: user.id,
-      },
+      where: { id, deletedAt: null },
       data: {
         deletedAt: new Date(),
       },

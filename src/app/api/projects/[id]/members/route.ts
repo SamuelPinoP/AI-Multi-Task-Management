@@ -1,4 +1,3 @@
-import { ProjectMemberRole } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeAuthEmail, requireApiUser } from "@/lib/auth";
@@ -8,8 +7,8 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-function isValidRole(value: unknown): value is ProjectMemberRole {
-  return typeof value === "string" && Object.values(ProjectMemberRole).includes(value as ProjectMemberRole);
+function isValidRole(value: unknown): value is "EDITOR" | "VIEWER" {
+  return value === "EDITOR" || value === "VIEWER";
 }
 
 export async function POST(req: Request, context: RouteContext) {
@@ -34,7 +33,7 @@ export async function POST(req: Request, context: RouteContext) {
 
     const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
     if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      return NextResponse.json({ error: "Only project owners can add members." }, { status: 403 });
     }
 
     const linkedUser = emailInput ? await prisma.user.findUnique({ where: { email: emailInput }, select: { id: true } }) : null;

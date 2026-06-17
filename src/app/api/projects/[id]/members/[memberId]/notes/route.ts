@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
-import { projectAccessWhereForProject } from "@/lib/project-access";
+import { canEditProjectContent, getProjectAccess, unauthorizedProjectResponse } from "@/lib/project-access";
 
 type RouteContext = { params: Promise<{ id: string; memberId: string }> };
 
@@ -14,8 +14,9 @@ export async function POST(req: Request, context: RouteContext) {
     if (!message) return NextResponse.json({ error: "Message is required" }, { status: 400 });
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-    const project = await prisma.project.findFirst({ where: projectAccessWhereForProject(projectId, user.id) });
-    if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    const access = await getProjectAccess(projectId, user.id);
+    if (!access) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    if (!canEditProjectContent(access)) return NextResponse.json(unauthorizedProjectResponse("create member notes"), { status: 403 });
     const member = await prisma.projectMember.findFirst({ where: { id: memberId, projectId }, select: { id: true } });
     if (!member) return NextResponse.json({ error: "Member not found" }, { status: 404 });
     const note = await prisma.projectMemberNote.create({
