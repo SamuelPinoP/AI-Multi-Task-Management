@@ -33,6 +33,7 @@ model User {
   projectMemberNotes         ProjectMemberNote[]        @relation("ProjectMemberNoteAuthor")
   projectComments            ProjectComment[]
   projectCommentAttachments  ProjectCommentAttachment[]
+  treePages                  TreePage[]
 }
 
 model Session {
@@ -240,6 +241,36 @@ model ProjectMemberNote {
 
   @@index([memberId])
   @@index([createdByUserId])
+}
+
+model TreePage {
+  id        String     @id @default(cuid())
+  title     String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  userId String
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nodes  TreeNode[]
+
+  @@index([userId, updatedAt])
+}
+
+model TreeNode {
+  id        String     @id @default(cuid())
+  pageId    String
+  parentId  String?
+  title     String
+  sortOrder Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  page     TreePage   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  parent   TreeNode?  @relation("TreeNodeChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children TreeNode[] @relation("TreeNodeChildren")
+
+  @@index([pageId, parentId, sortOrder])
+  @@index([parentId])
 }
 
 enum ProjectMemberNoteVisibility {

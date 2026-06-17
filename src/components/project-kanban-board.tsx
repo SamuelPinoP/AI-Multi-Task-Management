@@ -9,6 +9,8 @@ type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
 type Member = { id: string; name: string; email?: string | null; role: "OWNER" | "EDITOR" | "VIEWER" };
 
+type ProjectOption = { id: string; name: string; color: string | null };
+
 type Task = {
   id: string;
   title: string;
@@ -20,14 +22,16 @@ type Task = {
   projectId: string | null;
   assigneeId?: string | null;
   assignee: Member | null;
+  project?: ProjectOption | null;
 };
 
 type ProjectKanbanBoardProps = {
-  projectId: string;
+  projectId?: string | null;
   projectName: string;
   initialTasks: Task[];
   members: Member[];
   canEdit: boolean;
+  projects?: ProjectOption[];
 };
 
 const STATUS_COLUMNS: Array<{ status: TaskStatus; title: string; help: string }> = [
@@ -60,7 +64,7 @@ function getDueIndicator(task: Task): { label: string; className: string } | nul
   return null;
 }
 
-export function ProjectKanbanBoard({ projectId, projectName, initialTasks, members, canEdit }: ProjectKanbanBoardProps) {
+export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks, members, canEdit, projects = [] }: ProjectKanbanBoardProps) {
   const [tasks, setTasks] = useState(initialTasks);
   const [error, setError] = useState("");
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
@@ -69,6 +73,7 @@ export function ProjectKanbanBoard({ projectId, projectName, initialTasks, membe
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>("MEDIUM");
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
   const [newTaskAssigneeId, setNewTaskAssigneeId] = useState("");
+  const [newTaskProjectId, setNewTaskProjectId] = useState(projectId ?? "");
 
   const taskCounts = useMemo(() => new Map(STATUS_COLUMNS.map((column) => [column.status, tasks.filter((task) => task.status === column.status).length])), [tasks]);
 
@@ -89,7 +94,7 @@ export function ProjectKanbanBoard({ projectId, projectName, initialTasks, membe
           priority: task.priority,
           dueDate: task.dueDate,
           recurrence: task.recurrence,
-          projectId,
+          projectId: task.projectId,
           assigneeId: task.assignee?.id ?? "",
         }),
       });
@@ -120,7 +125,7 @@ export function ProjectKanbanBoard({ projectId, projectName, initialTasks, membe
           status,
           priority: newTaskPriority,
           dueDate: newTaskDueDate || null,
-          projectId,
+          projectId: projectId ?? (newTaskProjectId || null),
           assigneeId: newTaskAssigneeId,
         }),
       });
@@ -134,6 +139,7 @@ export function ProjectKanbanBoard({ projectId, projectName, initialTasks, membe
       setNewTaskPriority("MEDIUM");
       setNewTaskDueDate("");
       setNewTaskAssigneeId("");
+      if (!projectId) setNewTaskProjectId("");
       setCreatingStatus(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create task.");
@@ -149,7 +155,7 @@ export function ProjectKanbanBoard({ projectId, projectName, initialTasks, membe
           <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Kanban board</p>
           <h1 className="mt-1 text-3xl font-bold">{projectName}</h1>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-            Organize project tasks by status. {canEdit ? "Move cards or create new tasks directly on the board." : "Viewer access is read-only."}
+            Organize tasks by status across your workspace. {canEdit ? "Move cards or create new tasks directly on the board." : "Viewer access is read-only."}
           </p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-sm sm:min-w-72">
@@ -176,6 +182,7 @@ export function ProjectKanbanBoard({ projectId, projectName, initialTasks, membe
                     <select value={newTaskPriority} onChange={(e) => setNewTaskPriority(e.target.value as Priority)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900">{PRIORITIES.map((priority) => <option key={priority} value={priority}>{formatEnum(priority)}</option>)}</select>
                     <input type="date" value={newTaskDueDate} onChange={(e) => setNewTaskDueDate(e.target.value)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
                   </div>
+                  {!projectId && projects.length > 0 && <select value={newTaskProjectId} onChange={(e) => { setNewTaskProjectId(e.target.value); setNewTaskAssigneeId(""); }} className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="">Personal task</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>}
                   {members.length > 0 && <select value={newTaskAssigneeId} onChange={(e) => setNewTaskAssigneeId(e.target.value)} className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="">Unassigned</option>{members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>}
                   <div className="mt-3 flex gap-2"><button type="button" onClick={() => void createTask(column.status)} disabled={updatingTaskId === "new-task" || !newTaskTitle.trim()} className={`${uiPrimaryButtonClass} px-3 py-1.5 text-xs`}>Create</button><button type="button" onClick={() => setCreatingStatus(null)} className={`${uiButtonClass} px-3 py-1.5 text-xs`}>Cancel</button></div>
                 </div>
