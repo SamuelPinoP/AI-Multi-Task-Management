@@ -71,9 +71,9 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
 
   const content = <>
     <TreePageSwitcher pages={pages} activePage={activePage} onSelect={setActivePageId} onCreate={createPage} />
-    <div className="rounded-[2rem] border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-6">
+    <div className="rounded-[1.5rem] border border-zinc-200 bg-white/95 p-4 shadow-sm shadow-zinc-200/60 dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none sm:p-5">
       {!activePage ? <div className="rounded-2xl border border-dashed border-zinc-300 p-10 text-center dark:border-zinc-700"><h2 className="text-xl font-semibold">Create your first Tree View page</h2><p className="mt-2 text-sm text-zinc-500">Tree pages are private to your account and can hold editable parent, child, and sibling nodes.</p><button onClick={() => void createPage()} className={`${uiPrimaryButtonClass} mt-4`}>Create tree page</button></div> : <>
-        <div className="flex flex-col gap-4 border-b border-zinc-200 pb-5 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">Tree View</p><h2 className="mt-1 text-3xl font-bold tracking-tight">{activePage.title}</h2><p className="mt-1 text-sm text-zinc-500">Double-click any node title to edit inline.</p></div><div className="flex flex-wrap gap-2"><button onClick={() => setIsFullScreen(true)} className={uiButtonClass}>Full screen</button><button onClick={() => void renamePage()} className={`${uiButtonClass} px-3 text-xs`}>Rename page</button><button onClick={() => void addNode(null, activePage.title)} className={uiPrimaryButtonClass}>Add root node</button><button onClick={() => void deletePage()} className={`${uiDangerButtonClass} px-3 text-xs`}>Delete</button></div></div>
+        <div className="flex flex-col gap-3 border-b border-zinc-200 pb-4 dark:border-zinc-800 lg:flex-row lg:items-center lg:justify-between"><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">Tree View</p><h2 className="mt-1 truncate text-2xl font-bold tracking-tight">{activePage.title}</h2><p className="mt-1 text-sm text-zinc-500">Double-click a node title to edit inline.</p></div><div className="flex flex-wrap gap-2"><button onClick={() => setIsFullScreen((current) => !current)} className={uiButtonClass}>{isFullScreen ? "Exit full screen" : "Full screen"}</button><button onClick={() => void renamePage()} className={`${uiButtonClass} px-3 text-xs`}>Rename page</button><button onClick={() => void addNode(null, activePage.title)} className={uiPrimaryButtonClass}>Add root node</button><button onClick={() => void deletePage()} className={`${uiDangerButtonClass} px-3 text-xs`}>Delete</button></div></div>
         {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
         {loading && <p className="mt-4 text-sm text-zinc-500">Saving tree changes…</p>}
         <div className="mt-6 space-y-3">{tree.length === 0 ? <p className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/70 p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950/40">This page has no nodes. Add a root node to begin.</p> : tree.map((node) => <TreeNodeRow key={node.id} node={node} onAddChild={addNode} onAddSibling={(item) => addNode(item.parentId, "Sibling node")} onRename={(item, title) => patchNode(item.id, { title })} onDelete={deleteNode} />)}</div>
@@ -83,21 +83,17 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
 
   if (isFullScreen) {
     return <section className="fixed inset-0 z-50 overflow-y-auto bg-zinc-50 p-4 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 sm:p-6">
-      <div className="mx-auto max-w-7xl space-y-5">
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white/90 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/90">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">Focus mode</p><h1 className="text-xl font-bold">{activePage?.title ?? "Tree View"}</h1></div>
-          <button onClick={() => setIsFullScreen(false)} className={uiPrimaryButtonClass}>Exit full screen</button>
-        </div>
+      <div className="mx-auto max-w-7xl space-y-4">
         {content}
       </div>
     </section>;
   }
 
-  return <section className="space-y-5">{content}</section>;
+  return <section className="space-y-4">{content}</section>;
 }
 
 function TreePageSwitcher({ pages, activePage, onSelect, onCreate }: { pages: TreePage[]; activePage: TreePage | null; onSelect: (id: string) => void; onCreate: () => Promise<void>; }) {
-  return <div className="rounded-[2rem] border border-zinc-200 bg-white/80 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60"><div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">{pages.map((page) => <button key={page.id} onClick={() => onSelect(page.id)} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition ${activePage?.id === page.id ? "border-zinc-900 bg-zinc-900 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950" : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"}`}>{page.title}</button>)}<button onClick={() => void onCreate()} className={`${uiPrimaryButtonClass} shrink-0`}>New Tree Page</button></div></div>;
+  return <div className="rounded-[1.5rem] border border-zinc-200 bg-white/85 p-3 shadow-sm shadow-zinc-200/60 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none"><div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"><button onClick={() => void onCreate()} className={`${uiPrimaryButtonClass} shrink-0`}>New Tree Page</button>{pages.map((page) => <button key={page.id} onClick={() => onSelect(page.id)} title={page.title} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition ${activePage?.id === page.id ? "border-zinc-950 bg-zinc-950 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950" : "border-zinc-200 bg-white/90 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950/80 dark:text-zinc-200 dark:hover:bg-zinc-900"}`}>{page.title}</button>)}</div></div>;
 }
 
 function TreeNodeRow({ node, onAddChild, onAddSibling, onRename, onDelete }: { node: NestedNode; onAddChild: (parentId: string | null, fallback?: string) => Promise<void>; onAddSibling: (node: TreeNode) => Promise<void>; onRename: (node: TreeNode, title: string) => Promise<void>; onDelete: (node: TreeNode) => Promise<void>; }) {

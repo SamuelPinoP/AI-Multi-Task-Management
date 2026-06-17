@@ -1,6 +1,6 @@
 "use client";
 
-import { uiButtonClass, uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
+import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { useMemo, useState } from "react";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
@@ -149,17 +149,17 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
   }
 
   return (
-    <div className="space-y-6">
-      <section className={`${uiCardClass} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}>
-        <div>
-          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Kanban board</p>
-          <h1 className="mt-1 text-3xl font-bold">{projectName}</h1>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-            Organize tasks by status across your workspace. {canEdit ? "Move cards or create new tasks directly on the board." : "Viewer access is read-only."}
+    <div className="space-y-4">
+      <section className="flex flex-col gap-3 rounded-[1.5rem] border border-zinc-200 bg-white/95 p-4 shadow-sm shadow-zinc-200/60 dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">Kanban View</p>
+          <h1 className="mt-1 truncate text-2xl font-bold tracking-tight">{projectName}</h1>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            {canEdit ? "Move cards or create new tasks directly on the board." : "Viewer access is read-only."}
           </p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-sm sm:min-w-72">
-          {STATUS_COLUMNS.map((column) => <div key={column.status} className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"><p className="font-semibold">{taskCounts.get(column.status) ?? 0}</p><p className="text-xs text-zinc-500">{column.title}</p></div>)}
+          {STATUS_COLUMNS.map((column) => <div key={column.status} className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-950/40"><p className="font-semibold">{taskCounts.get(column.status) ?? 0}</p><p className="text-xs text-zinc-500">{column.title}</p></div>)}
         </div>
       </section>
 
