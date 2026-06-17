@@ -36,9 +36,7 @@ export default async function BoardPage({ searchParams }: BoardPageProps) {
     <div className="px-6 py-10">
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="rounded-3xl border border-zinc-200 bg-white/90 p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
-          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Main productivity area</p>
-          <h1 className="mt-1 text-4xl font-bold tracking-tight">Task Board</h1>
-          <p className="mt-3 max-w-3xl text-sm text-zinc-600 dark:text-zinc-300">Switch between a Kanban command center and editable hierarchical Tree View pages. Mindnote View is planned for a later release.</p>
+          <h1 className="text-4xl font-bold tracking-tight">Task Board</h1>
           <div className="mt-5 flex flex-wrap gap-2" role="tablist" aria-label="Board views">
             <a href="/board?view=kanban" className={`rounded-full border px-4 py-2 text-sm font-semibold ${view === "kanban" ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950" : "border-zinc-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"}`}>Kanban View</a>
             <a href="/board?view=tree" className={`rounded-full border px-4 py-2 text-sm font-semibold ${view === "tree" ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950" : "border-zinc-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"}`}>Tree View</a>
