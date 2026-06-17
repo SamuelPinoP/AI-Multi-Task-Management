@@ -178,6 +178,26 @@ export default async function ProjectDetailPage({
             </svg>
             <span>Chat</span>
           </Link>
+          <Link
+            href={`/projects/${project.id}/board`}
+            className={`${uiButtonClass} w-full gap-2 rounded-2xl border-zinc-400 bg-zinc-100 px-5 py-2.5 text-base font-semibold shadow-sm hover:bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:bg-zinc-700 sm:w-auto sm:min-w-36`}
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              className="h-5 w-5"
+            >
+              <path
+                d="M4 5.5h3.5v9H4zM9 5.5h3.5v9H9zM14 5.5h2v9h-2z"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span>Board</span>
+          </Link>
         </div>
 
         <section className={uiCardClass}>
