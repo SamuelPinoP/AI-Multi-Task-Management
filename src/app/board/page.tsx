@@ -6,6 +6,13 @@ import { prisma } from "@/lib/prisma";
 
 type BoardPageProps = { searchParams: Promise<{ view?: string }> };
 
+const boardViewLinkClass = (isActive: boolean) =>
+  `inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition ${
+    isActive
+      ? "bg-zinc-950 text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-950"
+      : "text-zinc-600 hover:bg-white hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+  }`;
+
 export default async function BoardPage({ searchParams }: BoardPageProps) {
   const user = await requirePageUser();
   const params = await searchParams;
@@ -33,16 +40,28 @@ export default async function BoardPage({ searchParams }: BoardPageProps) {
   ]);
 
   return (
-    <div className="px-6 py-10">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-3xl border border-zinc-200 bg-white/90 p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
-          <h1 className="text-4xl font-bold tracking-tight">Task Board</h1>
-          <div className="mt-5 flex flex-wrap gap-2" role="tablist" aria-label="Board views">
-            <a href="/board?view=kanban" className={`rounded-full border px-4 py-2 text-sm font-semibold ${view === "kanban" ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950" : "border-zinc-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"}`}>Kanban View</a>
-            <a href="/board?view=tree" className={`rounded-full border px-4 py-2 text-sm font-semibold ${view === "tree" ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950" : "border-zinc-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"}`}>Tree View</a>
-            <button type="button" disabled className="rounded-full border border-dashed border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-400 dark:border-zinc-700">Mindnote View — later</button>
+    <div className="px-4 py-6 sm:px-6 lg:py-8">
+      <div className="mx-auto max-w-7xl space-y-4">
+        <nav
+          className="flex flex-col gap-3 rounded-[1.5rem] border border-zinc-200 bg-white/85 p-3 shadow-sm shadow-zinc-200/60 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none sm:flex-row sm:items-center sm:justify-between"
+          aria-label="Board toolbar"
+        >
+          <div className="inline-flex w-full rounded-2xl bg-zinc-100 p-1 dark:bg-zinc-950/70 sm:w-auto" role="tablist" aria-label="Board views">
+            <a href="/board?view=kanban" className={`${boardViewLinkClass(view === "kanban")} flex-1 sm:flex-none`} aria-current={view === "kanban" ? "page" : undefined}>
+              Kanban View
+            </a>
+            <a href="/board?view=tree" className={`${boardViewLinkClass(view === "tree")} flex-1 sm:flex-none`} aria-current={view === "tree" ? "page" : undefined}>
+              Tree View
+            </a>
           </div>
-        </section>
+          <button
+            type="button"
+            disabled
+            className="inline-flex items-center justify-center rounded-xl border border-dashed border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-400 dark:border-zinc-700 dark:text-zinc-500"
+          >
+            Mindnote View — later
+          </button>
+        </nav>
 
         {view === "tree" ? (
           <TreeBoard initialPages={treePages.map((page) => ({ ...page, createdAt: page.createdAt.toISOString(), updatedAt: page.updatedAt.toISOString(), nodes: page.nodes.map((node) => ({ ...node, createdAt: node.createdAt.toISOString(), updatedAt: node.updatedAt.toISOString() })) }))} />
