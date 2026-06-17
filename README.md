@@ -2,14 +2,15 @@
 
 Live Demo: https://ai-multi-task-management-vercel.vercel.app
 
-AI-Multi Task-Management is a full-stack productivity and collaboration platform built with Next.js, TypeScript, Prisma, PostgreSQL, and Vercel. It supports authentication, notes, tasks, events, projects, project chat, file uploads, invitations, password reset, search, trash, planning views, recurrence, guest mode, and dark mode.
+AI-Multi Task-Management is a full-stack productivity and collaboration platform built with Next.js, TypeScript, Prisma, PostgreSQL, and Vercel. It supports authentication, notes, tasks, events, projects, project chat, file uploads, invitations, password reset, search, trash, planning views, recurrence, an in-app Notification Center with reminders, guest mode, and dark mode.
 
 ## Key Features
 
 - Secure authentication with signup, login, logout, sessions, and password reset
-- Notes, tasks, events, projects, calendars, a rule-based Smart Daily Planner, and trash recovery
+- Notes, tasks, events, projects, calendars, a rule-based Smart Daily Planner, in-app reminders, and trash recovery
 - Project collaboration with invitations and role-based Owner, Editor, and Viewer access enforced server-side
 - Project chat with file attachments using Vercel Blob storage
+- Notification Center for user-specific task due soon, overdue task, event, invitation, project chat, and planner reminders with read and dismissed states
 - PostgreSQL database modeled with Prisma migrations
 - Production deployment on Vercel with Neon PostgreSQL and server-side environment validation
 - Smart Daily Planner that analyzes overdue tasks, due-today work, upcoming events, active projects, recent notes, and project follow-up signals without relying on a paid external AI service

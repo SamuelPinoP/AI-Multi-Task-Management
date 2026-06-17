@@ -33,6 +33,7 @@ model User {
   projectMemberNotes         ProjectMemberNote[]        @relation("ProjectMemberNoteAuthor")
   projectComments            ProjectComment[]
   projectCommentAttachments  ProjectCommentAttachment[]
+  notificationStates        NotificationState[]
 }
 
 model Session {
@@ -259,6 +260,22 @@ model Activity {
   projectId String?
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+}
+
+model NotificationState {
+  id          String              @id @default(cuid())
+  userId      String
+  sourceKey   String
+  readAt      DateTime?
+  dismissedAt DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceKey])
+  @@index([userId, readAt])
+  @@index([userId, dismissedAt])
 }
 
 enum ActivityAction {

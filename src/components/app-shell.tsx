@@ -23,6 +23,7 @@ const workspaceLinks: NavLinkItem[] = [
 const topLinks: NavLinkItem[] = [
   { href: "/", label: "Dashboard" },
   { href: "/today", label: "Today" },
+  { href: "/notifications", label: "Notifications" },
 ];
 
 const toolLinks: NavLinkItem[] = [
@@ -51,7 +52,7 @@ function isActive(pathname: string, href: string, exact = false) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function TopBarLink({ href, label, exact }: NavLinkItem) {
+function TopBarLink({ href, label, exact, badge }: NavLinkItem & { badge?: number }) {
   const pathname = usePathname();
   const active = isActive(pathname, href, exact);
 
@@ -66,6 +67,11 @@ function TopBarLink({ href, label, exact }: NavLinkItem) {
       }`}
     >
       {label}
+      {badge ? (
+        <span className="ml-2 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white dark:bg-blue-500">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -103,9 +109,11 @@ function SidebarNavigation({ pathname }: { pathname: string }) {
 export function AppShell({
   children,
   currentUser,
+  unreadNotificationCount = 0,
 }: {
   children: React.ReactNode;
   currentUser: ShellUser;
+  unreadNotificationCount?: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -141,7 +149,7 @@ export function AppShell({
                 aria-label="Top tools"
               >
                 {[...topLinks, ...toolLinks].map((link) => (
-                  <TopBarLink key={link.href} {...link} />
+                  <TopBarLink key={link.href} {...link} badge={link.href === "/notifications" ? unreadNotificationCount : undefined} />
                 ))}
               </nav>
             </div>
@@ -208,6 +216,11 @@ export function AppShell({
                     }`}
                   >
                     {link.label}
+                    {link.href === "/notifications" && unreadNotificationCount ? (
+                      <span className="ml-2 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white dark:bg-blue-500">
+                        {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                      </span>
+                    ) : null}
                   </Link>
                 );
               })}
