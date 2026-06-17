@@ -26,7 +26,7 @@ const topLinks: NavLinkItem[] = [
 ];
 
 const toolLinks: NavLinkItem[] = [
-  { href: "/tasks/board", label: "Task Board" },
+  { href: "/board", label: "Task Board" },
   { href: "/planner", label: "Planner" },
   { href: "/roadmap", label: "Roadmap" },
   { href: "/trash", label: "Trash" },

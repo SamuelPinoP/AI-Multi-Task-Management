@@ -35,3 +35,12 @@ AI-Multi Task-Management is a full-stack productivity and collaboration platform
 
 ### Project Chat
 ![Project chat screenshot](docs/screenshots/project-chat.png)
+
+
+### Main Task Board
+
+The app includes a dedicated `/board` productivity area linked from the main navigation as **Task Board**. It currently supports:
+
+- **Kanban View** for organizing personal and project tasks by status across the workspace.
+- **Tree View** for user-specific editable hierarchy pages, such as Warrior, Study Plan, or Career Plan, with root nodes, child nodes, sibling nodes, renaming, deletion, simple reordering, and parent changes.
+- A disabled **Mindnote View** entry point so the board structure can be extended later without changing the primary navigation.
