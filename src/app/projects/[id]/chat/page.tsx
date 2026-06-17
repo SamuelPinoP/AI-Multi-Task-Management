@@ -3,7 +3,7 @@ import { BackLink } from "@/components/ui";
 import { ProjectChatWorkspace } from "@/components/project-chat-workspace";
 import { prisma } from "@/lib/prisma";
 import { requirePageUser } from "@/lib/auth";
-import { projectAccessWhereForProject } from "@/lib/project-access";
+import { getProjectAccessForUser, projectAccessWhereForProject } from "@/lib/project-access";
 
 
 type ProjectChatPageProps = {
@@ -22,6 +22,8 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
       name: true,
       description: true,
       status: true,
+      userId: true,
+      members: { where: { userId: user.id }, select: { userId: true, role: true } },
       comments: {
         orderBy: { createdAt: "asc" },
         include: { user: { select: { name: true, email: true } }, attachments: { orderBy: { createdAt: "asc" } } },
@@ -30,6 +32,9 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
   });
 
   if (!project) notFound();
+
+  const access = getProjectAccessForUser(project, user.id);
+  const readOnly = access?.accessLevel === "VIEWER";
 
   return (
     <main className="flex min-h-screen flex-col bg-zinc-50 px-4 py-6 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 sm:px-6 lg:px-8">
@@ -57,6 +62,7 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
         <ProjectChatWorkspace
           projectId={project.id}
           currentUser={{ name: user.name, email: user.email }}
+          readOnly={readOnly}
           initialComments={project.comments.map((comment) => ({
             id: comment.id,
             message: comment.message,

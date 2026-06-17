@@ -86,6 +86,7 @@ export default async function ProjectDetailPage({
           status: true,
           createdAt: true,
           invitedUser: { select: { name: true, email: true } },
+          role: true,
         },
       },
       comments: {
@@ -102,6 +103,8 @@ export default async function ProjectDetailPage({
 
   const access = getProjectAccessForUser(project, user.id);
   const isOwner = access?.accessLevel === "OWNER";
+  const canEditProjectContent = access?.accessLevel === "OWNER" || access?.accessLevel === "EDITOR";
+  const roleLabel = access?.accessLevel === "VIEWER" ? "Viewer (read-only)" : isOwner ? "Owner" : "Editor";
   const now = new Date();
   const totalNotes = project.notes.length;
   const totalTasks = project.tasks.length;
@@ -204,14 +207,16 @@ export default async function ProjectDetailPage({
               <span
                 className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${isOwner ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300" : "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"}`}
               >
-                {isOwner ? "Owner" : "Shared with me"}
+                {roleLabel}
               </span>
             </div>
           </div>
           <div className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-300">
             {isOwner
-              ? "Owner permissions: you can edit project details, invite registered collaborators, remove non-owner members, and coordinate work through tasks, notes, events, and chat."
-              : "Collaborator permissions: you can access this shared project, participate in project chat, view shared context, and contribute where the owner has enabled collaboration."}
+              ? "Owner permissions: you can edit project details, invite collaborators, remove members, change roles, and coordinate work through tasks, notes, events, and chat."
+              : canEditProjectContent
+                ? "Editor permissions: you can create and edit project tasks, notes, events, comments, and attachments, but cannot invite members or delete the project."
+                : "Viewer permissions: this is a read-only project. You can view project tasks, notes, events, comments, attachments, dashboard, and planner data, but cannot create or change project content."}
           </div>
           <div className="mt-4 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
             <span
@@ -265,7 +270,13 @@ export default async function ProjectDetailPage({
           </div>
         </section>
 
-        <ProjectQuickActions projectId={project.id} />
+        {canEditProjectContent ? (
+          <ProjectQuickActions projectId={project.id} />
+        ) : (
+          <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+            Read-only access: ask the project owner for Editor access to create tasks, notes, events, comments, or attachments.
+          </div>
+        )}
         <ProjectTeamSection
           projectId={project.id}
           initialMembers={project.members.map((member) => ({

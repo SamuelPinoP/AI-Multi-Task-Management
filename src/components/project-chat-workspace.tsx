@@ -183,10 +183,12 @@ export function ProjectChatWorkspace({
   projectId,
   initialComments,
   currentUser,
+  readOnly = false,
 }: {
   projectId: string;
   initialComments: ProjectComment[];
   currentUser: CurrentUser;
+  readOnly?: boolean;
 }) {
   const [comments, setComments] = useState(initialComments);
   const [message, setMessage] = useState("");
@@ -739,6 +741,11 @@ export function ProjectChatWorkspace({
               className="hidden"
               onChange={handleFileChange}
             />
+            {readOnly ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                Read-only access: you can review project chat and attachments, but only Owners and Editors can post messages or upload files.
+              </div>
+            ) : (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
               <button
                 type="button"
@@ -818,6 +825,7 @@ export function ProjectChatWorkspace({
                 {isSubmitting ? "Sending..." : "Send message"}
               </button>
             </div>
+            )}
             <div className="mt-3 min-h-5">
               {error ? (
                 <p className="text-sm font-medium text-red-600 dark:text-red-400">

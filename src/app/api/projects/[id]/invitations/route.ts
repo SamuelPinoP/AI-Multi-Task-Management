@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeAuthEmail, requireApiUser } from "@/lib/auth";
 import { sendProjectInvitationEmail } from "@/lib/email";
+import { ProjectMemberRole } from "@prisma/client";
 
 const INVITATION_SELECT = {
   id: true,
@@ -9,6 +10,7 @@ const INVITATION_SELECT = {
   status: true,
   createdAt: true,
   invitedUser: { select: { id: true, name: true, email: true } },
+  role: true,
 } as const;
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -43,6 +45,7 @@ export async function POST(req: Request, context: RouteContext) {
     const { id: projectId } = await context.params;
     const body = await req.json().catch(() => ({}));
     const invitedEmail = typeof body.email === "string" ? normalizeAuthEmail(body.email) : "";
+    const role = body.role === ProjectMemberRole.VIEWER ? ProjectMemberRole.VIEWER : ProjectMemberRole.EDITOR;
 
     if (!invitedEmail) return NextResponse.json({ error: "Invitee email is required" }, { status: 400 });
     if (invitedEmail === normalizeAuthEmail(user.email)) {
@@ -72,6 +75,7 @@ export async function POST(req: Request, context: RouteContext) {
         inviterUserId: user.id,
         invitedEmail,
         invitedUserId: invitedUser?.id,
+        role,
       },
       select: INVITATION_SELECT,
     });

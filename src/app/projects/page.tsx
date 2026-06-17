@@ -14,11 +14,11 @@ type Project = {
   status: ProjectStatus;
   createdAt: string;
   updatedAt: string;
-  accessLevel: "OWNER" | "COLLABORATOR";
+  accessLevel: "OWNER" | "EDITOR" | "VIEWER";
   memberRole: Role;
 };
 
-type Role = "OWNER" | "MEMBER" | "VIEWER";
+type Role = "OWNER" | "EDITOR" | "VIEWER";
 type Invitation = {
   id: string;
   invitedEmail: string;

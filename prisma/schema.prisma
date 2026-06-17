@@ -190,7 +190,7 @@ model ProjectMember {
   userId    String?
   name      String
   email     String?
-  role      ProjectMemberRole @default(MEMBER)
+  role      ProjectMemberRole @default(EDITOR)
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
 
@@ -211,6 +211,7 @@ model ProjectInvitation {
   invitedEmail  String
   invitedUserId String?
   status        ProjectInvitationStatus @default(PENDING)
+  role          ProjectMemberRole       @default(EDITOR)
   createdAt     DateTime                @default(now())
   updatedAt     DateTime                @updatedAt
 
@@ -303,7 +304,7 @@ enum GoalStatus {
 
 enum ProjectMemberRole {
   OWNER
-  MEMBER
+  EDITOR
   VIEWER
 }
 

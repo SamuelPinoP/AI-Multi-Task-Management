@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { createActivity } from "@/lib/activity";
-import { projectAccessWhereForProject } from "@/lib/project-access";
+import { getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import {
   isProjectChatStorageConfigError,
   saveProjectChatAttachments,
@@ -135,7 +135,10 @@ export async function POST(req: Request, context: RouteContext) {
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
-    const project = await prisma.project.findFirst({ where: projectAccessWhereForProject(projectId, user.id), select: { id: true, name: true } });
+    const access = await getProjectAccess(projectId, user.id);
+    if (!access) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    if (!canEditProjectContent(access)) return NextResponse.json(unauthorizedProjectResponse("post comments or upload attachments"), { status: 403 });
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
     const storedAttachments = await saveProjectChatAttachments(files);

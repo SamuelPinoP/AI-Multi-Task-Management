@@ -7,7 +7,7 @@ import {
   uiDangerButtonClass,
 } from "@/components/ui";
 
-type Role = "OWNER" | "MEMBER" | "VIEWER";
+type Role = "OWNER" | "EDITOR" | "VIEWER";
 type NoteVisibility = "TEAM" | "PRIVATE";
 type MemberNote = {
   id: string;
@@ -31,6 +31,7 @@ type PendingInvitation = {
   status: "PENDING" | "ACCEPTED" | "DECLINED";
   createdAt: string;
   invitedUser?: { name: string | null; email: string } | null;
+  role: Role;
 };
 
 type ProjectTeamSectionProps = {
@@ -59,7 +60,8 @@ export function ProjectTeamSection({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [role, setRole] = useState<Role>("MEMBER");
+  const [role, setRole] = useState<Exclude<Role, "OWNER">>("EDITOR");
+  const [inviteRole, setInviteRole] = useState<Exclude<Role, "OWNER">>("EDITOR");
   const [error, setError] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
@@ -85,7 +87,7 @@ export function ProjectTeamSection({
     setMembers((prev) => [...prev, { ...member, notes: [] }]);
     setName("");
     setEmail("");
-    setRole("MEMBER");
+    setRole("EDITOR");
     setError("");
   }
 
@@ -94,7 +96,7 @@ export function ProjectTeamSection({
     const res = await fetch(`/api/projects/${projectId}/invitations`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: inviteEmail }),
+      body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
     });
     const data = (await res.json().catch(() => null)) as
       | PendingInvitation
@@ -124,8 +126,21 @@ export function ProjectTeamSection({
 
     setInvitations((prev) => [invitation, ...prev]);
     setInviteEmail("");
+    setInviteRole("EDITOR");
     setError("");
     setInviteMessage(message);
+  }
+
+  async function updateMemberRole(memberId: string, nextRole: Exclude<Role, "OWNER">) {
+    const res = await fetch(`/api/projects/${projectId}/members/${memberId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: nextRole }),
+    });
+    if (!res.ok) return setError("Could not update member role.");
+    const updated = (await res.json()) as Member;
+    setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, role: updated.role } : m)));
+    setError("");
   }
 
   async function removeMember(memberId: string) {
@@ -195,7 +210,7 @@ export function ProjectTeamSection({
             </div>
             <form
               onSubmit={inviteUser}
-              className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]"
+              className="mb-4 grid gap-3 md:grid-cols-[1fr_180px_auto]"
             >
               <div>
                 <label className="mb-1 block text-sm font-medium">
@@ -209,6 +224,13 @@ export function ProjectTeamSection({
                   type="email"
                   required
                 />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Role</label>
+                <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as Exclude<Role, "OWNER">)} className="w-full rounded-xl border px-3 py-2">
+                  <option value="EDITOR">Editor</option>
+                  <option value="VIEWER">Viewer</option>
+                </select>
               </div>
               <button type="submit" className={`${uiButtonClass} self-end`}>
                 Invite collaborator
@@ -235,12 +257,11 @@ export function ProjectTeamSection({
               />
               <select
                 value={role}
-                onChange={(e) => setRole(e.target.value as Role)}
+                onChange={(e) => setRole(e.target.value as Exclude<Role, "OWNER">)}
                 className="rounded-xl border px-3 py-2"
               >
-                <option value="OWNER">OWNER</option>
-                <option value="MEMBER">MEMBER</option>
-                <option value="VIEWER">VIEWER</option>
+                <option value="EDITOR">Editor</option>
+                <option value="VIEWER">Viewer</option>
               </select>
               <button type="submit" className={uiButtonClass}>
                 Add member
@@ -249,9 +270,7 @@ export function ProjectTeamSection({
           </>
         ) : (
           <p className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200">
-            You have collaborator access. You can view members, add permitted
-            member notes, and participate in project chat. Only the owner can
-            invite, remove, or promote members.
+            You have shared access. Viewers have a read-only workspace; Editors can add project content and chat. Only the owner can invite, remove, or change roles.
           </p>
         )}
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
@@ -271,7 +290,7 @@ export function ProjectTeamSection({
                     key={invitation.id}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2"
                   >
-                    <span>{invitation.invitedEmail}</span>
+                    <span>{invitation.invitedEmail} <span className="text-xs text-zinc-500">({invitation.role})</span></span>
                     <span className="text-xs text-zinc-500">
                       Pending since{" "}
                       {new Date(invitation.createdAt).toLocaleDateString()}
@@ -327,6 +346,12 @@ export function ProjectTeamSection({
                     {memberWorkload.completed} • Overdue:{" "}
                     {memberWorkload.overdue}
                   </span>
+                  {isOwner && m.role !== "OWNER" && (
+                    <select value={m.role} onChange={(e) => void updateMemberRole(m.id, e.target.value as Exclude<Role, "OWNER">)} className="rounded-lg border px-2 py-1 text-xs">
+                      <option value="EDITOR">Editor</option>
+                      <option value="VIEWER">Viewer</option>
+                    </select>
+                  )}
                   {isOwner && m.role !== "OWNER" && (
                     <button
                       className={`${uiDangerButtonClass} px-2 py-0.5 text-xs`}
