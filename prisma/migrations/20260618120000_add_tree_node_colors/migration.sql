@@ -1,0 +1,1 @@
+ALTER TABLE "TreeNode" ADD COLUMN "color" TEXT NOT NULL DEFAULT 'blue';

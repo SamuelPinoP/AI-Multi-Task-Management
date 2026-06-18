@@ -3,8 +3,25 @@ import { requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type Context = { params: Promise<{ pageId: string; nodeId: string }> };
+const TREE_NODE_COLORS = new Set([
+  "blue",
+  "purple",
+  "emerald",
+  "amber",
+  "rose",
+  "slate",
+]);
 function cleanTitle(value: unknown) {
   return (typeof value === "string" ? value.trim() : "").slice(0, 120);
+}
+function cleanDescription(value: unknown) {
+  const description = typeof value === "string" ? value.trim() : "";
+  return description ? description.slice(0, 2000) : null;
+}
+function cleanSize(value: unknown, fallback: number, min: number, max: number) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(Math.max(Math.round(value), min), max)
+    : fallback;
 }
 async function ownPage(pageId: string, userId: string) {
   return prisma.treePage.findFirst({
@@ -12,6 +29,29 @@ async function ownPage(pageId: string, userId: string) {
     select: { id: true },
   });
 }
+async function descendantIds(nodeId: string, pageId: string) {
+  const nodes = await prisma.treeNode.findMany({
+    where: { pageId },
+    select: { id: true, parentId: true },
+  });
+  const descendants = new Set<string>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const node of nodes) {
+      if (
+        node.parentId &&
+        (node.parentId === nodeId || descendants.has(node.parentId)) &&
+        !descendants.has(node.id)
+      ) {
+        descendants.add(node.id);
+        changed = true;
+      }
+    }
+  }
+  return [...descendants];
+}
+
 async function wouldCreateCycle(
   nodeId: string,
   parentId: string | null,
@@ -47,13 +87,34 @@ export async function PATCH(req: Request, context: Context) {
     return NextResponse.json({ error: "Node not found" }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
-  const data: { title?: string; parentId?: string | null; sortOrder?: number } =
-    {};
+  const data: {
+    title?: string;
+    parentId?: string | null;
+    sortOrder?: number;
+    color?: string;
+    description?: string | null;
+    width?: number;
+    height?: number;
+  } = {};
   if ("title" in body) {
     const nextTitle = cleanTitle(body.title);
     if (!nextTitle)
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
     data.title = nextTitle;
+  }
+  if ("description" in body)
+    data.description = cleanDescription(body.description);
+  if ("width" in body)
+    data.width = cleanSize(body.width, existing.width, 180, 520);
+  if ("height" in body)
+    data.height = cleanSize(body.height, existing.height, 140, 420);
+  if ("color" in body) {
+    if (typeof body.color !== "string" || !TREE_NODE_COLORS.has(body.color))
+      return NextResponse.json(
+        { error: "Invalid node color" },
+        { status: 400 },
+      );
+    data.color = body.color;
   }
   const isMove = "parentId" in body;
   if (isMove) {
@@ -134,6 +195,22 @@ export async function PATCH(req: Request, context: Context) {
   }
   if (typeof body.sortOrder === "number" && Number.isInteger(body.sortOrder))
     data.sortOrder = body.sortOrder;
+  if (data.color) {
+    const ids = [nodeId, ...(await descendantIds(nodeId, pageId))];
+    const nodes = await prisma.$transaction(async (tx) => {
+      await tx.treeNode.updateMany({
+        where: { id: { in: ids }, pageId },
+        data: { color: data.color },
+      });
+      await tx.treePage.update({
+        where: { id: pageId },
+        data: { updatedAt: new Date() },
+      });
+      return tx.treeNode.findMany({ where: { id: { in: ids }, pageId } });
+    });
+    return NextResponse.json(nodes);
+  }
+
   const node = await prisma.$transaction(async (tx) => {
     const updated = await tx.treeNode.update({ where: { id: nodeId }, data });
     if (existing.parentId === null && data.title) {

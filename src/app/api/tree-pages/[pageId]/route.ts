@@ -38,7 +38,9 @@ export async function PATCH(req: Request, context: Context) {
     if (root) {
       await tx.treeNode.update({ where: { id: root.id }, data: { title } });
     } else {
-      await tx.treeNode.create({ data: { pageId, title, sortOrder: 0 } });
+      await tx.treeNode.create({
+        data: { pageId, title, color: "blue", sortOrder: 0 },
+      });
     }
 
     return tx.treePage.findUnique({
