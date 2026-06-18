@@ -138,7 +138,9 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
     }
     const nextParentId = position === "inside" ? targetId : targetNode.parentId;
     if (nextParentId === null && draggedNode.parentId !== null) {
-      setError("Nodes can be reordered within the tree, but only the page title can be the root node.");
+      setError(
+        "Nodes can be reordered within the tree, but only the page title can be the root node.",
+      );
       return;
     }
     if (
@@ -220,10 +222,14 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
   async function deleteNode(node: TreeNode) {
     if (!activePage) return;
     if (node.parentId === null) {
-      setError("The root node stays linked to the Tree Page title and cannot be deleted.");
+      setError(
+        "The root node stays linked to the Tree Page title and cannot be deleted.",
+      );
       return;
     }
-    const hasChildren = activePage.nodes.some((item) => item.parentId === node.id);
+    const hasChildren = activePage.nodes.some(
+      (item) => item.parentId === node.id,
+    );
     const hasSiblings = activePage.nodes.some(
       (item) => item.id !== node.id && item.parentId === node.parentId,
     );
@@ -308,43 +314,49 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
             {loading && (
               <p className="mt-4 text-sm text-zinc-500">Saving tree changes…</p>
             )}
-            <div className="mt-6 space-y-3">
+            <div className="mt-6 overflow-x-auto overflow-y-visible rounded-[1.35rem] bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_32%),linear-gradient(rgba(148,163,184,0.10)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.10)_1px,transparent_1px)] bg-[length:auto,32px_32px,32px_32px] p-4 dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_34%),linear-gradient(rgba(71,85,105,0.22)_1px,transparent_1px),linear-gradient(90deg,rgba(71,85,105,0.22)_1px,transparent_1px)] sm:p-6">
               {tree.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/70 p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950/40">
                   This page is preparing its root node.
                 </p>
               ) : (
-                tree.map((node) => (
-                  <TreeNodeRow
-                    key={node.id}
-                    node={node}
-                    draggedNodeId={draggedNodeId}
-                    dropTarget={dropTarget}
-                    onDragStart={setDraggedNodeId}
-                    onDragEnd={() => {
-                      setDraggedNodeId(null);
-                      setDropTarget(null);
-                    }}
-                    onDropIntent={(nodeId, position) =>
-                      setDropTarget({ nodeId, position })
-                    }
-                    onMove={(targetId, position) =>
-                      draggedNodeId
-                        ? moveNode(draggedNodeId, targetId, position)
-                        : Promise.resolve()
-                    }
-                    onAddChild={addNode}
-                    onAddSibling={(item, position) =>
-                      addNode(
-                        item.parentId,
-                        "Sibling node",
-                        item.sortOrder + (position === "after" ? 1 : 0),
-                      )
-                    }
-                    onRename={(item, title) => patchNode(item.id, { title })}
-                    onDelete={deleteNode}
-                  />
-                ))
+                <div className="inline-flex min-w-full justify-center pb-4">
+                  <div className="flex min-w-max items-start justify-center gap-8">
+                    {tree.map((node) => (
+                      <TreeNodeRow
+                        key={node.id}
+                        node={node}
+                        draggedNodeId={draggedNodeId}
+                        dropTarget={dropTarget}
+                        onDragStart={setDraggedNodeId}
+                        onDragEnd={() => {
+                          setDraggedNodeId(null);
+                          setDropTarget(null);
+                        }}
+                        onDropIntent={(nodeId, position) =>
+                          setDropTarget({ nodeId, position })
+                        }
+                        onMove={(targetId, position) =>
+                          draggedNodeId
+                            ? moveNode(draggedNodeId, targetId, position)
+                            : Promise.resolve()
+                        }
+                        onAddChild={addNode}
+                        onAddSibling={(item, position) =>
+                          addNode(
+                            item.parentId,
+                            "Sibling node",
+                            item.sortOrder + (position === "after" ? 1 : 0),
+                          )
+                        }
+                        onRename={(item, title) =>
+                          patchNode(item.id, { title })
+                        }
+                        onDelete={deleteNode}
+                      />
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           </>
@@ -355,7 +367,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
 
   if (isFullScreen) {
     return (
-      <section className="fixed inset-0 z-50 overflow-y-auto bg-zinc-50 p-4 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 sm:p-6">
+      <section className="fixed inset-0 z-50 overflow-y-auto bg-zinc-50 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.10),transparent_38%)] p-4 text-zinc-900 dark:bg-zinc-950 dark:bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.18),transparent_42%)] dark:text-zinc-100 sm:p-6">
         <button
           type="button"
           aria-label="Exit full screen"
@@ -514,19 +526,23 @@ function TreeNodeRow({
       void onMove(node.id, dropPosition ?? "inside");
     onDragEnd();
   }
+
+  const cardTone = isRoot
+    ? "border-blue-300/80 bg-gradient-to-br from-blue-600 via-indigo-600 to-slate-900 text-white shadow-blue-950/20 ring-blue-200/70 dark:border-blue-400/60 dark:from-blue-500 dark:via-indigo-500 dark:to-slate-800 dark:ring-blue-300/20"
+    : "border-slate-200/90 bg-white/95 text-slate-950 shadow-slate-200/80 ring-white/80 hover:border-blue-200 hover:shadow-blue-100/80 dark:border-slate-700/80 dark:bg-slate-900/95 dark:text-slate-50 dark:shadow-none dark:ring-slate-700/40 dark:hover:border-blue-500/50";
+  const accentTone = isRoot
+    ? "bg-white/80"
+    : "bg-gradient-to-b from-blue-500 to-indigo-500";
+
   return (
     <div
-      className={`relative pl-4 transition-opacity sm:pl-6 ${isDragging ? "opacity-45" : ""}`}
+      className={`relative flex shrink-0 flex-col items-center ${isDragging ? "opacity-45" : ""}`}
     >
-      <div
-        className="absolute left-1 top-0 h-full w-px bg-zinc-200 dark:bg-zinc-800"
-        aria-hidden="true"
-      />
       {dropPosition === "before" && (
-        <div className="mb-2 h-1 rounded-full bg-blue-500 shadow-sm shadow-blue-500/40" />
+        <div className="mb-3 h-1 w-48 rounded-full bg-blue-500 shadow-sm shadow-blue-500/40" />
       )}
       <article
-        draggable={!editing}
+        draggable={!editing && !isRoot}
         onDragStart={(event) => {
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", node.id);
@@ -535,121 +551,137 @@ function TreeNodeRow({
         onDragEnd={onDragEnd}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        className={`group relative rounded-2xl border bg-gradient-to-br p-4 shadow-sm transition ${dropPosition === "inside" ? "border-blue-400 from-blue-50 to-white ring-2 ring-blue-200 dark:border-blue-500 dark:from-blue-950/40 dark:to-zinc-950 dark:ring-blue-900/60" : "border-zinc-200 from-white to-zinc-50 hover:border-zinc-300 dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-950 dark:hover:border-zinc-700"}`}
+        className={`group relative flex min-h-28 w-56 flex-col overflow-hidden rounded-[1.35rem] border p-4 shadow-lg ring-1 transition duration-200 sm:w-60 ${cardTone} ${dropPosition === "inside" ? "scale-[1.02] border-blue-400 ring-4 ring-blue-300/45 dark:ring-blue-500/30" : ""}`}
       >
         <span
-          className="absolute -left-3 top-7 h-px w-3 bg-zinc-200 dark:bg-zinc-800"
+          className={`absolute inset-x-0 top-0 h-1.5 ${accentTone}`}
           aria-hidden="true"
         />
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span
-                className="cursor-grab rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900"
-                title="Drag to move"
-              >
-                ⋮⋮
-              </span>
-              {editing ? (
-                <input
-                  autoFocus
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  onBlur={() => void save()}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") void save();
-                    if (event.key === "Escape") {
-                      setDraft(node.title);
-                      setEditing(false);
-                    }
-                  }}
-                  className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-lg font-semibold outline-none ring-zinc-900 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:ring-zinc-100"
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
+        <div className="flex items-start justify-between gap-3">
+          <span
+            className={`mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border text-xs shadow-sm ${isRoot ? "cursor-default border-white/25 bg-white/15 text-white/85" : "cursor-grab border-slate-200 bg-slate-50 text-slate-400 group-hover:text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500"}`}
+            title={isRoot ? "Root node" : "Drag to move"}
+          >
+            ⋮⋮
+          </span>
+          <div className="min-w-0 flex-1 text-center">
+            {editing ? (
+              <input
+                autoFocus
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onBlur={() => void save()}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void save();
+                  if (event.key === "Escape") {
                     setDraft(node.title);
-                    setEditing(true);
-                  }}
-                  className="block max-w-full truncate rounded-lg px-1 text-left text-lg font-semibold tracking-tight text-zinc-950 transition hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:text-zinc-50 dark:hover:bg-zinc-800 dark:focus:ring-blue-900"
-                  title="Click to edit"
-                >
-                  {node.title}
-                </button>
-              )}
-            </div>{" "}
-            {node.children.length > 0 && (
-              <p className="mt-1 pl-11 text-xs text-zinc-500">
-                {node.children.length} child
-                {node.children.length === 1 ? "" : "ren"}
-              </p>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-1 opacity-80 transition group-hover:opacity-100 focus-within:opacity-100">
-            {!isRoot && (
+                    setEditing(false);
+                  }
+                }}
+                className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-center text-base font-semibold text-slate-950 outline-none ring-blue-300 focus:ring-2 dark:border-blue-800 dark:bg-slate-950 dark:text-slate-50 dark:ring-blue-700"
+              />
+            ) : (
               <button
                 type="button"
-                className={iconButtonClass}
-                title="Add sibling before"
-                aria-label="Add sibling before"
-                onClick={() => void onAddSibling(node, "before")}
+                onClick={() => {
+                  setDraft(node.title);
+                  setEditing(true);
+                }}
+                className={`line-clamp-2 min-h-12 w-full rounded-xl px-2 py-1 text-center text-base font-bold leading-snug tracking-tight transition focus:outline-none focus:ring-2 ${isRoot ? "text-white hover:bg-white/10 focus:ring-white/40" : "text-slate-950 hover:bg-slate-100 focus:ring-blue-200 dark:text-slate-50 dark:hover:bg-slate-800 dark:focus:ring-blue-900"}`}
+                title="Click to edit"
               >
-                ←
+                {node.title}
               </button>
             )}
+          </div>
+          <span
+            className={`mt-1 h-7 min-w-7 rounded-xl px-2 text-center text-xs font-bold leading-7 ${isRoot ? "bg-white/15 text-white/90" : "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"}`}
+          >
+            {node.children.length}
+          </span>
+        </div>
+        <div className="mt-auto flex justify-center gap-1.5 pt-4 opacity-90 transition group-hover:opacity-100 focus-within:opacity-100">
+          {!isRoot && (
             <button
               type="button"
               className={iconButtonClass}
-              title="Add child"
-              aria-label="Add child"
-              onClick={() => void onAddChild(node.id, "Child node")}
+              title="Add sibling before"
+              aria-label="Add sibling before"
+              onClick={() => void onAddSibling(node, "before")}
             >
-              +
+              ←
             </button>
-            {!isRoot && (
-              <button
-                type="button"
-                className={iconButtonClass}
-                title="Add sibling after"
-                aria-label="Add sibling after"
-                onClick={() => void onAddSibling(node, "after")}
-              >
-                →
-              </button>
-            )}
+          )}
+          <button
+            type="button"
+            className={iconButtonClass}
+            title="Add child"
+            aria-label="Add child"
+            onClick={() => void onAddChild(node.id, "Child node")}
+          >
+            +
+          </button>
+          {!isRoot && (
             <button
               type="button"
-              className={`${iconButtonClass} text-red-600 hover:border-red-200 hover:bg-red-50 dark:text-red-300 dark:hover:border-red-900/70 dark:hover:bg-red-950/30`}
-              title={isRoot ? "Root node cannot be deleted" : "Delete node"}
-              aria-label="Delete node"
-              onClick={() => void onDelete(node)}
+              className={iconButtonClass}
+              title="Add sibling after"
+              aria-label="Add sibling after"
+              onClick={() => void onAddSibling(node, "after")}
             >
-              −
+              →
             </button>
-          </div>
+          )}
+          <button
+            type="button"
+            className={`${iconButtonClass} text-red-600 hover:border-red-200 hover:bg-red-50 dark:text-red-300 dark:hover:border-red-900/70 dark:hover:bg-red-950/30`}
+            title={isRoot ? "Root node cannot be deleted" : "Delete node"}
+            aria-label="Delete node"
+            onClick={() => void onDelete(node)}
+          >
+            −
+          </button>
         </div>
       </article>
       {dropPosition === "after" && (
-        <div className="mt-2 h-1 rounded-full bg-blue-500 shadow-sm shadow-blue-500/40" />
+        <div className="mt-3 h-1 w-48 rounded-full bg-blue-500 shadow-sm shadow-blue-500/40" />
       )}
       {node.children.length > 0 && (
-        <div className="mt-3 space-y-3">
-          {node.children.map((child) => (
-            <TreeNodeRow
-              key={child.id}
-              node={child}
-              draggedNodeId={draggedNodeId}
-              dropTarget={dropTarget}
-              onDragStart={onDragStart}
-              onDragEnd={onDragEnd}
-              onDropIntent={onDropIntent}
-              onMove={onMove}
-              onAddChild={onAddChild}
-              onAddSibling={onAddSibling}
-              onRename={onRename}
-              onDelete={onDelete}
+        <div className="relative mt-12 flex items-start justify-center gap-6 pt-6 sm:gap-8">
+          <span
+            className="absolute -top-12 left-1/2 h-12 w-px -translate-x-1/2 bg-slate-300 dark:bg-slate-700"
+            aria-hidden="true"
+          />
+          <span
+            className="absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 rotate-45 border-b border-r border-slate-300 dark:border-slate-700"
+            aria-hidden="true"
+          />
+          {node.children.length > 1 && (
+            <span
+              className="absolute left-[calc(7.5rem)] right-[calc(7.5rem)] top-0 h-px bg-slate-300 dark:bg-slate-700"
+              aria-hidden="true"
             />
+          )}
+          {node.children.map((child) => (
+            <div key={child.id} className="relative flex justify-center">
+              <span
+                className="absolute -top-6 left-1/2 h-6 w-px -translate-x-1/2 bg-slate-300 dark:bg-slate-700"
+                aria-hidden="true"
+              />
+              <TreeNodeRow
+                node={child}
+                draggedNodeId={draggedNodeId}
+                dropTarget={dropTarget}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                onDropIntent={onDropIntent}
+                onMove={onMove}
+                onAddChild={onAddChild}
+                onAddSibling={onAddSibling}
+                onRename={onRename}
+                onDelete={onDelete}
+              />
+            </div>
           ))}
         </div>
       )}
