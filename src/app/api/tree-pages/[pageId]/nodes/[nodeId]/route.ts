@@ -3,6 +3,14 @@ import { requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type Context = { params: Promise<{ pageId: string; nodeId: string }> };
+const TREE_NODE_COLORS = new Set([
+  "blue",
+  "purple",
+  "emerald",
+  "amber",
+  "rose",
+  "slate",
+]);
 function cleanTitle(value: unknown) {
   return (typeof value === "string" ? value.trim() : "").slice(0, 120);
 }
@@ -47,13 +55,25 @@ export async function PATCH(req: Request, context: Context) {
     return NextResponse.json({ error: "Node not found" }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
-  const data: { title?: string; parentId?: string | null; sortOrder?: number } =
-    {};
+  const data: {
+    title?: string;
+    parentId?: string | null;
+    sortOrder?: number;
+    color?: string;
+  } = {};
   if ("title" in body) {
     const nextTitle = cleanTitle(body.title);
     if (!nextTitle)
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
     data.title = nextTitle;
+  }
+  if ("color" in body) {
+    if (typeof body.color !== "string" || !TREE_NODE_COLORS.has(body.color))
+      return NextResponse.json(
+        { error: "Invalid node color" },
+        { status: 400 },
+      );
+    data.color = body.color;
   }
   const isMove = "parentId" in body;
   if (isMove) {

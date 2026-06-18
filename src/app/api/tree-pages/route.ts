@@ -9,19 +9,29 @@ function cleanTitle(value: unknown, fallback = "Untitled tree") {
 
 export async function GET() {
   const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  if (!user)
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 },
+    );
 
   const pages = await prisma.treePage.findMany({
     where: { userId: user.id },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    include: { nodes: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } },
+    include: {
+      nodes: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+    },
   });
   return NextResponse.json(pages);
 }
 
 export async function POST(req: Request) {
   const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  if (!user)
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 },
+    );
 
   const body = await req.json().catch(() => ({}));
   const title = cleanTitle(body.title);
@@ -29,9 +39,11 @@ export async function POST(req: Request) {
     data: {
       title,
       userId: user.id,
-      nodes: { create: { title, sortOrder: 0 } },
+      nodes: { create: { title, color: "blue", sortOrder: 0 } },
     },
-    include: { nodes: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } },
+    include: {
+      nodes: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+    },
   });
   return NextResponse.json(page, { status: 201 });
 }
