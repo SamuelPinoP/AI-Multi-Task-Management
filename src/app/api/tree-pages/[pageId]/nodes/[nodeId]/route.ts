@@ -57,10 +57,26 @@ export async function PATCH(req: Request, context: Context) {
   }
   const isMove = "parentId" in body;
   if (isMove) {
+    if (existing.parentId === null)
+      return NextResponse.json(
+        { error: "The root node cannot be moved" },
+        { status: 400 },
+      );
     const parentId =
       typeof body.parentId === "string" && body.parentId.trim()
         ? body.parentId.trim()
         : null;
+    if (!parentId) {
+      const root = await prisma.treeNode.findFirst({
+        where: { pageId, parentId: null, NOT: { id: nodeId } },
+        select: { id: true },
+      });
+      if (root)
+        return NextResponse.json(
+          { error: "Tree pages can only have one root node" },
+          { status: 400 },
+        );
+    }
     if (parentId) {
       const parent = await prisma.treeNode.findFirst({
         where: { id: parentId, pageId },
@@ -118,10 +134,20 @@ export async function PATCH(req: Request, context: Context) {
   }
   if (typeof body.sortOrder === "number" && Number.isInteger(body.sortOrder))
     data.sortOrder = body.sortOrder;
-  const node = await prisma.treeNode.update({ where: { id: nodeId }, data });
-  await prisma.treePage.update({
-    where: { id: pageId },
-    data: { updatedAt: new Date() },
+  const node = await prisma.$transaction(async (tx) => {
+    const updated = await tx.treeNode.update({ where: { id: nodeId }, data });
+    if (existing.parentId === null && data.title) {
+      await tx.treePage.update({
+        where: { id: pageId },
+        data: { title: data.title },
+      });
+    } else {
+      await tx.treePage.update({
+        where: { id: pageId },
+        data: { updatedAt: new Date() },
+      });
+    }
+    return updated;
   });
   return NextResponse.json(node);
 }
@@ -136,6 +162,15 @@ export async function DELETE(_req: Request, context: Context) {
   const { pageId, nodeId } = await context.params;
   if (!(await ownPage(pageId, user.id)))
     return NextResponse.json({ error: "Tree page not found" }, { status: 404 });
+  const existing = await prisma.treeNode.findFirst({
+    where: { id: nodeId, pageId },
+    select: { parentId: true },
+  });
+  if (existing?.parentId === null)
+    return NextResponse.json(
+      { error: "The root node cannot be deleted" },
+      { status: 400 },
+    );
   const deleted = await prisma.treeNode.deleteMany({
     where: { id: nodeId, pageId },
   });

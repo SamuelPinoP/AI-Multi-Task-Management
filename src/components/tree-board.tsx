@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  uiButtonClass,
-  uiDangerButtonClass,
-  uiPrimaryButtonClass,
-} from "@/components/ui";
+import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { type DragEvent, useMemo, useState } from "react";
 
 type TreeNode = {
@@ -74,40 +70,33 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
     setPages((current) => [page, ...current]);
     setActivePageId(page.id);
   }
-  async function renamePage() {
-    if (!activePage) return;
-    const title = window.prompt("Rename tree page", activePage.title);
-    if (!title?.trim()) return;
-    const page = await request<TreePage>(`/api/tree-pages/${activePage.id}`, {
+  async function renamePage(pageId: string, title: string) {
+    const nextTitle = title.trim();
+    if (!nextTitle) return;
+    const page = await request<TreePage>(`/api/tree-pages/${pageId}`, {
       method: "PATCH",
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title: nextTitle }),
     });
     setPages((current) =>
       current.map((item) => (item.id === page.id ? page : item)),
     );
   }
-  async function deletePage() {
-    if (
-      !activePage ||
-      !window.confirm(`Delete “${activePage.title}” and all of its nodes?`)
-    )
-      return;
-    await request(`/api/tree-pages/${activePage.id}`, { method: "DELETE" });
-    setPages((current) => current.filter((item) => item.id !== activePage.id));
-    setActivePageId("");
-  }
-  async function addNode(parentId: string | null, fallback = "New node") {
+  async function addNode(
+    parentId: string | null,
+    fallback = "New node",
+    sortOrder?: number,
+  ) {
     if (!activePage) return;
     const title = window.prompt("Node title", fallback);
     if (!title?.trim()) return;
     const node = await request<TreeNode>(
       `/api/tree-pages/${activePage.id}/nodes`,
-      { method: "POST", body: JSON.stringify({ title, parentId }) },
+      { method: "POST", body: JSON.stringify({ title, parentId, sortOrder }) },
     );
     setPages((current) =>
       current.map((page) =>
         page.id === activePage.id
-          ? { ...page, nodes: [...page.nodes, node] }
+          ? { ...page, nodes: [...page.nodes, node].sort(compareNode) }
           : page,
       ),
     );
@@ -148,6 +137,10 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
       return;
     }
     const nextParentId = position === "inside" ? targetId : targetNode.parentId;
+    if (nextParentId === null && draggedNode.parentId !== null) {
+      setError("Nodes can be reordered within the tree, but only the page title can be the root node.");
+      return;
+    }
     if (
       nextParentId === nodeId ||
       (nextParentId && isDescendant(activePage.nodes, nextParentId, nodeId))
@@ -225,11 +218,21 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
     }
   }
   async function deleteNode(node: TreeNode) {
-    if (
-      !activePage ||
-      !window.confirm(`Delete “${node.title}” and its child nodes?`)
-    )
+    if (!activePage) return;
+    if (node.parentId === null) {
+      setError("The root node stays linked to the Tree Page title and cannot be deleted.");
       return;
+    }
+    const hasChildren = activePage.nodes.some((item) => item.parentId === node.id);
+    const hasSiblings = activePage.nodes.some(
+      (item) => item.id !== node.id && item.parentId === node.parentId,
+    );
+    const message = hasChildren
+      ? "This node has children. Deleting it will also remove its child nodes. Do you want to continue?"
+      : hasSiblings
+        ? "This node has sibling nodes. Do you want to delete it?"
+        : null;
+    if (message && !window.confirm(message)) return;
     await request(`/api/tree-pages/${activePage.id}/nodes/${node.id}`, {
       method: "DELETE",
     });
@@ -266,6 +269,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
         activePage={activePage}
         onSelect={setActivePageId}
         onCreate={createPage}
+        onRename={renamePage}
       />
       <div className="overflow-hidden rounded-[1.75rem] border border-zinc-200/80 bg-white/95 p-4 shadow-sm shadow-zinc-200/70 ring-1 ring-white/70 dark:border-zinc-800 dark:bg-zinc-900/80 dark:shadow-none dark:ring-zinc-800/40 sm:p-5">
         {!activePage ? (
@@ -286,45 +290,15 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
           </div>
         ) : (
           <>
-            <div className="flex flex-col gap-3 border-b border-zinc-200 pb-4 dark:border-zinc-800 lg:flex-row lg:items-center lg:justify-between">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                  Tree View
-                </p>
-                <h2 className="mt-1 truncate text-2xl font-bold tracking-tight">
-                  {activePage.title}
-                </h2>
-                <p className="mt-1 text-sm text-zinc-500">
-                  Drag nodes onto each other to nest them, or drop between
-                  siblings to reorder.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
+            <div className="flex justify-end border-b border-zinc-200 pb-4 dark:border-zinc-800">
+              {!isFullScreen && (
                 <button
-                  onClick={() => setIsFullScreen((current) => !current)}
+                  onClick={() => setIsFullScreen(true)}
                   className={uiButtonClass}
                 >
-                  {isFullScreen ? "Exit full screen" : "Full screen"}
+                  Full screen
                 </button>
-                <button
-                  onClick={() => void renamePage()}
-                  className={`${uiButtonClass} px-3 text-xs`}
-                >
-                  Rename page
-                </button>
-                <button
-                  onClick={() => void addNode(null, activePage.title)}
-                  className={uiPrimaryButtonClass}
-                >
-                  Add root node
-                </button>
-                <button
-                  onClick={() => void deletePage()}
-                  className={`${uiDangerButtonClass} px-3 text-xs`}
-                >
-                  Delete
-                </button>
-              </div>
+              )}
             </div>
             {error && (
               <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
@@ -337,7 +311,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
             <div className="mt-6 space-y-3">
               {tree.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/70 p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950/40">
-                  This page has no nodes. Add a root node to begin.
+                  This page is preparing its root node.
                 </p>
               ) : (
                 tree.map((node) => (
@@ -360,8 +334,12 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                         : Promise.resolve()
                     }
                     onAddChild={addNode}
-                    onAddSibling={(item) =>
-                      addNode(item.parentId, "Sibling node")
+                    onAddSibling={(item, position) =>
+                      addNode(
+                        item.parentId,
+                        "Sibling node",
+                        item.sortOrder + (position === "after" ? 1 : 0),
+                      )
                     }
                     onRename={(item, title) => patchNode(item.id, { title })}
                     onDelete={deleteNode}
@@ -378,7 +356,15 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
   if (isFullScreen) {
     return (
       <section className="fixed inset-0 z-50 overflow-y-auto bg-zinc-50 p-4 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 sm:p-6">
-        <div className="mx-auto max-w-7xl space-y-4">{content}</div>
+        <button
+          type="button"
+          aria-label="Exit full screen"
+          onClick={() => setIsFullScreen(false)}
+          className="fixed right-4 top-4 z-[60] flex h-9 w-9 items-center justify-center rounded-xl bg-red-600 text-lg font-bold leading-none text-white shadow-lg shadow-red-950/20 ring-1 ring-red-500/40 transition hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-300 dark:bg-red-500 dark:hover:bg-red-400"
+        >
+          ×
+        </button>
+        <div className="mx-auto max-w-7xl space-y-4 pr-10">{content}</div>
       </section>
     );
   }
@@ -391,12 +377,29 @@ function TreePageSwitcher({
   activePage,
   onSelect,
   onCreate,
+  onRename,
 }: {
   pages: TreePage[];
   activePage: TreePage | null;
   onSelect: (id: string) => void;
   onCreate: () => Promise<void>;
+  onRename: (pageId: string, title: string) => Promise<void>;
 }) {
+  const [editingPageId, setEditingPageId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+
+  function beginEdit(page: TreePage) {
+    setEditingPageId(page.id);
+    setDraft(page.title);
+  }
+
+  async function save(page: TreePage) {
+    const title = draft.trim();
+    setEditingPageId(null);
+    if (title && title !== page.title) await onRename(page.id, title);
+    else setDraft(page.title);
+  }
+
   return (
     <div className="rounded-[1.5rem] border border-zinc-200/80 bg-white/85 p-3 shadow-sm shadow-zinc-200/60 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/75 dark:shadow-none">
       <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:overflow-x-auto sm:pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
@@ -406,16 +409,37 @@ function TreePageSwitcher({
         >
           New Tree Page
         </button>
-        {pages.map((page) => (
-          <button
-            key={page.id}
-            onClick={() => onSelect(page.id)}
-            title={page.title}
-            className={`max-w-full shrink-0 truncate rounded-full border px-4 py-2 text-sm font-semibold transition sm:max-w-56 ${activePage?.id === page.id ? "border-zinc-950 bg-zinc-950 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950" : "border-zinc-200 bg-white/90 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950/80 dark:text-zinc-200 dark:hover:bg-zinc-900"}`}
-          >
-            {page.title}
-          </button>
-        ))}
+        {pages.map((page) => {
+          const selected = activePage?.id === page.id;
+          const pillClass = `max-w-full shrink-0 truncate rounded-full border px-4 py-2 text-sm font-semibold transition sm:max-w-56 ${selected ? "border-zinc-950 bg-zinc-950 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950" : "border-zinc-200 bg-white/90 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950/80 dark:text-zinc-200 dark:hover:bg-zinc-900"}`;
+          return editingPageId === page.id ? (
+            <input
+              key={page.id}
+              autoFocus
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onBlur={() => void save(page)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void save(page);
+                if (event.key === "Escape") {
+                  setDraft(page.title);
+                  setEditingPageId(null);
+                }
+              }}
+              className={`${pillClass} outline-none ring-2 ring-blue-300 dark:ring-blue-700`}
+            />
+          ) : (
+            <button
+              key={page.id}
+              onClick={() => onSelect(page.id)}
+              onDoubleClick={() => beginEdit(page)}
+              title="Click to switch. Double-click to rename."
+              className={pillClass}
+            >
+              {page.title}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -450,14 +474,19 @@ function TreeNodeRow({
     targetId: string,
     position: "inside" | "before" | "after",
   ) => Promise<void>;
-  onAddChild: (parentId: string | null, fallback?: string) => Promise<void>;
-  onAddSibling: (node: TreeNode) => Promise<void>;
+  onAddChild: (
+    parentId: string | null,
+    fallback?: string,
+    sortOrder?: number,
+  ) => Promise<void>;
+  onAddSibling: (node: TreeNode, position: "before" | "after") => Promise<void>;
   onRename: (node: TreeNode, title: string) => Promise<void>;
   onDelete: (node: TreeNode) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(node.title);
   const isDragging = draggedNodeId === node.id;
+  const isRoot = node.parentId === null;
   const dropPosition =
     dropTarget?.nodeId === node.id ? dropTarget.position : null;
   async function save() {
@@ -506,7 +535,7 @@ function TreeNodeRow({
         onDragEnd={onDragEnd}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        className={`relative rounded-2xl border bg-gradient-to-br p-4 shadow-sm transition ${dropPosition === "inside" ? "border-blue-400 from-blue-50 to-white ring-2 ring-blue-200 dark:border-blue-500 dark:from-blue-950/40 dark:to-zinc-950 dark:ring-blue-900/60" : "border-zinc-200 from-white to-zinc-50 hover:border-zinc-300 dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-950 dark:hover:border-zinc-700"}`}
+        className={`group relative rounded-2xl border bg-gradient-to-br p-4 shadow-sm transition ${dropPosition === "inside" ? "border-blue-400 from-blue-50 to-white ring-2 ring-blue-200 dark:border-blue-500 dark:from-blue-950/40 dark:to-zinc-950 dark:ring-blue-900/60" : "border-zinc-200 from-white to-zinc-50 hover:border-zinc-300 dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-950 dark:hover:border-zinc-700"}`}
       >
         <span
           className="absolute -left-3 top-7 h-px w-3 bg-zinc-200 dark:bg-zinc-800"
@@ -538,9 +567,13 @@ function TreeNodeRow({
                 />
               ) : (
                 <button
-                  onDoubleClick={() => setEditing(true)}
-                  className="block max-w-full truncate text-left text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50"
-                  title="Double-click to edit"
+                  type="button"
+                  onClick={() => {
+                    setDraft(node.title);
+                    setEditing(true);
+                  }}
+                  className="block max-w-full truncate rounded-lg px-1 text-left text-lg font-semibold tracking-tight text-zinc-950 transition hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:text-zinc-50 dark:hover:bg-zinc-800 dark:focus:ring-blue-900"
+                  title="Click to edit"
                 >
                   {node.title}
                 </button>
@@ -553,24 +586,46 @@ function TreeNodeRow({
               </p>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1 opacity-80 transition group-hover:opacity-100 focus-within:opacity-100">
+            {!isRoot && (
+              <button
+                type="button"
+                className={iconButtonClass}
+                title="Add sibling before"
+                aria-label="Add sibling before"
+                onClick={() => void onAddSibling(node, "before")}
+              >
+                ←
+              </button>
+            )}
             <button
-              className={`${uiButtonClass} px-2.5 py-1.5 text-xs`}
+              type="button"
+              className={iconButtonClass}
+              title="Add child"
+              aria-label="Add child"
               onClick={() => void onAddChild(node.id, "Child node")}
             >
-              Add child
+              +
             </button>
+            {!isRoot && (
+              <button
+                type="button"
+                className={iconButtonClass}
+                title="Add sibling after"
+                aria-label="Add sibling after"
+                onClick={() => void onAddSibling(node, "after")}
+              >
+                →
+              </button>
+            )}
             <button
-              className={`${uiButtonClass} px-2.5 py-1.5 text-xs`}
-              onClick={() => void onAddSibling(node)}
-            >
-              Add sibling
-            </button>
-            <button
-              className={`${uiDangerButtonClass} px-2.5 py-1.5 text-xs`}
+              type="button"
+              className={`${iconButtonClass} text-red-600 hover:border-red-200 hover:bg-red-50 dark:text-red-300 dark:hover:border-red-900/70 dark:hover:bg-red-950/30`}
+              title={isRoot ? "Root node cannot be deleted" : "Delete node"}
+              aria-label="Delete node"
               onClick={() => void onDelete(node)}
             >
-              Delete
+              −
             </button>
           </div>
         </div>
@@ -601,6 +656,9 @@ function TreeNodeRow({
     </div>
   );
 }
+const iconButtonClass =
+  "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white/80 text-sm font-bold text-zinc-600 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:bg-zinc-800 dark:focus:ring-blue-900";
+
 function compareNode(a: TreeNode, b: TreeNode) {
   return a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt);
 }
