@@ -4,6 +4,7 @@ import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import {
   type DragEvent,
   type PointerEvent,
+  type ReactNode,
   useEffect,
   useMemo,
   useRef,
@@ -47,6 +48,8 @@ type DeleteIntent = {
   hasChildren: boolean;
   hasSiblings: boolean;
 };
+const DEFAULT_ZOOM_LIMITS = { min: 0.5, max: 1.75 } as const;
+const FULL_SCREEN_ZOOM_LIMITS = { min: 0.18, max: 3.25 } as const;
 
 export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
   const [pages, setPages] = useState(initialPages);
@@ -62,6 +65,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
   const [createIntent, setCreateIntent] = useState<CreateIntent | null>(null);
   const [deleteIntent, setDeleteIntent] = useState<DeleteIntent | null>(null);
   const [zoom, setZoom] = useState(1);
+  const zoomLimits = isFullScreen ? FULL_SCREEN_ZOOM_LIMITS : DEFAULT_ZOOM_LIMITS;
   const activePage =
     pages.find((page) => page.id === activePageId) ?? pages[0] ?? null;
 
@@ -173,11 +177,16 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
   }
   function updateZoom(delta: number) {
     setZoom((current) =>
-      Math.min(Math.max(Number((current + delta).toFixed(2)), 0.5), 1.6),
+      clampZoom(Number((current + delta).toFixed(2)), zoomLimits),
     );
   }
   function resetZoom() {
     setZoom(1);
+  }
+
+  function exitFullScreen() {
+    setIsFullScreen(false);
+    setZoom((current) => clampZoom(current, DEFAULT_ZOOM_LIMITS));
   }
 
   async function moveNode(
@@ -348,7 +357,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
           <button
             type="button"
             aria-label="Exit full screen"
-            onClick={() => setIsFullScreen(false)}
+            onClick={exitFullScreen}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-red-600 text-lg font-bold leading-none text-white shadow-lg shadow-red-950/20 ring-1 ring-red-500/40 transition hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-300 dark:bg-red-500 dark:hover:bg-red-400"
           >
             ×
@@ -402,14 +411,14 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
               onWheel={(event) => {
                 if (!event.ctrlKey) return;
                 event.preventDefault();
-                updateZoom(event.deltaY > 0 ? -0.08 : 0.08);
+                updateZoom(event.deltaY > 0 ? (isFullScreen ? -0.14 : -0.08) : isFullScreen ? 0.14 : 0.08);
               }}
               className={`${isFullScreen ? "mt-3 h-[calc(100%-4.25rem)]" : "mt-6"} relative rounded-[1.35rem]`}
             >
               <ZoomControls
                 zoom={zoom}
-                onZoomIn={() => updateZoom(0.1)}
-                onZoomOut={() => updateZoom(-0.1)}
+                onZoomIn={() => updateZoom(isFullScreen ? 0.2 : 0.1)}
+                onZoomOut={() => updateZoom(isFullScreen ? -0.2 : -0.1)}
                 onReset={resetZoom}
               />
               <div
@@ -435,6 +444,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                           draggedNodeId={draggedNodeId}
                           dropTarget={dropTarget}
                           allNodes={activePage.nodes}
+                          draggedNodeSize={getDraggedNodeSize(activePage.nodes, draggedNodeId)}
                           onDragStart={setDraggedNodeId}
                           onDragEnd={() => {
                             setDraggedNodeId(null);
@@ -573,6 +583,7 @@ function TreeNodeRow({
   draggedNodeId,
   dropTarget,
   allNodes,
+  draggedNodeSize,
   onDragStart,
   onDragEnd,
   onDropIntent,
@@ -593,6 +604,7 @@ function TreeNodeRow({
     position: "inside" | "before" | "after";
   } | null;
   allNodes: TreeNode[];
+  draggedNodeSize: { width: number; height: number } | null;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
   onDropIntent: (
@@ -632,6 +644,7 @@ function TreeNodeRow({
     (draggedNodeId === node.id ||
       Boolean(draggedNodeId && isDescendant(allNodes, node.id, draggedNodeId)));
   const showDropZones = Boolean(draggedNodeId) && !isDragging;
+  const childDropActive = dropPosition === "inside";
   async function save() {
     const title = draft.trim();
     setEditing(false);
@@ -723,7 +736,6 @@ function TreeNodeRow({
     <div
       className={`relative flex shrink-0 flex-col items-center ${isDragging ? "opacity-45" : ""}`}
     >
-      {dropPosition === "before" && <DropPlaceholder label="Before sibling" />}
       <article
         draggable={!editing && !isRoot}
         onDragStart={(event) => {
@@ -738,14 +750,19 @@ function TreeNodeRow({
           width: `clamp(220px, calc(100vw - 3rem), ${sizeDraft.width}px)`,
           minHeight: sizeDraft.height,
         }}
-        className={`group relative flex flex-col overflow-visible rounded-[1.35rem] border p-3 shadow-lg ring-1 transition-[border,box-shadow,transform] duration-200 sm:p-4 ${cardTone} ${isInvalidDropTarget ? "cursor-no-drop" : ""} ${dropPosition === "inside" ? "scale-[1.02] border-blue-400 ring-4 ring-blue-300/45 dark:ring-blue-500/30" : ""}`}
+        className={`group relative flex flex-col overflow-visible rounded-[1.35rem] border p-3 shadow-lg ring-1 transition-[border,box-shadow,transform] duration-200 sm:p-4 ${cardTone} ${isInvalidDropTarget ? "cursor-no-drop border-red-300 ring-4 ring-red-200/70 dark:border-red-700 dark:ring-red-950/50" : ""} ${dropPosition === "inside" ? "scale-[1.02] border-blue-400 ring-4 ring-blue-300/45 dark:ring-blue-500/30" : ""}`}
       >
         {showDropZones && (
-          <div className="pointer-events-none absolute inset-2 z-20 grid grid-cols-3 grid-rows-[1fr_2.7rem] gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          <div className={`pointer-events-none absolute inset-2 z-20 grid grid-cols-3 grid-rows-[1fr_2.7rem] gap-1 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 ${isInvalidDropTarget ? "opacity-100" : "opacity-0"}`}>
             <div className="rounded-2xl border border-dashed border-blue-300/80 bg-blue-500/5" />
             <div className="rounded-2xl border border-dashed border-emerald-300/80 bg-emerald-500/5" />
             <div className="rounded-2xl border border-dashed border-blue-300/80 bg-blue-500/5" />
             <div className="col-span-3 rounded-2xl border border-dashed border-purple-300/80 bg-purple-500/10" />
+            {isInvalidDropTarget && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-2xl border border-dashed border-red-300 bg-red-50/80 text-xs font-bold uppercase tracking-[0.16em] text-red-700 dark:border-red-700 dark:bg-red-950/50 dark:text-red-200">
+                Cannot drop here
+              </div>
+            )}
           </div>
         )}
         <span
@@ -927,11 +944,7 @@ function TreeNodeRow({
           />
         )}
       </article>
-      {dropPosition === "inside" && (
-        <DropPlaceholder label="Add as child" child />
-      )}
-      {dropPosition === "after" && <DropPlaceholder label="After sibling" />}
-      {node.children.length > 0 && (
+      {(node.children.length > 0 || childDropActive) && (
         <div className="relative mt-12 flex items-start justify-center gap-6 pt-6 sm:gap-8">
           <span
             className="absolute -top-12 left-1/2 h-12 w-px -translate-x-1/2 bg-slate-300 dark:bg-slate-700"
@@ -947,8 +960,16 @@ function TreeNodeRow({
               aria-hidden="true"
             />
           )}
+          {childDropActive && (
+            <ChildBranch>
+              <DropPlaceholder label="Drop here" size={draggedNodeSize} />
+            </ChildBranch>
+          )}
           {node.children.map((child) => (
             <div key={child.id} className="relative flex justify-center">
+              {dropTarget?.nodeId === child.id && dropTarget.position === "before" && (
+                <DropPlaceholder label="Drop here" size={draggedNodeSize} sibling />
+              )}
               <span
                 className="absolute -top-6 left-1/2 h-6 w-px -translate-x-1/2 bg-slate-300 dark:bg-slate-700"
                 aria-hidden="true"
@@ -958,6 +979,7 @@ function TreeNodeRow({
                 draggedNodeId={draggedNodeId}
                 dropTarget={dropTarget}
                 allNodes={allNodes}
+                draggedNodeSize={draggedNodeSize}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 onDropIntent={onDropIntent}
@@ -971,6 +993,9 @@ function TreeNodeRow({
                 onResize={onResize}
                 onDelete={onDelete}
               />
+              {dropTarget?.nodeId === child.id && dropTarget.position === "after" && (
+                <DropPlaceholder label="Drop here" size={draggedNodeSize} sibling />
+              )}
             </div>
           ))}
         </div>
@@ -981,17 +1006,37 @@ function TreeNodeRow({
 
 function DropPlaceholder({
   label,
-  child = false,
+  size,
+  sibling = false,
 }: {
   label: string;
-  child?: boolean;
+  size: { width: number; height: number } | null;
+  sibling?: boolean;
 }) {
+  const width = size?.width ?? 240;
+  const height = size?.height ?? 160;
   return (
     <div
-      className={`${child ? "mt-3" : "my-3"} flex h-14 w-56 items-center justify-center rounded-[1.15rem] border border-dashed border-blue-300/90 bg-blue-50/80 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-blue-700 shadow-sm shadow-blue-500/10 ring-4 ring-blue-100/70 dark:border-blue-700/80 dark:bg-blue-950/35 dark:text-blue-200 dark:ring-blue-950/40`}
+      className={`${sibling ? "mx-2" : ""} flex shrink-0 items-center justify-center rounded-[1.15rem] border-2 border-dashed border-blue-300/90 bg-blue-50/80 px-4 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-blue-700 shadow-sm shadow-blue-500/10 ring-4 ring-blue-100/70 transition-all dark:border-blue-700/80 dark:bg-blue-950/35 dark:text-blue-200 dark:ring-blue-950/40`}
+      style={{
+        width: `clamp(220px, calc(100vw - 3rem), ${width}px)`,
+        minHeight: Math.max(height, 140),
+      }}
       aria-hidden="true"
     >
       {label}
+    </div>
+  );
+}
+
+function ChildBranch({ children }: { children: ReactNode }) {
+  return (
+    <div className="relative flex justify-center">
+      <span
+        className="absolute -top-6 left-1/2 h-6 w-px -translate-x-1/2 bg-slate-300 dark:bg-slate-700"
+        aria-hidden="true"
+      />
+      {children}
     </div>
   );
 }
@@ -1292,4 +1337,15 @@ function reindexedOrder(
       parentId,
     });
   return new Map(ordered.map((item, order) => [item.id, order]));
+}
+
+function clampZoom(value: number, limits: { min: number; max: number }) {
+  return Math.min(Math.max(value, limits.min), limits.max);
+}
+
+function getDraggedNodeSize(nodes: TreeNode[], draggedNodeId: string | null) {
+  if (!draggedNodeId) return null;
+  const node = nodes.find((item) => item.id === draggedNodeId);
+  if (!node) return null;
+  return { width: node.width || 240, height: node.height || 160 };
 }
