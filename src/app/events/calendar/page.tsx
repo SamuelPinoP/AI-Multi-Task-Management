@@ -51,6 +51,11 @@ export default function EventsCalendarPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDayKey, setSelectedDayKey] = useState(() => formatDayKey(new Date()));
+  const [mobileRangeStart, setMobileRangeStart] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -152,6 +157,21 @@ export default function EventsCalendarPage() {
     );
   }, [eventsByDay, selectedDayKey]);
 
+  const mobileDays = useMemo(() => {
+    return Array.from({ length: 3 }, (_, index) => {
+      const day = new Date(mobileRangeStart);
+      day.setDate(day.getDate() + index);
+      return day;
+    });
+  }, [mobileRangeStart]);
+
+  const mobileRangeLabel = useMemo(() => {
+    const start = mobileDays[0];
+    const end = mobileDays[mobileDays.length - 1];
+    const formatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+    return `${formatter.format(start)} – ${formatter.format(end)}`;
+  }, [mobileDays]);
+
   const selectedDayLabel = useMemo(() => {
     const [year, monthNum, day] = selectedDayKey.split("-").map(Number);
     return new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(
@@ -202,7 +222,7 @@ export default function EventsCalendarPage() {
                 year: "numeric",
               }).format(month)}
             </h2>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <select
                 value={projectFilter}
                 onChange={(e) => setProjectFilter(e.target.value)}
@@ -233,6 +253,70 @@ export default function EventsCalendarPage() {
 
           <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
             <div>
+              <div className="mb-4 flex items-center justify-between gap-3 sm:hidden">
+                <button
+                  type="button"
+                  onClick={() => setMobileRangeStart((prev) => { const next = new Date(prev); next.setDate(next.getDate() - 3); return next; })}
+                  className={uiButtonClass}
+                >
+                  Previous 3 days
+                </button>
+                <p className="text-center text-sm font-semibold text-zinc-600 dark:text-zinc-300">{mobileRangeLabel}</p>
+                <button
+                  type="button"
+                  onClick={() => setMobileRangeStart((prev) => { const next = new Date(prev); next.setDate(next.getDate() + 3); return next; })}
+                  className={uiButtonClass}
+                >
+                  Next 3 days
+                </button>
+              </div>
+
+              <div className="grid gap-3 sm:hidden">
+                {mobileDays.map((day) => {
+                  const dayKey = formatDayKey(day);
+                  const isToday = dayKey === formatDayKey(new Date());
+                  const isSelected = dayKey === selectedDayKey;
+                  const dayEvents = eventsByDay[dayKey] ?? [];
+                  return (
+                    <button
+                      key={dayKey}
+                      type="button"
+                      onClick={() => { setSelectedDayKey(dayKey); setMonth(new Date(day.getFullYear(), day.getMonth(), 1)); }}
+                      className={`w-full rounded-2xl border p-4 text-left transition ${
+                        isSelected
+                          ? "border-black bg-zinc-100 dark:bg-zinc-800"
+                          : "border-zinc-200 bg-white/80 hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900/60"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                            {new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(day)}
+                          </p>
+                          <p className={`mt-1 text-2xl font-bold ${isToday ? "text-blue-600 dark:text-blue-300" : ""}`}>
+                            {new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(day)}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-zinc-950 px-2.5 py-1 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-zinc-950">
+                          {dayEvents.length} {dayEvents.length === 1 ? "event" : "events"}
+                        </span>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {dayEvents.slice(0, 3).map((event) => (
+                          <p key={event.id} className="truncate rounded-xl bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                            {event.hasStartTime ? formatTime(event.startTime) : "No time"} {event.title}
+                          </p>
+                        ))}
+                        {dayEvents.length === 0 && (
+                          <p className="rounded-xl border border-dashed border-zinc-200 px-3 py-3 text-sm text-zinc-500 dark:border-zinc-700">No events.</p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="hidden sm:block">
               <div className="mb-3 grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500">
                 {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
                   <span key={day}>{day}</span>
@@ -295,6 +379,7 @@ export default function EventsCalendarPage() {
                     </button>
                   );
                 })}
+              </div>
               </div>
             </div>
 
