@@ -376,7 +376,11 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
           </div>
         ) : (
           <>
-            <div className="flex justify-end border-b border-zinc-200 pb-3 dark:border-zinc-800">
+            <div className="flex flex-col gap-3 border-b border-zinc-200 pb-3 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between">
+              <p className="rounded-2xl border border-blue-200/80 bg-blue-50/80 px-3 py-2 text-xs font-medium leading-5 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200 sm:hidden">
+                Rotate your device or use full-screen mode for the best tree
+                editing experience.
+              </p>
               {!isFullScreen && (
                 <button
                   onClick={() => setIsFullScreen(true)}
@@ -409,7 +413,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                 onReset={resetZoom}
               />
               <div
-                className={`${isFullScreen ? "h-full" : "max-h-[70vh]"} overflow-auto rounded-[1.35rem] bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_32%),linear-gradient(rgba(148,163,184,0.10)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.10)_1px,transparent_1px)] bg-[length:auto,32px_32px,32px_32px] p-4 pr-16 dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_34%),linear-gradient(rgba(71,85,105,0.22)_1px,transparent_1px),linear-gradient(90deg,rgba(71,85,105,0.22)_1px,transparent_1px)] sm:p-6 sm:pr-20`}
+                className={`${isFullScreen ? "h-full" : "max-h-[72vh] sm:max-h-[70vh]"} overscroll-contain overflow-auto rounded-[1.35rem] bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_32%),linear-gradient(rgba(148,163,184,0.10)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.10)_1px,transparent_1px)] bg-[length:auto,32px_32px,32px_32px] p-3 pr-14 dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_34%),linear-gradient(rgba(71,85,105,0.22)_1px,transparent_1px),linear-gradient(90deg,rgba(71,85,105,0.22)_1px,transparent_1px)] sm:p-6 sm:pr-20`}
               >
                 {tree.length === 0 ? (
                   <p className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/70 p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950/40">
@@ -417,19 +421,20 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                   </p>
                 ) : (
                   <div
-                    className="inline-flex min-w-full origin-top justify-center pb-8 transition-transform"
+                    className="inline-flex min-w-[max(100%,56rem)] origin-top justify-center pb-12 transition-transform sm:min-w-full"
                     style={{
                       transform: `scale(${zoom})`,
                       transformOrigin: "top center",
                     }}
                   >
-                    <div className="flex min-w-max items-start justify-center gap-8">
+                    <div className="flex min-w-max items-start justify-center gap-5 sm:gap-8">
                       {tree.map((node) => (
                         <TreeNodeRow
                           key={node.id}
                           node={node}
                           draggedNodeId={draggedNodeId}
                           dropTarget={dropTarget}
+                          allNodes={activePage.nodes}
                           onDragStart={setDraggedNodeId}
                           onDragEnd={() => {
                             setDraggedNodeId(null);
@@ -519,8 +524,8 @@ function TreePageSwitcher({
   }
 
   return (
-    <div className="rounded-[1.5rem] border border-zinc-200/80 bg-white/85 p-3 shadow-sm shadow-zinc-200/60 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/75 dark:shadow-none">
-      <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:overflow-x-auto sm:pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+    <div className="rounded-[1.5rem] border border-zinc-200/80 bg-white/85 p-2.5 shadow-sm shadow-zinc-200/60 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/75 dark:shadow-none sm:p-3">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <button
           onClick={() => void onCreate()}
           className={`${uiPrimaryButtonClass} shrink-0 shadow-sm`}
@@ -529,7 +534,7 @@ function TreePageSwitcher({
         </button>
         {pages.map((page) => {
           const selected = activePage?.id === page.id;
-          const pillClass = `max-w-full shrink-0 truncate rounded-full border px-4 py-2 text-sm font-semibold transition sm:max-w-56 ${selected ? "border-zinc-950 bg-zinc-950 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950" : "border-zinc-200 bg-white/90 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950/80 dark:text-zinc-200 dark:hover:bg-zinc-900"}`;
+          const pillClass = `max-w-[12rem] shrink-0 truncate rounded-full border px-3 py-2 text-sm font-semibold transition sm:max-w-56 sm:px-4 ${selected ? "border-zinc-950 bg-zinc-950 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950" : "border-zinc-200 bg-white/90 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950/80 dark:text-zinc-200 dark:hover:bg-zinc-900"}`;
           return editingPageId === page.id ? (
             <input
               key={page.id}
@@ -567,6 +572,7 @@ function TreeNodeRow({
   node,
   draggedNodeId,
   dropTarget,
+  allNodes,
   onDragStart,
   onDragEnd,
   onDropIntent,
@@ -586,6 +592,7 @@ function TreeNodeRow({
     nodeId: string;
     position: "inside" | "before" | "after";
   } | null;
+  allNodes: TreeNode[];
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
   onDropIntent: (
@@ -620,6 +627,11 @@ function TreeNodeRow({
   const isRoot = node.parentId === null;
   const dropPosition =
     dropTarget?.nodeId === node.id ? dropTarget.position : null;
+  const isInvalidDropTarget =
+    Boolean(draggedNodeId) &&
+    (draggedNodeId === node.id ||
+      Boolean(draggedNodeId && isDescendant(allNodes, node.id, draggedNodeId)));
+  const showDropZones = Boolean(draggedNodeId) && !isDragging;
   async function save() {
     const title = draft.trim();
     setEditing(false);
@@ -627,21 +639,29 @@ function TreeNodeRow({
     else setDraft(node.title);
   }
   function handleDragOver(event: DragEvent<HTMLElement>) {
-    if (!draggedNodeId || draggedNodeId === node.id) return;
+    if (!draggedNodeId) return;
+    if (draggedNodeId === node.id || isInvalidDropTarget) {
+      event.dataTransfer.dropEffect = "none";
+      return;
+    }
     event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
     const rect = event.currentTarget.getBoundingClientRect();
-    const offset = event.clientY - rect.top;
+    const xOffset = event.clientX - rect.left;
+    const yOffset = event.clientY - rect.top;
     const position =
-      offset < rect.height * 0.25
-        ? "before"
-        : offset > rect.height * 0.75
-          ? "after"
-          : "inside";
+      yOffset > rect.height * 0.62
+        ? "inside"
+        : xOffset < rect.width * 0.36
+          ? "before"
+          : xOffset > rect.width * 0.64
+            ? "after"
+            : "inside";
     onDropIntent(node.id, position);
   }
   function handleDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
-    if (draggedNodeId && draggedNodeId !== node.id)
+    if (draggedNodeId && draggedNodeId !== node.id && !isInvalidDropTarget)
       void onMove(node.id, dropPosition ?? "inside");
     onDragEnd();
   }
@@ -703,9 +723,7 @@ function TreeNodeRow({
     <div
       className={`relative flex shrink-0 flex-col items-center ${isDragging ? "opacity-45" : ""}`}
     >
-      {dropPosition === "before" && (
-        <div className="mb-3 h-1 w-48 rounded-full bg-blue-500 shadow-sm shadow-blue-500/40" />
-      )}
+      {dropPosition === "before" && <DropPlaceholder label="Before sibling" />}
       <article
         draggable={!editing && !isRoot}
         onDragStart={(event) => {
@@ -716,9 +734,20 @@ function TreeNodeRow({
         onDragEnd={onDragEnd}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        style={{ width: sizeDraft.width, minHeight: sizeDraft.height }}
-        className={`group relative flex flex-col overflow-visible rounded-[1.35rem] border p-4 shadow-lg ring-1 transition-[border,box-shadow,transform] duration-200 ${cardTone} ${dropPosition === "inside" ? "scale-[1.02] border-blue-400 ring-4 ring-blue-300/45 dark:ring-blue-500/30" : ""}`}
+        style={{
+          width: `clamp(220px, calc(100vw - 3rem), ${sizeDraft.width}px)`,
+          minHeight: sizeDraft.height,
+        }}
+        className={`group relative flex flex-col overflow-visible rounded-[1.35rem] border p-3 shadow-lg ring-1 transition-[border,box-shadow,transform] duration-200 sm:p-4 ${cardTone} ${isInvalidDropTarget ? "cursor-no-drop" : ""} ${dropPosition === "inside" ? "scale-[1.02] border-blue-400 ring-4 ring-blue-300/45 dark:ring-blue-500/30" : ""}`}
       >
+        {showDropZones && (
+          <div className="pointer-events-none absolute inset-2 z-20 grid grid-cols-3 grid-rows-[1fr_2.7rem] gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            <div className="rounded-2xl border border-dashed border-blue-300/80 bg-blue-500/5" />
+            <div className="rounded-2xl border border-dashed border-emerald-300/80 bg-emerald-500/5" />
+            <div className="rounded-2xl border border-dashed border-blue-300/80 bg-blue-500/5" />
+            <div className="col-span-3 rounded-2xl border border-dashed border-purple-300/80 bg-purple-500/10" />
+          </div>
+        )}
         <span
           className={`absolute inset-x-0 top-0 h-1.5 rounded-t-[1.35rem] ${accentTone}`}
           aria-hidden="true"
@@ -898,9 +927,10 @@ function TreeNodeRow({
           />
         )}
       </article>
-      {dropPosition === "after" && (
-        <div className="mt-3 h-1 w-48 rounded-full bg-blue-500 shadow-sm shadow-blue-500/40" />
+      {dropPosition === "inside" && (
+        <DropPlaceholder label="Add as child" child />
       )}
+      {dropPosition === "after" && <DropPlaceholder label="After sibling" />}
       {node.children.length > 0 && (
         <div className="relative mt-12 flex items-start justify-center gap-6 pt-6 sm:gap-8">
           <span
@@ -927,6 +957,7 @@ function TreeNodeRow({
                 node={child}
                 draggedNodeId={draggedNodeId}
                 dropTarget={dropTarget}
+                allNodes={allNodes}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 onDropIntent={onDropIntent}
@@ -944,6 +975,23 @@ function TreeNodeRow({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function DropPlaceholder({
+  label,
+  child = false,
+}: {
+  label: string;
+  child?: boolean;
+}) {
+  return (
+    <div
+      className={`${child ? "mt-3" : "my-3"} flex h-14 w-56 items-center justify-center rounded-[1.15rem] border border-dashed border-blue-300/90 bg-blue-50/80 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-blue-700 shadow-sm shadow-blue-500/10 ring-4 ring-blue-100/70 dark:border-blue-700/80 dark:bg-blue-950/35 dark:text-blue-200 dark:ring-blue-950/40`}
+      aria-hidden="true"
+    >
+      {label}
     </div>
   );
 }
@@ -1086,7 +1134,7 @@ function ZoomControls({
   onReset: () => void;
 }) {
   return (
-    <div className="absolute right-2 top-2 z-40 flex flex-col items-center gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1.5 text-zinc-700 shadow-lg shadow-zinc-950/10 backdrop-blur dark:border-zinc-700 dark:bg-zinc-950/85 dark:text-zinc-200 sm:right-3 sm:top-3">
+    <div className="absolute bottom-2 right-2 z-40 flex items-center gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1 text-zinc-700 shadow-lg shadow-zinc-950/10 backdrop-blur dark:border-zinc-700 dark:bg-zinc-950/85 dark:text-zinc-200 sm:bottom-auto sm:right-3 sm:top-3 sm:flex-col sm:p-1.5">
       <button
         type="button"
         onClick={onZoomIn}
@@ -1109,7 +1157,7 @@ function ZoomControls({
       <button
         type="button"
         onClick={onReset}
-        className="mt-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+        className="rounded-lg px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 sm:mt-1"
         aria-label="Reset zoom"
       >
         Reset
@@ -1119,7 +1167,7 @@ function ZoomControls({
 }
 
 const zoomButtonClass =
-  "flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-base font-black shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-blue-800 dark:hover:bg-blue-950/40 dark:hover:text-blue-300";
+  "flex h-7 w-7 items-center justify-center rounded-xl border border-zinc-200 bg-white text-sm font-black shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-blue-800 dark:hover:bg-blue-950/40 dark:hover:text-blue-300 sm:h-8 sm:w-8 sm:text-base";
 
 function ColorPalette({
   selected,
