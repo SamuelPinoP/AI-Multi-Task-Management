@@ -400,7 +400,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                 event.preventDefault();
                 updateZoom(event.deltaY > 0 ? -0.08 : 0.08);
               }}
-              className={`${isFullScreen ? "mt-3 h-[calc(100%-4.25rem)]" : "mt-6 max-h-[70vh]"} relative overflow-auto rounded-[1.35rem] bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_32%),linear-gradient(rgba(148,163,184,0.10)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.10)_1px,transparent_1px)] bg-[length:auto,32px_32px,32px_32px] p-4 dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_34%),linear-gradient(rgba(71,85,105,0.22)_1px,transparent_1px),linear-gradient(90deg,rgba(71,85,105,0.22)_1px,transparent_1px)] sm:p-6`}
+              className={`${isFullScreen ? "mt-3 h-[calc(100%-4.25rem)]" : "mt-6"} relative rounded-[1.35rem]`}
             >
               <ZoomControls
                 zoom={zoom}
@@ -408,59 +408,63 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                 onZoomOut={() => updateZoom(-0.1)}
                 onReset={resetZoom}
               />
-              {tree.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/70 p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950/40">
-                  This page is preparing its root node.
-                </p>
-              ) : (
-                <div
-                  className="inline-flex min-w-full origin-top justify-center pb-8 transition-transform"
-                  style={{
-                    transform: `scale(${zoom})`,
-                    transformOrigin: "top center",
-                  }}
-                >
-                  <div className="flex min-w-max items-start justify-center gap-8">
-                    {tree.map((node) => (
-                      <TreeNodeRow
-                        key={node.id}
-                        node={node}
-                        draggedNodeId={draggedNodeId}
-                        dropTarget={dropTarget}
-                        onDragStart={setDraggedNodeId}
-                        onDragEnd={() => {
-                          setDraggedNodeId(null);
-                          setDropTarget(null);
-                        }}
-                        onDropIntent={(nodeId, position) =>
-                          setDropTarget({ nodeId, position })
-                        }
-                        onMove={(targetId, position) =>
-                          draggedNodeId
-                            ? moveNode(draggedNodeId, targetId, position)
-                            : Promise.resolve()
-                        }
-                        createIntent={createIntent}
-                        onCreateIntent={setCreateIntent}
-                        onCreateNode={addNode}
-                        onRename={(item, title) =>
-                          patchNode(item.id, { title })
-                        }
-                        onColorChange={(item, color) =>
-                          patchNodeColor(item.id, color)
-                        }
-                        onDescriptionChange={(item, description) =>
-                          patchNode(item.id, { description })
-                        }
-                        onResize={(item, width, height) =>
-                          patchNode(item.id, { width, height })
-                        }
-                        onDelete={requestDeleteNode}
-                      />
-                    ))}
+              <div
+                className={`${isFullScreen ? "h-full" : "max-h-[70vh]"} overflow-auto rounded-[1.35rem] bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_32%),linear-gradient(rgba(148,163,184,0.10)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.10)_1px,transparent_1px)] bg-[length:auto,32px_32px,32px_32px] p-4 pr-16 dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_34%),linear-gradient(rgba(71,85,105,0.22)_1px,transparent_1px),linear-gradient(90deg,rgba(71,85,105,0.22)_1px,transparent_1px)] sm:p-6 sm:pr-20`}
+              >
+                {tree.length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/70 p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950/40">
+                    This page is preparing its root node.
+                  </p>
+                ) : (
+                  <div
+                    className="inline-flex min-w-full origin-top justify-center pb-8 transition-transform"
+                    style={{
+                      transform: `scale(${zoom})`,
+                      transformOrigin: "top center",
+                    }}
+                  >
+                    <div className="flex min-w-max items-start justify-center gap-8">
+                      {tree.map((node) => (
+                        <TreeNodeRow
+                          key={node.id}
+                          node={node}
+                          draggedNodeId={draggedNodeId}
+                          dropTarget={dropTarget}
+                          onDragStart={setDraggedNodeId}
+                          onDragEnd={() => {
+                            setDraggedNodeId(null);
+                            setDropTarget(null);
+                          }}
+                          onDropIntent={(nodeId, position) =>
+                            setDropTarget({ nodeId, position })
+                          }
+                          onMove={(targetId, position) =>
+                            draggedNodeId
+                              ? moveNode(draggedNodeId, targetId, position)
+                              : Promise.resolve()
+                          }
+                          createIntent={createIntent}
+                          onCreateIntent={setCreateIntent}
+                          onCreateNode={addNode}
+                          onRename={(item, title) =>
+                            patchNode(item.id, { title })
+                          }
+                          onColorChange={(item, color) =>
+                            patchNodeColor(item.id, color)
+                          }
+                          onDescriptionChange={(item, description) =>
+                            patchNode(item.id, { description })
+                          }
+                          onResize={(item, width, height) =>
+                            patchNode(item.id, { width, height })
+                          }
+                          onDelete={requestDeleteNode}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </>
         )}
@@ -1082,7 +1086,7 @@ function ZoomControls({
   onReset: () => void;
 }) {
   return (
-    <div className="sticky left-3 top-3 z-30 float-right flex flex-col items-center gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1.5 text-zinc-700 shadow-lg shadow-zinc-950/10 backdrop-blur dark:border-zinc-700 dark:bg-zinc-950/85 dark:text-zinc-200">
+    <div className="absolute right-2 top-2 z-40 flex flex-col items-center gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1.5 text-zinc-700 shadow-lg shadow-zinc-950/10 backdrop-blur dark:border-zinc-700 dark:bg-zinc-950/85 dark:text-zinc-200 sm:right-3 sm:top-3">
       <button
         type="button"
         onClick={onZoomIn}
