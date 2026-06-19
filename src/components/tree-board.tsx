@@ -49,7 +49,7 @@ type DeleteIntent = {
   hasSiblings: boolean;
 };
 const DEFAULT_ZOOM_LIMITS = { min: 0.5, max: 1.75 } as const;
-const FULL_SCREEN_ZOOM_LIMITS = { min: 0.18, max: 3.25 } as const;
+const FULL_SCREEN_ZOOM_LIMITS = { min: 0, max: 3.25 } as const;
 
 export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
   const [pages, setPages] = useState(initialPages);
@@ -65,7 +65,9 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
   const [createIntent, setCreateIntent] = useState<CreateIntent | null>(null);
   const [deleteIntent, setDeleteIntent] = useState<DeleteIntent | null>(null);
   const [zoom, setZoom] = useState(1);
-  const zoomLimits = isFullScreen ? FULL_SCREEN_ZOOM_LIMITS : DEFAULT_ZOOM_LIMITS;
+  const zoomLimits = isFullScreen
+    ? FULL_SCREEN_ZOOM_LIMITS
+    : DEFAULT_ZOOM_LIMITS;
   const activePage =
     pages.find((page) => page.id === activePageId) ?? pages[0] ?? null;
 
@@ -393,7 +395,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
               {!isFullScreen && (
                 <button
                   onClick={() => setIsFullScreen(true)}
-                  className={uiButtonClass}
+                  className={`${uiButtonClass} self-end sm:ml-auto`}
                 >
                   Full screen
                 </button>
@@ -411,7 +413,15 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
               onWheel={(event) => {
                 if (!event.ctrlKey) return;
                 event.preventDefault();
-                updateZoom(event.deltaY > 0 ? (isFullScreen ? -0.14 : -0.08) : isFullScreen ? 0.14 : 0.08);
+                updateZoom(
+                  event.deltaY > 0
+                    ? isFullScreen
+                      ? -0.14
+                      : -0.08
+                    : isFullScreen
+                      ? 0.14
+                      : 0.08,
+                );
               }}
               className={`${isFullScreen ? "mt-3 h-[calc(100%-4.25rem)]" : "mt-6"} relative rounded-[1.35rem]`}
             >
@@ -444,7 +454,10 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                           draggedNodeId={draggedNodeId}
                           dropTarget={dropTarget}
                           allNodes={activePage.nodes}
-                          draggedNodeSize={getDraggedNodeSize(activePage.nodes, draggedNodeId)}
+                          draggedNodeSize={getDraggedNodeSize(
+                            activePage.nodes,
+                            draggedNodeId,
+                          )}
                           onDragStart={setDraggedNodeId}
                           onDragEnd={() => {
                             setDraggedNodeId(null);
@@ -645,6 +658,36 @@ function TreeNodeRow({
       Boolean(draggedNodeId && isDescendant(allNodes, node.id, draggedNodeId)));
   const showDropZones = Boolean(draggedNodeId) && !isDragging;
   const childDropActive = dropPosition === "inside";
+  const siblingDropActive =
+    dropPosition === "before" || dropPosition === "after";
+  const allowSiblingDrop = showDropZones && !isRoot && !isInvalidDropTarget;
+  function handleDropIntent(
+    event: DragEvent<HTMLElement>,
+    position: "inside" | "before" | "after",
+  ) {
+    if (!draggedNodeId || draggedNodeId === node.id || isInvalidDropTarget) {
+      event.dataTransfer.dropEffect = "none";
+      return;
+    }
+    if ((position === "before" || position === "after") && isRoot) {
+      event.dataTransfer.dropEffect = "none";
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+    onDropIntent(node.id, position);
+  }
+  function handleDropOnZone(
+    event: DragEvent<HTMLElement>,
+    position: "inside" | "before" | "after",
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (draggedNodeId && draggedNodeId !== node.id && !isInvalidDropTarget)
+      void onMove(node.id, position);
+    onDragEnd();
+  }
   async function save() {
     const title = draft.trim();
     setEditing(false);
@@ -659,18 +702,7 @@ function TreeNodeRow({
     }
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
-    const rect = event.currentTarget.getBoundingClientRect();
-    const xOffset = event.clientX - rect.left;
-    const yOffset = event.clientY - rect.top;
-    const position =
-      yOffset > rect.height * 0.62
-        ? "inside"
-        : xOffset < rect.width * 0.36
-          ? "before"
-          : xOffset > rect.width * 0.64
-            ? "after"
-            : "inside";
-    onDropIntent(node.id, position);
+    onDropIntent(node.id, "inside");
   }
   function handleDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
@@ -753,17 +785,45 @@ function TreeNodeRow({
         className={`group relative flex flex-col overflow-visible rounded-[1.35rem] border p-3 shadow-lg ring-1 transition-[border,box-shadow,transform] duration-200 sm:p-4 ${cardTone} ${isInvalidDropTarget ? "cursor-no-drop border-red-300 ring-4 ring-red-200/70 dark:border-red-700 dark:ring-red-950/50" : ""} ${dropPosition === "inside" ? "scale-[1.02] border-blue-400 ring-4 ring-blue-300/45 dark:ring-blue-500/30" : ""}`}
       >
         {showDropZones && (
-          <div className={`pointer-events-none absolute inset-2 z-20 grid grid-cols-3 grid-rows-[1fr_2.7rem] gap-1 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 ${isInvalidDropTarget ? "opacity-100" : "opacity-0"}`}>
-            <div className="rounded-2xl border border-dashed border-blue-300/80 bg-blue-500/5" />
-            <div className="rounded-2xl border border-dashed border-emerald-300/80 bg-emerald-500/5" />
-            <div className="rounded-2xl border border-dashed border-blue-300/80 bg-blue-500/5" />
-            <div className="col-span-3 rounded-2xl border border-dashed border-purple-300/80 bg-purple-500/10" />
+          <div
+            className={`pointer-events-none absolute inset-2 z-20 rounded-2xl border-2 border-dashed transition ${
+              childDropActive
+                ? "border-emerald-400 bg-emerald-500/10 ring-4 ring-emerald-200/70 dark:ring-emerald-950/50"
+                : siblingDropActive
+                  ? "border-blue-300/60 bg-blue-500/5"
+                  : "border-emerald-300/70 bg-emerald-500/5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+            }`}
+          >
+            {!isInvalidDropTarget && childDropActive && (
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-600 px-3 py-1 text-[0.65rem] font-black uppercase tracking-[0.16em] text-white shadow-sm">
+                Drop as child
+              </span>
+            )}
             {isInvalidDropTarget && (
               <div className="absolute inset-0 flex items-center justify-center rounded-2xl border border-dashed border-red-300 bg-red-50/80 text-xs font-bold uppercase tracking-[0.16em] text-red-700 dark:border-red-700 dark:bg-red-950/50 dark:text-red-200">
                 Cannot drop here
               </div>
             )}
           </div>
+        )}
+
+        {allowSiblingDrop && (
+          <>
+            <SiblingDropZone
+              active={dropPosition === "before"}
+              label="Drop before"
+              side="left"
+              onDragOver={(event) => handleDropIntent(event, "before")}
+              onDrop={(event) => handleDropOnZone(event, "before")}
+            />
+            <SiblingDropZone
+              active={dropPosition === "after"}
+              label="Drop after"
+              side="right"
+              onDragOver={(event) => handleDropIntent(event, "after")}
+              onDrop={(event) => handleDropOnZone(event, "after")}
+            />
+          </>
         )}
         <span
           className={`absolute inset-x-0 top-0 h-1.5 rounded-t-[1.35rem] ${accentTone}`}
@@ -967,9 +1027,14 @@ function TreeNodeRow({
           )}
           {node.children.map((child) => (
             <div key={child.id} className="relative flex justify-center">
-              {dropTarget?.nodeId === child.id && dropTarget.position === "before" && (
-                <DropPlaceholder label="Drop here" size={draggedNodeSize} sibling />
-              )}
+              {dropTarget?.nodeId === child.id &&
+                dropTarget.position === "before" && (
+                  <DropPlaceholder
+                    label="Drop before"
+                    size={draggedNodeSize}
+                    sibling
+                  />
+                )}
               <span
                 className="absolute -top-6 left-1/2 h-6 w-px -translate-x-1/2 bg-slate-300 dark:bg-slate-700"
                 aria-hidden="true"
@@ -993,13 +1058,51 @@ function TreeNodeRow({
                 onResize={onResize}
                 onDelete={onDelete}
               />
-              {dropTarget?.nodeId === child.id && dropTarget.position === "after" && (
-                <DropPlaceholder label="Drop here" size={draggedNodeSize} sibling />
-              )}
+              {dropTarget?.nodeId === child.id &&
+                dropTarget.position === "after" && (
+                  <DropPlaceholder
+                    label="Drop after"
+                    size={draggedNodeSize}
+                    sibling
+                  />
+                )}
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function SiblingDropZone({
+  active,
+  label,
+  side,
+  onDragOver,
+  onDrop,
+}: {
+  active: boolean;
+  label: string;
+  side: "left" | "right";
+  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
+}) {
+  return (
+    <div
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={`${
+        side === "left" ? "-left-8 sm:-left-12" : "-right-8 sm:-right-12"
+      } absolute top-3 z-30 flex h-[calc(100%-1.5rem)] w-14 items-center justify-center rounded-2xl border-2 border-dashed transition sm:w-20 ${
+        active
+          ? "border-blue-500 bg-blue-100/90 text-blue-800 opacity-100 shadow-lg shadow-blue-500/20 ring-4 ring-blue-200/80 dark:bg-blue-950/70 dark:text-blue-100 dark:ring-blue-900/60"
+          : "border-blue-300/80 bg-blue-50/80 text-blue-700 opacity-70 hover:opacity-100 dark:border-blue-700/80 dark:bg-blue-950/40 dark:text-blue-200"
+      }`}
+      aria-label={label}
+    >
+      <span className="-rotate-90 whitespace-nowrap text-[0.65rem] font-black uppercase tracking-[0.18em]">
+        {label}
+      </span>
     </div>
   );
 }
