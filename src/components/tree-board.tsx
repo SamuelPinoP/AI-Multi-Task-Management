@@ -238,26 +238,12 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
         page.id === activePage.id
           ? {
               ...page,
-              nodes: page.nodes
-                .map((item) =>
-                  item.id === nodeId
-                    ? { ...item, parentId: nextParentId, sortOrder: nextIndex }
-                    : item,
-                )
-                .map((item) =>
-                  item.parentId === nextParentId
-                    ? {
-                        ...item,
-                        sortOrder:
-                          reindexedOrder(
-                            page.nodes,
-                            nodeId,
-                            nextParentId,
-                            nextIndex,
-                          ).get(item.id) ?? item.sortOrder,
-                      }
-                    : item,
-                ),
+              nodes: moveNodesOptimistically(
+                page.nodes,
+                nodeId,
+                nextParentId,
+                nextIndex,
+              ),
             }
           : page,
       ),
@@ -656,38 +642,19 @@ function TreeNodeRow({
     Boolean(draggedNodeId) &&
     (draggedNodeId === node.id ||
       Boolean(draggedNodeId && isDescendant(allNodes, node.id, draggedNodeId)));
-  const showDropZones = Boolean(draggedNodeId) && !isDragging;
+  const showDropPreview = Boolean(draggedNodeId) && !isDragging;
   const childDropActive = dropPosition === "inside";
-  const siblingDropActive =
-    dropPosition === "before" || dropPosition === "after";
-  const allowSiblingDrop = showDropZones && !isRoot && !isInvalidDropTarget;
-  function handleDropIntent(
-    event: DragEvent<HTMLElement>,
-    position: "inside" | "before" | "after",
-  ) {
-    if (!draggedNodeId || draggedNodeId === node.id || isInvalidDropTarget) {
-      event.dataTransfer.dropEffect = "none";
-      return;
-    }
-    if ((position === "before" || position === "after") && isRoot) {
-      event.dataTransfer.dropEffect = "none";
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    event.dataTransfer.dropEffect = "move";
-    onDropIntent(node.id, position);
+  function getDropPosition(event: DragEvent<HTMLElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const leftSiblingZone = rect.width * 0.28;
+    const rightSiblingZone = rect.width * 0.72;
+
+    if (!isRoot && x <= leftSiblingZone) return "before" as const;
+    if (!isRoot && x >= rightSiblingZone) return "after" as const;
+    return "inside" as const;
   }
-  function handleDropOnZone(
-    event: DragEvent<HTMLElement>,
-    position: "inside" | "before" | "after",
-  ) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (draggedNodeId && draggedNodeId !== node.id && !isInvalidDropTarget)
-      void onMove(node.id, position);
-    onDragEnd();
-  }
+
   async function save() {
     const title = draft.trim();
     setEditing(false);
@@ -701,13 +668,15 @@ function TreeNodeRow({
       return;
     }
     event.preventDefault();
+    event.stopPropagation();
     event.dataTransfer.dropEffect = "move";
-    onDropIntent(node.id, "inside");
+    onDropIntent(node.id, getDropPosition(event));
   }
   function handleDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
+    event.stopPropagation();
     if (draggedNodeId && draggedNodeId !== node.id && !isInvalidDropTarget)
-      void onMove(node.id, dropPosition ?? "inside");
+      void onMove(node.id, dropPosition ?? getDropPosition(event));
     onDragEnd();
   }
   async function saveDescription() {
@@ -763,6 +732,8 @@ function TreeNodeRow({
   const accentTone = isRoot ? "bg-white/80" : tone.accent;
   const activeCreate =
     createIntent?.anchorNodeId === node.id ? createIntent : null;
+  const visibleChildBranchCount =
+    node.children.length + (childDropActive ? 1 : 0);
 
   return (
     <div
@@ -784,46 +755,20 @@ function TreeNodeRow({
         }}
         className={`group relative flex flex-col overflow-visible rounded-[1.35rem] border p-3 shadow-lg ring-1 transition-[border,box-shadow,transform] duration-200 sm:p-4 ${cardTone} ${isInvalidDropTarget ? "cursor-no-drop border-red-300 ring-4 ring-red-200/70 dark:border-red-700 dark:ring-red-950/50" : ""} ${dropPosition === "inside" ? "scale-[1.02] border-blue-400 ring-4 ring-blue-300/45 dark:ring-blue-500/30" : ""}`}
       >
-        {showDropZones && (
+        {showDropPreview && (
           <div
             className={`pointer-events-none absolute inset-2 z-20 rounded-2xl border-2 border-dashed transition ${
               childDropActive
                 ? "border-emerald-400 bg-emerald-500/10 ring-4 ring-emerald-200/70 dark:ring-emerald-950/50"
-                : siblingDropActive
-                  ? "border-blue-300/60 bg-blue-500/5"
-                  : "border-emerald-300/70 bg-emerald-500/5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                : "border-transparent"
             }`}
           >
-            {!isInvalidDropTarget && childDropActive && (
-              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-600 px-3 py-1 text-[0.65rem] font-black uppercase tracking-[0.16em] text-white shadow-sm">
-                Drop as child
-              </span>
-            )}
             {isInvalidDropTarget && (
               <div className="absolute inset-0 flex items-center justify-center rounded-2xl border border-dashed border-red-300 bg-red-50/80 text-xs font-bold uppercase tracking-[0.16em] text-red-700 dark:border-red-700 dark:bg-red-950/50 dark:text-red-200">
                 Cannot drop here
               </div>
             )}
           </div>
-        )}
-
-        {allowSiblingDrop && (
-          <>
-            <SiblingDropZone
-              active={dropPosition === "before"}
-              label="Drop before"
-              side="left"
-              onDragOver={(event) => handleDropIntent(event, "before")}
-              onDrop={(event) => handleDropOnZone(event, "before")}
-            />
-            <SiblingDropZone
-              active={dropPosition === "after"}
-              label="Drop after"
-              side="right"
-              onDragOver={(event) => handleDropIntent(event, "after")}
-              onDrop={(event) => handleDropOnZone(event, "after")}
-            />
-          </>
         )}
         <span
           className={`absolute inset-x-0 top-0 h-1.5 rounded-t-[1.35rem] ${accentTone}`}
@@ -1014,95 +959,64 @@ function TreeNodeRow({
             className="absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 rotate-45 border-b border-r border-slate-300 dark:border-slate-700"
             aria-hidden="true"
           />
-          {node.children.length > 1 && (
+          {visibleChildBranchCount > 1 && (
             <span
               className="absolute left-[calc(7.5rem)] right-[calc(7.5rem)] top-0 h-px bg-slate-300 dark:bg-slate-700"
               aria-hidden="true"
             />
           )}
-          {childDropActive && (
-            <ChildBranch>
-              <DropPlaceholder label="Drop here" size={draggedNodeSize} />
-            </ChildBranch>
-          )}
           {node.children.map((child) => (
-            <div key={child.id} className="relative flex justify-center">
+            <div key={child.id} className="contents">
               {dropTarget?.nodeId === child.id &&
                 dropTarget.position === "before" && (
-                  <DropPlaceholder
-                    label="Drop before"
-                    size={draggedNodeSize}
-                    sibling
-                  />
+                  <ChildBranch>
+                    <DropPlaceholder
+                      label="Insert here"
+                      size={draggedNodeSize}
+                      sibling
+                    />
+                  </ChildBranch>
                 )}
-              <span
-                className="absolute -top-6 left-1/2 h-6 w-px -translate-x-1/2 bg-slate-300 dark:bg-slate-700"
-                aria-hidden="true"
-              />
-              <TreeNodeRow
-                node={child}
-                draggedNodeId={draggedNodeId}
-                dropTarget={dropTarget}
-                allNodes={allNodes}
-                draggedNodeSize={draggedNodeSize}
-                onDragStart={onDragStart}
-                onDragEnd={onDragEnd}
-                onDropIntent={onDropIntent}
-                onMove={onMove}
-                createIntent={createIntent}
-                onCreateIntent={onCreateIntent}
-                onCreateNode={onCreateNode}
-                onRename={onRename}
-                onColorChange={onColorChange}
-                onDescriptionChange={onDescriptionChange}
-                onResize={onResize}
-                onDelete={onDelete}
-              />
+              <ChildBranch>
+                <TreeNodeRow
+                  node={child}
+                  draggedNodeId={draggedNodeId}
+                  dropTarget={dropTarget}
+                  allNodes={allNodes}
+                  draggedNodeSize={draggedNodeSize}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                  onDropIntent={onDropIntent}
+                  onMove={onMove}
+                  createIntent={createIntent}
+                  onCreateIntent={onCreateIntent}
+                  onCreateNode={onCreateNode}
+                  onRename={onRename}
+                  onColorChange={onColorChange}
+                  onDescriptionChange={onDescriptionChange}
+                  onResize={onResize}
+                  onDelete={onDelete}
+                />
+              </ChildBranch>
               {dropTarget?.nodeId === child.id &&
                 dropTarget.position === "after" && (
-                  <DropPlaceholder
-                    label="Drop after"
-                    size={draggedNodeSize}
-                    sibling
-                  />
+                  <ChildBranch>
+                    <DropPlaceholder
+                      label="Insert here"
+                      size={draggedNodeSize}
+                      sibling
+                    />
+                  </ChildBranch>
                 )}
             </div>
           ))}
+          {childDropActive && (
+            <ChildBranch>
+              <DropPlaceholder label="New child" size={draggedNodeSize} />
+            </ChildBranch>
+          )}
         </div>
       )}
-    </div>
-  );
-}
-
-function SiblingDropZone({
-  active,
-  label,
-  side,
-  onDragOver,
-  onDrop,
-}: {
-  active: boolean;
-  label: string;
-  side: "left" | "right";
-  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
-  onDrop: (event: DragEvent<HTMLDivElement>) => void;
-}) {
-  return (
-    <div
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      className={`${
-        side === "left" ? "-left-8 sm:-left-12" : "-right-8 sm:-right-12"
-      } absolute top-3 z-30 flex h-[calc(100%-1.5rem)] w-14 items-center justify-center rounded-2xl border-2 border-dashed transition sm:w-20 ${
-        active
-          ? "border-blue-500 bg-blue-100/90 text-blue-800 opacity-100 shadow-lg shadow-blue-500/20 ring-4 ring-blue-200/80 dark:bg-blue-950/70 dark:text-blue-100 dark:ring-blue-900/60"
-          : "border-blue-300/80 bg-blue-50/80 text-blue-700 opacity-70 hover:opacity-100 dark:border-blue-700/80 dark:bg-blue-950/40 dark:text-blue-200"
-      }`}
-      aria-label={label}
-    >
-      <span className="-rotate-90 whitespace-nowrap text-[0.65rem] font-black uppercase tracking-[0.18em]">
-        {label}
-      </span>
     </div>
   );
 }
@@ -1424,22 +1338,41 @@ function isDescendant(
   }
   return false;
 }
-function reindexedOrder(
+function moveNodesOptimistically(
   nodes: TreeNode[],
   nodeId: string,
   parentId: string | null,
   index: number,
 ) {
-  const ordered = nodes
-    .filter((item) => item.id !== nodeId && item.parentId === parentId)
-    .sort(compareNode);
   const dragged = nodes.find((item) => item.id === nodeId);
-  if (dragged)
-    ordered.splice(Math.min(Math.max(index, 0), ordered.length), 0, {
-      ...dragged,
-      parentId,
+  if (!dragged) return nodes;
+
+  const oldParentId = dragged.parentId;
+  const moved = { ...dragged, parentId };
+  const nextNodes = nodes.map((item) => (item.id === nodeId ? moved : item));
+  const affectedParents = new Set([oldParentId, parentId]);
+  const orderByParent = new Map<string, number>();
+
+  for (const affectedParentId of affectedParents) {
+    const siblings = nextNodes
+      .filter(
+        (item) => item.id !== nodeId && item.parentId === affectedParentId,
+      )
+      .sort(compareNode);
+
+    if (affectedParentId === parentId) {
+      siblings.splice(Math.min(Math.max(index, 0), siblings.length), 0, moved);
+    }
+
+    siblings.forEach((item, sortOrder) => {
+      orderByParent.set(item.id, sortOrder);
     });
-  return new Map(ordered.map((item, order) => [item.id, order]));
+  }
+
+  return nextNodes.map((item) => ({
+    ...item,
+    sortOrder: orderByParent.get(item.id) ?? item.sortOrder,
+  }));
 }
 
 function clampZoom(value: number, limits: { min: number; max: number }) {

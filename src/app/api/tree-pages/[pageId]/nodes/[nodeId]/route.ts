@@ -182,13 +182,39 @@ export async function PATCH(req: Request, context: Context) {
           tx.treeNode.update({ where: { id: node.id }, data: { sortOrder } }),
         ),
       );
+
+      if (existing.parentId !== parentId) {
+        const previousSiblings = await tx.treeNode.findMany({
+          where: { pageId, parentId: existing.parentId },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        });
+        await Promise.all(
+          previousSiblings.map((node, sortOrder) =>
+            tx.treeNode.update({ where: { id: node.id }, data: { sortOrder } }),
+          ),
+        );
+      }
+
       await tx.treePage.update({
         where: { id: pageId },
         data: { updatedAt: new Date() },
       });
+
+      const changedParentIds = Array.from(
+        new Set([parentId, existing.parentId]),
+      );
       return tx.treeNode.findMany({
-        where: { pageId, parentId },
-        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        where: {
+          pageId,
+          OR: changedParentIds.map((changedParentId) => ({
+            parentId: changedParentId,
+          })),
+        },
+        orderBy: [
+          { parentId: "asc" },
+          { sortOrder: "asc" },
+          { createdAt: "asc" },
+        ],
       });
     });
     return NextResponse.json(movedNodes);
