@@ -2,6 +2,7 @@
 
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import {
+  Fragment,
   type DragEvent,
   type PointerEvent,
   type ReactNode,
@@ -58,6 +59,10 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
   const [loading, setLoading] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
+  const [draggedNodeSize, setDraggedNodeSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const [dropTarget, setDropTarget] = useState<{
     nodeId: string;
     position: "inside" | "before" | "after";
@@ -454,13 +459,17 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                           draggedNodeId={draggedNodeId}
                           dropTarget={dropTarget}
                           allNodes={activePage.nodes}
-                          draggedNodeSize={getDraggedNodeSize(
-                            activePage.nodes,
-                            draggedNodeId,
-                          )}
-                          onDragStart={setDraggedNodeId}
+                          draggedNodeSize={
+                            draggedNodeSize ??
+                            getDraggedNodeSize(activePage.nodes, draggedNodeId)
+                          }
+                          onDragStart={(id, size) => {
+                            setDraggedNodeId(id);
+                            setDraggedNodeSize(size);
+                          }}
                           onDragEnd={() => {
                             setDraggedNodeId(null);
+                            setDraggedNodeSize(null);
                             setDropTarget(null);
                           }}
                           onDropIntent={(nodeId, position) =>
@@ -618,7 +627,7 @@ function TreeNodeRow({
   } | null;
   allNodes: TreeNode[];
   draggedNodeSize: { width: number; height: number } | null;
-  onDragStart: (id: string) => void;
+  onDragStart: (id: string, size: { width: number; height: number }) => void;
   onDragEnd: () => void;
   onDropIntent: (
     nodeId: string,
@@ -773,7 +782,10 @@ function TreeNodeRow({
         onDragStart={(event) => {
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", node.id);
-          onDragStart(node.id);
+          onDragStart(node.id, {
+            width: event.currentTarget.offsetWidth,
+            height: event.currentTarget.offsetHeight,
+          });
         }}
         onDragEnd={onDragEnd}
         onDragOver={handleDragOver}
@@ -1026,47 +1038,53 @@ function TreeNodeRow({
             </ChildBranch>
           )}
           {node.children.map((child) => (
-            <div key={child.id} className="relative flex justify-center">
+            <Fragment key={child.id}>
               {dropTarget?.nodeId === child.id &&
                 dropTarget.position === "before" && (
-                  <DropPlaceholder
-                    label="Drop before"
-                    size={draggedNodeSize}
-                    sibling
-                  />
+                  <ChildBranch>
+                    <DropPlaceholder
+                      label="Drop before"
+                      size={draggedNodeSize}
+                      sibling
+                    />
+                  </ChildBranch>
                 )}
-              <span
-                className="absolute -top-6 left-1/2 h-6 w-px -translate-x-1/2 bg-slate-300 dark:bg-slate-700"
-                aria-hidden="true"
-              />
-              <TreeNodeRow
-                node={child}
-                draggedNodeId={draggedNodeId}
-                dropTarget={dropTarget}
-                allNodes={allNodes}
-                draggedNodeSize={draggedNodeSize}
-                onDragStart={onDragStart}
-                onDragEnd={onDragEnd}
-                onDropIntent={onDropIntent}
-                onMove={onMove}
-                createIntent={createIntent}
-                onCreateIntent={onCreateIntent}
-                onCreateNode={onCreateNode}
-                onRename={onRename}
-                onColorChange={onColorChange}
-                onDescriptionChange={onDescriptionChange}
-                onResize={onResize}
-                onDelete={onDelete}
-              />
+              <div className="relative flex justify-center">
+                <span
+                  className="absolute -top-6 left-1/2 h-6 w-px -translate-x-1/2 bg-slate-300 dark:bg-slate-700"
+                  aria-hidden="true"
+                />
+                <TreeNodeRow
+                  node={child}
+                  draggedNodeId={draggedNodeId}
+                  dropTarget={dropTarget}
+                  allNodes={allNodes}
+                  draggedNodeSize={draggedNodeSize}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                  onDropIntent={onDropIntent}
+                  onMove={onMove}
+                  createIntent={createIntent}
+                  onCreateIntent={onCreateIntent}
+                  onCreateNode={onCreateNode}
+                  onRename={onRename}
+                  onColorChange={onColorChange}
+                  onDescriptionChange={onDescriptionChange}
+                  onResize={onResize}
+                  onDelete={onDelete}
+                />
+              </div>
               {dropTarget?.nodeId === child.id &&
                 dropTarget.position === "after" && (
-                  <DropPlaceholder
-                    label="Drop after"
-                    size={draggedNodeSize}
-                    sibling
-                  />
+                  <ChildBranch>
+                    <DropPlaceholder
+                      label="Drop after"
+                      size={draggedNodeSize}
+                      sibling
+                    />
+                  </ChildBranch>
                 )}
-            </div>
+            </Fragment>
           ))}
         </div>
       )}
@@ -1120,14 +1138,18 @@ function DropPlaceholder({
   const height = size?.height ?? 160;
   return (
     <div
-      className={`${sibling ? "mx-2" : ""} flex shrink-0 items-center justify-center rounded-[1.15rem] border-2 border-dashed border-blue-300/90 bg-blue-50/80 px-4 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-blue-700 shadow-sm shadow-blue-500/10 ring-4 ring-blue-100/70 transition-all dark:border-blue-700/80 dark:bg-blue-950/35 dark:text-blue-200 dark:ring-blue-950/40`}
+      className={`${
+        sibling ? "ring-blue-100/70 dark:ring-blue-950/40" : "ring-emerald-100/70 dark:ring-emerald-950/40"
+      } pointer-events-none flex shrink-0 items-center justify-center rounded-[1.35rem] border-2 border-dashed border-blue-300/90 bg-blue-50/80 p-4 text-[0.68rem] font-black uppercase tracking-[0.18em] text-blue-700 shadow-lg shadow-blue-500/10 ring-4 transition-all dark:border-blue-700/80 dark:bg-blue-950/35 dark:text-blue-200`}
       style={{
         width: `clamp(220px, calc(100vw - 3rem), ${width}px)`,
-        minHeight: Math.max(height, 140),
+        height: Math.max(height, 140),
       }}
       aria-hidden="true"
     >
-      {label}
+      <span className="rounded-full border border-blue-200/80 bg-white/75 px-3 py-1 shadow-sm dark:border-blue-800/80 dark:bg-blue-950/70">
+        {label}
+      </span>
     </div>
   );
 }
