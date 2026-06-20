@@ -701,13 +701,19 @@ function TreeNodeRow({
       return;
     }
     event.preventDefault();
+    event.stopPropagation();
     event.dataTransfer.dropEffect = "move";
-    onDropIntent(node.id, "inside");
+    onDropIntent(node.id, getDropPositionFromPointer(event, isRoot));
   }
   function handleDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
-    if (draggedNodeId && draggedNodeId !== node.id && !isInvalidDropTarget)
-      void onMove(node.id, dropPosition ?? "inside");
+    event.stopPropagation();
+    if (draggedNodeId && draggedNodeId !== node.id && !isInvalidDropTarget) {
+      void onMove(
+        node.id,
+        dropPosition ?? getDropPositionFromPointer(event, isRoot),
+      );
+    }
     onDragEnd();
   }
   async function saveDescription() {
@@ -1142,6 +1148,22 @@ function ChildBranch({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+function getDropPositionFromPointer(
+  event: DragEvent<HTMLElement>,
+  isRoot: boolean,
+): "inside" | "before" | "after" {
+  if (isRoot) return "inside";
+
+  const { top, height } = event.currentTarget.getBoundingClientRect();
+  const pointerOffset = event.clientY - top;
+  const siblingZoneHeight = height * 0.25;
+
+  if (pointerOffset < siblingZoneHeight) return "before";
+  if (pointerOffset > height - siblingZoneHeight) return "after";
+
+  return "inside";
 }
 
 const TREE_NODE_COLORS = [
