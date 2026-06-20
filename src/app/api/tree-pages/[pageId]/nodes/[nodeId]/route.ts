@@ -160,11 +160,19 @@ export async function PATCH(req: Request, context: Context) {
         ? body.sortOrder
         : Number.MAX_SAFE_INTEGER;
     const movedNodes = await prisma.$transaction(async (tx) => {
-      const siblings = await tx.treeNode.findMany({
+      const oldParentId = existing.parentId;
+      const oldSiblings = await tx.treeNode.findMany({
+        where: { pageId, parentId: oldParentId, NOT: { id: nodeId } },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      });
+      const newSiblings = await tx.treeNode.findMany({
         where: { pageId, parentId, NOT: { id: nodeId } },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       });
-      const insertAt = Math.min(Math.max(requestedOrder, 0), siblings.length);
+      const insertAt = Math.min(
+        Math.max(requestedOrder, 0),
+        newSiblings.length,
+      );
       await tx.treeNode.update({
         where: { id: nodeId },
         data: { ...data, parentId, sortOrder: insertAt },
@@ -172,23 +180,29 @@ export async function PATCH(req: Request, context: Context) {
       const moved = await tx.treeNode.findUniqueOrThrow({
         where: { id: nodeId },
       });
-      const ordered = [
-        ...siblings.slice(0, insertAt),
+      const orderedNewSiblings = [
+        ...newSiblings.slice(0, insertAt),
         moved,
-        ...siblings.slice(insertAt),
+        ...newSiblings.slice(insertAt),
       ];
-      await Promise.all(
-        ordered.map((node, sortOrder) =>
-          tx.treeNode.update({ where: { id: node.id }, data: { sortOrder } }),
-        ),
+      const updates = orderedNewSiblings.map((node, sortOrder) =>
+        tx.treeNode.update({ where: { id: node.id }, data: { sortOrder } }),
       );
+      if (oldParentId !== parentId) {
+        updates.push(
+          ...oldSiblings.map((node, sortOrder) =>
+            tx.treeNode.update({ where: { id: node.id }, data: { sortOrder } }),
+          ),
+        );
+      }
+      await Promise.all(updates);
       await tx.treePage.update({
         where: { id: pageId },
         data: { updatedAt: new Date() },
       });
       return tx.treeNode.findMany({
-        where: { pageId, parentId },
-        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        where: { pageId },
+        orderBy: [{ parentId: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
       });
     });
     return NextResponse.json(movedNodes);

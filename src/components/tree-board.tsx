@@ -4,7 +4,6 @@ import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import {
   type DragEvent,
   type PointerEvent,
-  type ReactNode,
   useEffect,
   useMemo,
   useRef,
@@ -34,6 +33,7 @@ type TreePage = {
 };
 type TreeNodeColor = "blue" | "purple" | "emerald" | "amber" | "rose" | "slate";
 type NestedNode = TreeNode & { children: NestedNode[]; depth: number };
+type DropPosition = "before" | "after" | "child";
 type CreateIntent = {
   parentId: string | null;
   sortOrder?: number;
@@ -60,7 +60,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{
     nodeId: string;
-    position: "inside" | "before" | "after";
+    position: DropPosition;
   } | null>(null);
   const [createIntent, setCreateIntent] = useState<CreateIntent | null>(null);
   const [deleteIntent, setDeleteIntent] = useState<DeleteIntent | null>(null);
@@ -194,20 +194,20 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
   async function moveNode(
     nodeId: string,
     targetId: string,
-    position: "inside" | "before" | "after",
+    position: DropPosition,
   ) {
     if (!activePage || nodeId === targetId) return;
     const draggedNode = activePage.nodes.find((item) => item.id === nodeId);
     const targetNode = activePage.nodes.find((item) => item.id === targetId);
     if (!draggedNode || !targetNode) return;
     if (
-      position === "inside" &&
+      position === "child" &&
       isDescendant(activePage.nodes, targetId, nodeId)
     ) {
       setError("A node cannot be moved inside one of its own child nodes.");
       return;
     }
-    const nextParentId = position === "inside" ? targetId : targetNode.parentId;
+    const nextParentId = position === "child" ? targetId : targetNode.parentId;
     if (nextParentId === null && draggedNode.parentId !== null) {
       setError(
         "Nodes can be reordered within the tree, but only the page title can be the root node.",
@@ -226,7 +226,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
       .sort(compareNode);
     const targetIndex = siblings.findIndex((item) => item.id === targetId);
     const nextIndex =
-      position === "inside"
+      position === "child"
         ? siblings.length
         : position === "before"
           ? Math.max(targetIndex, 0)
@@ -244,20 +244,30 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                     ? { ...item, parentId: nextParentId, sortOrder: nextIndex }
                     : item,
                 )
-                .map((item) =>
-                  item.parentId === nextParentId
-                    ? {
-                        ...item,
-                        sortOrder:
-                          reindexedOrder(
-                            page.nodes,
-                            nodeId,
-                            nextParentId,
-                            nextIndex,
-                          ).get(item.id) ?? item.sortOrder,
-                      }
-                    : item,
-                ),
+                .map((item) => {
+                  const newOrder = reindexedOrder(
+                    page.nodes,
+                    nodeId,
+                    nextParentId,
+                    nextIndex,
+                  );
+                  const oldOrder = reindexedOrderWithoutNode(
+                    page.nodes,
+                    nodeId,
+                    draggedNode.parentId,
+                  );
+                  if (item.parentId === nextParentId || item.id === nodeId)
+                    return {
+                      ...item,
+                      sortOrder: newOrder.get(item.id) ?? item.sortOrder,
+                    };
+                  if (item.parentId === draggedNode.parentId)
+                    return {
+                      ...item,
+                      sortOrder: oldOrder.get(item.id) ?? item.sortOrder,
+                    };
+                  return item;
+                }),
             }
           : page,
       ),
@@ -270,6 +280,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
           body: JSON.stringify({
             parentId: nextParentId,
             sortOrder: nextIndex,
+            dropPosition: position,
           }),
         },
       );
@@ -614,7 +625,7 @@ function TreeNodeRow({
   draggedNodeId: string | null;
   dropTarget: {
     nodeId: string;
-    position: "inside" | "before" | "after";
+    position: DropPosition;
   } | null;
   allNodes: TreeNode[];
   draggedNodeSize: { width: number; height: number } | null;
@@ -622,11 +633,11 @@ function TreeNodeRow({
   onDragEnd: () => void;
   onDropIntent: (
     nodeId: string,
-    position: "inside" | "before" | "after",
+    position: DropPosition,
   ) => void;
   onMove: (
     targetId: string,
-    position: "inside" | "before" | "after",
+    position: DropPosition,
   ) => Promise<void>;
   createIntent: CreateIntent | null;
   onCreateIntent: (intent: CreateIntent | null) => void;
@@ -657,13 +668,13 @@ function TreeNodeRow({
     (draggedNodeId === node.id ||
       Boolean(draggedNodeId && isDescendant(allNodes, node.id, draggedNodeId)));
   const showDropZones = Boolean(draggedNodeId) && !isDragging;
-  const childDropActive = dropPosition === "inside";
+  const childDropActive = dropPosition === "child";
   const siblingDropActive =
     dropPosition === "before" || dropPosition === "after";
   const allowSiblingDrop = showDropZones && !isRoot && !isInvalidDropTarget;
   function handleDropIntent(
     event: DragEvent<HTMLElement>,
-    position: "inside" | "before" | "after",
+    position: DropPosition,
   ) {
     if (!draggedNodeId || draggedNodeId === node.id || isInvalidDropTarget) {
       event.dataTransfer.dropEffect = "none";
@@ -680,7 +691,7 @@ function TreeNodeRow({
   }
   function handleDropOnZone(
     event: DragEvent<HTMLElement>,
-    position: "inside" | "before" | "after",
+    position: DropPosition,
   ) {
     event.preventDefault();
     event.stopPropagation();
@@ -702,12 +713,12 @@ function TreeNodeRow({
     }
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
-    onDropIntent(node.id, "inside");
+    onDropIntent(node.id, "child");
   }
   function handleDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
     if (draggedNodeId && draggedNodeId !== node.id && !isInvalidDropTarget)
-      void onMove(node.id, dropPosition ?? "inside");
+      void onMove(node.id, dropPosition ?? "child");
     onDragEnd();
   }
   async function saveDescription() {
@@ -768,7 +779,18 @@ function TreeNodeRow({
     <div
       className={`relative flex shrink-0 flex-col items-center ${isDragging ? "opacity-45" : ""}`}
     >
-      <article
+      <div className="flex items-stretch justify-center gap-3 sm:gap-4">
+        {allowSiblingDrop && (
+          <SiblingDropZone
+            active={dropPosition === "before"}
+            label="Drop before"
+            side="left"
+            size={draggedNodeSize}
+            onDragOver={(event) => handleDropIntent(event, "before")}
+            onDrop={(event) => handleDropOnZone(event, "before")}
+          />
+        )}
+        <article
         draggable={!editing && !isRoot}
         onDragStart={(event) => {
           event.dataTransfer.effectAllowed = "move";
@@ -782,7 +804,7 @@ function TreeNodeRow({
           width: `clamp(220px, calc(100vw - 3rem), ${sizeDraft.width}px)`,
           minHeight: sizeDraft.height,
         }}
-        className={`group relative flex flex-col overflow-visible rounded-[1.35rem] border p-3 shadow-lg ring-1 transition-[border,box-shadow,transform] duration-200 sm:p-4 ${cardTone} ${isInvalidDropTarget ? "cursor-no-drop border-red-300 ring-4 ring-red-200/70 dark:border-red-700 dark:ring-red-950/50" : ""} ${dropPosition === "inside" ? "scale-[1.02] border-blue-400 ring-4 ring-blue-300/45 dark:ring-blue-500/30" : ""}`}
+        className={`group relative flex flex-col overflow-visible rounded-[1.35rem] border p-3 shadow-lg ring-1 transition-[border,box-shadow,transform] duration-200 sm:p-4 ${cardTone} ${isInvalidDropTarget ? "cursor-no-drop border-red-300 ring-4 ring-red-200/70 dark:border-red-700 dark:ring-red-950/50" : ""} ${dropPosition === "child" ? "scale-[1.02] border-blue-400 ring-4 ring-blue-300/45 dark:ring-blue-500/30" : ""}`}
       >
         {showDropZones && (
           <div
@@ -807,24 +829,6 @@ function TreeNodeRow({
           </div>
         )}
 
-        {allowSiblingDrop && (
-          <>
-            <SiblingDropZone
-              active={dropPosition === "before"}
-              label="Drop before"
-              side="left"
-              onDragOver={(event) => handleDropIntent(event, "before")}
-              onDrop={(event) => handleDropOnZone(event, "before")}
-            />
-            <SiblingDropZone
-              active={dropPosition === "after"}
-              label="Drop after"
-              side="right"
-              onDragOver={(event) => handleDropIntent(event, "after")}
-              onDrop={(event) => handleDropOnZone(event, "after")}
-            />
-          </>
-        )}
         <span
           className={`absolute inset-x-0 top-0 h-1.5 rounded-t-[1.35rem] ${accentTone}`}
           aria-hidden="true"
@@ -1003,8 +1007,28 @@ function TreeNodeRow({
             onCancel={() => onCreateIntent(null)}
           />
         )}
-      </article>
-      {(node.children.length > 0 || childDropActive) && (
+        </article>
+        {allowSiblingDrop && (
+          <SiblingDropZone
+            active={dropPosition === "after"}
+            label="Drop after"
+            side="right"
+            size={draggedNodeSize}
+            onDragOver={(event) => handleDropIntent(event, "after")}
+            onDrop={(event) => handleDropOnZone(event, "after")}
+          />
+        )}
+      </div>
+      {showDropZones && !isInvalidDropTarget && (
+        <ChildDropZone
+          active={childDropActive}
+          label="Drop as child"
+          size={draggedNodeSize}
+          onDragOver={(event) => handleDropIntent(event, "child")}
+          onDrop={(event) => handleDropOnZone(event, "child")}
+        />
+      )}
+      {node.children.length > 0 && (
         <div className="relative mt-12 flex items-start justify-center gap-6 pt-6 sm:gap-8">
           <span
             className="absolute -top-12 left-1/2 h-12 w-px -translate-x-1/2 bg-slate-300 dark:bg-slate-700"
@@ -1019,11 +1043,6 @@ function TreeNodeRow({
               className="absolute left-[calc(7.5rem)] right-[calc(7.5rem)] top-0 h-px bg-slate-300 dark:bg-slate-700"
               aria-hidden="true"
             />
-          )}
-          {childDropActive && (
-            <ChildBranch>
-              <DropPlaceholder label="Drop here" size={draggedNodeSize} />
-            </ChildBranch>
           )}
           {node.children.map((child) => (
             <div key={child.id} className="relative flex justify-center">
@@ -1078,31 +1097,70 @@ function SiblingDropZone({
   active,
   label,
   side,
+  size,
   onDragOver,
   onDrop,
 }: {
   active: boolean;
   label: string;
   side: "left" | "right";
+  size: { width: number; height: number } | null;
   onDragOver: (event: DragEvent<HTMLDivElement>) => void;
   onDrop: (event: DragEvent<HTMLDivElement>) => void;
 }) {
+  const width = Math.max(Math.min(size?.width ?? 240, 320), 180);
+  const height = Math.max(size?.height ?? 160, 140);
   return (
     <div
       onDragOver={onDragOver}
       onDrop={onDrop}
-      className={`${
-        side === "left" ? "-left-8 sm:-left-12" : "-right-8 sm:-right-12"
-      } absolute top-3 z-30 flex h-[calc(100%-1.5rem)] w-14 items-center justify-center rounded-2xl border-2 border-dashed transition sm:w-20 ${
+      className={`relative z-30 flex shrink-0 items-center justify-center rounded-[1.25rem] border-2 border-dashed px-3 text-center transition ${
         active
-          ? "border-blue-500 bg-blue-100/90 text-blue-800 opacity-100 shadow-lg shadow-blue-500/20 ring-4 ring-blue-200/80 dark:bg-blue-950/70 dark:text-blue-100 dark:ring-blue-900/60"
-          : "border-blue-300/80 bg-blue-50/80 text-blue-700 opacity-70 hover:opacity-100 dark:border-blue-700/80 dark:bg-blue-950/40 dark:text-blue-200"
+          ? "border-blue-500 bg-blue-100/95 text-blue-800 shadow-xl shadow-blue-500/20 ring-4 ring-blue-200/80 dark:bg-blue-950/75 dark:text-blue-100 dark:ring-blue-900/60"
+          : "border-blue-300/80 bg-blue-50/75 text-blue-700 shadow-sm shadow-blue-500/10 hover:bg-blue-100/80 dark:border-blue-700/80 dark:bg-blue-950/35 dark:text-blue-200 dark:hover:bg-blue-950/55"
       }`}
+      style={{ width, minHeight: height }}
       aria-label={label}
+      data-drop-position={side === "left" ? "before" : "after"}
     >
-      <span className="-rotate-90 whitespace-nowrap text-[0.65rem] font-black uppercase tracking-[0.18em]">
+      <span className="whitespace-nowrap text-[0.65rem] font-black uppercase tracking-[0.18em]">
         {label}
       </span>
+    </div>
+  );
+}
+
+function ChildDropZone({
+  active,
+  label,
+  size,
+  onDragOver,
+  onDrop,
+}: {
+  active: boolean;
+  label: string;
+  size: { width: number; height: number } | null;
+  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
+}) {
+  const width = Math.max(Math.min(size?.width ?? 240, 360), 200);
+  const height = Math.max(size?.height ?? 160, 140);
+  return (
+    <div className="mt-4 flex w-full justify-center">
+      <div
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        className={`flex shrink-0 items-center justify-center rounded-[1.25rem] border-2 border-dashed px-4 text-center text-[0.68rem] font-black uppercase tracking-[0.18em] transition ${
+          active
+            ? "border-emerald-500 bg-emerald-100/95 text-emerald-800 shadow-xl shadow-emerald-500/20 ring-4 ring-emerald-200/80 dark:bg-emerald-950/75 dark:text-emerald-100 dark:ring-emerald-900/60"
+            : "border-emerald-300/80 bg-emerald-50/75 text-emerald-700 shadow-sm shadow-emerald-500/10 hover:bg-emerald-100/80 dark:border-emerald-700/80 dark:bg-emerald-950/35 dark:text-emerald-200 dark:hover:bg-emerald-950/55"
+        }`}
+        style={{ width, minHeight: height }}
+        aria-label={label}
+        data-drop-position="child"
+      >
+        {label}
+      </div>
     </div>
   );
 }
@@ -1132,17 +1190,6 @@ function DropPlaceholder({
   );
 }
 
-function ChildBranch({ children }: { children: ReactNode }) {
-  return (
-    <div className="relative flex justify-center">
-      <span
-        className="absolute -top-6 left-1/2 h-6 w-px -translate-x-1/2 bg-slate-300 dark:bg-slate-700"
-        aria-hidden="true"
-      />
-      {children}
-    </div>
-  );
-}
 
 const TREE_NODE_COLORS = [
   "blue",
@@ -1440,6 +1487,19 @@ function reindexedOrder(
       parentId,
     });
   return new Map(ordered.map((item, order) => [item.id, order]));
+}
+
+function reindexedOrderWithoutNode(
+  nodes: TreeNode[],
+  nodeId: string,
+  parentId: string | null,
+) {
+  return new Map(
+    nodes
+      .filter((item) => item.id !== nodeId && item.parentId === parentId)
+      .sort(compareNode)
+      .map((item, order) => [item.id, order]),
+  );
 }
 
 function clampZoom(value: number, limits: { min: number; max: number }) {
