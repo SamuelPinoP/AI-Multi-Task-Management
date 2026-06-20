@@ -660,33 +660,14 @@ function TreeNodeRow({
   const childDropActive = dropPosition === "inside";
   const siblingDropActive =
     dropPosition === "before" || dropPosition === "after";
-  const allowSiblingDrop = showDropZones && !isRoot && !isInvalidDropTarget;
-  function handleDropIntent(
-    event: DragEvent<HTMLElement>,
-    position: "inside" | "before" | "after",
-  ) {
-    if (!draggedNodeId || draggedNodeId === node.id || isInvalidDropTarget) {
-      event.dataTransfer.dropEffect = "none";
-      return;
-    }
-    if ((position === "before" || position === "after") && isRoot) {
-      event.dataTransfer.dropEffect = "none";
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    event.dataTransfer.dropEffect = "move";
-    onDropIntent(node.id, position);
-  }
-  function handleDropOnZone(
-    event: DragEvent<HTMLElement>,
-    position: "inside" | "before" | "after",
-  ) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (draggedNodeId && draggedNodeId !== node.id && !isInvalidDropTarget)
-      void onMove(node.id, position);
-    onDragEnd();
+
+  function getDropPosition(event: DragEvent<HTMLElement>) {
+    if (isRoot) return "inside" as const;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const offsetX = event.clientX - rect.left;
+    if (offsetX < rect.width * 0.25) return "before" as const;
+    if (offsetX > rect.width * 0.75) return "after" as const;
+    return "inside" as const;
   }
   async function save() {
     const title = draft.trim();
@@ -701,14 +682,27 @@ function TreeNodeRow({
       return;
     }
     event.preventDefault();
+    event.stopPropagation();
     event.dataTransfer.dropEffect = "move";
-    onDropIntent(node.id, "inside");
+    onDropIntent(node.id, getDropPosition(event));
   }
   function handleDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
+    event.stopPropagation();
+    const position = getDropPosition(event);
     if (draggedNodeId && draggedNodeId !== node.id && !isInvalidDropTarget)
-      void onMove(node.id, dropPosition ?? "inside");
+      void onMove(node.id, position);
     onDragEnd();
+  }
+  function handleDragStart(event: DragEvent<HTMLElement>) {
+    if (isRoot || editing) {
+      event.preventDefault();
+      return;
+    }
+    event.stopPropagation();
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", node.id);
+    onDragStart(node.id);
   }
   async function saveDescription() {
     setEditingDescription(false);
@@ -770,11 +764,7 @@ function TreeNodeRow({
     >
       <article
         draggable={!editing && !isRoot}
-        onDragStart={(event) => {
-          event.dataTransfer.effectAllowed = "move";
-          event.dataTransfer.setData("text/plain", node.id);
-          onDragStart(node.id);
-        }}
+        onDragStart={handleDragStart}
         onDragEnd={onDragEnd}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
@@ -782,7 +772,7 @@ function TreeNodeRow({
           width: `clamp(220px, calc(100vw - 3rem), ${sizeDraft.width}px)`,
           minHeight: sizeDraft.height,
         }}
-        className={`group relative flex flex-col overflow-visible rounded-[1.35rem] border p-3 shadow-lg ring-1 transition-[border,box-shadow,transform] duration-200 sm:p-4 ${cardTone} ${isInvalidDropTarget ? "cursor-no-drop border-red-300 ring-4 ring-red-200/70 dark:border-red-700 dark:ring-red-950/50" : ""} ${dropPosition === "inside" ? "scale-[1.02] border-blue-400 ring-4 ring-blue-300/45 dark:ring-blue-500/30" : ""}`}
+        className={`group relative flex flex-col overflow-visible rounded-[1.35rem] border p-3 shadow-lg ring-1 transition-[border,box-shadow,transform] duration-200 sm:p-4 ${cardTone} ${!isRoot && !editing ? "cursor-grab active:cursor-grabbing" : ""} ${isInvalidDropTarget ? "cursor-no-drop border-red-300 ring-4 ring-red-200/70 dark:border-red-700 dark:ring-red-950/50" : ""} ${dropPosition === "inside" ? "scale-[1.02] border-blue-400 ring-4 ring-blue-300/45 dark:ring-blue-500/30" : ""} ${dropPosition === "before" ? "border-l-8 border-l-blue-500 ring-4 ring-blue-200/70 dark:ring-blue-900/50" : ""} ${dropPosition === "after" ? "border-r-8 border-r-blue-500 ring-4 ring-blue-200/70 dark:ring-blue-900/50" : ""}`}
       >
         {showDropZones && (
           <div
@@ -807,24 +797,6 @@ function TreeNodeRow({
           </div>
         )}
 
-        {allowSiblingDrop && (
-          <>
-            <SiblingDropZone
-              active={dropPosition === "before"}
-              label="Drop before"
-              side="left"
-              onDragOver={(event) => handleDropIntent(event, "before")}
-              onDrop={(event) => handleDropOnZone(event, "before")}
-            />
-            <SiblingDropZone
-              active={dropPosition === "after"}
-              label="Drop after"
-              side="right"
-              onDragOver={(event) => handleDropIntent(event, "after")}
-              onDrop={(event) => handleDropOnZone(event, "after")}
-            />
-          </>
-        )}
         <span
           className={`absolute inset-x-0 top-0 h-1.5 rounded-t-[1.35rem] ${accentTone}`}
           aria-hidden="true"
@@ -1070,39 +1042,6 @@ function TreeNodeRow({
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function SiblingDropZone({
-  active,
-  label,
-  side,
-  onDragOver,
-  onDrop,
-}: {
-  active: boolean;
-  label: string;
-  side: "left" | "right";
-  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
-  onDrop: (event: DragEvent<HTMLDivElement>) => void;
-}) {
-  return (
-    <div
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      className={`${
-        side === "left" ? "-left-8 sm:-left-12" : "-right-8 sm:-right-12"
-      } absolute top-3 z-30 flex h-[calc(100%-1.5rem)] w-14 items-center justify-center rounded-2xl border-2 border-dashed transition sm:w-20 ${
-        active
-          ? "border-blue-500 bg-blue-100/90 text-blue-800 opacity-100 shadow-lg shadow-blue-500/20 ring-4 ring-blue-200/80 dark:bg-blue-950/70 dark:text-blue-100 dark:ring-blue-900/60"
-          : "border-blue-300/80 bg-blue-50/80 text-blue-700 opacity-70 hover:opacity-100 dark:border-blue-700/80 dark:bg-blue-950/40 dark:text-blue-200"
-      }`}
-      aria-label={label}
-    >
-      <span className="-rotate-90 whitespace-nowrap text-[0.65rem] font-black uppercase tracking-[0.18em]">
-        {label}
-      </span>
     </div>
   );
 }
