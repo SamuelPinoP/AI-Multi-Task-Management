@@ -37,6 +37,11 @@ export default function NotesPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
+  const [openedNoteId, setOpenedNoteId] = useState<string | null>(() =>
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get("openNote"),
+  );
 
   const visibleNotes = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -101,6 +106,23 @@ export default function NotesPage() {
 
     void loadInitialData();
   }, []);
+
+  useEffect(() => {
+    if (!openedNoteId) return;
+    void markNoteOpened(openedNoteId);
+  }, [openedNoteId]);
+
+  async function markNoteOpened(noteId: string) {
+    try {
+      await fetch("/api/recent-shortcuts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "note", id: noteId }),
+      });
+    } catch {
+      // Opening a note should not be blocked if the recent shortcut update fails.
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -346,7 +368,8 @@ export default function NotesPage() {
                   return (
                     <article
                       key={note.id}
-                      className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800"
+                      id={`note-${note.id}`}
+                      className={`rounded-2xl border p-5 shadow-sm transition ${openedNoteId === note.id ? "border-blue-300 bg-blue-50/50 ring-2 ring-blue-200 dark:border-blue-800 dark:bg-blue-950/20 dark:ring-blue-900/60" : "border-zinc-200 dark:border-zinc-800"}`}
                     >
                       {isEditing ? (
                         <div className="space-y-3">
@@ -408,6 +431,17 @@ export default function NotesPage() {
                               ) : null}
                             </div>
                             <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenedNoteId(note.id);
+                                  void markNoteOpened(note.id);
+                                  window.history.replaceState(null, "", `/notes?openNote=${note.id}`);
+                                }}
+                                className="rounded-lg border border-blue-300 px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/40"
+                              >
+                                Open
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => startEditing(note)}

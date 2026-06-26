@@ -34,6 +34,7 @@ model User {
   projectComments            ProjectComment[]
   projectCommentAttachments  ProjectCommentAttachment[]
   treePages                  TreePage[]
+  recentShortcut             RecentShortcut?
 }
 
 model Session {
@@ -70,10 +71,11 @@ model Note {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  userId    String
-  projectId String?
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  userId          String
+  projectId       String?
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project         Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  recentShortcuts RecentShortcut[]
 }
 
 model Task {
@@ -139,15 +141,16 @@ model Project {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  userId      String
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  notes       Note[]
-  tasks       Task[]
-  members     ProjectMember[]
-  invitations ProjectInvitation[]
-  events      Event[]
-  activities  Activity[]
-  comments    ProjectComment[]
+  userId          String
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes           Note[]
+  tasks           Task[]
+  members         ProjectMember[]
+  invitations     ProjectInvitation[]
+  events          Event[]
+  activities      Activity[]
+  comments        ProjectComment[]
+  recentShortcuts RecentShortcut[]
 }
 
 model ProjectComment {
@@ -311,6 +314,24 @@ enum ActivityEntityType {
   TASK
   EVENT
   PROJECT
+}
+
+model RecentShortcut {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  projectId       String?
+  noteId          String?
+  projectOpenedAt DateTime?
+  noteOpenedAt    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  note    Note?    @relation(fields: [noteId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([noteId])
 }
 
 enum TaskStatus {

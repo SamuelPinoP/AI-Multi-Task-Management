@@ -64,6 +64,69 @@ const demoFeatures = [
   "Task board, Today, Planner, and Roadmap views",
 ];
 
+
+type RecentShortcutItem = {
+  href: string;
+  label: "Projects" | "Notes";
+  subtitle: string;
+  color: string | null;
+  empty: boolean;
+};
+
+function normalizeShortcutColor(color: string | null | undefined) {
+  if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return "#3b82f6";
+  return color;
+}
+
+function RecentShortcutBookmark({ item }: { item: RecentShortcutItem }) {
+  const accent = normalizeShortcutColor(item.color);
+  return (
+    <Link
+      href={item.href}
+      className="group relative isolate flex min-h-20 overflow-hidden rounded-2xl border border-zinc-200 bg-white/85 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-zinc-800 dark:bg-zinc-950/70 dark:focus:ring-offset-zinc-950"
+      style={{
+        backgroundImage: `linear-gradient(115deg, ${accent}1f, transparent 45%), radial-gradient(circle at top right, ${accent}26, transparent 36%)`,
+      }}
+    >
+      <span
+        aria-hidden="true"
+        className="relative w-7 shrink-0 shadow-inner transition group-hover:w-8"
+        style={{ backgroundColor: accent }}
+      >
+        <span className="absolute right-0 top-1/2 h-7 w-4 -translate-y-1/2 translate-x-1/2 rotate-45 rounded-sm bg-white dark:bg-zinc-950" />
+      </span>
+      <span className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/75 text-sm font-bold text-zinc-900 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900/80 dark:text-zinc-50 dark:ring-zinc-800">
+          {item.label === "Projects" ? "P" : "N"}
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+            {item.label}
+          </span>
+          <span className={`mt-0.5 block truncate text-base font-semibold ${item.empty ? "text-zinc-600 dark:text-zinc-300" : "text-zinc-950 dark:text-zinc-50"}`}>
+            {item.subtitle}
+          </span>
+        </span>
+      </span>
+    </Link>
+  );
+}
+
+function DashboardRecentShortcuts({
+  project,
+  note,
+}: {
+  project: RecentShortcutItem;
+  note: RecentShortcutItem;
+}) {
+  return (
+    <div className="grid w-full gap-3 sm:max-w-md md:grid-cols-2">
+      <RecentShortcutBookmark item={project} />
+      <RecentShortcutBookmark item={note} />
+    </div>
+  );
+}
+
 function LandingPage({
   signupEnabled,
   guestLoginEnabled,
@@ -336,6 +399,7 @@ export default async function DashboardPage() {
     completedTasks,
     totalEvents,
     activeProjects,
+    recentShortcut,
   ] = await Promise.all([
     prisma.note.findMany({
       where: { userId: user.id, deletedAt: null },
@@ -397,6 +461,13 @@ export default async function DashboardPage() {
     }),
     prisma.event.count({ where: getAccessibleEventWhere(user.id) }),
     prisma.project.count({ where: { ...projectAccessWhere(user.id), status: ProjectStatus.ACTIVE } }),
+    prisma.recentShortcut.findUnique({
+      where: { userId: user.id },
+      include: {
+        project: { select: { id: true, name: true, color: true, status: true, userId: true, members: { where: { userId: user.id }, select: { userId: true } } } },
+        note: { select: { id: true, title: true, deletedAt: true, userId: true, project: { select: { id: true, color: true, userId: true, members: { where: { userId: user.id }, select: { userId: true } } } } } },
+      },
+    }),
   ]);
 
   const overdueTasks = reminderTasks.filter(
@@ -442,6 +513,19 @@ export default async function DashboardPage() {
   const accessibleProjectActivity = recentActivities.filter(
     (activity) => activity.projectId !== null,
   );
+
+  const recentProject = recentShortcut?.project && recentShortcut.project.status === ProjectStatus.ACTIVE && (recentShortcut.project.userId === user.id || recentShortcut.project.members.length > 0)
+    ? recentShortcut.project
+    : null;
+  const recentNote = recentShortcut?.note && !recentShortcut.note.deletedAt && (recentShortcut.note.userId === user.id || (recentShortcut.note.project && (recentShortcut.note.project.userId === user.id || recentShortcut.note.project.members.length > 0)))
+    ? recentShortcut.note
+    : null;
+  const projectShortcut: RecentShortcutItem = recentProject
+    ? { href: `/projects/${recentProject.id}`, label: "Projects", subtitle: recentProject.name, color: recentProject.color, empty: false }
+    : { href: "/projects", label: "Projects", subtitle: "Open a project to pin it here", color: null, empty: true };
+  const noteShortcut: RecentShortcutItem = recentNote
+    ? { href: `/notes?openNote=${recentNote.id}`, label: "Notes", subtitle: recentNote.title, color: recentNote.project?.color ?? null, empty: false }
+    : { href: "/notes", label: "Notes", subtitle: "Open a note to pin it here", color: "#8b5cf6", empty: true };
 
   const dashboardAnalytics = [
     {
@@ -504,7 +588,7 @@ export default async function DashboardPage() {
   return (
     <main className="min-h-screen px-6 py-10">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-8 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="mb-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">
               {user.isGuest ? "Guest mode" : "Workspace"}
@@ -515,12 +599,15 @@ export default async function DashboardPage() {
               your productivity.
             </p>
           </div>
-          {user.isGuest ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
-              You&apos;re using a database-backed guest workspace. Keep this
-              browser session to keep access.
-            </div>
-          ) : null}
+          <div className="flex flex-col gap-3 md:items-end">
+            <DashboardRecentShortcuts project={projectShortcut} note={noteShortcut} />
+            {user.isGuest ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
+                You&apos;re using a database-backed guest workspace. Keep this
+                browser session to keep access.
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <section className="mb-8">
