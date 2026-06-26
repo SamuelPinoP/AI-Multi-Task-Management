@@ -12,6 +12,7 @@ import {
   getProjectAccessForUser,
   projectAccessWhereForProject,
 } from "@/lib/project-access";
+import { markProjectOpened } from "@/lib/recent-shortcuts";
 
 type ProjectDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -100,6 +101,8 @@ export default async function ProjectDetailPage({
   });
 
   if (!project) notFound();
+
+  await markProjectOpened(project.id, user.id);
 
   const access = getProjectAccessForUser(project, user.id);
   const isOwner = access?.accessLevel === "OWNER";
