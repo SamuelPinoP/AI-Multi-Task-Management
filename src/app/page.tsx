@@ -16,8 +16,7 @@ const analyticsAccentClasses = {
   zinc: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200",
   emerald:
     "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
-  amber:
-    "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
+  amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
   red: "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300",
   blue: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
   violet:
@@ -64,7 +63,6 @@ const demoFeatures = [
   "Task board, Today, Planner, and Roadmap views",
 ];
 
-
 type RecentShortcutItem = {
   href: string;
   label: "Projects" | "Notes";
@@ -80,38 +78,31 @@ function normalizeShortcutColor(color: string | null | undefined) {
 
 function RecentShortcutBookmark({ item }: { item: RecentShortcutItem }) {
   const accent = normalizeShortcutColor(item.color);
-  const icon = item.label === "Projects" ? "▦" : "✎";
 
   return (
     <Link
       href={item.href}
-      className="group relative isolate flex min-h-24 overflow-hidden rounded-[1.35rem] border border-zinc-200/80 bg-white/90 shadow-[0_14px_35px_rgba(15,23,42,0.08)] transition duration-200 hover:-translate-y-1 hover:border-zinc-300 hover:shadow-[0_20px_45px_rgba(15,23,42,0.13)] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-zinc-800/90 dark:bg-zinc-950/80 dark:shadow-none dark:hover:border-zinc-700 dark:focus:ring-offset-zinc-950"
+      aria-label={`Open ${item.label}`}
+      className="group relative isolate flex min-h-14 w-full overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/90 px-5 py-3 shadow-[0_10px_26px_rgba(15,23,42,0.06)] transition duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-[0_14px_32px_rgba(15,23,42,0.10)] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-zinc-800/90 dark:bg-zinc-950/80 dark:shadow-none dark:hover:border-zinc-700 dark:focus:ring-offset-zinc-950"
       style={{
-        backgroundImage: `linear-gradient(120deg, ${accent}24 0%, transparent 48%), radial-gradient(circle at 92% 12%, ${accent}33, transparent 34%), linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.72))`,
+        backgroundImage: `linear-gradient(110deg, ${accent}1f 0%, transparent 42%), linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,255,255,0.72))`,
       }}
     >
       <span
         aria-hidden="true"
-        className="absolute inset-y-3 left-3 w-1.5 rounded-full shadow-sm transition duration-200 group-hover:inset-y-2"
+        className="absolute inset-y-2 left-2 w-1 rounded-full opacity-75 transition duration-200 group-hover:inset-y-1.5 group-hover:opacity-100"
         style={{ backgroundColor: accent }}
       />
-      <span className="absolute -right-8 -top-10 h-28 w-28 rounded-full opacity-15 blur-2xl transition group-hover:opacity-25" style={{ backgroundColor: accent }} />
-      <span className="flex min-w-0 flex-1 items-center gap-4 px-6 py-4 pl-8">
-        <span
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/85 text-xl font-bold text-zinc-900 shadow-sm ring-1 ring-zinc-200/80 transition group-hover:scale-105 dark:bg-zinc-900/85 dark:text-zinc-50 dark:ring-zinc-800"
-          style={{ color: accent }}
-        >
-          {icon}
+      <span
+        aria-hidden="true"
+        className="absolute -right-10 top-1/2 h-20 w-20 -translate-y-1/2 rounded-full opacity-10 blur-2xl transition group-hover:opacity-20"
+        style={{ backgroundColor: accent }}
+      />
+      <span className="flex min-w-0 flex-1 items-center justify-between gap-4 pl-3">
+        <span className="text-sm font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+          {item.label}
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[0.68rem] font-bold uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
-            {item.label}
-          </span>
-          <span className={`mt-1 block truncate text-base font-semibold leading-6 ${item.empty ? "text-zinc-600 dark:text-zinc-300" : "text-zinc-950 dark:text-zinc-50"}`}>
-            {item.subtitle}
-          </span>
-        </span>
-        <span className="hidden rounded-full border border-zinc-200 bg-white/75 px-2.5 py-1 text-xs font-semibold text-zinc-500 transition group-hover:border-zinc-300 group-hover:text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-400 dark:group-hover:text-zinc-200 sm:inline-flex">
+        <span className="rounded-full border border-zinc-200/80 bg-white/65 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-zinc-500 transition group-hover:text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/65 dark:text-zinc-400 dark:group-hover:text-zinc-200">
           Open
         </span>
       </span>
@@ -127,7 +118,7 @@ function DashboardRecentShortcuts({
   note: RecentShortcutItem;
 }) {
   return (
-    <div className="grid w-full gap-3 sm:max-w-md md:grid-cols-2">
+    <div className="flex w-full flex-col gap-2 sm:w-72 md:w-80">
       <RecentShortcutBookmark item={project} />
       <RecentShortcutBookmark item={note} />
     </div>
@@ -468,11 +459,22 @@ export default async function DashboardPage() {
       where: { ...getAccessibleTaskWhere(user.id), status: TaskStatus.DONE },
     }),
     prisma.event.count({ where: getAccessibleEventWhere(user.id) }),
-    prisma.project.count({ where: { ...projectAccessWhere(user.id), status: ProjectStatus.ACTIVE } }),
+    prisma.project.count({
+      where: { ...projectAccessWhere(user.id), status: ProjectStatus.ACTIVE },
+    }),
     prisma.recentShortcut.findUnique({
       where: { userId: user.id },
       include: {
-        project: { select: { id: true, name: true, color: true, status: true, userId: true, members: { where: { userId: user.id }, select: { userId: true } } } },
+        project: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+            status: true,
+            userId: true,
+            members: { where: { userId: user.id }, select: { userId: true } },
+          },
+        },
       },
     }),
     prisma.note.findFirst({
@@ -529,28 +531,58 @@ export default async function DashboardPage() {
     (activity) => activity.projectId !== null,
   );
 
-  const recentProject = recentShortcut?.project && recentShortcut.project.status === ProjectStatus.ACTIVE && (recentShortcut.project.userId === user.id || recentShortcut.project.members.length > 0)
-    ? recentShortcut.project
-    : null;
+  const recentProject =
+    recentShortcut?.project &&
+    recentShortcut.project.status === ProjectStatus.ACTIVE &&
+    (recentShortcut.project.userId === user.id ||
+      recentShortcut.project.members.length > 0)
+      ? recentShortcut.project
+      : null;
   const recentNote = lastModifiedNote;
   const projectShortcut: RecentShortcutItem = recentProject
-    ? { href: `/projects/${recentProject.id}`, label: "Projects", subtitle: recentProject.name, color: recentProject.color, empty: false }
-    : { href: "/projects", label: "Projects", subtitle: "Open a project to pin it here", color: null, empty: true };
+    ? {
+        href: `/projects/${recentProject.id}`,
+        label: "Projects",
+        subtitle: recentProject.name,
+        color: recentProject.color,
+        empty: false,
+      }
+    : {
+        href: "/projects",
+        label: "Projects",
+        subtitle: "Open a project to pin it here",
+        color: null,
+        empty: true,
+      };
   const noteShortcut: RecentShortcutItem = recentNote
-    ? { href: `/notes?openNote=${recentNote.id}&focus=content`, label: "Notes", subtitle: recentNote.title, color: recentNote.project?.color ?? null, empty: false }
-    : { href: "/notes", label: "Notes", subtitle: "Modify a note to pin it here", color: "#8b5cf6", empty: true };
+    ? {
+        href: `/notes?openNote=${recentNote.id}&focus=content`,
+        label: "Notes",
+        subtitle: recentNote.title,
+        color: recentNote.project?.color ?? null,
+        empty: false,
+      }
+    : {
+        href: "/notes",
+        label: "Notes",
+        subtitle: "Modify a note to pin it here",
+        color: "#8b5cf6",
+        empty: true,
+      };
 
   const dashboardAnalytics = [
     {
       label: "Total tasks",
       value: totalTasks,
-      description: "All non-trashed tasks you own or can access through shared projects.",
+      description:
+        "All non-trashed tasks you own or can access through shared projects.",
       accent: "zinc" as const,
     },
     {
       label: "Completed tasks",
       value: completedTasks,
-      description: "Tasks marked done across your personal and accessible project work.",
+      description:
+        "Tasks marked done across your personal and accessible project work.",
       accent: "emerald" as const,
     },
     {
@@ -580,13 +612,15 @@ export default async function DashboardPage() {
     {
       label: "Active projects",
       value: activeProjects,
-      description: "Active project workspaces you own or have been invited to access.",
+      description:
+        "Active project workspaces you own or have been invited to access.",
       accent: "emerald" as const,
     },
     {
       label: "Project activity",
       value: accessibleProjectActivity.length,
-      description: "Recent project-linked updates visible under your access rules.",
+      description:
+        "Recent project-linked updates visible under your access rules.",
       accent: "zinc" as const,
     },
   ];
@@ -613,7 +647,10 @@ export default async function DashboardPage() {
             </p>
           </div>
           <div className="flex flex-col gap-3 md:items-end">
-            <DashboardRecentShortcuts project={projectShortcut} note={noteShortcut} />
+            <DashboardRecentShortcuts
+              project={projectShortcut}
+              note={noteShortcut}
+            />
             {user.isGuest ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
                 You&apos;re using a database-backed guest workspace. Keep this
@@ -629,7 +666,9 @@ export default async function DashboardPage() {
               <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
                 Analytics
               </p>
-              <h2 className="text-2xl font-semibold">Productivity at a glance</h2>
+              <h2 className="text-2xl font-semibold">
+                Productivity at a glance
+              </h2>
             </div>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Personal work plus shared projects you can access

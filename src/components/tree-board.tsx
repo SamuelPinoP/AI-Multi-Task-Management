@@ -64,6 +64,12 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
   } | null>(null);
   const [createIntent, setCreateIntent] = useState<CreateIntent | null>(null);
   const [deleteIntent, setDeleteIntent] = useState<DeleteIntent | null>(null);
+  const [deletePageIntent, setDeletePageIntent] = useState<TreePage | null>(
+    null,
+  );
+  const [newPageOpen, setNewPageOpen] = useState(false);
+  const [newPageTitle, setNewPageTitle] = useState("New Tree Page");
+  const [newPageError, setNewPageError] = useState("");
   const [zoom, setZoom] = useState(1);
   const zoomLimits = isFullScreen
     ? FULL_SCREEN_ZOOM_LIMITS
@@ -95,15 +101,26 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
     }
   }
 
-  async function createPage() {
-    const title = window.prompt("Tree page title", "New Tree Page");
-    if (!title?.trim()) return;
+  async function createPage(title?: string) {
+    if (typeof title !== "string") {
+      setNewPageTitle("New Tree Page");
+      setNewPageError("");
+      setNewPageOpen(true);
+      return;
+    }
+    const nextTitle = title.trim();
+    if (!nextTitle) {
+      setNewPageError("Add a name before creating the tree page.");
+      return;
+    }
     const page = await request<TreePage>("/api/tree-pages", {
       method: "POST",
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title: nextTitle }),
     });
     setPages((current) => [page, ...current]);
     setActivePageId(page.id);
+    setNewPageOpen(false);
+    setNewPageTitle("New Tree Page");
   }
   async function renamePage(pageId: string, title: string) {
     const nextTitle = title.trim();
@@ -293,9 +310,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
   function requestDeleteNode(node: TreeNode) {
     if (!activePage) return;
     if (node.parentId === null) {
-      setError(
-        "The root node stays linked to the Tree Page title and cannot be deleted.",
-      );
+      setDeletePageIntent(activePage);
       return;
     }
     const hasChildren = activePage.nodes.some(
@@ -341,6 +356,16 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
           : page,
       ),
     );
+  }
+
+  async function deletePage(page: TreePage) {
+    await request(`/api/tree-pages/${page.id}`, { method: "DELETE" });
+    setDeletePageIntent(null);
+    setPages((current) => {
+      const remaining = current.filter((item) => item.id !== page.id);
+      setActivePageId(remaining[0]?.id ?? "");
+      return remaining;
+    });
   }
 
   const content = (
@@ -497,6 +522,27 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
           </>
         )}
       </div>
+      {newPageOpen && (
+        <NewTreePageDialog
+          title={newPageTitle}
+          error={newPageError}
+          loading={loading}
+          onTitleChange={(value) => {
+            setNewPageTitle(value);
+            if (value.trim()) setNewPageError("");
+          }}
+          onCancel={() => setNewPageOpen(false)}
+          onCreate={() => void createPage(newPageTitle)}
+        />
+      )}
+      {deletePageIntent && (
+        <DeleteTreePageDialog
+          page={deletePageIntent}
+          loading={loading}
+          onCancel={() => setDeletePageIntent(null)}
+          onConfirm={() => void deletePage(deletePageIntent)}
+        />
+      )}
       {deleteIntent && (
         <DeleteNodeDialog
           intent={deleteIntent}
@@ -829,17 +875,15 @@ function TreeNodeRow({
           className={`absolute inset-x-0 top-0 h-1.5 rounded-t-[1.35rem] ${accentTone}`}
           aria-hidden="true"
         />
-        {!isRoot && (
-          <button
-            type="button"
-            className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-xl border border-red-200 bg-white/90 text-sm font-bold text-red-600 shadow-sm transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200 dark:border-red-900/60 dark:bg-slate-950/90 dark:text-red-300 dark:hover:bg-red-950/40"
-            title="Delete node"
-            aria-label="Delete node"
-            onClick={() => onDelete(node)}
-          >
-            ×
-          </button>
-        )}
+        <button
+          type="button"
+          className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-xl border border-red-200 bg-white/90 text-sm font-bold text-red-600 shadow-sm transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200 dark:border-red-900/60 dark:bg-slate-950/90 dark:text-red-300 dark:hover:bg-red-950/40"
+          title={isRoot ? "Delete tree page" : "Delete node"}
+          aria-label={isRoot ? "Delete tree page" : "Delete node"}
+          onClick={() => onDelete(node)}
+        >
+          ×
+        </button>
         <div className="flex items-start justify-between gap-3 pr-6">
           <span
             className={`mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border text-xs shadow-sm ${isRoot ? "cursor-default border-white/25 bg-white/15 text-white/85" : "cursor-grab border-slate-200 bg-slate-50 text-slate-400 group-hover:text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500"}`}
@@ -1339,6 +1383,126 @@ function ColorPalette({
           />
         </button>
       ))}
+    </div>
+  );
+}
+
+function NewTreePageDialog({
+  title,
+  error,
+  loading,
+  onTitleChange,
+  onCancel,
+  onCreate,
+}: {
+  title: string;
+  error: string;
+  loading: boolean;
+  onTitleChange: (value: string) => void;
+  onCancel: () => void;
+  onCreate: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const canCreate = title.trim().length > 0 && !loading;
+
+  useEffect(() => {
+    requestAnimationFrame(() => inputRef.current?.select());
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-zinc-950/45 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[1.75rem] border border-zinc-200 bg-white p-5 shadow-2xl shadow-zinc-950/20 ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/50">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+          Tree View
+        </p>
+        <h3 className="mt-2 text-xl font-bold text-zinc-950 dark:text-zinc-50">
+          New tree page
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
+          Name the page that will hold this tree and its root node.
+        </p>
+        <input
+          ref={inputRef}
+          value={title}
+          onChange={(event) => onTitleChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && canCreate) onCreate();
+            if (event.key === "Escape") onCancel();
+          }}
+          className="mt-5 w-full rounded-2xl border border-zinc-200 bg-zinc-50/80 px-4 py-3 text-base font-semibold text-zinc-950 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-50 dark:focus:border-blue-600 dark:focus:ring-blue-950/60"
+          placeholder="Tree page name"
+        />
+        {error ? (
+          <p className="mt-2 text-sm text-amber-600 dark:text-amber-300">
+            {error}
+          </p>
+        ) : null}
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={loading}
+            className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onCreate}
+            disabled={!canCreate}
+            className="rounded-xl bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+          >
+            {loading ? "Creating…" : "Create"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeleteTreePageDialog({
+  page,
+  loading,
+  onCancel,
+  onConfirm,
+}: {
+  page: TreePage;
+  loading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-zinc-950/45 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[1.5rem] border border-zinc-200 bg-white p-5 shadow-2xl shadow-zinc-950/20 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/50">
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-xl text-red-600 dark:bg-red-950/40 dark:text-red-300">
+          ×
+        </div>
+        <h3 className="mt-4 text-lg font-bold text-zinc-950 dark:text-zinc-50">
+          Delete this tree page?
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+          “{page.title}” and all nodes inside that tree page will be deleted.
+          This action cannot be undone.
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={loading}
+            className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading}
+            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-500 disabled:opacity-60"
+          >
+            {loading ? "Deleting…" : "Delete"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
