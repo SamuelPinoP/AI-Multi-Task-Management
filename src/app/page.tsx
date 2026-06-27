@@ -65,10 +65,8 @@ const demoFeatures = [
 
 type RecentShortcutItem = {
   href: string;
-  label: "Projects" | "Notes";
-  subtitle: string;
+  label: "Continue last Project" | "Continue last note";
   color: string | null;
-  empty: boolean;
 };
 
 function normalizeShortcutColor(color: string | null | undefined) {
@@ -82,29 +80,24 @@ function RecentShortcutBookmark({ item }: { item: RecentShortcutItem }) {
   return (
     <Link
       href={item.href}
-      aria-label={`Open ${item.label}`}
-      className="group relative isolate flex min-h-14 w-full overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/90 px-5 py-3 shadow-[0_10px_26px_rgba(15,23,42,0.06)] transition duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-[0_14px_32px_rgba(15,23,42,0.10)] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-zinc-800/90 dark:bg-zinc-950/80 dark:shadow-none dark:hover:border-zinc-700 dark:focus:ring-offset-zinc-950"
+      aria-label={item.label}
+      className="group relative isolate flex min-h-11 w-full items-center overflow-hidden rounded-xl border border-zinc-200/75 bg-white/75 px-4 py-2.5 shadow-[0_8px_20px_rgba(15,23,42,0.045)] backdrop-blur-md transition duration-200 hover:-translate-y-0.5 hover:border-zinc-300/90 hover:shadow-[0_12px_26px_rgba(15,23,42,0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/70 focus-visible:ring-offset-2 dark:border-zinc-800/85 dark:bg-zinc-950/55 dark:shadow-[0_8px_22px_rgba(0,0,0,0.18)] dark:hover:border-zinc-700/90 dark:focus-visible:ring-zinc-500 dark:focus-visible:ring-offset-zinc-950"
       style={{
-        backgroundImage: `linear-gradient(110deg, ${accent}1f 0%, transparent 42%), linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,255,255,0.72))`,
+        backgroundImage: `linear-gradient(105deg, ${accent}14 0%, transparent 46%), linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0.52))`,
       }}
     >
       <span
         aria-hidden="true"
-        className="absolute inset-y-2 left-2 w-1 rounded-full opacity-75 transition duration-200 group-hover:inset-y-1.5 group-hover:opacity-100"
+        className="absolute inset-y-2 left-2 w-0.5 rounded-full opacity-55 transition duration-200 group-hover:inset-y-1.5 group-hover:opacity-75"
         style={{ backgroundColor: accent }}
       />
       <span
         aria-hidden="true"
-        className="absolute -right-10 top-1/2 h-20 w-20 -translate-y-1/2 rounded-full opacity-10 blur-2xl transition group-hover:opacity-20"
+        className="absolute -right-8 top-1/2 h-16 w-16 -translate-y-1/2 rounded-full opacity-[0.07] blur-2xl transition duration-200 group-hover:opacity-[0.12]"
         style={{ backgroundColor: accent }}
       />
-      <span className="flex min-w-0 flex-1 items-center justify-between gap-4 pl-3">
-        <span className="text-sm font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-          {item.label}
-        </span>
-        <span className="rounded-full border border-zinc-200/80 bg-white/65 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-zinc-500 transition group-hover:text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/65 dark:text-zinc-400 dark:group-hover:text-zinc-200">
-          Open
-        </span>
+      <span className="min-w-0 pl-4 text-sm font-semibold leading-5 tracking-[-0.01em] text-zinc-800 transition duration-200 group-hover:text-zinc-950 dark:text-zinc-100 dark:group-hover:text-white">
+        {item.label}
       </span>
     </Link>
   );
@@ -542,32 +535,24 @@ export default async function DashboardPage() {
   const projectShortcut: RecentShortcutItem = recentProject
     ? {
         href: `/projects/${recentProject.id}`,
-        label: "Projects",
-        subtitle: recentProject.name,
+        label: "Continue last Project",
         color: recentProject.color,
-        empty: false,
       }
     : {
         href: "/projects",
-        label: "Projects",
-        subtitle: "Open a project to pin it here",
+        label: "Continue last Project",
         color: null,
-        empty: true,
       };
   const noteShortcut: RecentShortcutItem = recentNote
     ? {
         href: `/notes?openNote=${recentNote.id}&focus=content`,
-        label: "Notes",
-        subtitle: recentNote.title,
+        label: "Continue last note",
         color: recentNote.project?.color ?? null,
-        empty: false,
       }
     : {
         href: "/notes",
-        label: "Notes",
-        subtitle: "Modify a note to pin it here",
+        label: "Continue last note",
         color: "#8b5cf6",
-        empty: true,
       };
 
   const dashboardAnalytics = [
