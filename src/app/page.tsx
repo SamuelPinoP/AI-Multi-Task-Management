@@ -80,32 +80,39 @@ function normalizeShortcutColor(color: string | null | undefined) {
 
 function RecentShortcutBookmark({ item }: { item: RecentShortcutItem }) {
   const accent = normalizeShortcutColor(item.color);
+  const icon = item.label === "Projects" ? "▦" : "✎";
+
   return (
     <Link
       href={item.href}
-      className="group relative isolate flex min-h-20 overflow-hidden rounded-2xl border border-zinc-200 bg-white/85 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-zinc-800 dark:bg-zinc-950/70 dark:focus:ring-offset-zinc-950"
+      className="group relative isolate flex min-h-24 overflow-hidden rounded-[1.35rem] border border-zinc-200/80 bg-white/90 shadow-[0_14px_35px_rgba(15,23,42,0.08)] transition duration-200 hover:-translate-y-1 hover:border-zinc-300 hover:shadow-[0_20px_45px_rgba(15,23,42,0.13)] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-zinc-800/90 dark:bg-zinc-950/80 dark:shadow-none dark:hover:border-zinc-700 dark:focus:ring-offset-zinc-950"
       style={{
-        backgroundImage: `linear-gradient(115deg, ${accent}1f, transparent 45%), radial-gradient(circle at top right, ${accent}26, transparent 36%)`,
+        backgroundImage: `linear-gradient(120deg, ${accent}24 0%, transparent 48%), radial-gradient(circle at 92% 12%, ${accent}33, transparent 34%), linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.72))`,
       }}
     >
       <span
         aria-hidden="true"
-        className="relative w-7 shrink-0 shadow-inner transition group-hover:w-8"
+        className="absolute inset-y-3 left-3 w-1.5 rounded-full shadow-sm transition duration-200 group-hover:inset-y-2"
         style={{ backgroundColor: accent }}
-      >
-        <span className="absolute right-0 top-1/2 h-7 w-4 -translate-y-1/2 translate-x-1/2 rotate-45 rounded-sm bg-white dark:bg-zinc-950" />
-      </span>
-      <span className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/75 text-sm font-bold text-zinc-900 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900/80 dark:text-zinc-50 dark:ring-zinc-800">
-          {item.label === "Projects" ? "P" : "N"}
+      />
+      <span className="absolute -right-8 -top-10 h-28 w-28 rounded-full opacity-15 blur-2xl transition group-hover:opacity-25" style={{ backgroundColor: accent }} />
+      <span className="flex min-w-0 flex-1 items-center gap-4 px-6 py-4 pl-8">
+        <span
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/85 text-xl font-bold text-zinc-900 shadow-sm ring-1 ring-zinc-200/80 transition group-hover:scale-105 dark:bg-zinc-900/85 dark:text-zinc-50 dark:ring-zinc-800"
+          style={{ color: accent }}
+        >
+          {icon}
         </span>
-        <span className="min-w-0">
-          <span className="block text-sm font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+        <span className="min-w-0 flex-1">
+          <span className="block text-[0.68rem] font-bold uppercase tracking-[0.22em] text-zinc-500 dark:text-zinc-400">
             {item.label}
           </span>
-          <span className={`mt-0.5 block truncate text-base font-semibold ${item.empty ? "text-zinc-600 dark:text-zinc-300" : "text-zinc-950 dark:text-zinc-50"}`}>
+          <span className={`mt-1 block truncate text-base font-semibold leading-6 ${item.empty ? "text-zinc-600 dark:text-zinc-300" : "text-zinc-950 dark:text-zinc-50"}`}>
             {item.subtitle}
           </span>
+        </span>
+        <span className="hidden rounded-full border border-zinc-200 bg-white/75 px-2.5 py-1 text-xs font-semibold text-zinc-500 transition group-hover:border-zinc-300 group-hover:text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-400 dark:group-hover:text-zinc-200 sm:inline-flex">
+          Open
         </span>
       </span>
     </Link>
@@ -400,6 +407,7 @@ export default async function DashboardPage() {
     totalEvents,
     activeProjects,
     recentShortcut,
+    lastModifiedNote,
   ] = await Promise.all([
     prisma.note.findMany({
       where: { userId: user.id, deletedAt: null },
@@ -465,8 +473,15 @@ export default async function DashboardPage() {
       where: { userId: user.id },
       include: {
         project: { select: { id: true, name: true, color: true, status: true, userId: true, members: { where: { userId: user.id }, select: { userId: true } } } },
-        note: { select: { id: true, title: true, deletedAt: true, userId: true, project: { select: { id: true, color: true, userId: true, members: { where: { userId: user.id }, select: { userId: true } } } } } },
       },
+    }),
+    prisma.note.findFirst({
+      where: {
+        deletedAt: null,
+        OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }],
+      },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, title: true, project: { select: { color: true } } },
     }),
   ]);
 
@@ -517,15 +532,13 @@ export default async function DashboardPage() {
   const recentProject = recentShortcut?.project && recentShortcut.project.status === ProjectStatus.ACTIVE && (recentShortcut.project.userId === user.id || recentShortcut.project.members.length > 0)
     ? recentShortcut.project
     : null;
-  const recentNote = recentShortcut?.note && !recentShortcut.note.deletedAt && (recentShortcut.note.userId === user.id || (recentShortcut.note.project && (recentShortcut.note.project.userId === user.id || recentShortcut.note.project.members.length > 0)))
-    ? recentShortcut.note
-    : null;
+  const recentNote = lastModifiedNote;
   const projectShortcut: RecentShortcutItem = recentProject
     ? { href: `/projects/${recentProject.id}`, label: "Projects", subtitle: recentProject.name, color: recentProject.color, empty: false }
     : { href: "/projects", label: "Projects", subtitle: "Open a project to pin it here", color: null, empty: true };
   const noteShortcut: RecentShortcutItem = recentNote
-    ? { href: `/notes?openNote=${recentNote.id}`, label: "Notes", subtitle: recentNote.title, color: recentNote.project?.color ?? null, empty: false }
-    : { href: "/notes", label: "Notes", subtitle: "Open a note to pin it here", color: "#8b5cf6", empty: true };
+    ? { href: `/notes?openNote=${recentNote.id}&focus=content`, label: "Notes", subtitle: recentNote.title, color: recentNote.project?.color ?? null, empty: false }
+    : { href: "/notes", label: "Notes", subtitle: "Modify a note to pin it here", color: "#8b5cf6", empty: true };
 
   const dashboardAnalytics = [
     {
