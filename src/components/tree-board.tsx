@@ -561,7 +561,45 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
     );
   }
 
-  return <section className="space-y-4">{content}</section>;
+  return (
+    <section className="space-y-4">
+      <TreeViewWorkInProgressBanner />
+      {content}
+    </section>
+  );
+}
+
+function TreeViewWorkInProgressBanner() {
+  return (
+    <div className="relative isolate overflow-hidden rounded-[1.75rem] border border-blue-200/70 bg-gradient-to-br from-blue-50/90 via-white/85 to-emerald-50/80 p-4 shadow-sm shadow-blue-200/40 ring-1 ring-white/80 backdrop-blur dark:border-blue-900/50 dark:from-blue-950/35 dark:via-zinc-900/85 dark:to-emerald-950/25 dark:shadow-none dark:ring-white/10 sm:p-5">
+      <div
+        aria-hidden="true"
+        className="absolute -right-10 -top-12 h-28 w-28 rounded-full bg-blue-400/15 blur-3xl dark:bg-blue-500/20"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute -bottom-12 left-8 h-24 w-24 rounded-full bg-emerald-400/15 blur-3xl dark:bg-emerald-500/15"
+      />
+      <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="mt-1 flex h-3 w-3 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_0_5px_rgba(52,211,153,0.16)] dark:bg-emerald-300 dark:shadow-[0_0_0_5px_rgba(110,231,183,0.12)]" />
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-700 dark:text-blue-300">
+              Work In Progress
+            </p>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+              Tree View is still being improved. More planning views will be
+              added soon.
+            </p>
+          </div>
+        </div>
+        <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/80 bg-white/70 px-3 py-1.5 text-xs font-semibold text-zinc-600 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/10 dark:text-zinc-300">
+          <span aria-hidden="true">🚧</span>
+          <span>Polishing the experience</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function TreePageSwitcher({

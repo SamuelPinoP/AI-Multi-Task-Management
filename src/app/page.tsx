@@ -65,7 +65,7 @@ const demoFeatures = [
 
 type RecentShortcutItem = {
   href: string;
-  label: "Continue last Project" | "Continue last note";
+  label: "Continue last Project" | "Continue last Note";
   color: string | null;
 };
 
@@ -546,12 +546,12 @@ export default async function DashboardPage() {
   const noteShortcut: RecentShortcutItem = recentNote
     ? {
         href: `/notes?openNote=${recentNote.id}&focus=content`,
-        label: "Continue last note",
+        label: "Continue last Note",
         color: recentNote.project?.color ?? null,
       }
     : {
         href: "/notes",
-        label: "Continue last note",
+        label: "Continue last Note",
         color: "#8b5cf6",
       };
 
