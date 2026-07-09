@@ -8,6 +8,7 @@ import {
   normalizeRecurrence,
 } from "@/lib/recurrence";
 import { uiButtonClass, uiCardClass } from "@/components/ui";
+import { getLocalDateOnly } from "@/lib/task-date-buckets";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
@@ -52,12 +53,12 @@ type RoadmapItem = {
 };
 
 function getLocalDayStart(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return getLocalDateOnly(date);
 }
 
 function getDayDiffFromToday(value: string, todayStart: Date) {
-  const date = getLocalDayStart(new Date(value));
-  return Math.floor((date.getTime() - todayStart.getTime()) / 86400000);
+  const date = getLocalDateOnly(value);
+  return Math.round((date.getTime() - todayStart.getTime()) / 86400000);
 }
 
 function getRoadmapBucket(

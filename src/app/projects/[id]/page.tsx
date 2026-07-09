@@ -13,6 +13,7 @@ import {
   projectAccessWhereForProject,
 } from "@/lib/project-access";
 import { markProjectOpened } from "@/lib/recent-shortcuts";
+import { isOverdueTask } from "@/lib/task-date-buckets";
 
 type ProjectDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -118,7 +119,7 @@ export default async function ProjectDetailPage({
     (task) => task.status !== "DONE",
   ).length;
   const overdueTasks = project.tasks.filter(
-    (task) => task.status !== "DONE" && task.dueDate && task.dueDate < now,
+    (task) => task.status !== "DONE" && isOverdueTask(task.dueDate, now),
   ).length;
   const upcomingEvents = project.events.filter(
     (event) => event.startTime >= now,
@@ -150,7 +151,7 @@ export default async function ProjectDetailPage({
     if (task.status === "DONE") item.completed += 1;
     else {
       item.active += 1;
-      if (task.dueDate && task.dueDate < now) item.overdue += 1;
+      if (isOverdueTask(task.dueDate, now)) item.overdue += 1;
     }
   }
 

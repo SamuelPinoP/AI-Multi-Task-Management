@@ -8,6 +8,7 @@ import {
   uiPrimaryButtonClass,
 } from "@/components/ui";
 import { expandRecurringEventsForRange } from "@/lib/recurrence";
+import { getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
@@ -35,8 +36,7 @@ type EventItem = {
   project?: Project | null;
 };
 
-const dayStart = (date: Date) =>
-  new Date(date.getFullYear(), date.getMonth(), date.getDate());
+const dayStart = (date: Date) => getLocalDateOnly(date);
 const fmtDate = (value: string) =>
   new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(
     new Date(value),
@@ -84,12 +84,11 @@ export function TodayWorkspace({
         (task) => task.status !== "DONE" && task.dueDate,
       );
       const overdue = activeTasks.filter(
-        (task) => new Date(task.dueDate as string) < today,
+        (task) => getTaskDateBucket(task.dueDate) === "OVERDUE",
       );
-      const dueToday = activeTasks.filter((task) => {
-        const due = new Date(task.dueDate as string);
-        return due >= today && due < tomorrow;
-      });
+      const dueToday = activeTasks.filter(
+        (task) => getTaskDateBucket(task.dueDate) === "DUE_TODAY",
+      );
       const expanded = expandRecurringEventsForRange(
         events.map((event) => ({ ...event, sourceEventId: event.id })),
         today,

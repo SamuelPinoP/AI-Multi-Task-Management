@@ -4,6 +4,7 @@ import { Priority, ProjectStatus, Recurrence, TaskStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma";
 import { projectAccessWhere } from "@/lib/project-access";
 import { expandRecurringEventsForRange, normalizeRecurrence } from "@/lib/recurrence";
+import { getLocalDateOnly } from "@/lib/task-date-buckets";
 
 export type PlannerPriority = "HIGH" | "MEDIUM" | "LOW";
 export type PlannerSuggestionKind = "TASK" | "EVENT" | "PROJECT" | "NOTE" | "ACTIVITY" | "SYNTHETIC";
@@ -46,7 +47,7 @@ export type SmartPlanner = {
 const DAY_MS = 86_400_000;
 
 function dayStart(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return getLocalDateOnly(date);
 }
 
 function addDays(date: Date, days: number) {
@@ -56,7 +57,7 @@ function addDays(date: Date, days: number) {
 }
 
 function dayDiff(target: Date, now: Date) {
-  return Math.floor((dayStart(target).getTime() - dayStart(now).getTime()) / DAY_MS);
+  return Math.round((dayStart(target).getTime() - dayStart(now).getTime()) / DAY_MS);
 }
 
 function priorityFromTask(priority: Priority, overdue = false): PlannerPriority {
