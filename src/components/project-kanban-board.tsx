@@ -1,6 +1,7 @@
 "use client";
 
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import { getLocalDateOnly } from "@/lib/task-date-buckets";
 import { useMemo, useState } from "react";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
@@ -51,14 +52,14 @@ function formatEnum(value: string) {
 }
 
 function getLocalDayStart(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return getLocalDateOnly(date);
 }
 
 function getDueIndicator(task: Task): { label: string; className: string } | null {
   if (!task.dueDate || task.status === "DONE") return null;
-  const dueDate = getLocalDayStart(new Date(task.dueDate));
+  const dueDate = getLocalDateOnly(task.dueDate);
   const today = getLocalDayStart(new Date());
-  const dayDiff = Math.floor((dueDate.getTime() - today.getTime()) / 86400000);
+  const dayDiff = Math.round((dueDate.getTime() - today.getTime()) / 86400000);
   if (dayDiff < 0) return { label: "Overdue", className: "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300" };
   if (dayDiff === 0) return { label: "Due today", className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300" };
   return null;

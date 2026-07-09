@@ -8,6 +8,7 @@ import {
 } from "@/components/ui";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
@@ -47,18 +48,20 @@ type Task = {
 type TaskUrgency = "OVERDUE" | "DUE_TODAY" | "DUE_SOON" | "NONE";
 
 function getLocalDayStart(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return getLocalDateOnly(date);
 }
 
 function getTaskUrgency(task: Task): TaskUrgency {
   if (task.status === "DONE" || !task.dueDate) return "NONE";
 
-  const dueDate = getLocalDayStart(new Date(task.dueDate));
-  const today = getLocalDayStart(new Date());
-  const dayDiff = Math.floor((dueDate.getTime() - today.getTime()) / 86400000);
+  const bucket = getTaskDateBucket(task.dueDate);
+  if (bucket === "OVERDUE") return "OVERDUE";
+  if (bucket === "DUE_TODAY") return "DUE_TODAY";
 
-  if (dayDiff < 0) return "OVERDUE";
-  if (dayDiff === 0) return "DUE_TODAY";
+  const dueDate = getLocalDateOnly(task.dueDate);
+  const today = getLocalDayStart(new Date());
+  const dayDiff = Math.round((dueDate.getTime() - today.getTime()) / 86400000);
+
   if (dayDiff <= 3) return "DUE_SOON";
   return "NONE";
 }

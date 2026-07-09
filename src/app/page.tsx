@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth";
 import { expandRecurringEventsForRange } from "@/lib/recurrence";
 import { projectAccessWhere } from "@/lib/project-access";
+import { getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
 
 const REMINDER_LOOKAHEAD_DAYS = 7;
 
@@ -104,16 +105,17 @@ function RecentShortcutBookmark({ item }: { item: RecentShortcutItem }) {
 }
 
 function DashboardRecentShortcuts({
-  project,
-  note,
+  shortcuts,
 }: {
-  project: RecentShortcutItem;
-  note: RecentShortcutItem;
+  shortcuts: RecentShortcutItem[];
 }) {
+  if (shortcuts.length === 0) return null;
+
   return (
     <div className="flex w-full flex-col gap-2 sm:w-72 md:w-80">
-      <RecentShortcutBookmark item={project} />
-      <RecentShortcutBookmark item={note} />
+      {shortcuts.map((shortcut) => (
+        <RecentShortcutBookmark key={shortcut.label} item={shortcut} />
+      ))}
     </div>
   );
 }
@@ -267,23 +269,23 @@ function formatDate(date: Date) {
 }
 
 function getLocalDayStart(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return getLocalDateOnly(date);
 }
 
 function getTaskReminderGroup(
   taskDueDate: Date,
   now: Date,
 ): TaskReminderGroup | null {
+  const bucket = getTaskDateBucket(taskDueDate, now);
+  if (bucket !== "UPCOMING") return bucket;
+
   const dueStart = getLocalDayStart(taskDueDate);
   const todayStart = getLocalDayStart(now);
-  const dayDiff = Math.floor(
+  const dayDiff = Math.round(
     (dueStart.getTime() - todayStart.getTime()) / 86400000,
   );
 
-  if (dayDiff < 0) return "OVERDUE";
-  if (dayDiff === 0) return "DUE_TODAY";
-  if (dayDiff <= REMINDER_LOOKAHEAD_DAYS) return "UPCOMING";
-  return null;
+  return dayDiff <= REMINDER_LOOKAHEAD_DAYS ? "UPCOMING" : null;
 }
 
 function getEventReminderGroup(
@@ -392,6 +394,7 @@ export default async function DashboardPage() {
     activeProjects,
     recentShortcut,
     lastModifiedNote,
+    fallbackProject,
   ] = await Promise.all([
     prisma.note.findMany({
       where: { userId: user.id, deletedAt: null },
@@ -478,6 +481,11 @@ export default async function DashboardPage() {
       orderBy: { updatedAt: "desc" },
       select: { id: true, title: true, project: { select: { color: true } } },
     }),
+    prisma.project.findFirst({
+      where: { ...projectAccessWhere(user.id), status: ProjectStatus.ACTIVE },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      select: { id: true, color: true },
+    }),
   ]);
 
   const overdueTasks = reminderTasks.filter(
@@ -530,30 +538,28 @@ export default async function DashboardPage() {
     (recentShortcut.project.userId === user.id ||
       recentShortcut.project.members.length > 0)
       ? recentShortcut.project
-      : null;
+      : fallbackProject;
   const recentNote = lastModifiedNote;
-  const projectShortcut: RecentShortcutItem = recentProject
-    ? {
-        href: `/projects/${recentProject.id}`,
-        label: "Continue last Project",
-        color: recentProject.color,
-      }
-    : {
-        href: "/projects",
-        label: "Continue last Project",
-        color: null,
-      };
-  const noteShortcut: RecentShortcutItem = recentNote
-    ? {
-        href: `/notes?openNote=${recentNote.id}&focus=content`,
-        label: "Continue last Note",
-        color: recentNote.project?.color ?? null,
-      }
-    : {
-        href: "/notes",
-        label: "Continue last Note",
-        color: "#8b5cf6",
-      };
+  const shortcuts: RecentShortcutItem[] = [
+    ...(recentProject
+      ? [
+          {
+            href: `/projects/${recentProject.id}`,
+            label: "Continue last Project" as const,
+            color: recentProject.color,
+          },
+        ]
+      : []),
+    ...(recentNote
+      ? [
+          {
+            href: `/notes?openNote=${recentNote.id}&focus=content`,
+            label: "Continue last Note" as const,
+            color: recentNote.project?.color ?? null,
+          },
+        ]
+      : []),
+  ];
 
   const dashboardAnalytics = [
     {
@@ -632,10 +638,7 @@ export default async function DashboardPage() {
             </p>
           </div>
           <div className="flex flex-col gap-3 md:items-end">
-            <DashboardRecentShortcuts
-              project={projectShortcut}
-              note={noteShortcut}
-            />
+            <DashboardRecentShortcuts shortcuts={shortcuts} />
             {user.isGuest ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
                 You&apos;re using a database-backed guest workspace. Keep this
