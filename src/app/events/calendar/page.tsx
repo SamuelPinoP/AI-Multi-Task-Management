@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -32,11 +32,14 @@ type Priority = "LOW" | "MEDIUM" | "HIGH";
 type TaskItem = {
   id: string;
   title: string;
+  description?: string | null;
   status: TaskStatus;
   priority: Priority;
   dueDate: string | null;
+  recurrence?: Recurrence | null;
   projectId?: string | null;
   project?: Project | null;
+  assignee?: { id: string } | null;
 };
 type Project = { id: string; name: string; color: string | null };
 const ALL_PROJECTS_FILTER = "ALL";
@@ -50,7 +53,9 @@ function formatDayKey(date: Date) {
 }
 
 function formatTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(
+    new Date(value),
+  );
 }
 
 export default function EventsCalendarPage() {
@@ -64,7 +69,9 @@ export default function EventsCalendarPage() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [selectedDayKey, setSelectedDayKey] = useState(() => formatDayKey(new Date()));
+  const [selectedDayKey, setSelectedDayKey] = useState(() =>
+    formatDayKey(new Date()),
+  );
   const [mobileRangeStart, setMobileRangeStart] = useState(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -72,6 +79,8 @@ export default function EventsCalendarPage() {
   });
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     async function loadEvents() {
@@ -79,14 +88,16 @@ export default function EventsCalendarPage() {
         setFetching(true);
         setError("");
 
-        const [eventsResponse, tasksResponse, projectsData] = await Promise.all([
-          fetch("/api/events", { cache: "no-store" }),
-          fetch("/api/tasks", { cache: "no-store" }),
-          fetch("/api/projects", { cache: "no-store" }).then(async (res) => {
-            if (!res.ok) throw new Error("Failed to fetch projects");
-            return res.json() as Promise<Project[]>;
-          }),
-        ]);
+        const [eventsResponse, tasksResponse, projectsData] = await Promise.all(
+          [
+            fetch("/api/events", { cache: "no-store" }),
+            fetch("/api/tasks", { cache: "no-store" }),
+            fetch("/api/projects", { cache: "no-store" }).then(async (res) => {
+              if (!res.ok) throw new Error("Failed to fetch projects");
+              return res.json() as Promise<Project[]>;
+            }),
+          ],
+        );
         if (!eventsResponse.ok || !tasksResponse.ok) {
           throw new Error("Failed to fetch calendar items");
         }
@@ -95,7 +106,12 @@ export default function EventsCalendarPage() {
           eventsResponse.json() as Promise<EventItem[]>,
           tasksResponse.json() as Promise<TaskItem[]>,
         ]);
-        setEvents(eventsData.map((event) => ({ ...event, recurrence: normalizeRecurrence(event.recurrence) })));
+        setEvents(
+          eventsData.map((event) => ({
+            ...event,
+            recurrence: normalizeRecurrence(event.recurrence),
+          })),
+        );
         setTasks(tasksData);
         setProjects(projectsData);
       } catch {
@@ -144,36 +160,45 @@ export default function EventsCalendarPage() {
       ...event,
       sourceEventId: event.id,
     }));
-    return expandRecurringEventsForRange(eventsWithSourceId, visibleRange.start, visibleRange.end);
+    return expandRecurringEventsForRange(
+      eventsWithSourceId,
+      visibleRange.start,
+      visibleRange.end,
+    );
   }, [events, visibleRange]);
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === projectFilter) ?? null,
-    [projects, projectFilter]
+    [projects, projectFilter],
   );
   const filteredExpandedEvents = useMemo(() => {
     return expandedEvents.filter((event) => {
       if (projectFilter === ALL_PROJECTS_FILTER) return true;
-      if (projectFilter === NO_PROJECT_FILTER) return event.projectId === null || event.projectId === undefined;
+      if (projectFilter === NO_PROJECT_FILTER)
+        return event.projectId === null || event.projectId === undefined;
       return event.projectId === projectFilter;
     });
   }, [expandedEvents, projectFilter]);
 
   const eventsByDay = useMemo(() => {
-    return filteredExpandedEvents.reduce<Record<string, EventItem[]>>((acc, event) => {
-      const key = formatDayKey(new Date(event.startTime));
-      if (!acc[key]) {
-        acc[key] = [];
-      }
-      acc[key].push(event);
-      return acc;
-    }, {});
+    return filteredExpandedEvents.reduce<Record<string, EventItem[]>>(
+      (acc, event) => {
+        const key = formatDayKey(new Date(event.startTime));
+        if (!acc[key]) {
+          acc[key] = [];
+        }
+        acc[key].push(event);
+        return acc;
+      },
+      {},
+    );
   }, [filteredExpandedEvents]);
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
       if (!task.dueDate) return false;
       if (projectFilter === ALL_PROJECTS_FILTER) return true;
-      if (projectFilter === NO_PROJECT_FILTER) return task.projectId === null || task.projectId === undefined;
+      if (projectFilter === NO_PROJECT_FILTER)
+        return task.projectId === null || task.projectId === undefined;
       return task.projectId === projectFilter;
     });
   }, [projectFilter, tasks]);
@@ -193,11 +218,15 @@ export default function EventsCalendarPage() {
   const selectedDayEvents = useMemo(() => {
     const dayEvents = eventsByDay[selectedDayKey] ?? [];
     return [...dayEvents].sort(
-      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+      (a, b) =>
+        new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
     );
   }, [eventsByDay, selectedDayKey]);
 
-  const selectedDayTasks = useMemo(() => tasksByDay[selectedDayKey] ?? [], [selectedDayKey, tasksByDay]);
+  const selectedDayTasks = useMemo(
+    () => tasksByDay[selectedDayKey] ?? [],
+    [selectedDayKey, tasksByDay],
+  );
 
   const mobileDays = useMemo(() => {
     return Array.from({ length: 3 }, (_, index) => {
@@ -210,16 +239,62 @@ export default function EventsCalendarPage() {
   const mobileRangeLabel = useMemo(() => {
     const start = mobileDays[0];
     const end = mobileDays[mobileDays.length - 1];
-    const formatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+    });
     return `${formatter.format(start)} – ${formatter.format(end)}`;
   }, [mobileDays]);
 
   const selectedDayLabel = useMemo(() => {
     const [year, monthNum, day] = selectedDayKey.split("-").map(Number);
     return new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(
-      new Date(year, monthNum - 1, day)
+      new Date(year, monthNum - 1, day),
     );
   }, [selectedDayKey]);
+
+  function openEvent(event: EventItem) {
+    router.push(
+      `/events?event=${encodeURIComponent(event.sourceEventId ?? event.id)}`,
+    );
+  }
+
+  async function handleCompleteTask(task: TaskItem) {
+    try {
+      setCompletingTaskId(task.id);
+      setError("");
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: task.title,
+          status: "DONE",
+          description: task.description ?? "",
+          priority: task.priority,
+          dueDate: task.dueDate,
+          recurrence: normalizeRecurrence(task.recurrence),
+          projectId: task.projectId ?? "",
+          assigneeId: task.assignee?.id ?? "",
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Failed to complete task");
+      }
+      const updatedTask = (await res.json()) as TaskItem;
+      setTasks((prev) =>
+        prev.map((item) => (item.id === task.id ? updatedTask : item)),
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not mark this task done. Please try again.",
+      );
+    } finally {
+      setCompletingTaskId(null);
+    }
+  }
 
   async function handleDeleteEvent(eventId: string) {
     try {
@@ -248,7 +323,8 @@ export default function EventsCalendarPage() {
           <div>
             <h1 className="text-4xl font-bold">Full Calendar</h1>
             <p className="mt-2 text-zinc-600 dark:text-zinc-300">
-              Explore all events in a larger monthly view with day-by-day details.
+              Explore all events in a larger monthly view with day-by-day
+              details.
             </p>
           </div>
           <BackLink href="/events">Back to Events</BackLink>
@@ -279,13 +355,23 @@ export default function EventsCalendarPage() {
                 ))}
               </select>
               <button
-                onClick={() => setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                onClick={() =>
+                  setMonth(
+                    (prev) =>
+                      new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
+                  )
+                }
                 className={uiButtonClass}
               >
                 Previous
               </button>
               <button
-                onClick={() => setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                onClick={() =>
+                  setMonth(
+                    (prev) =>
+                      new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
+                  )
+                }
                 className={uiButtonClass}
               >
                 Next
@@ -298,15 +384,29 @@ export default function EventsCalendarPage() {
               <div className="mb-4 flex items-center justify-between gap-3 sm:hidden">
                 <button
                   type="button"
-                  onClick={() => setMobileRangeStart((prev) => { const next = new Date(prev); next.setDate(next.getDate() - 3); return next; })}
+                  onClick={() =>
+                    setMobileRangeStart((prev) => {
+                      const next = new Date(prev);
+                      next.setDate(next.getDate() - 3);
+                      return next;
+                    })
+                  }
                   className={uiButtonClass}
                 >
                   Previous 3 days
                 </button>
-                <p className="text-center text-sm font-semibold text-zinc-600 dark:text-zinc-300">{mobileRangeLabel}</p>
+                <p className="text-center text-sm font-semibold text-zinc-600 dark:text-zinc-300">
+                  {mobileRangeLabel}
+                </p>
                 <button
                   type="button"
-                  onClick={() => setMobileRangeStart((prev) => { const next = new Date(prev); next.setDate(next.getDate() + 3); return next; })}
+                  onClick={() =>
+                    setMobileRangeStart((prev) => {
+                      const next = new Date(prev);
+                      next.setDate(next.getDate() + 3);
+                      return next;
+                    })
+                  }
                   className={uiButtonClass}
                 >
                   Next 3 days
@@ -325,7 +425,12 @@ export default function EventsCalendarPage() {
                     <button
                       key={dayKey}
                       type="button"
-                      onClick={() => { setSelectedDayKey(dayKey); setMonth(new Date(day.getFullYear(), day.getMonth(), 1)); }}
+                      onClick={() => {
+                        setSelectedDayKey(dayKey);
+                        setMonth(
+                          new Date(day.getFullYear(), day.getMonth(), 1),
+                        );
+                      }}
                       className={`w-full rounded-2xl border p-4 text-left transition ${
                         isSelected
                           ? "border-black bg-zinc-100 dark:bg-zinc-800"
@@ -335,10 +440,17 @@ export default function EventsCalendarPage() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                            {new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(day)}
+                            {new Intl.DateTimeFormat("en-US", {
+                              weekday: "long",
+                            }).format(day)}
                           </p>
-                          <p className={`mt-1 text-2xl font-bold ${isToday ? "text-blue-600 dark:text-blue-300" : ""}`}>
-                            {new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(day)}
+                          <p
+                            className={`mt-1 text-2xl font-bold ${isToday ? "text-blue-600 dark:text-blue-300" : ""}`}
+                          >
+                            {new Intl.DateTimeFormat("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            }).format(day)}
                           </p>
                         </div>
                         <span className="rounded-full bg-zinc-950 px-2.5 py-1 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-zinc-950">
@@ -347,17 +459,33 @@ export default function EventsCalendarPage() {
                       </div>
                       <div className="mt-3 space-y-2">
                         {dayEvents.slice(0, 2).map((event) => (
-                          <p key={event.id} className="truncate rounded-xl bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-                            {event.hasStartTime ? formatTime(event.startTime) : "No time"} {event.title}
-                          </p>
+                          <span
+                            key={event.id}
+                            className="block truncate rounded-xl bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                          >
+                            {event.hasStartTime
+                              ? formatTime(event.startTime)
+                              : "No time"}{" "}
+                            {event.title}
+                          </span>
                         ))}
-                        {dayTasks.slice(0, Math.max(0, 3 - Math.min(dayEvents.length, 2))).map((task) => (
-                          <p key={task.id} className={`truncate rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200 ${task.status === "DONE" ? "opacity-60 line-through" : ""}`}>
-                            □ {task.title}
-                          </p>
-                        ))}
+                        {dayTasks
+                          .slice(
+                            0,
+                            Math.max(0, 3 - Math.min(dayEvents.length, 2)),
+                          )
+                          .map((task) => (
+                            <p
+                              key={task.id}
+                              className={`truncate rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200 ${task.status === "DONE" ? "opacity-60 line-through" : ""}`}
+                            >
+                              □ {task.title}
+                            </p>
+                          ))}
                         {itemCount === 0 && (
-                          <p className="rounded-xl border border-dashed border-zinc-200 px-3 py-3 text-sm text-zinc-500 dark:border-zinc-700">No items.</p>
+                          <p className="rounded-xl border border-dashed border-zinc-200 px-3 py-3 text-sm text-zinc-500 dark:border-zinc-700">
+                            No items.
+                          </p>
                         )}
                       </div>
                     </button>
@@ -366,79 +494,99 @@ export default function EventsCalendarPage() {
               </div>
 
               <div className="hidden sm:block">
-              <div className="mb-3 grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                  <span key={day}>{day}</span>
-                ))}
-              </div>
+                <div className="mb-3 grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                    (day) => (
+                      <span key={day}>{day}</span>
+                    ),
+                  )}
+                </div>
 
-              <div className="grid grid-cols-7 gap-2">
-                {monthDays.map((day) => {
-                  const dayKey = formatDayKey(day);
-                  const isCurrentMonth = day.getMonth() === month.getMonth();
-                  const isToday = dayKey === formatDayKey(new Date());
-                  const isSelected = dayKey === selectedDayKey;
-                  const eventCount = eventsByDay[dayKey]?.length ?? 0;
-                  const taskCount = tasksByDay[dayKey]?.length ?? 0;
-                  const itemCount = eventCount + taskCount;
+                <div className="grid grid-cols-7 gap-2">
+                  {monthDays.map((day) => {
+                    const dayKey = formatDayKey(day);
+                    const isCurrentMonth = day.getMonth() === month.getMonth();
+                    const isToday = dayKey === formatDayKey(new Date());
+                    const isSelected = dayKey === selectedDayKey;
+                    const eventCount = eventsByDay[dayKey]?.length ?? 0;
+                    const taskCount = tasksByDay[dayKey]?.length ?? 0;
+                    const itemCount = eventCount + taskCount;
 
-                  return (
-                    <button
-                      key={dayKey}
-                      onClick={() => setSelectedDayKey(dayKey)}
-                      className={`min-h-28 rounded-xl border p-3 text-left transition ${
-                        isSelected
-                          ? "border-black bg-zinc-100 dark:bg-zinc-800"
-                          : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-700"
-                      } ${!isCurrentMonth ? "opacity-45" : ""}`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span
-                          className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm ${
-                            isToday ? "bg-blue-600 font-semibold text-white" : ""
-                          }`}
-                        >
-                          {day.getDate()}
-                        </span>
-                        {itemCount > 0 && (
-                          <span className="rounded-full bg-black px-2 py-0.5 text-xs text-white">
-                            {itemCount}
+                    return (
+                      <button
+                        key={dayKey}
+                        onClick={() => setSelectedDayKey(dayKey)}
+                        className={`min-h-28 rounded-xl border p-3 text-left transition ${
+                          isSelected
+                            ? "border-black bg-zinc-100 dark:bg-zinc-800"
+                            : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-700"
+                        } ${!isCurrentMonth ? "opacity-45" : ""}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span
+                            className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm ${
+                              isToday
+                                ? "bg-blue-600 font-semibold text-white"
+                                : ""
+                            }`}
+                          >
+                            {day.getDate()}
                           </span>
-                        )}
-                      </div>
-
-                      {itemCount > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {(eventsByDay[dayKey] ?? []).slice(0, 2).map((event) => (
-                            <p
-                              key={event.id}
-                              className="truncate rounded border-l-2 bg-zinc-200/70 px-1.5 py-0.5 text-xs text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100"
-                              style={
-                                selectedProject && event.projectId === selectedProject.id
-                                  ? { borderLeftColor: selectedProject.color ?? "#18181b" }
-                                  : undefined
-                              }
-                            >
-                              {event.hasStartTime ? formatTime(event.startTime) : "No time"} {event.title}
-                            </p>
-                          ))}
-                          {(tasksByDay[dayKey] ?? []).slice(0, Math.max(0, 2 - Math.min(eventCount, 2))).map((task) => (
-                            <p
-                              key={task.id}
-                              className={`truncate rounded border-l-2 border-emerald-500 bg-emerald-50 px-1.5 py-0.5 text-xs text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200 ${task.status === "DONE" ? "opacity-60 line-through" : ""}`}
-                            >
-                              Task · {task.title}
-                            </p>
-                          ))}
-                          {itemCount > 2 && (
-                            <p className="text-xs text-zinc-500">+{itemCount - 2} more</p>
+                          {itemCount > 0 && (
+                            <span className="rounded-full bg-black px-2 py-0.5 text-xs text-white">
+                              {itemCount}
+                            </span>
                           )}
                         </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+
+                        {itemCount > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {(eventsByDay[dayKey] ?? [])
+                              .slice(0, 2)
+                              .map((event) => (
+                                <span
+                                  key={event.id}
+                                  className="block truncate rounded border-l-2 bg-zinc-200/70 px-1.5 py-0.5 text-xs text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100"
+                                  style={
+                                    selectedProject &&
+                                    event.projectId === selectedProject.id
+                                      ? {
+                                          borderLeftColor:
+                                            selectedProject.color ?? "#18181b",
+                                        }
+                                      : undefined
+                                  }
+                                >
+                                  {event.hasStartTime
+                                    ? formatTime(event.startTime)
+                                    : "No time"}{" "}
+                                  {event.title}
+                                </span>
+                              ))}
+                            {(tasksByDay[dayKey] ?? [])
+                              .slice(
+                                0,
+                                Math.max(0, 2 - Math.min(eventCount, 2)),
+                              )
+                              .map((task) => (
+                                <p
+                                  key={task.id}
+                                  className={`truncate rounded border-l-2 border-emerald-500 bg-emerald-50 px-1.5 py-0.5 text-xs text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200 ${task.status === "DONE" ? "opacity-60 line-through" : ""}`}
+                                >
+                                  Task · {task.title}
+                                </p>
+                              ))}
+                            {itemCount > 2 && (
+                              <p className="text-xs text-zinc-500">
+                                +{itemCount - 2} more
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -454,10 +602,19 @@ export default function EventsCalendarPage() {
                 {selectedDayEvents.map((event) => (
                   <article
                     key={event.id}
-                    className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openEvent(event)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") openEvent(event);
+                    }}
+                    className="cursor-pointer rounded-lg border border-zinc-200 p-3 transition hover:border-blue-300 hover:bg-blue-50/50 dark:border-zinc-700 dark:hover:border-blue-800 dark:hover:bg-blue-950/20"
                     style={
                       selectedProject && event.projectId === selectedProject.id
-                        ? { borderLeftWidth: 4, borderLeftColor: selectedProject.color ?? "#18181b" }
+                        ? {
+                            borderLeftWidth: 4,
+                            borderLeftColor: selectedProject.color ?? "#18181b",
+                          }
                         : undefined
                     }
                   >
@@ -465,18 +622,32 @@ export default function EventsCalendarPage() {
                       <p className="font-medium">{event.title}</p>
                       <button
                         type="button"
-                        onClick={() => setConfirmDeleteId(event.sourceEventId ?? event.id)}
-                        disabled={deletingEventId === (event.sourceEventId ?? event.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmDeleteId(event.sourceEventId ?? event.id);
+                        }}
+                        disabled={
+                          deletingEventId === (event.sourceEventId ?? event.id)
+                        }
                         className="inline-flex shrink-0 items-center rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {deletingEventId === (event.sourceEventId ?? event.id) ? "Deleting..." : "Delete"}
+                        {deletingEventId === (event.sourceEventId ?? event.id)
+                          ? "Deleting..."
+                          : "Delete"}
                       </button>
                     </div>
                     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                      {event.hasStartTime ? formatTime(event.startTime) : "Time not specified"}{event.endTime && event.hasEndTime ? ` - ${formatTime(event.endTime)}` : ""}
+                      {event.hasStartTime
+                        ? formatTime(event.startTime)
+                        : "Time not specified"}
+                      {event.endTime && event.hasEndTime
+                        ? ` - ${formatTime(event.endTime)}`
+                        : ""}
                     </p>
                     {event.location && (
-                      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{event.location}</p>
+                      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                        {event.location}
+                      </p>
                     )}
                     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
                       Repeats: {formatRecurrenceLabel(event.recurrence)}
@@ -490,34 +661,59 @@ export default function EventsCalendarPage() {
                 ))}
 
                 {selectedDayTasks.map((task) => (
-                  <Link
+                  <article
                     key={task.id}
-                    href={`/tasks?task=${task.id}`}
-                    className={`block rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 transition hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-900/70 dark:bg-emerald-950/30 ${task.status === "DONE" ? "opacity-65" : ""}`}
+                    className={`rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 transition dark:border-emerald-900/70 dark:bg-emerald-950/30 ${task.status === "DONE" ? "opacity-65" : ""}`}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
-                      <p className={`font-medium ${task.status === "DONE" ? "line-through" : ""}`}>{task.title}</p>
-                      <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">Task</span>
+                      <p
+                        className={`font-medium ${task.status === "DONE" ? "line-through" : ""}`}
+                      >
+                        {task.title}
+                      </p>
+                      {task.status === "DONE" ? (
+                        <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">
+                          Task
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleCompleteTask(task);
+                          }}
+                          disabled={completingTaskId === task.id}
+                          className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {completingTaskId === task.id ? "Saving…" : "Done"}
+                        </button>
+                      )}
                     </div>
                     <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-200">
-                      Status: {task.status.replace("_", " ")} · Priority: {task.priority}
+                      Status: {task.status.replace("_", " ")} · Priority:{" "}
+                      {task.priority}
                     </p>
                     {task.dueDate && (
                       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                        Due {getLocalDateOnly(task.dueDate).toLocaleDateString()}
+                        Due{" "}
+                        {getLocalDateOnly(task.dueDate).toLocaleDateString()}
                       </p>
                     )}
-                  </Link>
+                  </article>
                 ))}
 
-                {!fetching && selectedDayEvents.length === 0 && selectedDayTasks.length === 0 && (
-                  <p className="rounded-lg border border-dashed border-zinc-200 px-3 py-4 text-sm text-zinc-500 dark:border-zinc-700">
-                    Select another day or create an event or due task.
-                  </p>
-                )}
+                {!fetching &&
+                  selectedDayEvents.length === 0 &&
+                  selectedDayTasks.length === 0 && (
+                    <p className="rounded-lg border border-dashed border-zinc-200 px-3 py-4 text-sm text-zinc-500 dark:border-zinc-700">
+                      Select another day or create an event or due task.
+                    </p>
+                  )}
 
                 {fetching && (
-                  <p className="text-sm text-zinc-500">Loading calendar items...</p>
+                  <p className="text-sm text-zinc-500">
+                    Loading calendar items...
+                  </p>
                 )}
               </div>
             </aside>
