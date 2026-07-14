@@ -23,6 +23,7 @@ type TreeNode = {
   color: string;
   width: number;
   height: number;
+  childDirection: string;
 };
 type TreePage = {
   id: string;
@@ -33,6 +34,7 @@ type TreePage = {
   nodes: TreeNode[];
 };
 type TreeNodeColor = "blue" | "purple" | "emerald" | "amber" | "rose" | "slate";
+type TreeNodeDirection = "left" | "center" | "right";
 type NestedNode = TreeNode & { children: NestedNode[]; depth: number };
 type CreateIntent = {
   parentId: string | null;
@@ -41,6 +43,7 @@ type CreateIntent = {
   inheritColor: TreeNodeColor;
   anchorNodeId: string;
   mode: "child" | "before" | "after";
+  childDirection: TreeNodeDirection;
 };
 type DeleteIntent = {
   node: TreeNode;
@@ -144,6 +147,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
           parentId: intent.parentId,
           sortOrder: intent.sortOrder,
           color: intent.inheritColor,
+          childDirection: intent.childDirection,
         }),
       },
     );
@@ -258,7 +262,15 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
               nodes: page.nodes
                 .map((item) =>
                   item.id === nodeId
-                    ? { ...item, parentId: nextParentId, sortOrder: nextIndex }
+                    ? {
+                        ...item,
+                        parentId: nextParentId,
+                        sortOrder: nextIndex,
+                        childDirection:
+                          position === "inside"
+                            ? "center"
+                            : asTreeNodeDirection(targetNode.childDirection),
+                      }
                     : item,
                 )
                 .map((item) =>
@@ -287,6 +299,10 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
           body: JSON.stringify({
             parentId: nextParentId,
             sortOrder: nextIndex,
+            childDirection:
+              position === "inside"
+                ? "center"
+                : asTreeNodeDirection(targetNode.childDirection),
           }),
         },
       );
@@ -847,6 +863,7 @@ function TreeNodeRow({
   const accentTone = isRoot ? "bg-white/80" : tone.accent;
   const activeCreate =
     createIntent?.anchorNodeId === node.id ? createIntent : null;
+  const childGroups = groupChildrenByDirection(node.children);
 
   return (
     <div
@@ -1006,6 +1023,7 @@ function TreeNodeRow({
                   inheritColor: nodeColor,
                   anchorNodeId: node.id,
                   mode: "before",
+                  childDirection: asTreeNodeDirection(node.childDirection),
                 })
               }
             >
@@ -1015,19 +1033,56 @@ function TreeNodeRow({
           <button
             type="button"
             className={iconButtonClass}
-            title="Add child"
-            aria-label="Add child"
+            title="Add left child"
+            aria-label="Add left child"
             onClick={() =>
               onCreateIntent({
                 parentId: node.id,
-                fallback: "Child node",
+                fallback: "Left child node",
                 inheritColor: nodeColor,
                 anchorNodeId: node.id,
                 mode: "child",
+                childDirection: "left",
               })
             }
           >
-            +
+            ↙
+          </button>
+          <button
+            type="button"
+            className={iconButtonClass}
+            title="Add center child"
+            aria-label="Add center child"
+            onClick={() =>
+              onCreateIntent({
+                parentId: node.id,
+                fallback: "Center child node",
+                inheritColor: nodeColor,
+                anchorNodeId: node.id,
+                mode: "child",
+                childDirection: "center",
+              })
+            }
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            className={iconButtonClass}
+            title="Add right child"
+            aria-label="Add right child"
+            onClick={() =>
+              onCreateIntent({
+                parentId: node.id,
+                fallback: "Right child node",
+                inheritColor: nodeColor,
+                anchorNodeId: node.id,
+                mode: "child",
+                childDirection: "right",
+              })
+            }
+          >
+            ↘
           </button>
           {!isRoot && (
             <button
@@ -1043,6 +1098,7 @@ function TreeNodeRow({
                   inheritColor: nodeColor,
                   anchorNodeId: node.id,
                   mode: "after",
+                  childDirection: asTreeNodeDirection(node.childDirection),
                 })
               }
             >
@@ -1087,7 +1143,7 @@ function TreeNodeRow({
         )}
       </article>
       {(node.children.length > 0 || childDropActive) && (
-        <div className="relative mt-12 flex items-start justify-center gap-6 pt-6 sm:gap-8">
+        <div className="relative mt-12 grid grid-flow-col auto-cols-max items-start justify-center gap-6 pt-6 sm:gap-8">
           <span
             className="absolute -top-12 left-1/2 h-12 w-px -translate-x-1/2 bg-slate-300 dark:bg-slate-700"
             aria-hidden="true"
@@ -1107,49 +1163,55 @@ function TreeNodeRow({
               <DropPlaceholder label="Drop here" size={draggedNodeSize} />
             </ChildBranch>
           )}
-          {node.children.map((child) => (
-            <div key={child.id} className="relative flex justify-center">
-              {dropTarget?.nodeId === child.id &&
-                dropTarget.position === "before" && (
-                  <DropPlaceholder
-                    label="Drop before"
-                    size={draggedNodeSize}
-                    sibling
-                  />
-                )}
-              <span
-                className="absolute -top-6 left-1/2 h-6 w-px -translate-x-1/2 bg-slate-300 dark:bg-slate-700"
-                aria-hidden="true"
-              />
-              <TreeNodeRow
-                node={child}
-                draggedNodeId={draggedNodeId}
-                dropTarget={dropTarget}
-                allNodes={allNodes}
-                draggedNodeSize={draggedNodeSize}
-                onDragStart={onDragStart}
-                onDragEnd={onDragEnd}
-                onDropIntent={onDropIntent}
-                onMove={onMove}
-                createIntent={createIntent}
-                onCreateIntent={onCreateIntent}
-                onCreateNode={onCreateNode}
-                onRename={onRename}
-                onColorChange={onColorChange}
-                onDescriptionChange={onDescriptionChange}
-                onResize={onResize}
-                onDelete={onDelete}
-              />
-              {dropTarget?.nodeId === child.id &&
-                dropTarget.position === "after" && (
-                  <DropPlaceholder
-                    label="Drop after"
-                    size={draggedNodeSize}
-                    sibling
-                  />
-                )}
-            </div>
-          ))}
+          {(["left", "center", "right"] as const).map((direction) =>
+            childGroups[direction].map((child) => (
+              <div
+                key={child.id}
+                className="relative flex justify-center"
+                title={`${direction} child`}
+              >
+                {dropTarget?.nodeId === child.id &&
+                  dropTarget.position === "before" && (
+                    <DropPlaceholder
+                      label="Drop before"
+                      size={draggedNodeSize}
+                      sibling
+                    />
+                  )}
+                <span
+                  className="absolute -top-6 left-1/2 h-6 w-px -translate-x-1/2 bg-slate-300 dark:bg-slate-700"
+                  aria-hidden="true"
+                />
+                <TreeNodeRow
+                  node={child}
+                  draggedNodeId={draggedNodeId}
+                  dropTarget={dropTarget}
+                  allNodes={allNodes}
+                  draggedNodeSize={draggedNodeSize}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                  onDropIntent={onDropIntent}
+                  onMove={onMove}
+                  createIntent={createIntent}
+                  onCreateIntent={onCreateIntent}
+                  onCreateNode={onCreateNode}
+                  onRename={onRename}
+                  onColorChange={onColorChange}
+                  onDescriptionChange={onDescriptionChange}
+                  onResize={onResize}
+                  onDelete={onDelete}
+                />
+                {dropTarget?.nodeId === child.id &&
+                  dropTarget.position === "after" && (
+                    <DropPlaceholder
+                      label="Drop after"
+                      size={draggedNodeSize}
+                      sibling
+                    />
+                  )}
+              </div>
+            )),
+          )}
         </div>
       )}
     </div>
@@ -1320,7 +1382,8 @@ function CreateNodePopover({
   return (
     <div className="absolute left-1/2 top-[calc(100%+0.75rem)] z-30 w-64 -translate-x-1/2 rounded-2xl border border-zinc-200 bg-white p-3 text-left shadow-2xl shadow-zinc-950/10 ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-950 dark:shadow-black/40">
       <p className="mb-2 text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-        Create {intent.mode === "child" ? "child" : "sibling"}
+        Create{" "}
+        {intent.mode === "child" ? `${intent.childDirection} child` : "sibling"}
       </p>
       <input
         ref={inputRef}
@@ -1594,6 +1657,24 @@ function DeleteNodeDialog({
 
 const iconButtonClass =
   "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white/80 text-sm font-bold text-zinc-600 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:bg-zinc-800 dark:focus:ring-blue-900";
+
+function asTreeNodeDirection(direction: string): TreeNodeDirection {
+  return direction === "left" || direction === "right" ? direction : "center";
+}
+
+function groupChildrenByDirection(children: NestedNode[]) {
+  return {
+    left: children.filter(
+      (child) => asTreeNodeDirection(child.childDirection) === "left",
+    ),
+    center: children.filter(
+      (child) => asTreeNodeDirection(child.childDirection) === "center",
+    ),
+    right: children.filter(
+      (child) => asTreeNodeDirection(child.childDirection) === "right",
+    ),
+  } satisfies Record<TreeNodeDirection, NestedNode[]>;
+}
 
 function compareNode(a: TreeNode, b: TreeNode) {
   return a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt);

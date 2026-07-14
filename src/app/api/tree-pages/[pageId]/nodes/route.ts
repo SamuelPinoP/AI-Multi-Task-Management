@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 type Context = { params: Promise<{ pageId: string }> };
 
+const TREE_NODE_DIRECTIONS = new Set(["left", "center", "right"]);
 const TREE_NODE_COLORS = new Set([
   "blue",
   "purple",
@@ -71,6 +72,20 @@ export async function POST(req: Request, context: Context) {
     (typeof body.color !== "string" || !TREE_NODE_COLORS.has(body.color))
   )
     return NextResponse.json({ error: "Invalid node color" }, { status: 400 });
+  const childDirection =
+    typeof body.childDirection === "string" &&
+    TREE_NODE_DIRECTIONS.has(body.childDirection)
+      ? body.childDirection
+      : "center";
+  if (
+    "childDirection" in body &&
+    (typeof body.childDirection !== "string" ||
+      !TREE_NODE_DIRECTIONS.has(body.childDirection))
+  )
+    return NextResponse.json(
+      { error: "Invalid child direction" },
+      { status: 400 },
+    );
   const requestedOrder =
     typeof body.sortOrder === "number" && Number.isInteger(body.sortOrder)
       ? body.sortOrder
@@ -91,6 +106,7 @@ export async function POST(req: Request, context: Context) {
         title: title(body.title),
         color: nodeColor,
         sortOrder: insertAt,
+        childDirection,
       },
     });
     const ordered = [

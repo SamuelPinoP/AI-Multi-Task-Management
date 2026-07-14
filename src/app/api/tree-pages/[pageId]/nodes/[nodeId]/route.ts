@@ -3,6 +3,7 @@ import { requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type Context = { params: Promise<{ pageId: string; nodeId: string }> };
+const TREE_NODE_DIRECTIONS = new Set(["left", "center", "right"]);
 const TREE_NODE_COLORS = new Set([
   "blue",
   "purple",
@@ -95,6 +96,7 @@ export async function PATCH(req: Request, context: Context) {
     description?: string | null;
     width?: number;
     height?: number;
+    childDirection?: string;
   } = {};
   if ("title" in body) {
     const nextTitle = cleanTitle(body.title);
@@ -108,6 +110,17 @@ export async function PATCH(req: Request, context: Context) {
     data.width = cleanSize(body.width, existing.width, 180, 520);
   if ("height" in body)
     data.height = cleanSize(body.height, existing.height, 140, 420);
+  if ("childDirection" in body) {
+    if (
+      typeof body.childDirection !== "string" ||
+      !TREE_NODE_DIRECTIONS.has(body.childDirection)
+    )
+      return NextResponse.json(
+        { error: "Invalid child direction" },
+        { status: 400 },
+      );
+    data.childDirection = body.childDirection;
+  }
   if ("color" in body) {
     if (typeof body.color !== "string" || !TREE_NODE_COLORS.has(body.color))
       return NextResponse.json(

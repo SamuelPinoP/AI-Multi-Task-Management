@@ -260,17 +260,18 @@ model TreePage {
 }
 
 model TreeNode {
-  id          String   @id @default(cuid())
-  pageId      String
-  parentId    String?
-  title       String
-  description String?
-  color       String   @default("blue")
-  width       Int      @default(240)
-  height      Int      @default(160)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  pageId         String
+  parentId       String?
+  title          String
+  description    String?
+  color          String   @default("blue")
+  width          Int      @default(240)
+  height         Int      @default(160)
+  sortOrder      Int      @default(0)
+  childDirection String   @default("center")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   page     TreePage   @relation(fields: [pageId], references: [id], onDelete: Cascade)
   parent   TreeNode?  @relation("TreeNodeChildren", fields: [parentId], references: [id], onDelete: Cascade)
