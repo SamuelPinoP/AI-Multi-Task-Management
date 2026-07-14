@@ -126,16 +126,18 @@ function PaperclipIcon({ className = "h-5 w-5" }: { className?: string }) {
 
 function AttachmentCard({
   attachment,
+  projectId,
 }: {
   attachment: ProjectCommentAttachment;
+  projectId: string;
 }) {
   const kind = getFileKind(attachment.fileType, attachment.originalName);
+  const downloadUrl = `/api/projects/${encodeURIComponent(projectId)}/attachments/${encodeURIComponent(attachment.id)}/download`;
 
   return (
     <a
-      href={attachment.url}
-      target="_blank"
-      rel="noreferrer"
+      href={downloadUrl}
+      download={attachment.originalName}
       className="group block overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 text-zinc-800 transition hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
     >
       {kind === "image" ? (
@@ -711,6 +713,7 @@ export function ProjectChatWorkspace({
                           <AttachmentCard
                             key={attachment.id}
                             attachment={attachment}
+                            projectId={projectId}
                           />
                         ))}
                       </div>
@@ -743,88 +746,89 @@ export function ProjectChatWorkspace({
             />
             {readOnly ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
-                Read-only access: you can review project chat and attachments, but only Owners and Editors can post messages or upload files.
+                Read-only access: you can review project chat and attachments,
+                but only Owners and Editors can post messages or upload files.
               </div>
             ) : (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
-              <button
-                type="button"
-                className="inline-flex h-12 w-12 shrink-0 items-center justify-center self-start rounded-2xl bg-white text-zinc-600 shadow-sm ring-1 ring-zinc-200 transition hover:-translate-y-0.5 hover:text-zinc-950 hover:ring-zinc-300 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:text-zinc-50 dark:hover:ring-zinc-700 sm:h-auto sm:min-h-12"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isSubmitting}
-                aria-label="Attach files"
-                title="Attach files"
-              >
-                <PaperclipIcon />
-              </button>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+                <button
+                  type="button"
+                  className="inline-flex h-12 w-12 shrink-0 items-center justify-center self-start rounded-2xl bg-white text-zinc-600 shadow-sm ring-1 ring-zinc-200 transition hover:-translate-y-0.5 hover:text-zinc-950 hover:ring-zinc-300 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:text-zinc-50 dark:hover:ring-zinc-700 sm:h-auto sm:min-h-12"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSubmitting}
+                  aria-label="Attach files"
+                  title="Attach files"
+                >
+                  <PaperclipIcon />
+                </button>
 
-              <div
-                className={`min-w-0 flex-1 rounded-3xl bg-zinc-50/80 ring-1 transition dark:bg-zinc-900/70 ${
-                  isDragging
-                    ? "ring-4 ring-zinc-300 dark:ring-zinc-700"
-                    : "ring-zinc-200 focus-within:ring-zinc-400 dark:ring-zinc-800 dark:focus-within:ring-zinc-600"
-                }`}
-                onDragEnter={(event) => {
-                  event.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-              >
-                <textarea
-                  id="project-chat-message"
-                  value={message}
-                  onChange={(e) => {
-                    setMessage(e.target.value);
-                    if (error) setError("");
+                <div
+                  className={`min-w-0 flex-1 rounded-3xl bg-zinc-50/80 ring-1 transition dark:bg-zinc-900/70 ${
+                    isDragging
+                      ? "ring-4 ring-zinc-300 dark:ring-zinc-700"
+                      : "ring-zinc-200 focus-within:ring-zinc-400 dark:ring-zinc-800 dark:focus-within:ring-zinc-600"
+                  }`}
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    setIsDragging(true);
                   }}
-                  placeholder="Share an update, decision, blocker, or handoff..."
-                  rows={2}
-                  className="min-h-12 w-full resize-none rounded-3xl border-0 bg-transparent px-4 py-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
-                />
-                {selectedAttachments.length > 0 ? (
-                  <div className="px-3 pb-3">
-                    <div className="flex max-h-24 flex-wrap gap-2 overflow-y-auto pr-1">
-                      {selectedAttachments.map((attachment) => (
-                        <div
-                          key={attachment.id}
-                          className="flex max-w-full items-center gap-2 rounded-full bg-white px-2.5 py-1.5 text-xs shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-950 dark:ring-zinc-800"
-                        >
-                          <span className="max-w-44 truncate font-medium text-zinc-800 dark:text-zinc-100">
-                            {attachment.file.name}
-                          </span>
-                          <span className="shrink-0 text-zinc-500">
-                            {formatFileSize(attachment.file.size)}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              removeSelectedAttachment(attachment.id)
-                            }
-                            className="shrink-0 rounded-full px-1.5 py-0.5 font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                            aria-label={`Remove ${attachment.file.name}`}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                >
+                  <textarea
+                    id="project-chat-message"
+                    value={message}
+                    onChange={(e) => {
+                      setMessage(e.target.value);
+                      if (error) setError("");
+                    }}
+                    placeholder="Share an update, decision, blocker, or handoff..."
+                    rows={2}
+                    className="min-h-12 w-full resize-none rounded-3xl border-0 bg-transparent px-4 py-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                  />
+                  {selectedAttachments.length > 0 ? (
+                    <div className="px-3 pb-3">
+                      <div className="flex max-h-24 flex-wrap gap-2 overflow-y-auto pr-1">
+                        {selectedAttachments.map((attachment) => (
+                          <div
+                            key={attachment.id}
+                            className="flex max-w-full items-center gap-2 rounded-full bg-white px-2.5 py-1.5 text-xs shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-950 dark:ring-zinc-800"
                           >
-                            ×
-                          </button>
-                        </div>
-                      ))}
+                            <span className="max-w-44 truncate font-medium text-zinc-800 dark:text-zinc-100">
+                              {attachment.file.name}
+                            </span>
+                            <span className="shrink-0 text-zinc-500">
+                              {formatFileSize(attachment.file.size)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                removeSelectedAttachment(attachment.id)
+                              }
+                              className="shrink-0 rounded-full px-1.5 py-0.5 font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                              aria-label={`Remove ${attachment.file.name}`}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ) : null}
-              </div>
+                  ) : null}
+                </div>
 
-              <button
-                type="submit"
-                className={`${uiPrimaryButtonClass} h-12 shrink-0 self-start px-5 sm:h-auto sm:min-h-12`}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Sending..." : "Send message"}
-              </button>
-            </div>
+                <button
+                  type="submit"
+                  className={`${uiPrimaryButtonClass} h-12 shrink-0 self-start px-5 sm:h-auto sm:min-h-12`}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Sending..." : "Send message"}
+                </button>
+              </div>
             )}
             <div className="mt-3 min-h-5">
               {error ? (
