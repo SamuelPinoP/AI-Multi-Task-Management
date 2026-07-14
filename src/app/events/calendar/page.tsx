@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -35,6 +36,9 @@ type TaskItem = {
   status: TaskStatus;
   priority: Priority;
   dueDate: string | null;
+  description?: string | null;
+  recurrence?: Recurrence | null;
+  assigneeId?: string | null;
   projectId?: string | null;
   project?: Project | null;
 };
@@ -72,6 +76,8 @@ export default function EventsCalendarPage() {
   });
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     async function loadEvents() {
@@ -238,6 +244,40 @@ export default function EventsCalendarPage() {
       setError(err instanceof Error ? err.message : "Could not delete event.");
     } finally {
       setDeletingEventId(null);
+    }
+  }
+
+
+  async function handleCompleteTask(task: TaskItem) {
+    try {
+      setCompletingTaskId(task.id);
+      setError("");
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: task.title,
+          description: task.description ?? "",
+          status: "DONE",
+          priority: task.priority,
+          dueDate: task.dueDate,
+          recurrence: task.recurrence ?? "NONE",
+          projectId: task.projectId ?? "",
+          assigneeId: task.assigneeId ?? "",
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Failed to complete task");
+      }
+
+      const updatedTask = (await res.json()) as TaskItem;
+      setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, ...updatedTask } : item)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not mark this task done. Please try again.");
+    } finally {
+      setCompletingTaskId(null);
     }
   }
 
@@ -454,7 +494,11 @@ export default function EventsCalendarPage() {
                 {selectedDayEvents.map((event) => (
                   <article
                     key={event.id}
-                    className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push(`/events?event=${event.sourceEventId ?? event.id}`)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(`/events?event=${event.sourceEventId ?? event.id}`); } }}
+                    className="cursor-pointer rounded-lg border border-zinc-200 p-3 transition hover:border-blue-300 hover:bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:hover:bg-blue-950/20"
                     style={
                       selectedProject && event.projectId === selectedProject.id
                         ? { borderLeftWidth: 4, borderLeftColor: selectedProject.color ?? "#18181b" }
@@ -465,7 +509,7 @@ export default function EventsCalendarPage() {
                       <p className="font-medium">{event.title}</p>
                       <button
                         type="button"
-                        onClick={() => setConfirmDeleteId(event.sourceEventId ?? event.id)}
+                        onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(event.sourceEventId ?? event.id); }}
                         disabled={deletingEventId === (event.sourceEventId ?? event.id)}
                         className="inline-flex shrink-0 items-center rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
@@ -497,7 +541,19 @@ export default function EventsCalendarPage() {
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <p className={`font-medium ${task.status === "DONE" ? "line-through" : ""}`}>{task.title}</p>
-                      <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">Task</span>
+                      <div className="flex items-center gap-2">
+                        {task.status !== "DONE" && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleCompleteTask(task); }}
+                            disabled={completingTaskId === task.id}
+                            className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {completingTaskId === task.id ? "Saving…" : "Done"}
+                          </button>
+                        )}
+                        <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">Task</span>
+                      </div>
                     </div>
                     <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-200">
                       Status: {task.status.replace("_", " ")} · Priority: {task.priority}

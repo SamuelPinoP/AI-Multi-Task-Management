@@ -254,10 +254,15 @@ export default function NotesPage() {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error || "Failed to create note");
       }
+      const createdNote = (await res.json()) as Note;
       setTitle("");
       setContent("");
       setProjectId("");
-      await fetchNotes();
+      setNotes((prevNotes) => [createdNote, ...prevNotes.filter((note) => note.id !== createdNote.id)]);
+      openNote(createdNote, "content");
+      sessionStartWordCountRef.current = wordCount(createdNote.content ?? "");
+      autoFullscreenTriggeredRef.current = null;
+      await fetchNotes(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create note.");
     } finally {

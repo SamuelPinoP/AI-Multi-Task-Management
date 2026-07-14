@@ -116,6 +116,7 @@ export default function EventsPage() {
   const [editRecurrence, setEditRecurrence] = useState<Recurrence>("NONE");
   const [editProjectId, setEditProjectId] = useState("");
   const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS_FILTER);
+  const [highlightedEventId, setHighlightedEventId] = useState<string | null>(null);
 
   const visibleEvents = useMemo(() => {
     return events.filter((event) => {
@@ -278,6 +279,24 @@ export default function EventsPage() {
 
     void loadInitialEvents();
   }, []);
+
+
+  useEffect(() => {
+    if (fetching || events.length === 0) return;
+    const eventId = new URLSearchParams(window.location.search).get("event");
+    if (!eventId) return;
+    const event = events.find((item) => item.id === eventId);
+    if (!event) return;
+
+    const timer = window.setTimeout(() => {
+      setHighlightedEventId(eventId);
+      startEditing(event);
+      setSelectedDayKey(formatDayKey(new Date(event.startTime)));
+      setCalendarMonth(new Date(new Date(event.startTime).getFullYear(), new Date(event.startTime).getMonth(), 1));
+      document.getElementById(`event-${eventId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [events, fetching]);
 
   async function handleCreateEvent(e: FormEvent) {
     e.preventDefault();
@@ -637,7 +656,7 @@ export default function EventsPage() {
                 {selectedDayEvents.map((event) => (
                   <li
                     key={event.id}
-                    className={`rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 ${
+                    className={`rounded-lg border p-3 transition ${highlightedEventId === (event.sourceEventId ?? event.id) ? "border-blue-400 bg-blue-50 ring-2 ring-blue-200 dark:border-blue-700 dark:bg-blue-950/20 dark:ring-blue-900" : "border-zinc-200 dark:border-zinc-700"} ${
                       projectFilter !== ALL_PROJECTS_FILTER &&
                       projectFilter !== NO_PROJECT_FILTER &&
                       event.projectId !== projectFilter
@@ -714,7 +733,8 @@ export default function EventsPage() {
                 return (
                   <article
                     key={event.id}
-                    className={`rounded-2xl border p-5 shadow-sm ${cardStyles}`}
+                    id={`event-${event.id}`}
+                    className={`rounded-2xl border p-5 shadow-sm ${highlightedEventId === event.id ? "ring-4 ring-blue-200 dark:ring-blue-900" : ""} ${cardStyles}`}
                   >
                     {isEditing ? (
                       <div className="space-y-3">
