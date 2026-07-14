@@ -40,7 +40,7 @@ type CreateIntent = {
   fallback: string;
   inheritColor: TreeNodeColor;
   anchorNodeId: string;
-  mode: "child" | "before" | "after";
+  mode: "child" | "sibling";
 };
 type DeleteIntent = {
   node: TreeNode;
@@ -991,27 +991,7 @@ function TreeNodeRow({
             </button>
           )}
         </div>
-        <div className="mt-auto flex justify-center gap-1.5 pt-4 opacity-95 transition group-hover:opacity-100 focus-within:opacity-100">
-          {!isRoot && (
-            <button
-              type="button"
-              className={iconButtonClass}
-              title="Add sibling before"
-              aria-label="Add sibling before"
-              onClick={() =>
-                onCreateIntent({
-                  parentId: node.parentId,
-                  fallback: "Sibling node",
-                  sortOrder: node.sortOrder,
-                  inheritColor: nodeColor,
-                  anchorNodeId: node.id,
-                  mode: "before",
-                })
-              }
-            >
-              ←
-            </button>
-          )}
+        <div className="mt-auto flex flex-wrap justify-center gap-1.5 pt-4 opacity-95 transition group-hover:opacity-100 focus-within:opacity-100">
           <button
             type="button"
             className={iconButtonClass}
@@ -1032,9 +1012,9 @@ function TreeNodeRow({
           {!isRoot && (
             <button
               type="button"
-              className={iconButtonClass}
-              title="Add sibling after"
-              aria-label="Add sibling after"
+              className={siblingButtonClass}
+              title="Add sibling"
+              aria-label="Add sibling"
               onClick={() =>
                 onCreateIntent({
                   parentId: node.parentId,
@@ -1042,11 +1022,12 @@ function TreeNodeRow({
                   sortOrder: node.sortOrder + 1,
                   inheritColor: nodeColor,
                   anchorNodeId: node.id,
-                  mode: "after",
+                  mode: "sibling",
                 })
               }
             >
-              →
+              <span aria-hidden="true" className="text-xs leading-none">⎇</span>
+              <span>Sibling</span>
             </button>
           )}
           <div className="relative">
@@ -1594,6 +1575,9 @@ function DeleteNodeDialog({
 
 const iconButtonClass =
   "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white/80 text-sm font-bold text-zinc-600 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:bg-zinc-800 dark:focus:ring-blue-900";
+
+const siblingButtonClass =
+  "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white/80 px-2.5 text-xs font-bold text-zinc-600 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:bg-zinc-800 dark:focus:ring-blue-900";
 
 function compareNode(a: TreeNode, b: TreeNode) {
   return a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt);
