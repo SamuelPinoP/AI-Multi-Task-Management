@@ -42,6 +42,7 @@ type CreateIntent = {
   anchorNodeId: string;
   mode: "child" | "before" | "after";
 };
+type BranchSide = "left" | "right" | "center";
 type DeleteIntent = {
   node: TreeNode;
   message: string | null;
@@ -78,6 +79,10 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
     pages.find((page) => page.id === activePageId) ?? pages[0] ?? null;
 
   const tree = useMemo(() => buildTree(activePage?.nodes ?? []), [activePage]);
+  const branchSides = useMemo(
+    () => getBranchSides(activePage?.nodes ?? []),
+    [activePage],
+  );
 
   async function request<T>(url: string, init: RequestInit): Promise<T> {
     setLoading(true);
@@ -497,6 +502,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                               : Promise.resolve()
                           }
                           createIntent={createIntent}
+                          branchSides={branchSides}
                           onCreateIntent={setCreateIntent}
                           onCreateNode={addNode}
                           onRename={(item, title) =>
@@ -686,6 +692,7 @@ function TreeNodeRow({
   onDropIntent,
   onMove,
   createIntent,
+  branchSides,
   onCreateIntent,
   onCreateNode,
   onRename,
@@ -713,6 +720,7 @@ function TreeNodeRow({
     position: "inside" | "before" | "after",
   ) => Promise<void>;
   createIntent: CreateIntent | null;
+  branchSides: Map<string, BranchSide>;
   onCreateIntent: (intent: CreateIntent | null) => void;
   onCreateNode: (intent: CreateIntent, title: string) => Promise<void>;
   onRename: (node: TreeNode, title: string) => Promise<void>;
@@ -847,6 +855,7 @@ function TreeNodeRow({
   const accentTone = isRoot ? "bg-white/80" : tone.accent;
   const activeCreate =
     createIntent?.anchorNodeId === node.id ? createIntent : null;
+  const childSortOrder = getChildCreateSortOrder(node, branchSides);
 
   return (
     <div
@@ -1021,6 +1030,7 @@ function TreeNodeRow({
               onCreateIntent({
                 parentId: node.id,
                 fallback: "Child node",
+                sortOrder: childSortOrder,
                 inheritColor: nodeColor,
                 anchorNodeId: node.id,
                 mode: "child",
@@ -1132,6 +1142,7 @@ function TreeNodeRow({
                 onDropIntent={onDropIntent}
                 onMove={onMove}
                 createIntent={createIntent}
+                branchSides={branchSides}
                 onCreateIntent={onCreateIntent}
                 onCreateNode={onCreateNode}
                 onRename={onRename}
@@ -1612,6 +1623,44 @@ function buildTree(nodes: TreeNode[]) {
       children: visit(node.id, depth + 1),
     }));
   return visit(null, 0);
+}
+
+function getBranchSides(nodes: TreeNode[]) {
+  const sortedNodes = [...nodes].sort(compareNode);
+  const root = sortedNodes.find((node) => node.parentId === null);
+  const rootChildren = sortedNodes.filter((node) => node.parentId === root?.id);
+  const sideByNode = new Map<string, BranchSide>();
+  if (root) sideByNode.set(root.id, "center");
+
+  const midpoint = (rootChildren.length - 1) / 2;
+  rootChildren.forEach((node, index) => {
+    const side =
+      index < midpoint ? "left" : index > midpoint ? "right" : "center";
+    sideByNode.set(node.id, side);
+  });
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const node of sortedNodes) {
+      if (sideByNode.has(node.id) || !node.parentId) continue;
+      const parentSide = sideByNode.get(node.parentId);
+      if (parentSide) {
+        sideByNode.set(node.id, parentSide);
+        changed = true;
+      }
+    }
+  }
+
+  return sideByNode;
+}
+
+function getChildCreateSortOrder(
+  node: TreeNode,
+  branchSides: Map<string, BranchSide>,
+) {
+  if (node.parentId === null) return undefined;
+  return branchSides.get(node.id) === "left" ? 0 : undefined;
 }
 
 function isDescendant(

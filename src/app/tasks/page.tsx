@@ -716,7 +716,7 @@ export default function TasksPage() {
                             <article
                               key={task.id}
                               id={`task-${task.id}`}
-                              className={`rounded-2xl border p-5 shadow-sm ${urgencyStyles} ${highlightedTaskId === task.id ? "ring-4 ring-blue-500 ring-offset-4 dark:ring-blue-400 dark:ring-offset-zinc-950" : ""}`}
+                              className={`rounded-2xl border p-5 shadow-sm ${urgencyStyles} ${highlightedTaskId === task.id ? "ring-4 ring-blue-300 ring-offset-4 ring-offset-white dark:ring-blue-800 dark:ring-offset-zinc-950" : ""}`}
                             >
                               {isEditing ? (
                                 <div className="space-y-3">
