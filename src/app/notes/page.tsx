@@ -21,8 +21,8 @@ type Note = {
 
 type FocusTarget = "title" | "content";
 
-function wordCount(value: string) {
-  return value.trim().split(/\s+/).filter(Boolean).length;
+function getNotePreview(note: Pick<Note, "title" | "content">) {
+  return note.title.trim() || (note.content ?? "").trim();
 }
 
 function getInitialOpenNoteId() {
@@ -70,8 +70,6 @@ export default function NotesPage() {
   const [fullscreenNoteId, setFullscreenNoteId] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const sessionStartWordCountRef = useRef(0);
-  const autoFullscreenTriggeredRef = useRef<string | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const latestDraftRef = useRef({
     noteId: "",
@@ -156,8 +154,6 @@ export default function NotesPage() {
       };
       lastSavedDraftRef.current = latestDraftRef.current;
       setSaveStatus("saved");
-      sessionStartWordCountRef.current = wordCount(note.content ?? "");
-      autoFullscreenTriggeredRef.current = null;
       setFocusRequest((count) => count + 1);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -238,8 +234,8 @@ export default function NotesPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!title.trim()) {
-      setError("Title is required.");
+    if (!title.trim() && !content.trim()) {
+      setError("Add a title or note content before saving.");
       return;
     }
     try {
@@ -279,8 +275,6 @@ export default function NotesPage() {
     };
     lastSavedDraftRef.current = latestDraftRef.current;
     setSaveStatus("saved");
-    sessionStartWordCountRef.current = wordCount(note.content ?? "");
-    autoFullscreenTriggeredRef.current = null;
     setFocusTarget(target);
     setFocusRequest((count) => count + 1);
     setError("");
@@ -311,9 +305,9 @@ export default function NotesPage() {
       draftsMatch(draft, lastSavedDraftRef.current)
     )
       return;
-    if (!draft.title.trim()) {
+    if (!draft.title.trim() && !draft.content.trim()) {
       setSaveStatus("error");
-      setError("Title is required before this note can autosave.");
+      setError("Add a title or note content before saving.");
       return;
     }
     try {
@@ -389,12 +383,6 @@ export default function NotesPage() {
 
   function handleContentChange(value: string) {
     setEditContent(value);
-    if (!editingNoteId || autoFullscreenTriggeredRef.current === editingNoteId)
-      return;
-    if (wordCount(value) - sessionStartWordCountRef.current >= 10) {
-      autoFullscreenTriggeredRef.current = editingNoteId;
-      setFullscreenNoteId(editingNoteId);
-    }
   }
 
   async function handleDelete(noteId: string) {
@@ -509,7 +497,7 @@ export default function NotesPage() {
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter a note title"
+                placeholder="Title (optional)"
                 className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black dark:border-zinc-700"
               />
               <textarea
@@ -587,6 +575,7 @@ export default function NotesPage() {
                 {visibleNotes.map((note) => {
                   const isDeleting = deletingNoteId === note.id;
                   const isEditing = editingNoteId === note.id;
+                  const notePreview = getNotePreview(note);
                   return (
                     <article
                       key={note.id}
@@ -602,9 +591,15 @@ export default function NotesPage() {
                             onClick={() => openNote(note, "title")}
                             className="min-w-0 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-2xl"
                           >
-                            <h3 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-                              {note.title}
-                            </h3>
+                            {note.title.trim() ? (
+                              <h3 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+                                {note.title}
+                              </h3>
+                            ) : (
+                              <p className="line-clamp-2 text-lg font-medium leading-7 text-zinc-800 dark:text-zinc-100">
+                                {notePreview}
+                              </p>
+                            )}
                             {note.project ? (
                               <span className="mt-2 inline-flex rounded-full border border-zinc-300 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
                                 {note.project.name}
