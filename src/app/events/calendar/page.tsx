@@ -60,6 +60,7 @@ function formatTime(value: string) {
 
 export default function EventsCalendarPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
+  const router = useRouter();
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS_FILTER);
@@ -80,7 +81,6 @@ export default function EventsCalendarPage() {
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
-  const router = useRouter();
 
   useEffect(() => {
     async function loadEvents() {
@@ -663,7 +663,20 @@ export default function EventsCalendarPage() {
                 {selectedDayTasks.map((task) => (
                   <article
                     key={task.id}
-                    className={`rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 transition dark:border-emerald-900/70 dark:bg-emerald-950/30 ${task.status === "DONE" ? "opacity-65" : ""}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() =>
+                      router.push(`/tasks?task=${encodeURIComponent(task.id)}`)
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        router.push(
+                          `/tasks?task=${encodeURIComponent(task.id)}`,
+                        );
+                      }
+                    }}
+                    className={`cursor-pointer rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 transition hover:border-emerald-400 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:hover:border-emerald-700 dark:focus:ring-offset-zinc-950 ${task.status === "DONE" ? "opacity-65" : ""}`}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <p

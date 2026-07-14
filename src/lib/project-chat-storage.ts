@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "crypto";
-import { mkdir, unlink, writeFile } from "fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 
 const DEFAULT_PUBLIC_UPLOAD_PATH = "/uploads/project-chat";
@@ -15,7 +15,10 @@ export type ProjectChatStoredAttachment = {
   url: string;
 };
 
-export type ProjectChatStoredAttachmentForDelete = Pick<ProjectChatStoredAttachment, "fileName" | "url">;
+export type ProjectChatStoredAttachmentForDelete = Pick<
+  ProjectChatStoredAttachment,
+  "fileName" | "url"
+>;
 
 type StorageProvider = "local" | "vercel-blob";
 
@@ -28,7 +31,9 @@ export class ProjectChatStorageConfigError extends Error {
   }
 }
 
-export function isProjectChatStorageConfigError(error: unknown): error is ProjectChatStorageConfigError {
+export function isProjectChatStorageConfigError(
+  error: unknown,
+): error is ProjectChatStorageConfigError {
   return error instanceof ProjectChatStorageConfigError;
 }
 
@@ -55,7 +60,12 @@ function selectedProvider(): StorageProvider {
 }
 
 function safeOriginalName(name: string) {
-  return path.basename(name).replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 180) || "attachment";
+  return (
+    path
+      .basename(name)
+      .replace(/[\u0000-\u001f\u007f]/g, "")
+      .slice(0, 180) || "attachment"
+  );
 }
 
 function safePublicPrefix(prefix: string) {
@@ -63,19 +73,32 @@ function safePublicPrefix(prefix: string) {
   return `/${trimmed.replace(/^\/+|\/+$/g, "")}`;
 }
 
-const LOCAL_UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "project-chat");
+const LOCAL_UPLOAD_DIR = path.join(
+  process.cwd(),
+  "public",
+  "uploads",
+  "project-chat",
+);
 
 function localUploadDir() {
   return LOCAL_UPLOAD_DIR;
 }
 
 function blobPrefix() {
-  return (process.env.PROJECT_CHAT_BLOB_PREFIX?.trim() || DEFAULT_BLOB_PREFIX).replace(/^\/+|\/+$/g, "") || DEFAULT_BLOB_PREFIX;
+  return (
+    (
+      process.env.PROJECT_CHAT_BLOB_PREFIX?.trim() || DEFAULT_BLOB_PREFIX
+    ).replace(/^\/+|\/+$/g, "") || DEFAULT_BLOB_PREFIX
+  );
 }
 
-async function saveFilesLocally(files: File[]): Promise<ProjectChatStoredAttachment[]> {
+async function saveFilesLocally(
+  files: File[],
+): Promise<ProjectChatStoredAttachment[]> {
   const uploadDir = localUploadDir();
-  const publicUploadPath = safePublicPrefix(process.env.PROJECT_CHAT_PUBLIC_UPLOAD_PATH || DEFAULT_PUBLIC_UPLOAD_PATH);
+  const publicUploadPath = safePublicPrefix(
+    process.env.PROJECT_CHAT_PUBLIC_UPLOAD_PATH || DEFAULT_PUBLIC_UPLOAD_PATH,
+  );
   await mkdir(uploadDir, { recursive: true });
 
   return Promise.all(
@@ -100,19 +123,23 @@ async function saveFilesLocally(files: File[]): Promise<ProjectChatStoredAttachm
 async function loadVercelBlobSdk(): Promise<VercelBlobModule> {
   try {
     // Keep the SDK server-only and load it only when the hosted provider is selected.
-    return (await import(/* webpackIgnore: true */ "@vercel/blob")) as VercelBlobModule;
+    return (await import(
+      /* webpackIgnore: true */ "@vercel/blob"
+    )) as VercelBlobModule;
   } catch {
     throw new ProjectChatStorageConfigError(
-      'Vercel Blob storage is selected, but @vercel/blob is not installed. Run npm install @vercel/blob and redeploy.',
+      "Vercel Blob storage is selected, but @vercel/blob is not installed. Run npm install @vercel/blob and redeploy.",
     );
   }
 }
 
-async function saveFilesToVercelBlob(files: File[]): Promise<ProjectChatStoredAttachment[]> {
+async function saveFilesToVercelBlob(
+  files: File[],
+): Promise<ProjectChatStoredAttachment[]> {
   const token = process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) {
     throw new ProjectChatStorageConfigError(
-      'Vercel Blob storage is selected, but BLOB_READ_WRITE_TOKEN is missing. Add it as a server-side secret environment variable.',
+      "Vercel Blob storage is selected, but BLOB_READ_WRITE_TOKEN is missing. Add it as a server-side secret environment variable.",
     );
   }
 
@@ -143,14 +170,20 @@ async function saveFilesToVercelBlob(files: File[]): Promise<ProjectChatStoredAt
   );
 }
 
-export async function saveProjectChatAttachments(files: File[]): Promise<ProjectChatStoredAttachment[]> {
+export async function saveProjectChatAttachments(
+  files: File[],
+): Promise<ProjectChatStoredAttachment[]> {
   if (files.length === 0) return [];
 
   const provider = selectedProvider();
-  return provider === "vercel-blob" ? saveFilesToVercelBlob(files) : saveFilesLocally(files);
+  return provider === "vercel-blob"
+    ? saveFilesToVercelBlob(files)
+    : saveFilesLocally(files);
 }
 
-async function deleteLocalAttachment(attachment: ProjectChatStoredAttachmentForDelete) {
+async function deleteLocalAttachment(
+  attachment: ProjectChatStoredAttachmentForDelete,
+) {
   const fileName = path.basename(attachment.fileName || attachment.url);
   if (!fileName) return;
 
@@ -163,7 +196,9 @@ async function deleteLocalAttachment(attachment: ProjectChatStoredAttachmentForD
   });
 }
 
-async function deleteBlobAttachment(attachment: ProjectChatStoredAttachmentForDelete) {
+async function deleteBlobAttachment(
+  attachment: ProjectChatStoredAttachmentForDelete,
+) {
   const token = process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) {
     throw new ProjectChatStorageConfigError(
@@ -175,11 +210,55 @@ async function deleteBlobAttachment(attachment: ProjectChatStoredAttachmentForDe
   await del(attachment.url || attachment.fileName, { token });
 }
 
-export async function deleteProjectChatAttachments(attachments: ProjectChatStoredAttachmentForDelete[]) {
+export async function deleteProjectChatAttachments(
+  attachments: ProjectChatStoredAttachmentForDelete[],
+) {
   if (attachments.length === 0) return;
 
   const provider = selectedProvider();
   await Promise.all(
-    attachments.map((attachment) => (provider === "vercel-blob" ? deleteBlobAttachment(attachment) : deleteLocalAttachment(attachment))),
+    attachments.map((attachment) =>
+      provider === "vercel-blob"
+        ? deleteBlobAttachment(attachment)
+        : deleteLocalAttachment(attachment),
+    ),
   );
+}
+
+export type ProjectChatStoredAttachmentForDownload = Pick<
+  ProjectChatStoredAttachment,
+  "fileName" | "url" | "fileType"
+>;
+
+export async function readProjectChatAttachment(
+  attachment: ProjectChatStoredAttachmentForDownload,
+): Promise<{ body: BodyInit; contentType: string }> {
+  const provider = selectedProvider();
+
+  if (provider === "vercel-blob") {
+    const response = await fetch(attachment.url);
+    if (!response.ok || !response.body) {
+      throw new Error("Stored attachment could not be loaded.");
+    }
+
+    return {
+      body: response.body,
+      contentType:
+        response.headers.get("content-type") ||
+        attachment.fileType ||
+        "application/octet-stream",
+    };
+  }
+
+  const uploadDir = localUploadDir();
+  const fileName = path.basename(attachment.fileName || attachment.url);
+  const fullPath = path.resolve(uploadDir, fileName);
+  if (!fullPath.startsWith(`${uploadDir}${path.sep}`)) {
+    throw new Error("Invalid stored attachment path.");
+  }
+
+  return {
+    body: await readFile(fullPath),
+    contentType: attachment.fileType || "application/octet-stream",
+  };
 }
