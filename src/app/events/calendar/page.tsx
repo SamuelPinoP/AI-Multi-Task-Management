@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -8,6 +9,7 @@ import {
   formatRecurrenceLabel,
   normalizeRecurrence,
 } from "@/lib/recurrence";
+import { getLocalDateOnly } from "@/lib/task-date-buckets";
 
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
@@ -22,6 +24,17 @@ type EventItem = {
   hasStartTime: boolean;
   hasEndTime: boolean;
   recurrence?: Recurrence | null;
+  projectId?: string | null;
+  project?: Project | null;
+};
+type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
+type Priority = "LOW" | "MEDIUM" | "HIGH";
+type TaskItem = {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  priority: Priority;
+  dueDate: string | null;
   projectId?: string | null;
   project?: Project | null;
 };
@@ -42,6 +55,7 @@ function formatTime(value: string) {
 
 export default function EventsCalendarPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS_FILTER);
   const [fetching, setFetching] = useState(true);
@@ -65,22 +79,27 @@ export default function EventsCalendarPage() {
         setFetching(true);
         setError("");
 
-        const response = await fetch("/api/events", { cache: "no-store" });
-        if (!response.ok) {
-          throw new Error("Failed to fetch events");
-        }
-
-        const [eventsData, projectsData] = await Promise.all([
-          response.json() as Promise<EventItem[]>,
+        const [eventsResponse, tasksResponse, projectsData] = await Promise.all([
+          fetch("/api/events", { cache: "no-store" }),
+          fetch("/api/tasks", { cache: "no-store" }),
           fetch("/api/projects", { cache: "no-store" }).then(async (res) => {
             if (!res.ok) throw new Error("Failed to fetch projects");
             return res.json() as Promise<Project[]>;
           }),
         ]);
+        if (!eventsResponse.ok || !tasksResponse.ok) {
+          throw new Error("Failed to fetch calendar items");
+        }
+
+        const [eventsData, tasksData] = await Promise.all([
+          eventsResponse.json() as Promise<EventItem[]>,
+          tasksResponse.json() as Promise<TaskItem[]>,
+        ]);
         setEvents(eventsData.map((event) => ({ ...event, recurrence: normalizeRecurrence(event.recurrence) })));
+        setTasks(tasksData);
         setProjects(projectsData);
       } catch {
-        setError("Could not load events for the calendar.");
+        setError("Could not load calendar items.");
       } finally {
         setFetching(false);
       }
@@ -150,12 +169,35 @@ export default function EventsCalendarPage() {
     }, {});
   }, [filteredExpandedEvents]);
 
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      if (!task.dueDate) return false;
+      if (projectFilter === ALL_PROJECTS_FILTER) return true;
+      if (projectFilter === NO_PROJECT_FILTER) return task.projectId === null || task.projectId === undefined;
+      return task.projectId === projectFilter;
+    });
+  }, [projectFilter, tasks]);
+
+  const tasksByDay = useMemo(() => {
+    return filteredTasks.reduce<Record<string, TaskItem[]>>((acc, task) => {
+      if (!task.dueDate) return acc;
+      const key = formatDayKey(getLocalDateOnly(task.dueDate));
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(task);
+      return acc;
+    }, {});
+  }, [filteredTasks]);
+
   const selectedDayEvents = useMemo(() => {
     const dayEvents = eventsByDay[selectedDayKey] ?? [];
     return [...dayEvents].sort(
       (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
     );
   }, [eventsByDay, selectedDayKey]);
+
+  const selectedDayTasks = useMemo(() => tasksByDay[selectedDayKey] ?? [], [selectedDayKey, tasksByDay]);
 
   const mobileDays = useMemo(() => {
     return Array.from({ length: 3 }, (_, index) => {
@@ -277,6 +319,8 @@ export default function EventsCalendarPage() {
                   const isToday = dayKey === formatDayKey(new Date());
                   const isSelected = dayKey === selectedDayKey;
                   const dayEvents = eventsByDay[dayKey] ?? [];
+                  const dayTasks = tasksByDay[dayKey] ?? [];
+                  const itemCount = dayEvents.length + dayTasks.length;
                   return (
                     <button
                       key={dayKey}
@@ -298,17 +342,22 @@ export default function EventsCalendarPage() {
                           </p>
                         </div>
                         <span className="rounded-full bg-zinc-950 px-2.5 py-1 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-zinc-950">
-                          {dayEvents.length} {dayEvents.length === 1 ? "event" : "events"}
+                          {itemCount} {itemCount === 1 ? "item" : "items"}
                         </span>
                       </div>
                       <div className="mt-3 space-y-2">
-                        {dayEvents.slice(0, 3).map((event) => (
+                        {dayEvents.slice(0, 2).map((event) => (
                           <p key={event.id} className="truncate rounded-xl bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
                             {event.hasStartTime ? formatTime(event.startTime) : "No time"} {event.title}
                           </p>
                         ))}
-                        {dayEvents.length === 0 && (
-                          <p className="rounded-xl border border-dashed border-zinc-200 px-3 py-3 text-sm text-zinc-500 dark:border-zinc-700">No events.</p>
+                        {dayTasks.slice(0, Math.max(0, 3 - Math.min(dayEvents.length, 2))).map((task) => (
+                          <p key={task.id} className={`truncate rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200 ${task.status === "DONE" ? "opacity-60 line-through" : ""}`}>
+                            □ {task.title}
+                          </p>
+                        ))}
+                        {itemCount === 0 && (
+                          <p className="rounded-xl border border-dashed border-zinc-200 px-3 py-3 text-sm text-zinc-500 dark:border-zinc-700">No items.</p>
                         )}
                       </div>
                     </button>
@@ -330,6 +379,8 @@ export default function EventsCalendarPage() {
                   const isToday = dayKey === formatDayKey(new Date());
                   const isSelected = dayKey === selectedDayKey;
                   const eventCount = eventsByDay[dayKey]?.length ?? 0;
+                  const taskCount = tasksByDay[dayKey]?.length ?? 0;
+                  const itemCount = eventCount + taskCount;
 
                   return (
                     <button
@@ -349,14 +400,14 @@ export default function EventsCalendarPage() {
                         >
                           {day.getDate()}
                         </span>
-                        {eventCount > 0 && (
+                        {itemCount > 0 && (
                           <span className="rounded-full bg-black px-2 py-0.5 text-xs text-white">
-                            {eventCount}
+                            {itemCount}
                           </span>
                         )}
                       </div>
 
-                      {eventCount > 0 && (
+                      {itemCount > 0 && (
                         <div className="mt-2 space-y-1">
                           {(eventsByDay[dayKey] ?? []).slice(0, 2).map((event) => (
                             <p
@@ -371,8 +422,16 @@ export default function EventsCalendarPage() {
                               {event.hasStartTime ? formatTime(event.startTime) : "No time"} {event.title}
                             </p>
                           ))}
-                          {eventCount > 2 && (
-                            <p className="text-xs text-zinc-500">+{eventCount - 2} more</p>
+                          {(tasksByDay[dayKey] ?? []).slice(0, Math.max(0, 2 - Math.min(eventCount, 2))).map((task) => (
+                            <p
+                              key={task.id}
+                              className={`truncate rounded border-l-2 border-emerald-500 bg-emerald-50 px-1.5 py-0.5 text-xs text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200 ${task.status === "DONE" ? "opacity-60 line-through" : ""}`}
+                            >
+                              Task · {task.title}
+                            </p>
+                          ))}
+                          {itemCount > 2 && (
+                            <p className="text-xs text-zinc-500">+{itemCount - 2} more</p>
                           )}
                         </div>
                       )}
@@ -386,9 +445,9 @@ export default function EventsCalendarPage() {
             <aside className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
               <h3 className="text-lg font-semibold">{selectedDayLabel}</h3>
               <p className="mt-1 text-sm text-zinc-500">
-                {selectedDayEvents.length === 0
-                  ? "No events planned for this day."
-                  : `${selectedDayEvents.length} event${selectedDayEvents.length > 1 ? "s" : ""} scheduled`}
+                {selectedDayEvents.length + selectedDayTasks.length === 0
+                  ? "No events or tasks planned for this day."
+                  : `${selectedDayEvents.length + selectedDayTasks.length} item${selectedDayEvents.length + selectedDayTasks.length > 1 ? "s" : ""} scheduled`}
               </p>
 
               <div className="mt-4 space-y-3">
@@ -430,14 +489,35 @@ export default function EventsCalendarPage() {
                   </article>
                 ))}
 
-                {!fetching && selectedDayEvents.length === 0 && (
+                {selectedDayTasks.map((task) => (
+                  <Link
+                    key={task.id}
+                    href={`/tasks?task=${task.id}`}
+                    className={`block rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 transition hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-900/70 dark:bg-emerald-950/30 ${task.status === "DONE" ? "opacity-65" : ""}`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <p className={`font-medium ${task.status === "DONE" ? "line-through" : ""}`}>{task.title}</p>
+                      <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">Task</span>
+                    </div>
+                    <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-200">
+                      Status: {task.status.replace("_", " ")} · Priority: {task.priority}
+                    </p>
+                    {task.dueDate && (
+                      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                        Due {getLocalDateOnly(task.dueDate).toLocaleDateString()}
+                      </p>
+                    )}
+                  </Link>
+                ))}
+
+                {!fetching && selectedDayEvents.length === 0 && selectedDayTasks.length === 0 && (
                   <p className="rounded-lg border border-dashed border-zinc-200 px-3 py-4 text-sm text-zinc-500 dark:border-zinc-700">
-                    Select another day or create an event from the Events page.
+                    Select another day or create an event or due task.
                   </p>
                 )}
 
                 {fetching && (
-                  <p className="text-sm text-zinc-500">Loading events for calendar...</p>
+                  <p className="text-sm text-zinc-500">Loading calendar items...</p>
                 )}
               </div>
             </aside>
