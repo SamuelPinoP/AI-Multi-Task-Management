@@ -376,6 +376,17 @@ export default function NotesPage() {
     void saveDraft(editingNoteId, "flush");
   }
 
+  async function handleDoneWriting(noteId: string) {
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    await saveDraft(noteId, "flush");
+    setFullscreenNoteId(null);
+    setEditingNoteId(null);
+    window.history.replaceState(null, "", "/notes");
+  }
+
   function handleContentChange(value: string) {
     setEditContent(value);
     if (!editingNoteId || autoFullscreenTriggeredRef.current === editingNoteId)
@@ -412,17 +423,26 @@ export default function NotesPage() {
     const isFullscreen = fullscreenNoteId === note.id;
     return (
       <div className={compact ? "space-y-4" : "space-y-5"}>
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
             Writing mode
           </span>
-          <button
-            type="button"
-            onClick={() => setFullscreenNoteId(note.id)}
-            className="rounded-full border border-zinc-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-zinc-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-200 dark:hover:bg-zinc-800"
-          >
-            Full screen
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFullscreenNoteId(note.id)}
+              className="rounded-full border border-zinc-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-zinc-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              Full screen
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDoneWriting(note.id)}
+              className="rounded-full bg-zinc-950 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white dark:focus:ring-offset-zinc-950"
+            >
+              Done
+            </button>
+          </div>
         </div>
         <input
           ref={titleInputRef}

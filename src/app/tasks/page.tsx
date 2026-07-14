@@ -83,6 +83,10 @@ export default function TasksPage() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [highlightedTaskId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("task");
+  });
 
   const [filter, setFilter] = useState<TaskFilter>("ALL");
   const [priorityFilter, setPriorityFilter] = useState<"ALL" | Priority>("ALL");
@@ -165,6 +169,20 @@ export default function TasksPage() {
 
     return sorted;
   }, [tasks, searchQuery, filter, priorityFilter, sortBy, projectFilter]);
+
+
+  useEffect(() => {
+    if (!highlightedTaskId || fetching) return;
+    const task = tasks.find((item) => item.id === highlightedTaskId);
+    if (!task) return;
+
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById(`task-${highlightedTaskId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [fetching, highlightedTaskId, tasks]);
+
 
   const taskSections = useMemo(() => {
     const overdue = visibleTasks.filter(
@@ -694,7 +712,8 @@ export default function TasksPage() {
                           return (
                             <article
                               key={task.id}
-                              className={`rounded-2xl border p-5 shadow-sm ${urgencyStyles}`}
+                              id={`task-${task.id}`}
+                              className={`rounded-2xl border p-5 shadow-sm ${urgencyStyles} ${highlightedTaskId === task.id ? "ring-2 ring-blue-400 ring-offset-2 dark:ring-offset-zinc-950" : ""}`}
                             >
                               {isEditing ? (
                                 <div className="space-y-3">
