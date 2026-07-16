@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "crypto";
+import { del, put } from "@vercel/blob";
 import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 
@@ -21,8 +22,6 @@ export type ProjectChatStoredAttachmentForDelete = Pick<
 >;
 
 type StorageProvider = "local" | "vercel-blob";
-
-type VercelBlobModule = typeof import("@vercel/blob");
 
 export class ProjectChatStorageConfigError extends Error {
   constructor(message: string) {
@@ -120,19 +119,6 @@ async function saveFilesLocally(
   );
 }
 
-async function loadVercelBlobSdk(): Promise<VercelBlobModule> {
-  try {
-    // Keep the SDK server-only and load it only when the hosted provider is selected.
-    return (await import(
-      /* webpackIgnore: true */ "@vercel/blob"
-    )) as VercelBlobModule;
-  } catch {
-    throw new ProjectChatStorageConfigError(
-      "Vercel Blob storage is selected, but @vercel/blob is not installed. Run npm install @vercel/blob and redeploy.",
-    );
-  }
-}
-
 async function saveFilesToVercelBlob(
   files: File[],
 ): Promise<ProjectChatStoredAttachment[]> {
@@ -144,7 +130,6 @@ async function saveFilesToVercelBlob(
   }
 
   const prefix = blobPrefix();
-  const { put } = await loadVercelBlobSdk();
 
   return Promise.all(
     files.map(async (file) => {
@@ -206,7 +191,6 @@ async function deleteBlobAttachment(
     );
   }
 
-  const { del } = await loadVercelBlobSdk();
   await del(attachment.url || attachment.fileName, { token });
 }
 
