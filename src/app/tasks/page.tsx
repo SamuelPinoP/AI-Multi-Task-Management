@@ -179,11 +179,12 @@ export default function TasksPage() {
       setPriorityFilter("ALL");
       setProjectFilter("");
       setSearchQuery("");
-      setEditingTaskId(task.id);
 
-      document
-        .getElementById(`task-${highlightedTaskId}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => {
+        document
+          .getElementById(`task-${highlightedTaskId}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 0);
     });
   }, [fetching, highlightedTaskId, tasks]);
 
@@ -716,7 +717,7 @@ export default function TasksPage() {
                             <article
                               key={task.id}
                               id={`task-${task.id}`}
-                              className={`rounded-2xl border p-5 shadow-sm ${urgencyStyles} ${highlightedTaskId === task.id ? "ring-4 ring-blue-500 ring-offset-4 dark:ring-blue-400 dark:ring-offset-zinc-950" : ""}`}
+                              className={`scroll-mt-28 rounded-2xl border p-5 shadow-sm transition-[box-shadow,border-color] duration-300 ${urgencyStyles} ${highlightedTaskId === task.id ? "border-blue-300 ring-4 ring-blue-300 ring-offset-4 ring-offset-white dark:border-blue-700 dark:ring-blue-800 dark:ring-offset-zinc-950" : ""}`}
                             >
                               {isEditing ? (
                                 <div className="space-y-3">
