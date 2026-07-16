@@ -10,6 +10,7 @@ import {
   formatRecurrenceLabel,
   normalizeRecurrence,
 } from "@/lib/recurrence";
+import { getLocalDateOnly } from "@/lib/task-date-buckets";
 
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
@@ -53,16 +54,16 @@ function formatTime(value: string) {
   }).format(new Date(value));
 }
 
-function getLocalDayStart(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+function getLocalDayStart(date: Date | string) {
+  return getLocalDateOnly(date);
+}
+
+function isSameLocalDay(left: Date | string, right: Date | string) {
+  return formatDayKey(getLocalDayStart(left)) === formatDayKey(getLocalDayStart(right));
 }
 
 function isEventToday(event: EventItem, now: Date) {
-  const todayStart = getLocalDayStart(now);
-  const tomorrowStart = new Date(todayStart);
-  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-  const eventStart = new Date(event.startTime);
-  return eventStart >= todayStart && eventStart < tomorrowStart;
+  return isSameLocalDay(event.startTime, now);
 }
 
 function validateEventInput(input: {
@@ -139,7 +140,7 @@ export default function EventsPage() {
       })
       .sort(
         (a, b) =>
-          new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+          getLocalDayStart(a.startTime).getTime() - getLocalDayStart(b.startTime).getTime(),
       );
   }, [events, projectFilter]);
   const selectedProject = useMemo(
@@ -149,18 +150,24 @@ export default function EventsPage() {
 
   const eventSections = useMemo(() => {
     const now = new Date();
-    const soonBoundary = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const todayStart = getLocalDayStart(now);
+    const tomorrowStart = new Date(todayStart);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+    const soonBoundary = new Date(todayStart);
+    soonBoundary.setDate(soonBoundary.getDate() + 7);
 
     const today = visibleEvents.filter((event) => isEventToday(event, now));
     const upcoming = visibleEvents.filter((event) => {
-      const start = new Date(event.startTime);
-      return start > now && start <= soonBoundary && !isEventToday(event, now);
+      const start = getLocalDayStart(event.startTime);
+      return start >= tomorrowStart && start <= soonBoundary;
     });
     const later = visibleEvents.filter(
-      (event) => new Date(event.startTime) > soonBoundary,
+      (event) => getLocalDayStart(event.startTime) > soonBoundary,
     );
     const past = visibleEvents.filter((event) =>
-      event.endTime ? new Date(event.endTime) < now : false,
+      event.endTime
+        ? getLocalDayStart(event.endTime) < todayStart
+        : getLocalDayStart(event.startTime) < todayStart,
     );
 
     return [
@@ -222,7 +229,7 @@ export default function EventsPage() {
   const calendarEventsByDay = useMemo(() => {
     return expandedCalendarEvents.reduce<Record<string, EventItem[]>>(
       (acc, event) => {
-        const key = formatDayKey(new Date(event.startTime));
+        const key = formatDayKey(getLocalDayStart(event.startTime));
         if (!acc[key]) {
           acc[key] = [];
         }
@@ -243,7 +250,7 @@ export default function EventsPage() {
     return expandedCalendarEvents.reduce<Record<string, EventItem[]>>(
       (acc, event) => {
         if (event.projectId !== projectFilter) return acc;
-        const key = formatDayKey(new Date(event.startTime));
+        const key = formatDayKey(getLocalDayStart(event.startTime));
         if (!acc[key]) {
           acc[key] = [];
         }
@@ -263,7 +270,7 @@ export default function EventsPage() {
     }
     return [...eventsForDay].sort(
       (a, b) =>
-        new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+        getLocalDayStart(a.startTime).getTime() - getLocalDayStart(b.startTime).getTime(),
     );
   }, [calendarEventsByDay, selectedDayKey, projectFilter]);
 
@@ -330,13 +337,10 @@ export default function EventsPage() {
     if (!event) return;
     const timer = window.setTimeout(() => {
       setProjectFilter(ALL_PROJECTS_FILTER);
-      setSelectedDayKey(formatDayKey(new Date(event.startTime)));
+      setSelectedDayKey(formatDayKey(getLocalDayStart(event.startTime)));
+      const eventDay = getLocalDayStart(event.startTime);
       setCalendarMonth(
-        new Date(
-          new Date(event.startTime).getFullYear(),
-          new Date(event.startTime).getMonth(),
-          1,
-        ),
+        new Date(eventDay.getFullYear(), eventDay.getMonth(), 1),
       );
       startEditing(event);
       window.requestAnimationFrame(() => {
@@ -412,14 +416,14 @@ export default function EventsPage() {
     setEditDescription(event.description ?? "");
     setEditLocation(event.location ?? "");
     const start = new Date(event.startTime);
-    setEditStartDate(start.toISOString().slice(0, 10));
+    setEditStartDate(formatDayKey(getLocalDayStart(event.startTime)));
     setEditStartTime(
-      event.hasStartTime ? start.toISOString().slice(11, 16) : "",
+      event.hasStartTime ? start.toTimeString().slice(0, 5) : "",
     );
     if (event.endTime) {
       const end = new Date(event.endTime);
-      setEditEndDate(end.toISOString().slice(0, 10));
-      setEditEndTime(event.hasEndTime ? end.toISOString().slice(11, 16) : "");
+      setEditEndDate(formatDayKey(getLocalDayStart(event.endTime)));
+      setEditEndTime(event.hasEndTime ? end.toTimeString().slice(0, 5) : "");
     } else {
       setEditEndDate("");
       setEditEndTime("");

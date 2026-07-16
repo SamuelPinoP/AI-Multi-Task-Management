@@ -182,7 +182,7 @@ export default function EventsCalendarPage() {
   const eventsByDay = useMemo(() => {
     return filteredExpandedEvents.reduce<Record<string, EventItem[]>>(
       (acc, event) => {
-        const key = formatDayKey(new Date(event.startTime));
+        const key = formatDayKey(getLocalDateOnly(event.startTime));
         if (!acc[key]) {
           acc[key] = [];
         }
@@ -219,7 +219,7 @@ export default function EventsCalendarPage() {
     const dayEvents = eventsByDay[selectedDayKey] ?? [];
     return [...dayEvents].sort(
       (a, b) =>
-        new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+        getLocalDateOnly(a.startTime).getTime() - getLocalDateOnly(b.startTime).getTime(),
     );
   }, [eventsByDay, selectedDayKey]);
 

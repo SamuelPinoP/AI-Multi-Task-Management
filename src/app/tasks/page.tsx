@@ -7,7 +7,7 @@ import {
   uiDangerButtonClass,
   uiPrimaryButtonClass,
 } from "@/components/ui";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
 
@@ -86,6 +86,7 @@ export default function TasksPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const highlightedTaskId = searchParams.get("task");
+  const highlightedTaskRef = useRef<HTMLElement | null>(null);
 
   const [filter, setFilter] = useState<TaskFilter>("ALL");
   const [priorityFilter, setPriorityFilter] = useState<"ALL" | Priority>("ALL");
@@ -174,18 +175,26 @@ export default function TasksPage() {
     const task = tasks.find((item) => item.id === highlightedTaskId);
     if (!task) return;
 
-    window.requestAnimationFrame(() => {
+    const timer = window.setTimeout(() => {
       setFilter("ALL");
       setPriorityFilter("ALL");
       setProjectFilter("");
       setSearchQuery("");
-      setEditingTaskId(task.id);
-
-      document
-        .getElementById(`task-${highlightedTaskId}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
+      startEditing(task);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [fetching, highlightedTaskId, tasks]);
+
+  useEffect(() => {
+    if (!highlightedTaskId || fetching) return;
+    const timer = window.setTimeout(() => {
+      highlightedTaskRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetching, highlightedTaskId, visibleTasks]);
 
   const taskSections = useMemo(() => {
     const overdue = visibleTasks.filter(
@@ -716,7 +725,12 @@ export default function TasksPage() {
                             <article
                               key={task.id}
                               id={`task-${task.id}`}
-                              className={`rounded-2xl border p-5 shadow-sm ${urgencyStyles} ${highlightedTaskId === task.id ? "ring-4 ring-blue-500 ring-offset-4 dark:ring-blue-400 dark:ring-offset-zinc-950" : ""}`}
+                              ref={
+                                highlightedTaskId === task.id
+                                  ? highlightedTaskRef
+                                  : null
+                              }
+                              className={`rounded-2xl border p-5 shadow-sm ${urgencyStyles} ${highlightedTaskId === task.id ? "ring-4 ring-blue-300 ring-offset-2 ring-offset-white dark:ring-blue-800 dark:ring-offset-zinc-950" : ""}`}
                             >
                               {isEditing ? (
                                 <div className="space-y-3">
