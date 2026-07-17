@@ -39,7 +39,7 @@ type EventItem = {
 const dayStart = (date: Date) => getLocalDateOnly(date);
 const fmtDate = (value: string) =>
   new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(
-    new Date(value),
+    getLocalDateOnly(value),
   );
 const fmtTime = (value: string) =>
   new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(

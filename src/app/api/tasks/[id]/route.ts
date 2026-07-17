@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
+import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 
 
@@ -63,8 +64,8 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     let dueDate: Date | null = null;
     if (body.dueDate) {
-      const parsed = new Date(body.dueDate);
-      if (Number.isNaN(parsed.getTime())) {
+      const parsed = parseTaskDueDateForStorage(body.dueDate);
+      if (!parsed) {
         return NextResponse.json({ error: "Invalid due date" }, { status: 400 });
       }
       dueDate = parsed;

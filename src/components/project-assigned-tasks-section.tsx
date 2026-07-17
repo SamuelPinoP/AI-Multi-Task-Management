@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatTaskDueDate } from "@/lib/task-date-buckets";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
@@ -108,7 +109,7 @@ export function ProjectAssignedTasksSection({ projectId, tasks, members }: Proje
                 <div className="mt-3 flex flex-wrap gap-3 text-sm text-zinc-600 dark:text-zinc-300">
                   <span>Status: <strong>{task.status}</strong></span>
                   <span>Priority: <strong>{task.priority}</strong></span>
-                  <span>Due: <strong>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}</strong></span>
+                  <span>Due: <strong>{task.dueDate ? formatTaskDueDate(task.dueDate) : "No due date"}</strong></span>
                   <span>Assigned to: <strong>{task.assignee?.name ?? "Unassigned"}</strong></span>
                 </div>
               </article>

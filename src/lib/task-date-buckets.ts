@@ -28,6 +28,36 @@ export function getLocalDateOnly(value: Date | string) {
   return parseLocalDateOnly(value);
 }
 
+export function formatTaskDueDate(value: Date | string, locales?: Intl.LocalesArgument) {
+  return new Intl.DateTimeFormat(locales).format(getLocalDateOnly(value));
+}
+
+export function formatTaskDueDateInput(value: Date | string) {
+  return formatTaskDayKey(getLocalDateOnly(value));
+}
+
+export function formatTaskDayKey(value: Date | string) {
+  const date = getLocalDateOnly(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function parseTaskDueDateForStorage(value: string) {
+  const date = getLocalDateOnly(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function compareTaskDueDates(
+  a: Date | string | null | undefined,
+  b: Date | string | null | undefined,
+) {
+  const aTime = a ? getLocalDateOnly(a).getTime() : Number.POSITIVE_INFINITY;
+  const bTime = b ? getLocalDateOnly(b).getTime() : Number.POSITIVE_INFINITY;
+  return aTime - bTime;
+}
+
 export function getTaskDateBucket(
   dueDate: Date | string | null | undefined,
   now: Date | string = new Date(),

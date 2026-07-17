@@ -1,5 +1,6 @@
 "use client";
 
+import { formatTaskDueDate } from "@/lib/task-date-buckets";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -40,9 +41,7 @@ const quickLinks = [
 
 function formatDate(dateString: string | null) {
   if (!dateString) return null;
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString();
+  return formatTaskDueDate(dateString);
 }
 
 function ProjectBadge({ project }: { project: ProjectRef | null }) {
