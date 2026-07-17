@@ -9,7 +9,7 @@ import {
   formatRecurrenceLabel,
   normalizeRecurrence,
 } from "@/lib/recurrence";
-import { getLocalDateOnly } from "@/lib/task-date-buckets";
+import { formatTaskDueDate, getLocalDateOnly } from "@/lib/task-date-buckets";
 
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
@@ -709,7 +709,7 @@ export default function EventsCalendarPage() {
                     {task.dueDate && (
                       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
                         Due{" "}
-                        {getLocalDateOnly(task.dueDate).toLocaleDateString()}
+                        {formatTaskDueDate(task.dueDate)}
                       </p>
                     )}
                   </article>

@@ -9,7 +9,7 @@ import {
 } from "@/lib/auth";
 import { expandRecurringEventsForRange } from "@/lib/recurrence";
 import { projectAccessWhere } from "@/lib/project-access";
-import { getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
+import { formatTaskDueDate, getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
 
 const REMINDER_LOOKAHEAD_DAYS = 7;
 
@@ -698,7 +698,7 @@ export default async function DashboardPage() {
                       >
                         <p className="font-medium">{task.title}</p>
                         <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                          Due {formatDate(task.dueDate as Date)} ·{" "}
+                          Due {formatTaskDueDate(task.dueDate as Date)} ·{" "}
                           {task.priority} · {task.status.replace("_", " ")}
                         </p>
                         <div className="mt-2">
@@ -725,7 +725,7 @@ export default async function DashboardPage() {
                       >
                         <p className="font-medium">{task.title}</p>
                         <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                          Due {formatDate(task.dueDate as Date)} ·{" "}
+                          Due {formatTaskDueDate(task.dueDate as Date)} ·{" "}
                           {task.priority} · {task.status.replace("_", " ")}
                         </p>
                         <div className="mt-2">
@@ -752,7 +752,7 @@ export default async function DashboardPage() {
                       >
                         <p className="font-medium">{task.title}</p>
                         <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                          Due {formatDate(task.dueDate as Date)} ·{" "}
+                          Due {formatTaskDueDate(task.dueDate as Date)} ·{" "}
                           {task.priority} · {task.status.replace("_", " ")}
                         </p>
                         <div className="mt-2">
@@ -938,7 +938,7 @@ export default async function DashboardPage() {
                     </p>
                     {task.dueDate && (
                       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        Due {formatDate(task.dueDate)}
+                        Due {formatTaskDueDate(task.dueDate)}
                       </p>
                     )}
                     <div className="mt-2">

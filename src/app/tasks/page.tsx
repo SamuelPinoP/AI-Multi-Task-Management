@@ -9,7 +9,13 @@ import {
 } from "@/components/ui";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
+import {
+  compareTaskDueDates,
+  formatTaskDueDate,
+  formatTaskDueDateInput,
+  getLocalDateOnly,
+  getTaskDateBucket,
+} from "@/lib/task-date-buckets";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
@@ -156,15 +162,10 @@ export default function TasksPage() {
         );
       }
 
-      const aDue = a.dueDate
-        ? new Date(a.dueDate).getTime()
-        : Number.POSITIVE_INFINITY;
-      const bDue = b.dueDate
-        ? new Date(b.dueDate).getTime()
-        : Number.POSITIVE_INFINITY;
+      const dueDateComparison = compareTaskDueDates(a.dueDate, b.dueDate);
 
-      if (sortBy === "DUE_DATE_ASC") return aDue - bDue;
-      return bDue - aDue;
+      if (sortBy === "DUE_DATE_ASC") return dueDateComparison;
+      return -dueDateComparison;
     });
 
     return sorted;
@@ -366,7 +367,7 @@ export default function TasksPage() {
     setEditStatus(task.status);
     setEditPriority(task.priority);
     setEditDueDate(
-      task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : "",
+      task.dueDate ? formatTaskDueDateInput(task.dueDate) : "",
     );
     setEditRecurrence(task.recurrence);
     setEditProjectId(task.projectId ?? "");
@@ -446,9 +447,7 @@ export default function TasksPage() {
           description: task.description ?? "",
           status: nextStatus,
           priority: task.priority,
-          dueDate: task.dueDate
-            ? new Date(task.dueDate).toISOString().slice(0, 10)
-            : null,
+          dueDate: task.dueDate ? formatTaskDueDateInput(task.dueDate) : null,
           recurrence: task.recurrence,
           projectId: task.projectId ?? "",
           assigneeId: task.projectId ? (task.assignee?.id ?? "") : "",
@@ -965,9 +964,7 @@ export default function TasksPage() {
                                       Due:{" "}
                                       <strong>
                                         {task.dueDate
-                                          ? new Date(
-                                              task.dueDate,
-                                            ).toLocaleDateString()
+                                          ? formatTaskDueDate(task.dueDate)
                                           : "No due date"}
                                       </strong>
                                     </span>

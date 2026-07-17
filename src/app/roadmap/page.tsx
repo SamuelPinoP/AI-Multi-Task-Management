@@ -161,7 +161,7 @@ export default function RoadmapPage() {
         kind: "TASK",
         title: task.title,
         when: task.dueDate as string,
-        timeMs: new Date(task.dueDate as string).getTime(),
+        timeMs: getLocalDateOnly(task.dueDate as string).getTime(),
         taskStatus: task.status,
         taskPriority: task.priority,
         recurrence: task.recurrence,
