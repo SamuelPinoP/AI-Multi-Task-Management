@@ -34,13 +34,13 @@ function getNotePreview(note: Pick<Note, "title" | "content">) {
   return note.title.trim() || (note.content ?? "").trim();
 }
 
-// Reads the note id from /notes?openNote=<id> so a specific note can open automatically.
+// Reads the note id from /notes?openNote=<id> so it opens the correct note.
 function getInitialOpenNoteId() {
   if (typeof window === "undefined") return null;
   return new URLSearchParams(window.location.search).get("openNote");
 }
 
-// Reads /notes?focus=title or /notes?focus=content to decide which editor field should receive focus.
+// Decides if the note is being edited in the content or title.
 function getInitialFocusTarget(): FocusTarget {
   if (typeof window === "undefined") return "content";
   return new URLSearchParams(window.location.search).get("focus") === "title"
@@ -117,7 +117,7 @@ export default function NotesPage() {
     projectId: "",
   });
 
-  // Computes the notes that should appear after applying search and project filters.
+  // Computes the notes that should appear after applying search and project filters. This is for the search functionality.
   // useMemo avoids recalculating unless notes, search text, or project filter changes.
   const visibleNotes = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -338,6 +338,8 @@ export default function NotesPage() {
     );
   }
 
+  // Saves the latest editor draft to /api/notes/[id] using PATCH.
+  // Debounced saves happen while typing; flush saves happen on blur, Done, or page exit.
   async function saveDraft(
     noteId: string,
     mode: "debounced" | "flush" = "debounced",
@@ -348,6 +350,8 @@ export default function NotesPage() {
       draftsMatch(draft, lastSavedDraftRef.current)
     )
       return;
+
+    // Does not save if the note is empty
     if (!draft.title.trim() && !draft.content.trim()) {
       setSaveStatus("error");
       setError("Add a title or note content before saving.");
@@ -407,12 +411,15 @@ export default function NotesPage() {
     }
   }
 
+  // Forces any pending autosave to run immediately so no content is lost.
   function flushAutosave() {
     if (!editingNoteId) return;
     if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
     void saveDraft(editingNoteId, "flush");
   }
 
+  // Finishes Writing mode by saving the latest draft, closing fullscreen,
+  // clearing the active editor, and returning the URL to /notes.
   async function handleDoneWriting(noteId: string) {
     if (autosaveTimerRef.current) {
       window.clearTimeout(autosaveTimerRef.current);
@@ -424,10 +431,12 @@ export default function NotesPage() {
     window.history.replaceState(null, "", "/notes");
   }
 
+  // Updates the editor content state when the user types in the textarea.
   function handleContentChange(value: string) {
     setEditContent(value);
   }
 
+  // Deletes a note through the API and removes it from the current UI list.
   async function handleDelete(noteId: string) {
     try {
       setDeletingNoteId(noteId);
@@ -445,11 +454,13 @@ export default function NotesPage() {
       setDeletingNoteId(null);
     }
   }
-
+  
+  // Finds the active note object for fullscreen rendering.
   const activeNote = editingNoteId
     ? notes.find((note) => note.id === editingNoteId)
     : null;
 
+  // Renders the Writing mode editor used both inline and in fullscreen.
   function renderEditor(note: Note, compact = false) {
     const isFullscreen = fullscreenNoteId === note.id;
     return (
