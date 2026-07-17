@@ -1,14 +1,20 @@
+// This page is interactive, so it must run in the browser.
+// It uses React state, effects, refs, focus control, autosave timers, and browser URL parameters.
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
+// This is not different to the data class in Kotlin
 type Project = {
   id: string;
   name: string;
   color: string | null;
 };
 
+// This is not different to the data class in Kotlin
+// A Note represents the data shape the Notes page frontend expects from the backend.
+// This matches the note information returned by /api/notes and used by the UI.
 type Note = {
   id: string;
   title: string;
@@ -19,17 +25,22 @@ type Note = {
   project: Project | null;
 };
 
+// The editor can focus either the title input or the content textarea.
 type FocusTarget = "title" | "content";
 
+// Builds the text preview shown on note cards.
+// If a note has no title, the content becomes the preview so body-only notes still look clean.
 function getNotePreview(note: Pick<Note, "title" | "content">) {
   return note.title.trim() || (note.content ?? "").trim();
 }
 
+// Reads the note id from /notes?openNote=<id> so a specific note can open automatically.
 function getInitialOpenNoteId() {
   if (typeof window === "undefined") return null;
   return new URLSearchParams(window.location.search).get("openNote");
 }
 
+// Reads /notes?focus=title or /notes?focus=content to decide which editor field should receive focus.
 function getInitialFocusTarget(): FocusTarget {
   if (typeof window === "undefined") return "content";
   return new URLSearchParams(window.location.search).get("focus") === "title"
@@ -37,18 +48,28 @@ function getInitialFocusTarget(): FocusTarget {
     : "content";
 }
 
+// Loaded data from the backend.
+// notes renders the note list, and projects fills the project dropdowns.
 export default function NotesPage() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+
+  // Create-note form state.
+  // These values belong to the form at the top of the Notes page.
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [projectId, setProjectId] = useState("");
+
+  // UI status state for loading, fetching, deleting, and errors.
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(() =>
     getInitialOpenNoteId(),
   );
+
+  // Editing state.
+  // These values belong to the currently opened note in Writing mode.
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editProjectId, setEditProjectId] = useState("");
@@ -58,8 +79,13 @@ export default function NotesPage() {
   >("idle");
   const [error, setError] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Search and filter state used to decide which notes are visible.
   const [searchQuery, setSearchQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
+
+  // Focus and fullscreen state.
+  // These values control which note is opened, where the cursor goes, and whether the editor is fullscreen.
   const [openedNoteId, setOpenedNoteId] = useState<string | null>(() =>
     getInitialOpenNoteId(),
   );
@@ -68,9 +94,16 @@ export default function NotesPage() {
   );
   const [focusRequest, setFocusRequest] = useState(0);
   const [fullscreenNoteId, setFullscreenNoteId] = useState<string | null>(null);
+
+  // Refs point directly to DOM elements or mutable values without causing re-renders.
+  // They are used here for focusing inputs and managing autosave.
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
+  
+  // latestDraftRef stores the newest unsaved editor values.
+  // lastSavedDraftRef stores the last version successfully saved.
+  // Comparing them prevents unnecessary autosave requests.
   const latestDraftRef = useRef({
     noteId: "",
     title: "",
@@ -84,6 +117,8 @@ export default function NotesPage() {
     projectId: "",
   });
 
+  // Computes the notes that should appear after applying search and project filters.
+  // useMemo avoids recalculating unless notes, search text, or project filter changes.
   const visibleNotes = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
@@ -100,6 +135,7 @@ export default function NotesPage() {
     });
   }, [notes, projectFilter, searchQuery]);
 
+  // Loads the user's notes from the backend API and stores them in state.
   async function fetchNotes(showLoading = true) {
     try {
       if (showLoading) setFetching(true);
@@ -115,6 +151,7 @@ export default function NotesPage() {
     }
   }
 
+  // Loads projects so notes can be attached to a project from the dropdown.
   async function fetchProjects() {
     try {
       const res = await fetch("/api/projects");
@@ -222,6 +259,7 @@ export default function NotesPage() {
     };
   });
 
+  // Marks a note as recently opened so Dashboard shortcuts can continue from it.
   async function markNoteOpened(noteId: string) {
     try {
       await fetch("/api/recent-shortcuts", {
@@ -232,6 +270,8 @@ export default function NotesPage() {
     } catch {}
   }
 
+  // Handles the Create Note form.
+  // It allows title-only notes, body-only notes, or notes with both.
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!title.trim() && !content.trim()) {
@@ -261,6 +301,8 @@ export default function NotesPage() {
     }
   }
 
+  // Opens a note in Writing mode, fills the editor state, focuses the requested field,
+  // records the note as recently opened, and updates the URL.
   function openNote(note: Note, target: FocusTarget) {
     setOpenedNoteId(note.id);
     setEditingNoteId(note.id);
@@ -283,6 +325,7 @@ export default function NotesPage() {
     window.history.replaceState(null, "", `/notes?${params.toString()}`);
   }
 
+  // Compares two drafts so autosave only runs when something actually changed.
   function draftsMatch(
     a: typeof latestDraftRef.current,
     b: typeof latestDraftRef.current,
