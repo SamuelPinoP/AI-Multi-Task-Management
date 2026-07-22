@@ -1,5 +1,29 @@
 "use client";
 
+/**
+ * TasksPage
+ * ---------
+ * Main "Tasks" view for the AI-Multi Task-Management app.
+ *
+ * Responsibilities:
+ * - Fetch and display the current user's tasks and projects.
+ * - Provide a form to create new tasks (with priority, due date, recurrence,
+ *   project, and assignee).
+ * - Support inline editing, marking tasks complete/incomplete, and deleting
+ *   tasks (with a confirmation dialog).
+ * - Support searching, filtering (status/priority/project), and sorting the
+ *   task list.
+ * - Group visible tasks into "Overdue", "Due Today", and "Upcoming" sections
+ *   based on due date urgency.
+ * - Support deep-linking to a specific task via a `?task=<id>` query param,
+ *   which opens that task in edit mode and scrolls it into view.
+ *
+ * This file intentionally keeps all data-fetching, filtering, and mutation
+ * logic colocated in a single client component for simplicity. Shared
+ * date-bucketing helpers live in `@/lib/task-date-buckets` and are reused by
+ * both this page and the task board view.
+ */
+
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -17,18 +41,33 @@ import {
   getTaskDateBucket,
 } from "@/lib/task-date-buckets";
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** Lifecycle state of a task. */
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
+
+/** Relative importance of a task, used for sorting/filtering and UI badges. */
 type Priority = "LOW" | "MEDIUM" | "HIGH";
+
+/** How often a task repeats. "NONE" means it's a one-off task. */
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+
+/** Completion filter applied to the visible task list. */
 type TaskFilter = "ALL" | "ACTIVE" | "COMPLETED";
+
+/** Sort order applied to the visible task list. */
 type SortOption = "NEWEST" | "OLDEST" | "DUE_DATE_ASC" | "DUE_DATE_DESC";
 
+/** A project a task can optionally belong to. */
 type Project = {
   id: string;
   name: string;
   color: string | null;
 };
 
+/** A member of a project, eligible to be assigned to a task. */
 type Member = {
   id: string;
   name: string;
@@ -36,6 +75,7 @@ type Member = {
   role: "OWNER" | "EDITOR" | "VIEWER";
 };
 
+/** A single task as returned by the `/api/tasks` endpoints. */
 type Task = {
   id: string;
   title: string;
@@ -52,12 +92,35 @@ type Task = {
   assignee: Member | null;
 };
 
+/**
+ * Derived urgency bucket for a task based on its due date and status.
+ * Completed tasks and tasks without a due date are always "NONE".
+ */
 type TaskUrgency = "OVERDUE" | "DUE_TODAY" | "DUE_SOON" | "NONE";
 
+// ---------------------------------------------------------------------------
+// Pure helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the local midnight `Date` for the given date, stripping the
+ * time-of-day component. Thin wrapper around `getLocalDateOnly` used for
+ * readability at call sites that are comparing "today" to a due date.
+ */
 function getLocalDayStart(date: Date) {
   return getLocalDateOnly(date);
 }
 
+/**
+ * Determines how urgent a task is, for grouping and badge styling.
+ *
+ * Rules:
+ * - Done tasks, or tasks with no due date, are never urgent ("NONE").
+ * - Delegates the coarse bucketing (OVERDUE / DUE_TODAY) to
+ *   `getTaskDateBucket`, which is shared with the task board view.
+ * - Otherwise, computes the number of whole days between today and the due
+ *   date; due dates within the next 3 days are flagged "DUE_SOON".
+ */
 function getTaskUrgency(task: Task): TaskUrgency {
   if (task.status === "DONE" || !task.dueDate) return "NONE";
 
@@ -73,33 +136,60 @@ function getTaskUrgency(task: Task): TaskUrgency {
   return "NONE";
 }
 
+/**
+ * Formats a `Recurrence` value into a short, human-readable label used in
+ * the "Repeats: ..." badge and summary line.
+ */
 function formatRecurrenceLabel(recurrence: Recurrence) {
   if (recurrence === "NONE") return "No";
   if (recurrence === "BIWEEKLY") return "every 2 weeks";
   return recurrence.toLowerCase();
 }
 
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export default function TasksPage() {
+  // --- Core data -----------------------------------------------------------
+  /** All tasks belonging to the current user, as loaded from the API. */
   const [tasks, setTasks] = useState<Task[]>([]);
+  /** All projects available to the current user (for the project selects). */
   const [projects, setProjects] = useState<Project[]>([]);
+
+  // --- Async / loading state -------------------------------------------------
+  /** True while the initial tasks list is being fetched. */
   const [fetching, setFetching] = useState(true);
+  /** True while a new task is being submitted via the create form. */
   const [loading, setLoading] = useState(false);
+  /** True while an in-progress edit is being saved. */
   const [savingEdit, setSavingEdit] = useState(false);
+  /** id of the task currently being deleted, if any (drives per-row spinner). */
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+  /** id of the task whose completion state is being toggled, if any. */
   const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null);
+  /** id of the task currently open in inline edit mode, if any. */
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  /** Human-readable error message shown near the create form, if any. */
   const [error, setError] = useState("");
+  /** id of the task pending delete confirmation via `ConfirmDialog`. */
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // --- Deep-linking (?task=<id>) ---------------------------------------------
   const searchParams = useSearchParams();
+  /** Task id requested via the `task` query param, used to auto-open + highlight a task. */
   const highlightedTaskId = searchParams.get("task");
+  /** Ref to the highlighted task's DOM node, used to scroll it into view. */
   const highlightedTaskRef = useRef<HTMLElement | null>(null);
 
+  // --- List controls (search / filter / sort) --------------------------------
   const [filter, setFilter] = useState<TaskFilter>("ALL");
   const [priorityFilter, setPriorityFilter] = useState<"ALL" | Priority>("ALL");
   const [sortBy, setSortBy] = useState<SortOption>("NEWEST");
   const [searchQuery, setSearchQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
 
+  // --- Create-task form state --------------------------------------------
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("TODO");
@@ -108,10 +198,16 @@ export default function TasksPage() {
   const [recurrence, setRecurrence] = useState<Recurrence>("NONE");
   const [projectId, setProjectId] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
+  /**
+   * Cache of project members keyed by project id, populated lazily the
+   * first time a project's assignee dropdown is opened or a task tied to
+   * that project is edited. Avoids refetching members repeatedly.
+   */
   const [membersByProject, setMembersByProject] = useState<
     Record<string, Member[]>
   >({});
 
+  // --- Edit-task form state (mirrors the create form, for the row being edited) --
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editStatus, setEditStatus] = useState<TaskStatus>("TODO");
@@ -121,10 +217,16 @@ export default function TasksPage() {
   const [editProjectId, setEditProjectId] = useState("");
   const [editAssigneeId, setEditAssigneeId] = useState("");
 
+  /**
+   * Derived list of tasks after applying search, status filter, priority
+   * filter, project filter, and the selected sort order. Recomputed only
+   * when one of its dependencies changes.
+   */
   const visibleTasks = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
     const filtered = tasks
+      // Text search over title + description.
       .filter((task) => {
         if (!normalizedQuery) return true;
 
@@ -135,20 +237,24 @@ export default function TasksPage() {
 
         return titleMatches || descriptionMatches;
       })
+      // Completion status filter.
       .filter((task) => {
         if (filter === "ACTIVE") return task.status !== "DONE";
         if (filter === "COMPLETED") return task.status === "DONE";
         return true;
       })
+      // Priority filter.
       .filter((task) => {
         if (priorityFilter === "ALL") return true;
         return task.priority === priorityFilter;
       })
+      // Project filter.
       .filter((task) => {
         if (!projectFilter) return true;
         return task.projectId === projectFilter;
       });
 
+    // Apply the selected sort order over the filtered results.
     const sorted = [...filtered].sort((a, b) => {
       if (sortBy === "NEWEST") {
         return (
@@ -162,6 +268,8 @@ export default function TasksPage() {
         );
       }
 
+      // DUE_DATE_ASC / DUE_DATE_DESC: reuse the shared due-date comparator,
+      // negating it for descending order.
       const dueDateComparison = compareTaskDueDates(a.dueDate, b.dueDate);
 
       if (sortBy === "DUE_DATE_ASC") return dueDateComparison;
@@ -171,6 +279,11 @@ export default function TasksPage() {
     return sorted;
   }, [tasks, searchQuery, filter, priorityFilter, sortBy, projectFilter]);
 
+  /**
+   * Deep-link effect: once tasks have loaded and a `?task=<id>` param is
+   * present, reset all list controls (so the task is guaranteed to be
+   * visible) and open that task in edit mode.
+   */
   useEffect(() => {
     if (!highlightedTaskId || fetching) return;
     const task = tasks.find((item) => item.id === highlightedTaskId);
@@ -186,6 +299,11 @@ export default function TasksPage() {
     return () => window.clearTimeout(timer);
   }, [fetching, highlightedTaskId, tasks]);
 
+  /**
+   * Deep-link effect: after the highlighted task's row has rendered (i.e.
+   * `visibleTasks` includes it), smooth-scroll it into the center of the
+   * viewport so the user can immediately see/edit it.
+   */
   useEffect(() => {
     if (!highlightedTaskId || fetching) return;
     const timer = window.setTimeout(() => {
@@ -197,6 +315,11 @@ export default function TasksPage() {
     return () => window.clearTimeout(timer);
   }, [fetching, highlightedTaskId, visibleTasks]);
 
+  /**
+   * Groups `visibleTasks` into three display sections based on
+   * `getTaskUrgency`: "Overdue", "Due Today", and "Upcoming" (which also
+   * includes tasks due soon or with no near-term urgency).
+   */
   const taskSections = useMemo(() => {
     const overdue = visibleTasks.filter(
       (task) => getTaskUrgency(task) === "OVERDUE",
@@ -216,6 +339,12 @@ export default function TasksPage() {
     ] as const;
   }, [visibleTasks]);
 
+  /**
+   * Loads the current user's tasks from `GET /api/tasks`.
+   * @param showLoading When true (default), toggles the full-page
+   *   "Loading tasks..." state; pass `false` for background refetches
+   *   (e.g. after create/update) to avoid UI flicker.
+   */
   async function fetchTasks(showLoading = true) {
     try {
       if (showLoading) setFetching(true);
@@ -235,6 +364,11 @@ export default function TasksPage() {
     }
   }
 
+  /**
+   * Lazily fetches and caches the member list for a project, used to
+   * populate assignee dropdowns. No-ops if the project has no id or its
+   * members are already cached.
+   */
   async function fetchMembers(projectIdToLoad: string) {
     if (!projectIdToLoad || membersByProject[projectIdToLoad]) return;
     const res = await fetch(`/api/projects/${projectIdToLoad}`);
@@ -246,6 +380,12 @@ export default function TasksPage() {
     }));
   }
 
+  /**
+   * Handles a project change in the **create** form: updates the selected
+   * project, ensures its members are loaded (fetching + caching them if
+   * needed), and clears the assignee selection if it's no longer a valid
+   * member of the new project (or if "No project" was selected).
+   */
   async function handleProjectChange(nextProjectId: string) {
     setProjectId(nextProjectId);
     if (!nextProjectId) {
@@ -267,6 +407,10 @@ export default function TasksPage() {
     if (!members?.some((member) => member.id === assigneeId)) setAssigneeId("");
   }
 
+  /**
+   * Same as `handleProjectChange`, but for the **edit** form's project
+   * selector (operates on `editProjectId` / `editAssigneeId` instead).
+   */
   async function handleEditProjectChange(nextProjectId: string) {
     setEditProjectId(nextProjectId);
     if (!nextProjectId) {
@@ -288,6 +432,8 @@ export default function TasksPage() {
     if (!members?.some((member) => member.id === editAssigneeId))
       setEditAssigneeId("");
   }
+
+  /** Loads all projects available to the current user from `GET /api/projects`. */
   async function fetchProjects() {
     try {
       const res = await fetch("/api/projects");
@@ -302,6 +448,7 @@ export default function TasksPage() {
     }
   }
 
+  /** On mount, load tasks and projects in parallel. */
   useEffect(() => {
     async function loadInitialTasks() {
       await Promise.all([fetchTasks(), fetchProjects()]);
@@ -310,6 +457,11 @@ export default function TasksPage() {
     void loadInitialTasks();
   }, []);
 
+  /**
+   * Submits the create-task form: validates the title, posts the new task
+   * to `POST /api/tasks`, resets the form fields on success, and
+   * refetches the task list (without the full-page loading state).
+   */
   async function handleCreateTask(e: FormEvent) {
     e.preventDefault();
 
@@ -360,6 +512,11 @@ export default function TasksPage() {
     }
   }
 
+  /**
+   * Puts the given task into inline edit mode by seeding the edit-form
+   * state from its current values, and prefetches its project's members
+   * (if any) so the assignee dropdown is ready immediately.
+   */
   function startEditing(task: Task) {
     setEditingTaskId(task.id);
     setEditTitle(task.title);
@@ -376,6 +533,7 @@ export default function TasksPage() {
     setError("");
   }
 
+  /** Exits inline edit mode and resets all edit-form fields to defaults. */
   function cancelEditing() {
     setEditingTaskId(null);
     setEditTitle("");
@@ -388,6 +546,11 @@ export default function TasksPage() {
     setEditAssigneeId("");
   }
 
+  /**
+   * Saves changes from the edit form for the given task id via
+   * `PATCH /api/tasks/:id`, updates the task in local state with the
+   * server's response, and exits edit mode on success.
+   */
   async function handleSaveEdit(taskId: string) {
     if (!editTitle.trim()) {
       setError("Title is required.");
@@ -432,6 +595,11 @@ export default function TasksPage() {
     }
   }
 
+  /**
+   * Toggles a task between "DONE" and "TODO" via `PATCH /api/tasks/:id`,
+   * sending along the task's other current fields unchanged. Updates the
+   * task in local state with the server's response.
+   */
   async function handleToggleComplete(task: Task) {
     const nextStatus: TaskStatus = task.status === "DONE" ? "TODO" : "DONE";
 
@@ -472,6 +640,11 @@ export default function TasksPage() {
     }
   }
 
+  /**
+   * Deletes a task via `DELETE /api/tasks/:id` (moves it to Trash per the
+   * confirmation dialog's messaging), removes it from local state on
+   * success, and exits edit mode if the deleted task was being edited.
+   */
   async function handleDeleteTask(taskId: string) {
     try {
       setDeletingTaskId(taskId);
@@ -513,6 +686,7 @@ export default function TasksPage() {
             Create and manage your tasks for AI-Multi Task-Management.
           </p>
 
+          {/* Create Task form */}
           <section className="mb-10 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
             <h2 className="mb-4 text-2xl font-semibold">Create Task</h2>
             <form onSubmit={handleCreateTask} className="space-y-4">
@@ -607,6 +781,7 @@ export default function TasksPage() {
             {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
           </section>
 
+          {/* Task list: search/filter/sort controls + grouped sections */}
           <section>
             <h2 className="mb-4 text-2xl font-semibold">Your Tasks</h2>
             <div className="mb-4 grid gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 sm:grid-cols-2">
@@ -667,6 +842,8 @@ export default function TasksPage() {
                 Loading tasks...
               </p>
             ) : visibleTasks.length === 0 ? (
+              // Empty state: distinguishes "no tasks at all" from
+              // "tasks exist but filters hide them".
               <div className="rounded-3xl border border-dashed border-zinc-300 bg-white/70 p-8 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
                 <h3 className="text-lg font-semibold">
                   {tasks.length === 0
@@ -681,6 +858,7 @@ export default function TasksPage() {
               </div>
             ) : (
               <div className="space-y-6">
+                {/* Render each urgency section (Overdue / Due Today / Upcoming) */}
                 {taskSections.map((section) => (
                   <div key={section.key}>
                     <h3 className="mb-3 text-lg font-semibold text-gray-800">
@@ -732,6 +910,7 @@ export default function TasksPage() {
                               className={`rounded-2xl border p-5 shadow-sm ${urgencyStyles} ${highlightedTaskId === task.id ? "ring-4 ring-blue-300 ring-offset-2 ring-offset-white dark:ring-blue-800 dark:ring-offset-zinc-950" : ""}`}
                             >
                               {isEditing ? (
+                                // --- Inline edit form for this task ---
                                 <div className="space-y-3">
                                   <input
                                     value={editTitle}
@@ -870,6 +1049,7 @@ export default function TasksPage() {
                                   </div>
                                 </div>
                               ) : (
+                                // --- Read-only display for this task ---
                                 <>
                                   <div className="flex items-start justify-between gap-4">
                                     <div>
@@ -989,6 +1169,7 @@ export default function TasksPage() {
           </section>
         </div>
       </main>
+      {/* Delete confirmation dialog: moves the selected task to Trash. */}
       <ConfirmDialog
         open={Boolean(confirmDeleteId)}
         title="Confirm delete"
