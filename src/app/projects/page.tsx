@@ -3,9 +3,17 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
+// Lifecycle status a project can be in.
 type ProjectStatus = "ACTIVE" | "COMPLETED" | "ARCHIVED";
+
+// Filter value used by the "Your projects" list. "ALL" means no filtering.
 type StatusFilter = "ALL" | ProjectStatus;
 
+/**
+ * A project as returned by the /api/projects endpoint, from the perspective
+ * of the currently authenticated user (includes their access level/role on
+ * that project).
+ */
 type Project = {
   id: string;
   name: string;
@@ -14,16 +22,27 @@ type Project = {
   status: ProjectStatus;
   createdAt: string;
   updatedAt: string;
+  // Coarse-grained access bucket used purely for UI decisions
+  // (e.g. showing Edit/Delete vs. "Open shared project").
   accessLevel: "OWNER" | "EDITOR" | "VIEWER";
+  // The user's specific role on the project.
   memberRole: Role;
 };
 
+// Role a member can hold on a project.
 type Role = "OWNER" | "EDITOR" | "VIEWER";
+
+/**
+ * A pending invitation for the current user to join a project.
+ * Only PENDING invitations are ever fetched/shown on this page; once
+ * accepted or declined they are removed from local state.
+ */
 type Invitation = {
   id: string;
   invitedEmail: string;
   status: "PENDING";
   createdAt: string;
+  // Minimal project info needed to render the invitation card.
   project: {
     id: string;
     name: string;
@@ -31,37 +50,80 @@ type Invitation = {
     color: string | null;
     status: ProjectStatus;
   };
+  // Who sent the invitation, for display purposes.
   inviterUser: { name: string | null; email: string };
 };
 
+// Fallback swatch color used when a project/edit form has no color chosen yet.
 const DEFAULT_COLOR = "#6366f1";
+
+// All selectable project statuses, used to populate the status <select>.
 const STATUS_OPTIONS: ProjectStatus[] = ["ACTIVE", "COMPLETED", "ARCHIVED"];
 
+/**
+ * Converts a ProjectStatus enum value (e.g. "ACTIVE") into a
+ * human-friendly, title-cased label (e.g. "Active") for display.
+ */
 function formatStatus(status: ProjectStatus) {
   return status.charAt(0) + status.slice(1).toLowerCase();
 }
 
+/**
+ * ProjectsPage
+ *
+ * Top-level dashboard for a user's projects. Responsibilities:
+ *  - List projects the user owns or is a member of, with status filtering.
+ *  - Create new projects.
+ *  - Edit/delete projects the user owns, inline in the card.
+ *  - List and respond to (accept/decline) pending project invitations.
+ *
+ * All data is fetched client-side from the /api/projects and
+ * /api/project-invitations REST endpoints; there is no server component
+ * data-fetching involved here.
+ */
 export default function ProjectsPage() {
+  // Projects visible to the current user (owned + shared-with-me).
   const [projects, setProjects] = useState<Project[]>([]);
+  // Pending invitations addressed to the current user.
   const [invitations, setInvitations] = useState<Invitation[]>([]);
+  // Currently selected status filter for the "Your projects" grid.
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+
+  // --- "Create a project" form state ---
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
-  const [fetchingInvitations, setFetchingInvitations] = useState(true);
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false); // create-project submit in flight
+
+  // --- Initial data loading state ---
+  const [fetching, setFetching] = useState(true); // projects list loading
+  const [fetchingInvitations, setFetchingInvitations] = useState(true); // invitations list loading
+
+  // --- Inline "edit project" state ---
+  // editingProjectId is the id of the project currently being edited in-place
+  // within the grid (or null if no card is in edit mode).
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(
+    null,
+  );
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editColor, setEditColor] = useState("");
   const [editStatus, setEditStatus] = useState<ProjectStatus>("ACTIVE");
-  const [savingEdit, setSavingEdit] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false); // edit submit in flight
+
+  // id of the project currently being deleted, used to show a per-card
+  // "Deleting..." state and disable its delete button.
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(
     null,
   );
+
+  // Shared error banner message shown above the create-project form.
   const [error, setError] = useState("");
 
+  /**
+   * Fetches the current user's pending project invitations and stores them
+   * in state. On failure, surfaces a generic error message via `error`.
+   */
   async function fetchInvitations() {
     try {
       const res = await fetch("/api/project-invitations");
@@ -74,6 +136,11 @@ export default function ProjectsPage() {
     }
   }
 
+  /**
+   * Fetches the list of projects visible to the current user (owned and
+   * shared) and stores them in state. On failure, surfaces a generic error
+   * message via `error`.
+   */
   async function fetchProjects() {
     try {
       setError("");
@@ -87,6 +154,7 @@ export default function ProjectsPage() {
     }
   }
 
+  // On mount, load projects and invitations in parallel.
   useEffect(() => {
     async function loadInitialProjects() {
       await Promise.all([fetchProjects(), fetchInvitations()]);
@@ -95,6 +163,16 @@ export default function ProjectsPage() {
     void loadInitialProjects();
   }, []);
 
+  /**
+   * Accepts or declines a pending invitation.
+   *
+   * Optimistically removes the invitation from local state once the server
+   * confirms the update. If the invitation was accepted, re-fetches the
+   * projects list so the newly joined project appears immediately.
+   *
+   * @param invitationId - id of the invitation being responded to
+   * @param action - "ACCEPT" to join the project, "DECLINE" to reject it
+   */
   async function respondToInvitation(
     invitationId: string,
     action: "ACCEPT" | "DECLINE",
@@ -121,6 +199,13 @@ export default function ProjectsPage() {
     }
   }
 
+  /**
+   * Handles submission of the "Create a project" form.
+   * Validates that a name was provided, POSTs the new project to the API,
+   * resets the form on success, and refreshes both the projects and
+   * invitations lists (invitations are refreshed in case creating a project
+   * affects invitation-related UI state elsewhere).
+   */
   async function handleCreateProject(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return setError("Project name is required.");
@@ -150,6 +235,10 @@ export default function ProjectsPage() {
     }
   }
 
+  /**
+   * Puts a project card into inline edit mode, pre-filling the edit form
+   * fields with the project's current values.
+   */
   function startEditing(project: Project) {
     setEditingProjectId(project.id);
     setEditName(project.name);
@@ -158,6 +247,11 @@ export default function ProjectsPage() {
     setEditStatus(project.status);
     setError("");
   }
+
+  /**
+   * Exits inline edit mode and resets the edit form fields to their
+   * defaults. Used both for the "Cancel" button and after a successful save.
+   */
   function cancelEditing() {
     setEditingProjectId(null);
     setEditName("");
@@ -166,6 +260,13 @@ export default function ProjectsPage() {
     setEditStatus("ACTIVE");
   }
 
+  /**
+   * Saves edits made to a project via the inline edit form.
+   * Validates that a name was provided, PATCHes the project, then refreshes
+   * the projects/invitations lists and exits edit mode on success.
+   *
+   * @param projectId - id of the project being updated
+   */
   async function handleUpdateProject(projectId: string) {
     if (!editName.trim()) return setError("Project name is required.");
 
@@ -197,6 +298,13 @@ export default function ProjectsPage() {
     }
   }
 
+  /**
+   * Deletes a project (owner-only action).
+   * Removes the project from local state immediately on success, and exits
+   * edit mode if the deleted project was the one being edited.
+   *
+   * @param projectId - id of the project to delete
+   */
   async function handleDeleteProject(projectId: string) {
     /* unchanged */
     try {
@@ -220,6 +328,8 @@ export default function ProjectsPage() {
     }
   }
 
+  // Projects to actually render in the grid, after applying the selected
+  // status filter ("ALL" shows everything).
   const filteredProjects = projects.filter(
     (project) => statusFilter === "ALL" || project.status === statusFilter,
   );
@@ -227,6 +337,7 @@ export default function ProjectsPage() {
   return (
     <main className="min-h-screen px-6 py-10">
       <div className="mx-auto max-w-5xl space-y-10">
+        {/* Page header / intro copy */}
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
@@ -241,6 +352,7 @@ export default function ProjectsPage() {
           </div>
         </header>
 
+        {/* "Create a project" form */}
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60">
           <div className="mb-5">
             <h2 className="text-2xl font-semibold">Create a project</h2>
@@ -310,6 +422,7 @@ export default function ProjectsPage() {
           )}
         </section>
 
+        {/* Pending invitations list */}
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -375,6 +488,7 @@ export default function ProjectsPage() {
           )}
         </section>
 
+        {/* "Your projects" grid, with status filter and inline edit/delete */}
         <section>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -412,8 +526,12 @@ export default function ProjectsPage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {filteredProjects.map((project) => {
+                // Whether this specific card is currently in edit mode.
                 const isEditing = editingProjectId === project.id;
+                // Whether this specific card's delete request is in flight.
                 const isDeleting = deletingProjectId === project.id;
+                // Only owners get edit/delete controls; others get a
+                // read-only "Open shared project" link instead.
                 const isOwner = project.accessLevel === "OWNER";
                 return (
                   <article
@@ -421,6 +539,7 @@ export default function ProjectsPage() {
                     className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60"
                   >
                     {isEditing ? (
+                      // --- Inline edit form for this project ---
                       <div className="space-y-3">
                         <input
                           value={editName}
@@ -473,6 +592,7 @@ export default function ProjectsPage() {
                         </div>
                       </div>
                     ) : (
+                      // --- Read-only card view ---
                       <>
                         <Link
                           href={`/projects/${project.id}`}
@@ -489,6 +609,7 @@ export default function ProjectsPage() {
                                 </p>
                               )}
                             </div>
+                            {/* Project color swatch */}
                             <span
                               className="mt-1 inline-block h-4 w-4 shrink-0 rounded-full border"
                               style={{
@@ -497,6 +618,7 @@ export default function ProjectsPage() {
                             />
                           </div>
                         </Link>
+                        {/* Status / ownership / role badges */}
                         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
                           <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs dark:border-zinc-700">
                             {formatStatus(project.status)}
@@ -515,6 +637,7 @@ export default function ProjectsPage() {
                             ? "You can edit details, manage invitations, and remove collaborators."
                             : "You can view the project, participate in chat, and contribute to permitted collaborative areas."}
                         </p>
+                        {/* Owner-only actions vs. shared-member link */}
                         <div className="mt-4 flex flex-wrap gap-2">
                           {isOwner ? (
                             <>
