@@ -1,5 +1,22 @@
 "use client";
 
+/**
+ * EventsCalendarPage
+ * -------------------
+ * The "Full Calendar" page: a larger, combined month view that shows both
+ * events and tasks-with-due-dates side by side, with a day-detail sidebar.
+ *
+ * Responsibilities:
+ *  - Fetch events, tasks, and projects in parallel on mount.
+ *  - Render a month grid (desktop) or a rolling 3-day view (mobile) showing
+ *    per-day previews of events and due tasks, filterable by project.
+ *  - Show full details for whichever day is selected in a side panel,
+ *    including the ability to open an event for editing (navigates to the
+ *    /events page with a deep-link query param) or open a task.
+ *  - Allow marking a task done directly from the calendar, and deleting an
+ *    event (with confirmation) directly from the day-detail panel.
+ */
+
 import { useRouter } from "next/navigation";
 import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
@@ -11,8 +28,16 @@ import {
 } from "@/lib/recurrence";
 import { formatTaskDueDate, getLocalDateOnly } from "@/lib/task-date-buckets";
 
+/** Supported recurrence patterns for an event or recurring task. */
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
+/**
+ * Shape of an event as used by the UI. `sourceEventId` is populated once an
+ * event has been expanded into a concrete occurrence of a recurring series
+ * (see `expandRecurringEventsForRange`), pointing back to the original
+ * stored event's id — needed so actions like "open" or "delete" target the
+ * real record rather than a virtual occurrence.
+ */
 type EventItem = {
   id: string;
   sourceEventId?: string;
@@ -27,8 +52,11 @@ type EventItem = {
   projectId?: string | null;
   project?: Project | null;
 };
+
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
+
+/** Shape of a task as used by the UI (only tasks with a due date appear on this calendar). */
 type TaskItem = {
   id: string;
   title: string;
@@ -41,10 +69,19 @@ type TaskItem = {
   project?: Project | null;
   assignee?: { id: string } | null;
 };
+
+/** Minimal project shape needed to display project filters/badges. */
 type Project = { id: string; name: string; color: string | null };
+
+/** Sentinel value for the "show items from every project" filter option. */
 const ALL_PROJECTS_FILTER = "ALL";
+/** Sentinel value for the "show only items with no project" filter option. */
 const NO_PROJECT_FILTER = "NO_PROJECT";
 
+/**
+ * Formats a Date as a `YYYY-MM-DD` key using LOCAL (not UTC) date parts.
+ * Used as the canonical lookup key for grouping events/tasks by calendar day.
+ */
 function formatDayKey(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -52,6 +89,7 @@ function formatDayKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+/** Formats an ISO datetime string as a short local time, e.g. "3:00 PM". */
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(
     new Date(value),
@@ -59,29 +97,61 @@ function formatTime(value: string) {
 }
 
 export default function EventsCalendarPage() {
+  // ---------------------------------------------------------------------
+  // Core data state
+  // ---------------------------------------------------------------------
+  /** All events belonging to the current user. */
   const [events, setEvents] = useState<EventItem[]>([]);
   const router = useRouter();
+  /** All tasks belonging to the current user (later filtered down to those with a due date). */
   const [tasks, setTasks] = useState<TaskItem[]>([]);
+  /** All projects belonging to the current user, used for the filter dropdown and color accents. */
   const [projects, setProjects] = useState<Project[]>([]);
+  /** Currently selected project filter: ALL_PROJECTS_FILTER, NO_PROJECT_FILTER, or a project id. */
   const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS_FILTER);
+
+  // ---------------------------------------------------------------------
+  // Async / loading state
+  // ---------------------------------------------------------------------
+  /** True while the initial events/tasks/projects fetch is in flight. */
   const [fetching, setFetching] = useState(true);
+  /** Current error message shown near the top of the page, or empty string if none. */
   const [error, setError] = useState("");
+
+  // ---------------------------------------------------------------------
+  // Calendar navigation state
+  // ---------------------------------------------------------------------
+  /** First-of-month Date representing which month the desktop calendar grid is showing. */
   const [month, setMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+  /** `YYYY-MM-DD` key for the day currently selected (drives the detail sidebar); defaults to today. */
   const [selectedDayKey, setSelectedDayKey] = useState(() =>
     formatDayKey(new Date()),
   );
+  /** Start-of-day Date anchoring the mobile 3-day rolling view; defaults to today at midnight. */
   const [mobileRangeStart, setMobileRangeStart] = useState(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return today;
   });
+
+  // ---------------------------------------------------------------------
+  // Action state (delete event / complete task)
+  // ---------------------------------------------------------------------
+  /** Id of the event currently being deleted, or null if none — drives the button's "Deleting..." state. */
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
+  /** Id of the event pending delete confirmation (drives the ConfirmDialog), or null if closed. */
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  /** Id of the task currently being marked done, or null if none — drives the button's "Saving…" state. */
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
 
+  /**
+   * On mount: fetch events, tasks, and projects in parallel. Events have
+   * their recurrence value normalized before being stored. Any failure in
+   * events/tasks fetching surfaces a single generic error message.
+   */
   useEffect(() => {
     async function loadEvents() {
       try {
@@ -124,6 +194,15 @@ export default function EventsCalendarPage() {
     void loadEvents();
   }, []);
 
+  // ---------------------------------------------------------------------
+  // Derived data (memoized)
+  // ---------------------------------------------------------------------
+
+  /**
+   * Full grid of Date objects for the desktop month view, covering the
+   * displayed month padded out to whole weeks (Sunday-start) before the
+   * 1st and after the last day, so the grid is always a rectangle.
+   */
   const monthDays = useMemo(() => {
     const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
     const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0);
@@ -145,6 +224,11 @@ export default function EventsCalendarPage() {
     return days;
   }, [month]);
 
+  /**
+   * The inclusive [start, end] Date range covered by `monthDays` (start of
+   * first day through end of last day), used as bounds when expanding
+   * recurring events into individual occurrences.
+   */
   const visibleRange = useMemo(() => {
     const start = new Date(monthDays[0]);
     start.setHours(0, 0, 0, 0);
@@ -155,6 +239,11 @@ export default function EventsCalendarPage() {
     return { start, end };
   }, [monthDays]);
 
+  /**
+   * All events (including recurring-series occurrences) that fall within
+   * the visible month range. Each event is tagged with `sourceEventId`
+   * pointing back to its original stored event before being expanded.
+   */
   const expandedEvents = useMemo(() => {
     const eventsWithSourceId = events.map((event) => ({
       ...event,
@@ -166,10 +255,14 @@ export default function EventsCalendarPage() {
       visibleRange.end,
     );
   }, [events, visibleRange]);
+
+  /** The Project object matching the current project filter, or null if filtering by ALL/NO_PROJECT. */
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === projectFilter) ?? null,
     [projects, projectFilter],
   );
+
+  /** `expandedEvents` narrowed down to the currently active project filter. */
   const filteredExpandedEvents = useMemo(() => {
     return expandedEvents.filter((event) => {
       if (projectFilter === ALL_PROJECTS_FILTER) return true;
@@ -179,6 +272,7 @@ export default function EventsCalendarPage() {
     });
   }, [expandedEvents, projectFilter]);
 
+  /** `filteredExpandedEvents` grouped by local day key (`YYYY-MM-DD`) for calendar-cell rendering. */
   const eventsByDay = useMemo(() => {
     return filteredExpandedEvents.reduce<Record<string, EventItem[]>>(
       (acc, event) => {
@@ -193,6 +287,11 @@ export default function EventsCalendarPage() {
     );
   }, [filteredExpandedEvents]);
 
+  /**
+   * Tasks that have a due date, narrowed down to the currently active
+   * project filter. Tasks without a `dueDate` never appear on this
+   * calendar, regardless of the filter.
+   */
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
       if (!task.dueDate) return false;
@@ -203,6 +302,7 @@ export default function EventsCalendarPage() {
     });
   }, [projectFilter, tasks]);
 
+  /** `filteredTasks` grouped by local due-date day key (`YYYY-MM-DD`) for calendar-cell rendering. */
   const tasksByDay = useMemo(() => {
     return filteredTasks.reduce<Record<string, TaskItem[]>>((acc, task) => {
       if (!task.dueDate) return acc;
@@ -215,6 +315,7 @@ export default function EventsCalendarPage() {
     }, {});
   }, [filteredTasks]);
 
+  /** Events for `selectedDayKey`, sorted chronologically, shown in the day-detail sidebar. */
   const selectedDayEvents = useMemo(() => {
     const dayEvents = eventsByDay[selectedDayKey] ?? [];
     return [...dayEvents].sort(
@@ -223,11 +324,13 @@ export default function EventsCalendarPage() {
     );
   }, [eventsByDay, selectedDayKey]);
 
+  /** Tasks due on `selectedDayKey`, shown in the day-detail sidebar. */
   const selectedDayTasks = useMemo(
     () => tasksByDay[selectedDayKey] ?? [],
     [selectedDayKey, tasksByDay],
   );
 
+  /** The 3 consecutive days (starting at `mobileRangeStart`) shown in the mobile rolling view. */
   const mobileDays = useMemo(() => {
     return Array.from({ length: 3 }, (_, index) => {
       const day = new Date(mobileRangeStart);
@@ -236,6 +339,7 @@ export default function EventsCalendarPage() {
     });
   }, [mobileRangeStart]);
 
+  /** Human-readable "Mon D – Mon D" label describing the mobile 3-day range. */
   const mobileRangeLabel = useMemo(() => {
     const start = mobileDays[0];
     const end = mobileDays[mobileDays.length - 1];
@@ -246,6 +350,7 @@ export default function EventsCalendarPage() {
     return `${formatter.format(start)} – ${formatter.format(end)}`;
   }, [mobileDays]);
 
+  /** Human-readable full date label (e.g. "Monday, January 5, 2025") for `selectedDayKey`. */
   const selectedDayLabel = useMemo(() => {
     const [year, monthNum, day] = selectedDayKey.split("-").map(Number);
     return new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(
@@ -253,12 +358,28 @@ export default function EventsCalendarPage() {
     );
   }, [selectedDayKey]);
 
+  // ---------------------------------------------------------------------
+  // Action handlers
+  // ---------------------------------------------------------------------
+
+  /**
+   * Navigates to the main Events page with a deep-link query param, which
+   * causes that page to auto-select and open the event for editing.
+   * Uses `sourceEventId` (the original stored event id) rather than the
+   * expanded occurrence's id, since recurring occurrences are virtual.
+   */
   function openEvent(event: EventItem) {
     router.push(
       `/events?event=${encodeURIComponent(event.sourceEventId ?? event.id)}`,
     );
   }
 
+  /**
+   * Marks `task` as done via a PATCH request, resubmitting all of its
+   * existing fields alongside the new "DONE" status (the API expects a
+   * full task payload, not a partial patch). Updates the task in local
+   * state with the server's response on success.
+   */
   async function handleCompleteTask(task: TaskItem) {
     try {
       setCompletingTaskId(task.id);
@@ -296,6 +417,11 @@ export default function EventsCalendarPage() {
     }
   }
 
+  /**
+   * Deletes the event at `eventId` via the API (soft-delete / move to
+   * Trash, per the confirm dialog copy). On success, removes it from local
+   * state and closes the confirmation dialog.
+   */
   async function handleDeleteEvent(eventId: string) {
     try {
       setDeletingEventId(eventId);
@@ -316,9 +442,13 @@ export default function EventsCalendarPage() {
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------
   return (
     <main className="min-h-screen px-6 py-10">
       <div className="mx-auto max-w-7xl">
+        {/* Page header with title/description and a link back to the Events page */}
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold">Full Calendar</h1>
@@ -333,6 +463,7 @@ export default function EventsCalendarPage() {
         {error && <p className="mb-6 text-sm text-red-600">{error}</p>}
 
         <section className={uiCardClass}>
+          {/* Month heading + project filter + month navigation */}
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-2xl font-semibold">
               {new Intl.DateTimeFormat("en-US", {
@@ -381,6 +512,9 @@ export default function EventsCalendarPage() {
 
           <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
             <div>
+              {/* ------------------------------------------------------
+                  Mobile-only: rolling 3-day view with Previous/Next nav
+              ------------------------------------------------------- */}
               <div className="mb-4 flex items-center justify-between gap-3 sm:hidden">
                 <button
                   type="button"
@@ -427,6 +561,9 @@ export default function EventsCalendarPage() {
                       type="button"
                       onClick={() => {
                         setSelectedDayKey(dayKey);
+                        // Keep the (hidden, desktop-only) month state in sync
+                        // so switching back to desktop view lands on the
+                        // right month.
                         setMonth(
                           new Date(day.getFullYear(), day.getMonth(), 1),
                         );
@@ -458,6 +595,7 @@ export default function EventsCalendarPage() {
                         </span>
                       </div>
                       <div className="mt-3 space-y-2">
+                        {/* Preview up to 2 events... */}
                         {dayEvents.slice(0, 2).map((event) => (
                           <span
                             key={event.id}
@@ -469,6 +607,7 @@ export default function EventsCalendarPage() {
                             {event.title}
                           </span>
                         ))}
+                        {/* ...then fill remaining preview slots (up to 3 total) with tasks */}
                         {dayTasks
                           .slice(
                             0,
@@ -493,7 +632,11 @@ export default function EventsCalendarPage() {
                 })}
               </div>
 
+              {/* ------------------------------------------------------
+                  Desktop-only: full month grid
+              ------------------------------------------------------- */}
               <div className="hidden sm:block">
+                {/* Weekday header row (Sun–Sat) */}
                 <div className="mb-3 grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500">
                   {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
                     (day) => (
@@ -541,6 +684,7 @@ export default function EventsCalendarPage() {
 
                         {itemCount > 0 && (
                           <div className="mt-2 space-y-1">
+                            {/* Preview up to 2 events, colored by the selected project if it matches */}
                             {(eventsByDay[dayKey] ?? [])
                               .slice(0, 2)
                               .map((event) => (
@@ -563,6 +707,7 @@ export default function EventsCalendarPage() {
                                   {event.title}
                                 </span>
                               ))}
+                            {/* Fill remaining preview slots (up to 2 total) with tasks */}
                             {(tasksByDay[dayKey] ?? [])
                               .slice(
                                 0,
@@ -576,6 +721,7 @@ export default function EventsCalendarPage() {
                                   Task · {task.title}
                                 </p>
                               ))}
+                            {/* Overflow indicator when more than 2 items exist for the day */}
                             {itemCount > 2 && (
                               <p className="text-xs text-zinc-500">
                                 +{itemCount - 2} more
@@ -590,6 +736,9 @@ export default function EventsCalendarPage() {
               </div>
             </div>
 
+            {/* ----------------------------------------------------------
+                Sidebar: full detail list for the selected day
+            ------------------------------------------------------------- */}
             <aside className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
               <h3 className="text-lg font-semibold">{selectedDayLabel}</h3>
               <p className="mt-1 text-sm text-zinc-500">
@@ -599,6 +748,7 @@ export default function EventsCalendarPage() {
               </p>
 
               <div className="mt-4 space-y-3">
+                {/* Full event cards: clicking opens the event for editing on the Events page */}
                 {selectedDayEvents.map((event) => (
                   <article
                     key={event.id}
@@ -623,6 +773,8 @@ export default function EventsCalendarPage() {
                       <button
                         type="button"
                         onClick={(e) => {
+                          // Prevent the delete click from also triggering
+                          // the card's onClick (which would navigate away).
                           e.stopPropagation();
                           setConfirmDeleteId(event.sourceEventId ?? event.id);
                         }}
@@ -660,6 +812,7 @@ export default function EventsCalendarPage() {
                   </article>
                 ))}
 
+                {/* Full task cards: clicking navigates to the Tasks page for that task */}
                 {selectedDayTasks.map((task) => (
                   <article
                     key={task.id}
@@ -692,6 +845,8 @@ export default function EventsCalendarPage() {
                         <button
                           type="button"
                           onClick={(e) => {
+                            // Prevent the "Done" click from also triggering
+                            // the card's onClick (which would navigate away).
                             e.stopPropagation();
                             void handleCompleteTask(task);
                           }}
@@ -715,6 +870,7 @@ export default function EventsCalendarPage() {
                   </article>
                 ))}
 
+                {/* Empty state: nothing scheduled and fetch has completed */}
                 {!fetching &&
                   selectedDayEvents.length === 0 &&
                   selectedDayTasks.length === 0 && (
@@ -733,6 +889,7 @@ export default function EventsCalendarPage() {
           </div>
         </section>
       </div>
+      {/* Confirmation modal shown before permanently triggering an event delete request */}
       <ConfirmDialog
         open={confirmDeleteId !== null}
         title="Delete event?"
@@ -740,6 +897,7 @@ export default function EventsCalendarPage() {
         confirmLabel="Move to Trash"
         loading={deletingEventId !== null}
         onCancel={() => {
+          // Ignore cancel attempts while a delete request is in flight.
           if (deletingEventId) return;
           setConfirmDeleteId(null);
         }}
