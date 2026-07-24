@@ -1,5 +1,25 @@
 "use client";
 
+/**
+ * EventsPage
+ * ----------
+ * Client-side page component for the "Events" feature of the AI-Multi
+ * Task-Management app.
+ *
+ * Responsibilities:
+ *  - Fetch the user's events and projects from the API on mount.
+ *  - Provide a form to create new events (with optional recurrence and
+ *    project association).
+ *  - Render a month calendar with per-day event counts, and a detail list
+ *    of events for whichever day is selected.
+ *  - Render a chronological list of events grouped into sections
+ *    (Today / Upcoming Soon / Later / Past), filterable by project.
+ *  - Support inline editing and deletion (with confirmation) of events.
+ *  - Support deep-linking: if the URL contains an `event` query param,
+ *    the matching event is highlighted, scrolled into view, and opened
+ *    for editing automatically.
+ */
+
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -12,28 +32,51 @@ import {
 } from "@/lib/recurrence";
 import { getLocalDateOnly } from "@/lib/task-date-buckets";
 
+/** Supported recurrence patterns for an event. */
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
+/**
+ * Shape of an event as used by the UI. Mirrors the API's event response,
+ * with an added optional `sourceEventId` used when an event has been
+ * "expanded" from a recurring series into individual calendar occurrences
+ * (see `expandRecurringEventsForRange`), so each occurrence can be traced
+ * back to the original stored event.
+ */
 type EventItem = {
   id: string;
+  /** Present on expanded recurrence occurrences; points back to the original event's id. */
   sourceEventId?: string;
   title: string;
   description: string | null;
   location: string | null;
+  /** ISO datetime string for when the event starts. */
   startTime: string;
+  /** ISO datetime string for when the event ends, or null if unset. */
   endTime: string | null;
+  /** Whether the user specified a start time (vs. an all-day/date-only event). */
   hasStartTime: boolean;
+  /** Whether the user specified an end time. */
   hasEndTime: boolean;
   createdAt: string;
   updatedAt: string;
   recurrence?: Recurrence | null;
   projectId?: string | null;
+  /** Populated project relation, if the event belongs to one. */
   project?: Project | null;
 };
+
+/** Minimal project shape needed to display project filters/badges. */
 type Project = { id: string; name: string; color: string | null };
+
+/** Sentinel value for the "show events from every project" filter option. */
 const ALL_PROJECTS_FILTER = "ALL";
+/** Sentinel value for the "show only events with no project" filter option. */
 const NO_PROJECT_FILTER = "NO_PROJECT";
 
+/**
+ * Formats an ISO datetime string as a medium date + short time string,
+ * e.g. "Jan 5, 2025, 3:00 PM", using the browser's locale.
+ */
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
@@ -41,6 +84,10 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
+/**
+ * Formats a Date as a `YYYY-MM-DD` key using LOCAL (not UTC) date parts.
+ * Used as the canonical lookup key for grouping events by calendar day.
+ */
 function formatDayKey(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -48,24 +95,49 @@ function formatDayKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * Formats an ISO datetime string as a short local time, e.g. "3:00 PM".
+ */
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     timeStyle: "short",
   }).format(new Date(value));
 }
 
+/**
+ * Returns the local, time-stripped (midnight) Date for a given date/string.
+ * Thin wrapper around the shared `getLocalDateOnly` utility so this file's
+ * calendar-bucketing logic reads consistently as "day starts".
+ */
 function getLocalDayStart(date: Date | string) {
   return getLocalDateOnly(date);
 }
 
+/**
+ * Compares two dates/strings to see if they fall on the same local calendar
+ * day (ignoring time-of-day).
+ */
 function isSameLocalDay(left: Date | string, right: Date | string) {
   return formatDayKey(getLocalDayStart(left)) === formatDayKey(getLocalDayStart(right));
 }
 
+/** Whether an event's start time falls on the same local day as `now`. */
 function isEventToday(event: EventItem, now: Date) {
   return isSameLocalDay(event.startTime, now);
 }
 
+/**
+ * Validates the create/edit event form fields before submitting to the API.
+ *
+ * Rules enforced:
+ *  - Title must be non-empty (after trimming whitespace).
+ *  - Start date is required.
+ *  - End date, if provided, cannot be earlier than the start date.
+ *  - If start and end dates are the same day and both times are provided,
+ *    the end time must be strictly after the start time.
+ *
+ * @returns An empty string if valid, otherwise a human-readable error message.
+ */
 function validateEventInput(input: {
   title: string;
   startDate: string;
@@ -88,24 +160,50 @@ function validateEventInput(input: {
   }
   return "";
 }
+
 export default function EventsPage() {
+  // ---------------------------------------------------------------------
+  // Core data state
+  // ---------------------------------------------------------------------
+  /** All events belonging to the current user, as returned by the API. */
   const [events, setEvents] = useState<EventItem[]>([]);
+  /** All projects belonging to the current user, used for filters/badges/selects. */
   const [projects, setProjects] = useState<Project[]>([]);
+
+  // ---------------------------------------------------------------------
+  // Async / loading state
+  // ---------------------------------------------------------------------
+  /** True while the initial events fetch is in flight (controls the loading message). */
   const [fetching, setFetching] = useState(true);
+  /** True while the "create event" request is in flight. */
   const [loading, setLoading] = useState(false);
+  /** True while an "edit event" save request is in flight. */
   const [savingEdit, setSavingEdit] = useState(false);
+  /** Id of the event currently being deleted, or null if none. Used to show a per-item spinner state. */
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
+  /** Id of the event currently open in inline-edit mode, or null if none. */
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  /** Current error message shown near the create form, or empty string if none. */
   const [error, setError] = useState("");
+  /** Id of the event pending delete confirmation (drives the ConfirmDialog), or null if closed. */
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // ---------------------------------------------------------------------
+  // Calendar navigation state
+  // ---------------------------------------------------------------------
+  /** First-of-month Date representing which month the calendar grid is showing. */
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+  /** `YYYY-MM-DD` key for the day currently selected in the calendar (defaults to today). */
   const [selectedDayKey, setSelectedDayKey] = useState(() =>
     formatDayKey(new Date()),
   );
 
+  // ---------------------------------------------------------------------
+  // "Create event" form state
+  // ---------------------------------------------------------------------
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
@@ -116,6 +214,10 @@ export default function EventsPage() {
   const [recurrence, setRecurrence] = useState<Recurrence>("NONE");
   const [projectId, setProjectId] = useState("");
 
+  // ---------------------------------------------------------------------
+  // "Edit event" (inline) form state — mirrors the create form fields,
+  // but scoped to whichever event is being edited (`editingEventId`).
+  // ---------------------------------------------------------------------
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editLocation, setEditLocation] = useState("");
@@ -125,11 +227,28 @@ export default function EventsPage() {
   const [editEndTime, setEditEndTime] = useState("");
   const [editRecurrence, setEditRecurrence] = useState<Recurrence>("NONE");
   const [editProjectId, setEditProjectId] = useState("");
+
+  /** Currently selected project filter: ALL_PROJECTS_FILTER, NO_PROJECT_FILTER, or a project id. */
   const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS_FILTER);
+
+  // ---------------------------------------------------------------------
+  // Deep-link support: ?event=<id> in the URL highlights & opens an event
+  // ---------------------------------------------------------------------
   const searchParams = useSearchParams();
+  /** Event id requested via the `event` query param, if any. */
   const highlightedEventId = searchParams.get("event");
+  /** Ref to the DOM node of the highlighted event's <article>, used to scroll it into view. */
   const highlightedEventRef = useRef<HTMLElement | null>(null);
 
+  // ---------------------------------------------------------------------
+  // Derived data (memoized)
+  // ---------------------------------------------------------------------
+
+  /**
+   * Events filtered by the active project filter and sorted chronologically
+   * by local start day. This is the base list that both the "list" section
+   * and (indirectly) other derived views build on.
+   */
   const visibleEvents = useMemo(() => {
     return events
       .filter((event) => {
@@ -143,11 +262,21 @@ export default function EventsPage() {
           getLocalDayStart(a.startTime).getTime() - getLocalDayStart(b.startTime).getTime(),
       );
   }, [events, projectFilter]);
+
+  /** The Project object matching the current project filter, or null if filtering by ALL/NO_PROJECT. */
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === projectFilter) ?? null,
     [projects, projectFilter],
   );
 
+  /**
+   * Buckets `visibleEvents` into four display sections for the "Your Events"
+   * list, relative to the current moment:
+   *  - Today: starts on the same local day as now.
+   *  - Upcoming Soon: starts between tomorrow and 7 days from today (inclusive).
+   *  - Later: starts more than 7 days from today.
+   *  - Past: has already ended (or started, if no end time) before today.
+   */
   const eventSections = useMemo(() => {
     const now = new Date();
     const todayStart = getLocalDayStart(now);
@@ -178,6 +307,12 @@ export default function EventsPage() {
     ] as const;
   }, [visibleEvents]);
 
+  /**
+   * Full grid of Date objects to render in the calendar, covering the
+   * displayed month padded out to whole weeks (Sunday-start) before the
+   * 1st and after the last day, so the grid is always a rectangle of
+   * complete weeks.
+   */
   const calendarDays = useMemo(() => {
     const monthStart = new Date(
       calendarMonth.getFullYear(),
@@ -203,6 +338,11 @@ export default function EventsPage() {
     return days;
   }, [calendarMonth]);
 
+  /**
+   * The inclusive [start, end] Date range covered by `calendarDays`
+   * (start of first day through end of last day), used as bounds when
+   * expanding recurring events into individual occurrences.
+   */
   const visibleCalendarRange = useMemo(() => {
     const start = new Date(calendarDays[0]);
     start.setHours(0, 0, 0, 0);
@@ -213,6 +353,11 @@ export default function EventsPage() {
     return { start, end };
   }, [calendarDays]);
 
+  /**
+   * All events (including recurring-series occurrences) that fall within
+   * the visible calendar range. Each event is tagged with `sourceEventId`
+   * pointing back to its original stored event before being expanded.
+   */
   const expandedCalendarEvents = useMemo(() => {
     const eventsWithSourceId = events.map((event) => ({
       ...event,
@@ -226,6 +371,11 @@ export default function EventsPage() {
     );
   }, [events, visibleCalendarRange]);
 
+  /**
+   * `expandedCalendarEvents` grouped by local day key (`YYYY-MM-DD`),
+   * used to render event counts/badges on each calendar cell and to look
+   * up events for the selected day.
+   */
   const calendarEventsByDay = useMemo(() => {
     return expandedCalendarEvents.reduce<Record<string, EventItem[]>>(
       (acc, event) => {
@@ -240,6 +390,13 @@ export default function EventsPage() {
     );
   }, [expandedCalendarEvents]);
 
+  /**
+   * Same grouping as `calendarEventsByDay`, but restricted to events
+   * belonging to the currently selected project filter. Returns an empty
+   * object when the filter is ALL or NO_PROJECT, since this is only used
+   * to render a secondary "N in <project>" count on calendar cells when a
+   * specific project is selected.
+   */
   const selectedProjectCalendarEventsByDay = useMemo(() => {
     if (
       projectFilter === ALL_PROJECTS_FILTER ||
@@ -261,6 +418,11 @@ export default function EventsPage() {
     );
   }, [expandedCalendarEvents, projectFilter]);
 
+  /**
+   * Events to display in the "Events on <selected day>" panel: all events
+   * for `selectedDayKey`, further filtered down to "no project" events
+   * when that filter is active, sorted chronologically.
+   */
   const selectedDayEvents = useMemo(() => {
     let eventsForDay = calendarEventsByDay[selectedDayKey] ?? [];
     if (projectFilter === NO_PROJECT_FILTER) {
@@ -274,6 +436,7 @@ export default function EventsPage() {
     );
   }, [calendarEventsByDay, selectedDayKey, projectFilter]);
 
+  /** Human-readable full date label (e.g. "Monday, January 5, 2025") for `selectedDayKey`. */
   const selectedDayLabel = useMemo(() => {
     const [year, month, day] = selectedDayKey.split("-").map(Number);
     return new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(
@@ -281,18 +444,36 @@ export default function EventsPage() {
     );
   }, [selectedDayKey]);
 
+  // ---------------------------------------------------------------------
+  // Calendar navigation handlers
+  // ---------------------------------------------------------------------
+
+  /** Moves the calendar view back one month. */
   function goToPreviousMonth() {
     setCalendarMonth(
       (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
     );
   }
 
+  /** Moves the calendar view forward one month. */
   function goToNextMonth() {
     setCalendarMonth(
       (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
     );
   }
 
+  // ---------------------------------------------------------------------
+  // Data fetching
+  // ---------------------------------------------------------------------
+
+  /**
+   * Fetches the current user's events from `/api/events`, normalizes each
+   * event's recurrence value, and stores the result in state.
+   *
+   * @param showLoading When true (default), toggles the `fetching` flag so
+   *   the UI shows a "Loading events..." message. Pass false for background
+   *   refreshes (e.g. after create/edit) so the list doesn't flash a loader.
+   */
   async function fetchEvents(showLoading = true) {
     try {
       if (showLoading) setFetching(true);
@@ -316,6 +497,8 @@ export default function EventsPage() {
       setFetching(false);
     }
   }
+
+  /** Fetches the current user's projects from `/api/projects` and stores them in state. */
   async function fetchProjects() {
     const res = await fetch("/api/projects");
     if (!res.ok) throw new Error("Failed to fetch projects");
@@ -323,6 +506,7 @@ export default function EventsPage() {
     setProjects(data);
   }
 
+  /** On mount: load events and projects in parallel. */
   useEffect(() => {
     async function loadInitialEvents() {
       await Promise.all([fetchEvents(), fetchProjects()]);
@@ -331,6 +515,17 @@ export default function EventsPage() {
     void loadInitialEvents();
   }, []);
 
+  /**
+   * Deep-link handling: once events have loaded, if the URL specifies
+   * `?event=<id>`, this:
+   *  1. Clears the project filter (so the event is guaranteed visible).
+   *  2. Navigates the calendar to the month/day containing the event.
+   *  3. Opens the event in inline-edit mode.
+   *  4. Scrolls the corresponding list item into view.
+   *
+   * Runs whenever `events`, `fetching`, or `highlightedEventId` change, but
+   * no-ops if there's no id to highlight or events are still loading.
+   */
   useEffect(() => {
     if (!highlightedEventId || fetching) return;
     const event = events.find((item) => item.id === highlightedEventId);
@@ -353,6 +548,15 @@ export default function EventsPage() {
     return () => window.clearTimeout(timer);
   }, [events, fetching, highlightedEventId]);
 
+  // ---------------------------------------------------------------------
+  // Create / Edit / Delete handlers
+  // ---------------------------------------------------------------------
+
+  /**
+   * Handles submission of the "Create Event" form: validates input,
+   * POSTs to `/api/events`, resets the form on success, and refreshes
+   * the events list in the background.
+   */
   async function handleCreateEvent(e: FormEvent) {
     e.preventDefault();
 
@@ -393,6 +597,7 @@ export default function EventsPage() {
         throw new Error(data?.error || "Failed to create event");
       }
 
+      // Reset the create form back to its default empty state.
       setTitle("");
       setDescription("");
       setLocation("");
@@ -410,6 +615,11 @@ export default function EventsPage() {
     }
   }
 
+  /**
+   * Opens `event` for inline editing: populates the edit form fields from
+   * the event's current values (splitting the ISO start/end datetimes back
+   * into separate date/time inputs) and marks it as the active edit target.
+   */
   function startEditing(event: EventItem) {
     setEditingEventId(event.id);
     setEditTitle(event.title);
@@ -433,6 +643,7 @@ export default function EventsPage() {
     setError("");
   }
 
+  /** Closes inline-edit mode and resets all edit-form fields to their defaults. */
   function cancelEditing() {
     setEditingEventId(null);
     setEditTitle("");
@@ -446,6 +657,11 @@ export default function EventsPage() {
     setEditProjectId("");
   }
 
+  /**
+   * Validates the edit form and, if valid, PATCHes the event at `eventId`
+   * with the current edit-form values. On success, replaces the event in
+   * local state with the server's updated copy and exits edit mode.
+   */
   async function handleSaveEdit(eventId: string) {
     const editValidationError = validateEventInput({
       title: editTitle,
@@ -496,6 +712,11 @@ export default function EventsPage() {
     }
   }
 
+  /**
+   * Deletes the event at `eventId` via the API (soft-delete / move to
+   * Trash, per the confirm dialog copy). On success, removes it from local
+   * state and, if it was the event currently being edited, exits edit mode.
+   */
   async function handleDeleteEvent(eventId: string) {
     try {
       setDeletingEventId(eventId);
@@ -518,10 +739,14 @@ export default function EventsPage() {
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------
   return (
     <>
       <main className="min-h-screen px-6 py-10">
         <div className="mx-auto max-w-4xl">
+          {/* Page header with title/description and a link to the full calendar view */}
           <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
             <div>
               <h1 className="mb-2 text-4xl font-bold">Events</h1>
@@ -534,6 +759,7 @@ export default function EventsPage() {
               aria-label="Open full calendar view"
               className={`${uiPrimaryButtonClass} gap-2 py-2.5`}
             >
+              {/* Calendar icon */}
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
@@ -552,6 +778,9 @@ export default function EventsPage() {
             </Link>
           </div>
 
+          {/* ------------------------------------------------------------
+              Create Event form
+          ------------------------------------------------------------- */}
           <section className="mb-10 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
             <h2 className="mb-4 text-2xl font-semibold">Create Event</h2>
 
@@ -576,6 +805,7 @@ export default function EventsPage() {
                 placeholder="Location (optional)"
                 className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
               />
+              {/* Start date/time row */}
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1">
                   <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
@@ -601,6 +831,7 @@ export default function EventsPage() {
                   />
                 </label>
               </div>
+              {/* End date/time row */}
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1">
                   <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
@@ -625,6 +856,7 @@ export default function EventsPage() {
                   />
                 </label>
               </div>
+              {/* Project association */}
               <select
                 value={projectId}
                 onChange={(e) => setProjectId(e.target.value)}
@@ -637,6 +869,7 @@ export default function EventsPage() {
                   </option>
                 ))}
               </select>
+              {/* Recurrence pattern */}
               <select
                 value={recurrence}
                 onChange={(e) => setRecurrence(e.target.value as Recurrence)}
@@ -660,6 +893,9 @@ export default function EventsPage() {
             {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
           </section>
 
+          {/* ------------------------------------------------------------
+              Calendar: month grid + selected-day event list
+          ------------------------------------------------------------- */}
           <section className="mb-10 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-2xl font-semibold">Calendar</h2>
@@ -685,12 +921,14 @@ export default function EventsPage() {
               </div>
             </div>
 
+            {/* Weekday header row (Sun–Sat) */}
             <div className="mb-3 grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500">
               {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
                 <span key={day}>{day}</span>
               ))}
             </div>
 
+            {/* Month grid: one button per day, showing an event-count badge */}
             <div className="grid grid-cols-7 gap-2">
               {calendarDays.map((day) => {
                 const dayKey = formatDayKey(day);
@@ -704,6 +942,9 @@ export default function EventsPage() {
                   (event) =>
                     event.projectId === null || event.projectId === undefined,
                 ).length;
+                // When filtering to "No project", show only that count;
+                // otherwise show the total count for the day regardless of
+                // which specific project filter (if any) is active.
                 const eventCount =
                   projectFilter === NO_PROJECT_FILTER
                     ? noProjectCount
@@ -742,6 +983,7 @@ export default function EventsPage() {
                             ? "1 event"
                             : `${eventCount} events`}
                         </p>
+                        {/* Secondary count of events in the actively-filtered project */}
                         {selectedProject && selectedProjectCount > 0 && (
                           <p
                             className="text-xs"
@@ -759,6 +1001,7 @@ export default function EventsPage() {
               })}
             </div>
 
+            {/* Detail panel: events on the currently selected calendar day */}
             <div className="mt-6 rounded-xl border border-zinc-200 dark:border-zinc-700 p-4">
               <h3 className="mb-3 text-lg font-semibold">
                 Events on {selectedDayLabel}
@@ -773,6 +1016,8 @@ export default function EventsPage() {
                     <li
                       key={event.id}
                       className={`rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 ${
+                        // Dim events that don't match a specific active project filter
+                        // (they're still shown because they fall on the selected day).
                         projectFilter !== ALL_PROJECTS_FILTER &&
                         projectFilter !== NO_PROJECT_FILTER &&
                         event.projectId !== projectFilter
@@ -783,6 +1028,8 @@ export default function EventsPage() {
                         selectedProject &&
                         event.projectId === selectedProject.id
                           ? {
+                              // Highlight events belonging to the selected project
+                              // with a colored left border.
                               borderLeftWidth: 4,
                               borderLeftColor:
                                 selectedProject.color ?? "#18181b",
@@ -811,8 +1058,12 @@ export default function EventsPage() {
             </div>
           </section>
 
+          {/* ------------------------------------------------------------
+              Your Events: full chronological, sectioned, filterable list
+          ------------------------------------------------------------- */}
           <section>
             <h2 className="mb-4 text-2xl font-semibold">Your Events</h2>
+            {/* Project filter dropdown, shared by both the calendar and this list */}
             <div className="mb-4">
               <select
                 value={projectFilter}
@@ -836,6 +1087,7 @@ export default function EventsPage() {
               <p className="text-zinc-600 dark:text-zinc-300">No events yet.</p>
             ) : (
               <div className="space-y-6">
+                {/* One block per section: Today / Upcoming Soon / Later / Past */}
                 {eventSections.map((section) => (
                   <div key={section.key}>
                     <h3 className="mb-3 text-lg font-semibold text-gray-800">
@@ -852,6 +1104,7 @@ export default function EventsPage() {
                           const isDeleting = deletingEventId === event.id;
                           const now = new Date();
                           const today = isEventToday(event, now);
+                          // "Starts soon" = starts strictly in the future but within the next 48 hours.
                           const startsSoon =
                             new Date(event.startTime).getTime() >
                               now.getTime() &&
@@ -874,6 +1127,8 @@ export default function EventsPage() {
                           return (
                             <article
                               key={event.id}
+                              // Attach the scroll-into-view ref only to the
+                              // event matching the ?event= deep link.
                               ref={
                                 highlightedEventId === event.id
                                   ? highlightedEventRef
@@ -882,6 +1137,7 @@ export default function EventsPage() {
                               className={`rounded-2xl border p-5 shadow-sm ${cardStyles} ${highlightedEventId === event.id ? "ring-4 ring-blue-300 dark:ring-blue-800" : ""}`}
                             >
                               {isEditing ? (
+                                // ---------------- Inline edit form ----------------
                                 <div className="space-y-3">
                                   <input
                                     value={editTitle}
@@ -1017,6 +1273,7 @@ export default function EventsPage() {
                                   </div>
                                 </div>
                               ) : (
+                                // ---------------- Read-only event card ----------------
                                 <>
                                   <div className="flex items-start justify-between gap-3">
                                     <h3 className="text-xl font-semibold">
@@ -1091,6 +1348,8 @@ export default function EventsPage() {
                                     </button>
                                     <button
                                       onClick={(e) => {
+                                        // Prevent the click from bubbling to any
+                                        // ancestor click handlers on the card.
                                         e.stopPropagation();
                                         setConfirmDeleteId(event.id);
                                       }}
@@ -1114,6 +1373,7 @@ export default function EventsPage() {
           </section>
         </div>
       </main>
+      {/* Confirmation modal shown before permanently triggering a delete request */}
       <ConfirmDialog
         open={Boolean(confirmDeleteId)}
         title="Confirm delete"
