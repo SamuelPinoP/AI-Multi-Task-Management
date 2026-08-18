@@ -9,9 +9,13 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
-    "validate:deploy-env": "node scripts/validate-deployment-env.mjs"
+    "validate:deploy-env": "node scripts/validate-deployment-env.mjs",
+    "test:storage": "node --conditions react-server --import tsx --test src/lib/project-chat-*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.864.0",
+    "@aws-sdk/s3-request-presigner": "^3.864.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@vercel/blob": "^2.6.1",

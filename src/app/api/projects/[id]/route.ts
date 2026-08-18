@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { getProjectAccessForUser, projectAccessWhereForProject } from "@/lib/project-access";
+import { deleteProjectChatAttachments } from "@/lib/project-chat-storage";
 
 
 type RouteContext = {
@@ -132,6 +133,19 @@ export async function DELETE(_req: Request, context: RouteContext) {
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Project id is required" }, { status: 400 });
 
+    const project = await prisma.project.findFirst({
+      where: { id, userId: user.id },
+      select: {
+        comments: {
+          select: {
+            attachments: { select: { storageProvider: true, storageKey: true, fileType: true, url: true } },
+          },
+        },
+      },
+    });
+    if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+
+    await deleteProjectChatAttachments(project.comments.flatMap((comment) => comment.attachments));
     const deleted = await prisma.project.deleteMany({ where: { id, userId: user.id } });
     if (deleted.count === 0) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 

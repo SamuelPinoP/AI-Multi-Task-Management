@@ -61,7 +61,7 @@ async function getOwnedProjectComment(projectId: string, commentId: string) {
       message: true,
       pinned: true,
       updatedAt: true,
-      attachments: { select: { fileName: true, url: true } },
+      attachments: { select: { storageProvider: true, storageKey: true, fileType: true, url: true } },
       _count: { select: { attachments: true } },
     },
   });
@@ -117,14 +117,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
     const result = await getOwnedProjectComment(projectId, commentId);
     if ("error" in result) return result.error;
 
-    try {
-      await deleteProjectChatAttachments(result.comment.attachments);
-    } catch (storageError) {
-      console.warn(
-        `Could not delete one or more stored attachments for project comment ${result.comment.id}. The comment metadata will still be deleted.`,
-        storageError,
-      );
-    }
+    await deleteProjectChatAttachments(result.comment.attachments);
 
     await prisma.projectComment.delete({ where: { id: result.comment.id } });
 

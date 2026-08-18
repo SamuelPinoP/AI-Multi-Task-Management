@@ -19,14 +19,15 @@ Add these in Vercel Project Settings → Environment Variables for the productio
 
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
-PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"
+PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER="vercel-blob"
+PROJECT_CHAT_VIDEO_STORAGE_PROVIDER="aws-s3"
 BLOB_READ_WRITE_TOKEN="your-vercel-blob-read-write-token"
 SIGNUP_ENABLED="false"
 GUEST_LOGIN_ENABLED="false"
 ```
 
 - `DATABASE_URL` must point at the hosted PostgreSQL database that should receive production migrations.
-- `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"` is recommended for Vercel because local filesystem uploads are not durable in serverless production.
+- Use `vercel-blob` or `aws-s3` routing targets on Vercel because local filesystem uploads are not durable in serverless production.
 - `BLOB_READ_WRITE_TOKEN` is a server-only Vercel Blob secret. Never commit it, never expose it to client code, and never rename it with a `NEXT_PUBLIC_` prefix.
 - `SIGNUP_ENABLED="false"` is recommended for the first public deployment unless public account creation is intentional.
 - `GUEST_LOGIN_ENABLED="false"` is recommended for the first public deployment unless public guest workspaces are intentional.
@@ -59,7 +60,7 @@ Run the deployment validator before the first Vercel deploy and after changing e
 npm run validate:deploy-env
 ```
 
-The same check runs automatically at the start of `npm run vercel-build`. It fails with beginner-friendly messages for missing `DATABASE_URL`, missing `BLOB_READ_WRITE_TOKEN` when `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"`, unsupported storage provider values, invalid email provider values, missing Resend variables when email is enabled, and unsafe Vercel production local-storage configuration. It prints variable names and guidance only; it does not print secret values.
+The same check runs automatically at the start of `npm run vercel-build`. It validates both storage routing targets and requires only the credentials used by those targets. It prints variable names and guidance only; it does not print secret values.
 
 ## Database and migrations
 
@@ -77,10 +78,10 @@ If you prefer to separate migrations from the Vercel build step, run the same Pr
 
 1. Create or connect a Vercel Blob store for the Vercel project.
 2. Add the Blob read/write token as `BLOB_READ_WRITE_TOKEN` in Vercel environment variables.
-3. Set `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"`.
+3. Set `PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER="vercel-blob"` and `PROJECT_CHAT_VIDEO_STORAGE_PROVIDER="aws-s3"` (or select one cloud provider for both).
 4. Redeploy after changing Blob-related environment variables.
 
-In production, the app will not silently fall back to local Project Chat attachment storage when `PROJECT_CHAT_STORAGE_PROVIDER` is omitted. Explicitly setting `PROJECT_CHAT_STORAGE_PROVIDER="local"` is allowed, but it is not recommended on Vercel because files written to the serverless filesystem are not durable.
+In production, deployment validation requires an explicit default storage target. The deprecated `PROJECT_CHAT_STORAGE_PROVIDER` remains a temporary fallback, while explicit default/video variables take precedence. Do not select local on Vercel because serverless filesystem writes are not durable.
 
 ## Troubleshooting
 
@@ -94,11 +95,11 @@ In production, the app will not silently fall back to local Project Chat attachm
 
 ### Missing `BLOB_READ_WRITE_TOKEN`
 
-`npm run validate:deploy-env` fails when `PROJECT_CHAT_STORAGE_PROVIDER="vercel-blob"` is selected without `BLOB_READ_WRITE_TOKEN`. Add the server-only Vercel Blob token and redeploy.
+`npm run validate:deploy-env` fails when either routing target selects `vercel-blob` without `BLOB_READ_WRITE_TOKEN`. Add the server-only Vercel Blob token and redeploy.
 
 ### Blob provider misconfiguration
 
-If `PROJECT_CHAT_STORAGE_PROVIDER` has any value other than `local` or `vercel-blob`, `npm run validate:deploy-env` fails with a configuration error. Use `vercel-blob` for Vercel production.
+If any storage variable has a value other than `local`, `vercel-blob`, or `aws-s3`, deployment validation fails. Use durable cloud targets for Vercel production.
 
 ### Invitation email configuration
 

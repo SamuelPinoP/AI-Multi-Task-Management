@@ -48,7 +48,7 @@ const landingFeatures = [
   {
     title: "Project chat + attachments",
     description:
-      "Discuss decisions and blockers in project chat, pin key messages, and attach files through local or Vercel Blob storage.",
+      "Discuss decisions and blockers in project chat, pin key messages, and attach files through local, Vercel Blob, or private AWS S3 storage.",
   },
   {
     title: "Planner and Today",

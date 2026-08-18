@@ -143,13 +143,13 @@ function AttachmentCard({
       {kind === "image" ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={attachment.url}
+          src={downloadUrl}
           alt={attachment.originalName}
           className="h-32 w-full object-cover"
         />
       ) : kind === "video" ? (
         <video
-          src={attachment.url}
+          src={downloadUrl}
           className="h-32 w-full bg-black object-cover"
           controls
           preload="metadata"
@@ -838,7 +838,7 @@ export function ProjectChatWorkspace({
               ) : (
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   Attach multiple files with the paperclip or drag-and-drop them
-                  here. Storage uses the configured local/Vercel Blob backend;
+                  here. Storage uses the configured local, Vercel Blob, or AWS S3 backend;
                   avoid uploading secrets unless this deployment is intended for
                   them.
                 </p>
