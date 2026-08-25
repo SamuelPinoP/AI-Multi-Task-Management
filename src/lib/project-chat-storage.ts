@@ -1,7 +1,14 @@
 import "server-only";
 
 import { randomUUID } from "crypto";
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+  type S3ClientConfig,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { del, head, put } from "@vercel/blob";
 import { mkdir, readFile, unlink, writeFile } from "fs/promises";
@@ -35,6 +42,17 @@ export type ProjectChatStoredAttachmentReference = Pick<
   "storageProvider" | "storageKey" | "fileType" | "url"
 >;
 
+export type ProjectChatAttachmentUploadPlan =
+  | { strategy: "multipart"; provider: StorageProvider }
+  | {
+      strategy: "direct-s3";
+      storedAttachment: ProjectChatStoredAttachment;
+      uploadUrl: string;
+      uploadMethod: "PUT";
+      uploadHeaders: Record<string, string>;
+      expiresIn: number;
+    };
+
 export type ProjectChatAttachmentReadResult =
   | { kind: "body"; body: BodyInit; contentType: string }
   | { kind: "redirect"; url: string };
@@ -50,9 +68,19 @@ export function isProjectChatStorageConfigError(error: unknown): error is Projec
   return error instanceof ProjectChatStorageConfigError;
 }
 
+type ProjectChatS3PresignCommand = GetObjectCommand | PutObjectCommand;
+type ProjectChatS3Presign = (
+  client: S3Client,
+  command: ProjectChatS3PresignCommand,
+  options: { expiresIn: number },
+) => Promise<string>;
+
+const presignProjectChatS3Url: ProjectChatS3Presign = (client, command, options) =>
+  getSignedUrl(client, command, options);
+
 export const projectChatStorageTestHooks = {
-  createS3Client: (options: ConstructorParameters<typeof S3Client>[0]) => new S3Client(options),
-  presign: getSignedUrl,
+  createS3Client: (options: S3ClientConfig) => new S3Client(options),
+  presign: presignProjectChatS3Url,
   blobPut: put,
   blobHead: head,
   blobDelete: del,
@@ -167,6 +195,21 @@ function resolveStoredProvider(value: unknown): StorageProvider {
   return APPLICATION_PROVIDER[value as DatabaseStorageProvider];
 }
 
+function s3StoredAttachment(file: Pick<File, "name" | "size">, prefix: string) {
+  const originalName = sanitizeAttachmentName(file.name);
+  const key = `${prefix}/${randomUUID()}-${originalName}`;
+  const type = attachmentContentType(file);
+  return {
+    fileName: key,
+    originalName,
+    fileType: type,
+    fileSize: file.size,
+    url: `s3://${key}`,
+    storageProvider: "AWS_S3" as const,
+    storageKey: key,
+  };
+}
+
 type StorageAdapter = {
   upload(file: File): Promise<ProjectChatStoredAttachment>;
   read(attachment: ProjectChatStoredAttachmentReference): Promise<ProjectChatAttachmentReadResult>;
@@ -239,12 +282,10 @@ const blobAdapter: StorageAdapter = {
 const s3Adapter: StorageAdapter = {
   async upload(file) {
     const config = s3Config();
-    const originalName = sanitizeAttachmentName(file.name);
-    const key = `${config.prefix}/${randomUUID()}-${originalName}`;
-    const type = attachmentContentType(file);
+    const storedAttachment = s3StoredAttachment(file, config.prefix);
     try {
-      await config.client.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: Buffer.from(await file.arrayBuffer()), ContentType: type }));
-      return { fileName: key, originalName, fileType: type, fileSize: file.size, url: `s3://${key}`, storageProvider: "AWS_S3", storageKey: key };
+      await config.client.send(new PutObjectCommand({ Bucket: config.bucket, Key: storedAttachment.storageKey, Body: Buffer.from(await file.arrayBuffer()), ContentType: storedAttachment.fileType }));
+      return storedAttachment;
     } catch (error) {
       console.error("project_chat_storage_upload_failed", { provider: "aws-s3", operation: "PutObject", errorName: error instanceof Error ? error.name : "UnknownError" });
       throw new Error("The attachment could not be stored.");
@@ -279,6 +320,59 @@ export function resolveProjectChatStorageProvider(provider: StorageProvider) {
   return PROVIDERS[provider];
 }
 
+export async function createProjectChatAttachmentUploadPlan(file: Pick<File, "name" | "type" | "size">): Promise<ProjectChatAttachmentUploadPlan> {
+  const invalid = validateProjectChatAttachment(file);
+  if (invalid) throw new Error("Attachment validation failed before storage.");
+
+  const type = attachmentContentType(file);
+  const provider = selectUploadProvider({ mimeType: type, ...configuredUploadProviders() });
+  if (provider !== "aws-s3") return { strategy: "multipart", provider };
+
+  const config = s3Config();
+  const storedAttachment = s3StoredAttachment(file, config.prefix);
+  try {
+    const command = new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: storedAttachment.storageKey,
+      ContentType: storedAttachment.fileType,
+    });
+    const uploadUrl = await projectChatStorageTestHooks.presign(config.client, command, { expiresIn: config.expiresIn });
+    return {
+      strategy: "direct-s3",
+      storedAttachment,
+      uploadUrl,
+      uploadMethod: "PUT",
+      uploadHeaders: { "Content-Type": storedAttachment.fileType },
+      expiresIn: config.expiresIn,
+    };
+  } catch (error) {
+    console.error("project_chat_storage_upload_url_failed", { provider: "aws-s3", operation: "PutObjectPresign", errorName: error instanceof Error ? error.name : "UnknownError" });
+    throw new Error("A secure attachment upload could not be prepared.");
+  }
+}
+
+export async function confirmProjectChatDirectUploadedAttachment(attachment: ProjectChatStoredAttachment) {
+  if (attachment.storageProvider !== "AWS_S3") throw new Error("Only AWS S3 direct uploads can be confirmed.");
+  const config = s3Config();
+  assertPrefixedKey(attachment.storageKey, config.prefix, "aws-s3");
+  try {
+    const result = await config.client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: attachment.storageKey }));
+    if (result.ContentLength !== attachment.fileSize) throw new Error("Uploaded attachment size did not match.");
+    const storedContentType = result.ContentType?.split(";")[0]?.trim().toLowerCase();
+    if (storedContentType && storedContentType !== attachment.fileType.toLowerCase()) {
+      throw new Error("Uploaded attachment content type did not match.");
+    }
+  } catch (error) {
+    try {
+      await config.client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: attachment.storageKey }));
+    } catch (cleanupError) {
+      console.error("project_chat_storage_upload_confirm_cleanup_failed", { provider: "aws-s3", operation: "DeleteObject", errorName: cleanupError instanceof Error ? cleanupError.name : "UnknownError" });
+    }
+    console.error("project_chat_storage_upload_confirm_failed", { provider: "aws-s3", operation: "HeadObject", errorName: error instanceof Error ? error.name : "UnknownError" });
+    throw new Error("The uploaded attachment could not be verified.");
+  }
+}
+
 export async function saveProjectChatAttachments(files: File[]): Promise<ProjectChatStoredAttachment[]> {
   const invalid = files.find((file) => validateProjectChatAttachment(file));
   if (invalid) throw new Error("Attachment validation failed before storage.");
@@ -301,13 +395,16 @@ export async function deleteProjectChatAttachments(attachments: ProjectChatStore
 export async function uploadAndPersistProjectChatAttachments<T>(
   files: File[],
   persist: (attachments: ProjectChatStoredAttachment[]) => Promise<T>,
+  preuploadedAttachments: ProjectChatStoredAttachment[] = [],
 ) {
-  const stored = await saveProjectChatAttachments(files);
+  let stored: ProjectChatStoredAttachment[] = [];
   try {
-    return await persist(stored);
+    stored = await saveProjectChatAttachments(files);
+    return await persist([...preuploadedAttachments, ...stored]);
   } catch (persistenceError) {
+    const attachmentsToDelete = [...preuploadedAttachments, ...stored];
     try {
-      await deleteProjectChatAttachments(stored);
+      if (attachmentsToDelete.length > 0) await deleteProjectChatAttachments(attachmentsToDelete);
     } catch (cleanupError) {
       console.error("project_chat_storage_compensating_delete_failed", {
         operation: "uploadRollback",

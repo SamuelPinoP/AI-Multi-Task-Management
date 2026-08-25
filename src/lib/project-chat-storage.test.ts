@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, type S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, type S3Client } from "@aws-sdk/client-s3";
 import {
+  confirmProjectChatDirectUploadedAttachment,
   configuredUploadProviders,
+  createProjectChatAttachmentUploadPlan,
   deleteProjectChatAttachments,
   projectChatStorageTestHooks,
   readProjectChatAttachment,
@@ -72,6 +74,27 @@ test("hybrid upload stores AWS provider identity and command inputs for video", 
   assert.equal(stored.storageKey, putCommand.input.Key);
 });
 
+test("prepares browser-direct S3 upload plans for S3-routed videos", async () => {
+  configureHybrid();
+  let command: unknown;
+  projectChatStorageTestHooks.presign = async (_client, value) => {
+    command = value;
+    return "https://signed.example/upload";
+  };
+
+  const plan = await createProjectChatAttachmentUploadPlan(new File(["video"], "clip.mp4", { type: "text/plain" }));
+  assert.equal(plan.strategy, "direct-s3");
+  if (plan.strategy !== "direct-s3") throw new Error("expected direct S3 plan");
+  assert.ok(command instanceof PutObjectCommand);
+  const putCommand = command as PutObjectCommand;
+  assert.equal(putCommand.input.Bucket, "private-test-bucket");
+  assert.match(String(putCommand.input.Key), /^project-chat\/[0-9a-f-]+-clip\.mp4$/);
+  assert.equal(putCommand.input.ContentType, "video/mp4");
+  assert.equal(plan.uploadUrl, "https://signed.example/upload");
+  assert.deepEqual(plan.uploadHeaders, { "Content-Type": "video/mp4" });
+  assert.equal(plan.storedAttachment.storageProvider, "AWS_S3");
+});
+
 test("hybrid upload stores Vercel provider identity for ordinary files", async () => {
   configureHybrid();
   mockBlob();
@@ -96,6 +119,31 @@ test("local/local stores all types locally and local/S3 routes only videos to S3
   assert.deepEqual(mixed.map((item) => item.storageProvider), ["LOCAL", "AWS_S3"]);
   assert.equal(commands, 1);
   await deleteProjectChatAttachments([mixed[0]]);
+});
+
+test("confirms direct S3 uploads before attachment metadata is persisted", async (t) => {
+  configureHybrid();
+  let command: unknown;
+  mockS3(async (value) => {
+    command = value;
+    return { ContentLength: 5, ContentType: "video/mp4" };
+  });
+
+  const attachment = {
+    fileName: "project-chat/video.mp4",
+    originalName: "video.mp4",
+    fileType: "video/mp4",
+    fileSize: 5,
+    url: "s3://project-chat/video.mp4",
+    storageProvider: "AWS_S3" as const,
+    storageKey: "project-chat/video.mp4",
+  };
+  await confirmProjectChatDirectUploadedAttachment(attachment);
+  assert.ok(command instanceof HeadObjectCommand);
+
+  t.mock.method(console, "error", () => undefined);
+  mockS3(async () => ({ ContentLength: 4, ContentType: "video/mp4" }));
+  await assert.rejects(() => confirmProjectChatDirectUploadedAttachment(attachment), /uploaded attachment could not be verified/i);
 });
 
 test("downloads and deletes use each recorded provider, not upload defaults", async () => {
@@ -161,6 +209,7 @@ test("cleanup failure is safely logged without hiding persistence failure", asyn
   const logged: unknown[][] = [];
   t.mock.method(console, "error", (...args: unknown[]) => { logged.push(args); });
   await assert.rejects(() => uploadAndPersistProjectChatAttachments([new File(["x"], "note.txt")], async () => { throw databaseError; }), (error) => error === databaseError);
-  assert.equal(logged[0][0], "project_chat_storage_compensating_delete_failed");
-  assert.deepEqual(logged[0][1], { operation: "uploadRollback", errorName: "Error" });
+  const compensationLog = logged.find((entry) => entry[0] === "project_chat_storage_compensating_delete_failed");
+  assert.ok(compensationLog);
+  assert.deepEqual(compensationLog[1], { operation: "uploadRollback", errorName: "Error" });
 });

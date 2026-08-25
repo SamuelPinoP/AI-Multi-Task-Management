@@ -1,6 +1,6 @@
 # First Vercel Deploy Checklist
 
-Use this checklist before the first production deployment of AI-Multi Task-Management to Vercel with hosted PostgreSQL and Vercel Blob.
+Use this checklist before the first production deployment of AI-Multi Task-Management to Vercel with hosted PostgreSQL, Vercel Blob, and private S3 video storage.
 
 ## Vercel project settings
 
@@ -22,6 +22,10 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
 PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER="vercel-blob"
 PROJECT_CHAT_VIDEO_STORAGE_PROVIDER="aws-s3"
 BLOB_READ_WRITE_TOKEN="your-vercel-blob-read-write-token"
+AWS_REGION="us-east-1"
+AWS_S3_BUCKET_NAME="your-private-bucket"
+AWS_ACCESS_KEY_ID="your-dedicated-app-key"
+AWS_SECRET_ACCESS_KEY="your-dedicated-app-secret"
 SIGNUP_ENABLED="false"
 GUEST_LOGIN_ENABLED="false"
 ```
@@ -29,6 +33,7 @@ GUEST_LOGIN_ENABLED="false"
 - `DATABASE_URL` must point at the hosted PostgreSQL database that should receive production migrations.
 - Use `vercel-blob` or `aws-s3` routing targets on Vercel because local filesystem uploads are not durable in serverless production.
 - `BLOB_READ_WRITE_TOKEN` is a server-only Vercel Blob secret. Never commit it, never expose it to client code, and never rename it with a `NEXT_PUBLIC_` prefix.
+- `AWS_REGION`, `AWS_S3_BUCKET_NAME`, and the AWS credentials are server-only values for the private S3 bucket used by video uploads. Never use `NEXT_PUBLIC_` for these variables.
 - `SIGNUP_ENABLED="false"` is recommended for the first public deployment unless public account creation is intentional.
 - `GUEST_LOGIN_ENABLED="false"` is recommended for the first public deployment unless public guest workspaces are intentional.
 - `SIGNUP_ENABLED` and `GUEST_LOGIN_ENABLED` must be exactly `"true"` or `"false"` if present; ambiguous values fail deployment validation.
@@ -37,6 +42,7 @@ Optional production variables:
 
 ```env
 PROJECT_CHAT_BLOB_PREFIX="project-chat"
+PROJECT_CHAT_S3_PREFIX="project-chat"
 APP_BASE_URL="https://your-production-app.example.com"
 EMAIL_PROVIDER="disabled"
 ```
@@ -83,6 +89,15 @@ If you prefer to separate migrations from the Vercel build step, run the same Pr
 
 In production, deployment validation requires an explicit default storage target. The deprecated `PROJECT_CHAT_STORAGE_PROVIDER` remains a temporary fallback, while explicit default/video variables take precedence. Do not select local on Vercel because serverless filesystem writes are not durable.
 
+## AWS S3 setup
+
+1. Create a private S3 bucket with Block all public access enabled.
+2. Add bucket CORS for the exact deployed app origin so browser-direct presigned PUT uploads can succeed. Add `http://localhost:3000` only for local live testing.
+3. Create a dedicated IAM user or role that can only `s3:PutObject`, `s3:GetObject`, and `s3:DeleteObject` under the configured project-chat prefix.
+4. Add the AWS environment variables above in Vercel, redeploy, then upload/download/delete one disposable video before using production data.
+
+See `docs/aws-s3-storage.md` for the exact CORS and IAM policy examples.
+
 ## Troubleshooting
 
 ### Missing `DATABASE_URL`
@@ -100,6 +115,10 @@ In production, deployment validation requires an explicit default storage target
 ### Blob provider misconfiguration
 
 If any storage variable has a value other than `local`, `vercel-blob`, or `aws-s3`, deployment validation fails. Use durable cloud targets for Vercel production.
+
+### Missing AWS S3 values
+
+When any storage route selects `aws-s3`, `npm run validate:deploy-env` requires `AWS_REGION` and `AWS_S3_BUCKET_NAME`. If one static key variable is set, both `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` must be set. On Vercel, these should be encrypted server-side Environment Variables.
 
 ### Invitation email configuration
 
