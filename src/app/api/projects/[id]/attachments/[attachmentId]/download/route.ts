@@ -3,10 +3,16 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { getProjectAccess } from "@/lib/project-access";
 import {
+  isPreviewableDocxAttachment,
+  projectChatDocxPreviewResponse,
+} from "@/lib/project-chat-attachment-preview";
+import {
   projectChatAttachmentContentDisposition,
   readProjectChatAttachment,
   type ProjectChatAttachmentDisposition,
 } from "@/lib/project-chat-storage";
+
+export const runtime = "nodejs";
 
 type RouteContext = { params: Promise<{ id: string; attachmentId: string }> };
 
@@ -45,6 +51,10 @@ export async function GET(req: Request, context: RouteContext) {
       );
 
     const attachmentName = attachment.originalName || attachment.fileName;
+    if (disposition === "inline" && isPreviewableDocxAttachment(attachmentName, attachment.fileType)) {
+      return projectChatDocxPreviewResponse(attachment, attachmentName);
+    }
+
     const storedFile = await readProjectChatAttachment(attachment, {
       disposition,
       fileName: attachmentName,
