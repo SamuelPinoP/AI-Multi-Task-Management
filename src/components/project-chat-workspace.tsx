@@ -84,6 +84,13 @@ function getFileKind(fileType: string, fileName: string) {
   return "file";
 }
 
+function canPreviewAttachment(fileName: string, fileType: string) {
+  return (
+    fileName.toLowerCase().endsWith(".docx") ||
+    fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  );
+}
+
 function isEdited(comment: ProjectComment) {
   return (
     new Date(comment.updatedAt).getTime() -
@@ -144,8 +151,12 @@ function AttachmentCard({
   projectId: string;
 }) {
   const kind = getFileKind(attachment.fileType, attachment.originalName);
-  const openUrl = `/api/projects/${encodeURIComponent(projectId)}/attachments/${encodeURIComponent(attachment.id)}/download`;
-  const downloadUrl = `${openUrl}?download=1`;
+  const attachmentBaseUrl = `/api/projects/${encodeURIComponent(projectId)}/attachments/${encodeURIComponent(attachment.id)}`;
+  const rawOpenUrl = `${attachmentBaseUrl}/download`;
+  const openUrl = canPreviewAttachment(attachment.originalName, attachment.fileType)
+    ? `${attachmentBaseUrl}/preview`
+    : rawOpenUrl;
+  const downloadUrl = `${rawOpenUrl}?download=1`;
 
   return (
     <div
