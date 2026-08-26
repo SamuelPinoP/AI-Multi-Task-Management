@@ -626,8 +626,8 @@ export function ProjectChatWorkspace({
           </section>
         ) : null}
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-zinc-100/60 px-4 py-6 dark:bg-zinc-950 sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-5xl flex-col gap-5">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-zinc-100/60 px-4 py-4 dark:bg-zinc-950 sm:px-6 lg:px-8">
+          <div className="mx-auto flex max-w-5xl flex-col gap-4">
             {comments.length === 0 ? (
               <div className="rounded-3xl bg-white/80 p-8 text-center shadow-sm ring-1 ring-zinc-200/70 dark:bg-zinc-900/70 dark:ring-zinc-800/70">
                 <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
@@ -651,7 +651,7 @@ export function ProjectChatWorkspace({
                   <article
                     id={`comment-${comment.id}`}
                     key={comment.id}
-                    className={`rounded-3xl bg-white/95 p-4 text-sm shadow-sm shadow-zinc-200/60 ring-1 transition dark:bg-zinc-900/80 dark:shadow-none sm:p-5 ${
+                    className={`rounded-3xl bg-white/95 p-4 text-sm shadow-sm shadow-zinc-200/60 ring-1 transition dark:bg-zinc-900/80 dark:shadow-none ${
                       isPending
                         ? "opacity-80 ring-zinc-300 dark:ring-zinc-700"
                         : comment.pinned
@@ -835,7 +835,7 @@ export function ProjectChatWorkspace({
         </div>
 
         <form
-          className="border-t border-zinc-200 bg-white px-4 py-4 shadow-[0_-12px_35px_rgba(24,24,27,0.08)] dark:border-zinc-800 dark:bg-zinc-950 sm:px-6 lg:px-8"
+          className="border-t border-zinc-200 bg-white px-3 py-2 shadow-[0_-12px_35px_rgba(24,24,27,0.08)] dark:border-zinc-800 dark:bg-zinc-950 sm:px-5 lg:px-7"
           onSubmit={(event) => {
             event.preventDefault();
             void sendMessage();
@@ -858,10 +858,10 @@ export function ProjectChatWorkspace({
                 but only Owners and Editors can post messages or upload files.
               </div>
             ) : (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                 <button
                   type="button"
-                  className="inline-flex h-12 w-12 shrink-0 items-center justify-center self-start rounded-2xl bg-white text-zinc-600 shadow-sm ring-1 ring-zinc-200 transition hover:-translate-y-0.5 hover:text-zinc-950 hover:ring-zinc-300 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:text-zinc-50 dark:hover:ring-zinc-700 sm:h-auto sm:min-h-12"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-start rounded-xl bg-white text-zinc-600 shadow-sm ring-1 ring-zinc-200 transition hover:-translate-y-0.5 hover:text-zinc-950 hover:ring-zinc-300 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:text-zinc-50 dark:hover:ring-zinc-700 sm:h-auto sm:min-h-9"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isSubmitting}
                   aria-label="Attach files"
@@ -895,8 +895,8 @@ export function ProjectChatWorkspace({
                       if (error) setError("");
                     }}
                     placeholder="Share an update, decision, blocker, or handoff..."
-                    rows={2}
-                    className="min-h-12 w-full resize-none rounded-3xl border-0 bg-transparent px-4 py-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                    rows={1}
+                    className="min-h-9 w-full resize-none rounded-3xl border-0 bg-transparent px-4 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
                   />
                   {selectedAttachments.length > 0 ? (
                     <div className="px-3 pb-3">
@@ -931,24 +931,20 @@ export function ProjectChatWorkspace({
 
                 <button
                   type="submit"
-                  className={`${uiPrimaryButtonClass} h-12 shrink-0 self-start px-5 sm:h-auto sm:min-h-12`}
+                  className={`${uiPrimaryButtonClass} h-9 shrink-0 self-start px-5 sm:h-auto sm:min-h-9`}
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? "Sending..." : "Send message"}
                 </button>
               </div>
             )}
-            <div className="mt-3 min-h-5">
-              {error ? (
+            {error ? (
+              <div className="mt-2">
                 <p className="text-sm font-medium text-red-600 dark:text-red-400">
                   {error}
                 </p>
-              ) : (
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Attach multiple files with the paperclip or drag-and-drop them here.
-                </p>
-              )}
-            </div>
+              </div>
+            ) : null}
           </div>
         </form>
       </div>

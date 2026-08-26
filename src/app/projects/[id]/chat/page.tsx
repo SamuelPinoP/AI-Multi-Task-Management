@@ -20,8 +20,6 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
     select: {
       id: true,
       name: true,
-      description: true,
-      status: true,
       userId: true,
       members: { where: { userId: user.id }, select: { userId: true, role: true } },
       comments: {
@@ -37,24 +35,15 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
   const readOnly = access?.accessLevel === "VIEWER";
 
   return (
-    <main className="flex h-full min-h-0 flex-col overflow-hidden bg-zinc-50 px-4 py-6 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 sm:px-6 lg:px-8">
-      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-3 overflow-hidden">
-        <header className="rounded-2xl border border-zinc-200 bg-white/95 px-4 py-3 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none sm:px-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <main className="flex h-full min-h-0 flex-col overflow-hidden bg-zinc-50 px-4 py-2 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-1.5 overflow-hidden">
+        <header className="rounded-xl border border-zinc-200 bg-white/95 px-3 py-1.5 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none sm:px-4">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Project Chat</p>
-                <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-                  {project.status.charAt(0) + project.status.slice(1).toLowerCase()}
-                </span>
-              </div>
-              <h1 className="mt-1 truncate text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-2xl">{project.name}</h1>
-              <p className="mt-1 max-w-3xl truncate text-sm text-zinc-500 dark:text-zinc-400">
-                {project.description || "Updates, decisions, blockers, handoffs, and shared files."}
-              </p>
+              <h1 className="truncate text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-lg">{project.name}</h1>
             </div>
             <div className="flex shrink-0 sm:justify-end">
-              <BackLink href={`/projects/${project.id}`}>Back to Project</BackLink>
+              <BackLink href={`/projects/${project.id}`} className="rounded-lg px-2.5 py-1 text-xs">Back to Project</BackLink>
             </div>
           </div>
         </header>
