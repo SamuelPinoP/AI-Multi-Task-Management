@@ -17,6 +17,7 @@ test("derives routing and content type from the validated extension, not client 
   assert.equal(isVideoAttachment({ name: "notes.txt", type: "video/mp4" }), false);
   assert.equal(isVideoAttachment({ name: "clip.mp4", type: "text/plain" }), true);
   assert.equal(attachmentContentType({ name: "clip.mp4" }), "video/mp4");
+  assert.equal(attachmentContentType({ name: "meeting-minutes.docx" }), "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
 });
 
 test("rejects invalid types and unsafe filenames", () => {

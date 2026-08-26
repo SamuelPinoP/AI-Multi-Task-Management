@@ -57,6 +57,13 @@ export type ProjectChatAttachmentReadResult =
   | { kind: "body"; body: BodyInit; contentType: string }
   | { kind: "redirect"; url: string };
 
+export type ProjectChatAttachmentDisposition = "inline" | "attachment";
+
+export type ProjectChatAttachmentReadOptions = {
+  disposition?: ProjectChatAttachmentDisposition;
+  fileName?: string;
+};
+
 export class ProjectChatStorageConfigError extends Error {
   constructor(message: string) {
     super(message);
@@ -210,9 +217,30 @@ function s3StoredAttachment(file: Pick<File, "name" | "size">, prefix: string) {
   };
 }
 
+function sanitizeDownloadName(name: string) {
+  return (
+    name
+      .replace(/[\\/]/g, "-")
+      .replace(/[\u0000-\u001f\u007f]/g, "")
+      .trim()
+      .slice(0, 180) || "attachment"
+  );
+}
+
+export function projectChatAttachmentContentDisposition(
+  fileName: string,
+  disposition: ProjectChatAttachmentDisposition = "attachment",
+) {
+  const safeName = sanitizeDownloadName(fileName);
+  const fallbackName = safeName
+    .replace(/[^\x20-\x7e]/g, "_")
+    .replace(/["\\]/g, "_");
+  return `${disposition}; filename="${fallbackName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`;
+}
+
 type StorageAdapter = {
   upload(file: File): Promise<ProjectChatStoredAttachment>;
-  read(attachment: ProjectChatStoredAttachmentReference): Promise<ProjectChatAttachmentReadResult>;
+  read(attachment: ProjectChatStoredAttachmentReference, options?: ProjectChatAttachmentReadOptions): Promise<ProjectChatAttachmentReadResult>;
   delete(attachment: ProjectChatStoredAttachmentReference): Promise<void>;
 };
 
@@ -291,11 +319,16 @@ const s3Adapter: StorageAdapter = {
       throw new Error("The attachment could not be stored.");
     }
   },
-  async read(attachment) {
+  async read(attachment, options) {
     const config = s3Config();
     assertPrefixedKey(attachment.storageKey, config.prefix, "aws-s3");
     try {
-      const url = await projectChatStorageTestHooks.presign(config.client, new GetObjectCommand({ Bucket: config.bucket, Key: attachment.storageKey }), { expiresIn: config.expiresIn });
+      const url = await projectChatStorageTestHooks.presign(config.client, new GetObjectCommand({
+        Bucket: config.bucket,
+        Key: attachment.storageKey,
+        ResponseContentDisposition: projectChatAttachmentContentDisposition(options?.fileName || path.basename(attachment.storageKey), options?.disposition || "inline"),
+        ResponseContentType: attachment.fileType,
+      }), { expiresIn: config.expiresIn });
       return { kind: "redirect", url };
     } catch (error) {
       console.error("project_chat_storage_download_url_failed", { provider: "aws-s3", operation: "GetObjectPresign", errorName: error instanceof Error ? error.name : "UnknownError" });
@@ -384,8 +417,8 @@ export async function saveProjectChatAttachments(files: File[]): Promise<Project
   }));
 }
 
-export async function readProjectChatAttachment(attachment: ProjectChatStoredAttachmentReference) {
-  return resolveProjectChatStorageProvider(resolveStoredProvider(attachment.storageProvider)).read(attachment);
+export async function readProjectChatAttachment(attachment: ProjectChatStoredAttachmentReference, options?: ProjectChatAttachmentReadOptions) {
+  return resolveProjectChatStorageProvider(resolveStoredProvider(attachment.storageProvider)).read(attachment, options);
 }
 
 export async function deleteProjectChatAttachments(attachments: ProjectChatStoredAttachmentReference[]) {

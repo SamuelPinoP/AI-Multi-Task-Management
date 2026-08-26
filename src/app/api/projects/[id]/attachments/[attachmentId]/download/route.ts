@@ -2,31 +2,18 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { getProjectAccess } from "@/lib/project-access";
-import { readProjectChatAttachment } from "@/lib/project-chat-storage";
+import {
+  projectChatAttachmentContentDisposition,
+  readProjectChatAttachment,
+  type ProjectChatAttachmentDisposition,
+} from "@/lib/project-chat-storage";
 
 type RouteContext = { params: Promise<{ id: string; attachmentId: string }> };
 
-function sanitizeDownloadName(name: string) {
-  return (
-    name
-      .replace(/[\\/]/g, "-")
-      .replace(/[\u0000-\u001f\u007f]/g, "")
-      .trim()
-      .slice(0, 180) || "attachment"
-  );
-}
-
-function contentDisposition(fileName: string) {
-  const safeName = sanitizeDownloadName(fileName);
-  const fallbackName = safeName
-    .replace(/[^\x20-\x7e]/g, "_")
-    .replace(/["\\]/g, "_");
-  return `attachment; filename="${fallbackName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`;
-}
-
-export async function GET(_req: Request, context: RouteContext) {
+export async function GET(req: Request, context: RouteContext) {
   try {
     const { id: projectId, attachmentId } = await context.params;
+    const disposition: ProjectChatAttachmentDisposition = new URL(req.url).searchParams.get("download") === "1" ? "attachment" : "inline";
     const user = await requireApiUser();
     if (!user)
       return NextResponse.json(
@@ -57,7 +44,11 @@ export async function GET(_req: Request, context: RouteContext) {
         { status: 404 },
       );
 
-    const storedFile = await readProjectChatAttachment(attachment);
+    const attachmentName = attachment.originalName || attachment.fileName;
+    const storedFile = await readProjectChatAttachment(attachment, {
+      disposition,
+      fileName: attachmentName,
+    });
     if (storedFile.kind === "redirect") {
       return NextResponse.redirect(storedFile.url, { status: 307 });
     }
@@ -66,9 +57,7 @@ export async function GET(_req: Request, context: RouteContext) {
       headers: {
         "Content-Type": storedFile.contentType,
         "Content-Length": String(attachment.fileSize),
-        "Content-Disposition": contentDisposition(
-          attachment.originalName || attachment.fileName,
-        ),
+        "Content-Disposition": projectChatAttachmentContentDisposition(attachmentName, disposition),
         "X-Content-Type-Options": "nosniff",
       },
     });

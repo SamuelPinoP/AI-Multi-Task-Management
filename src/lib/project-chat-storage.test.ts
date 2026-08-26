@@ -155,8 +155,11 @@ test("downloads and deletes use each recorded provider, not upload defaults", as
     return "https://signed.example/object";
   };
   const aws = { storageProvider: "AWS_S3" as const, storageKey: "project-chat/video.mp4", fileType: "video/mp4", url: "s3://project-chat/video.mp4" };
-  assert.deepEqual(await readProjectChatAttachment(aws), { kind: "redirect", url: "https://signed.example/object" });
+  assert.deepEqual(await readProjectChatAttachment(aws, { disposition: "attachment", fileName: "video.mp4" }), { kind: "redirect", url: "https://signed.example/object" });
   assert.ok(command instanceof GetObjectCommand);
+  const getCommand = command as GetObjectCommand;
+  assert.equal(getCommand.input.ResponseContentDisposition, `attachment; filename="video.mp4"; filename*=UTF-8''video.mp4`);
+  assert.equal(getCommand.input.ResponseContentType, "video/mp4");
   await deleteProjectChatAttachments([aws]);
   assert.ok(command instanceof DeleteObjectCommand);
 

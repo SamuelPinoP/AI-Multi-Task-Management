@@ -14,7 +14,11 @@ const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".m4v"]);
 
 const CONTENT_TYPES_BY_EXTENSION: Record<string, string> = {
   ".csv": "text/csv",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".gif": "image/gif",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   ".jpeg": "image/jpeg",
   ".jpg": "image/jpeg",
   ".json": "application/json",
@@ -22,6 +26,8 @@ const CONTENT_TYPES_BY_EXTENSION: Record<string, string> = {
   ".mov": "video/quicktime",
   ".mp4": "video/mp4",
   ".pdf": "application/pdf",
+  ".ppt": "application/vnd.ms-powerpoint",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   ".png": "image/png",
   ".txt": "text/plain",
   ".webm": "video/webm",

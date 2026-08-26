@@ -144,24 +144,25 @@ function AttachmentCard({
   projectId: string;
 }) {
   const kind = getFileKind(attachment.fileType, attachment.originalName);
-  const downloadUrl = `/api/projects/${encodeURIComponent(projectId)}/attachments/${encodeURIComponent(attachment.id)}/download`;
+  const openUrl = `/api/projects/${encodeURIComponent(projectId)}/attachments/${encodeURIComponent(attachment.id)}/download`;
+  const downloadUrl = `${openUrl}?download=1`;
 
   return (
-    <a
-      href={downloadUrl}
-      download={attachment.originalName}
+    <div
       className="group block overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 text-zinc-800 transition hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
     >
       {kind === "image" ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={downloadUrl}
-          alt={attachment.originalName}
-          className="h-32 w-full object-cover"
-        />
+        <a href={openUrl} target="_blank" rel="noopener noreferrer">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={openUrl}
+            alt={attachment.originalName}
+            className="h-32 w-full object-cover"
+          />
+        </a>
       ) : kind === "video" ? (
         <video
-          src={downloadUrl}
+          src={openUrl}
           className="h-32 w-full bg-black object-cover"
           controls
           preload="metadata"
@@ -180,16 +181,28 @@ function AttachmentCard({
                   : "FILE"}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold group-hover:underline">
+          <a
+            href={openUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block truncate text-sm font-semibold group-hover:underline"
+          >
             {attachment.originalName}
-          </span>
+          </a>
           <span className="block text-xs text-zinc-500 dark:text-zinc-400">
             {attachment.fileType || "File"} •{" "}
             {formatFileSize(attachment.fileSize)}
           </span>
         </span>
+        <a
+          href={downloadUrl}
+          download={attachment.originalName}
+          className="shrink-0 rounded-full px-2 py-1 text-xs font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+        >
+          Download
+        </a>
       </div>
-    </a>
+    </div>
   );
 }
 
@@ -921,10 +934,7 @@ export function ProjectChatWorkspace({
                 </p>
               ) : (
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Attach multiple files with the paperclip or drag-and-drop them
-                  here. Storage uses the configured local, Vercel Blob, or AWS S3 backend;
-                  avoid uploading secrets unless this deployment is intended for
-                  them.
+                  Attach multiple files with the paperclip or drag-and-drop them here.
                 </p>
               )}
             </div>
