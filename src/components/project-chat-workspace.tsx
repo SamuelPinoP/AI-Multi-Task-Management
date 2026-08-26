@@ -35,6 +35,18 @@ type SelectedAttachment = {
   previewUrl: string;
 };
 
+type AttachmentUploadPlan =
+  | { clientId: string; strategy: "multipart"; provider: string }
+  | {
+      clientId: string;
+      strategy: "direct-s3";
+      uploadId: string;
+      uploadUrl: string;
+      uploadMethod: "PUT";
+      uploadHeaders: Record<string, string>;
+      expiresAt: string;
+    };
+
 const MAX_FILES_PER_MESSAGE = 5;
 const STANDARD_FILE_SIZE_LIMIT = 10 * 1024 * 1024;
 const VIDEO_FILE_SIZE_LIMIT = 100 * 1024 * 1024;
@@ -143,13 +155,13 @@ function AttachmentCard({
       {kind === "image" ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={attachment.url}
+          src={downloadUrl}
           alt={attachment.originalName}
           className="h-32 w-full object-cover"
         />
       ) : kind === "video" ? (
         <video
-          src={attachment.url}
+          src={downloadUrl}
           className="h-32 w-full bg-black object-cover"
           controls
           preload="metadata"
@@ -269,6 +281,33 @@ export function ProjectChatWorkspace({
     if (event.dataTransfer.files.length > 0) addFiles(event.dataTransfer.files);
   }
 
+  async function prepareAttachmentUploads(attachments: SelectedAttachment[]) {
+    if (attachments.length === 0) return new Map<string, AttachmentUploadPlan>();
+
+    const res = await fetch(`/api/projects/${projectId}/attachments/uploads`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        files: attachments.map((attachment) => ({
+          clientId: attachment.id,
+          name: attachment.file.name,
+          type: attachment.file.type,
+          size: attachment.file.size,
+        })),
+      }),
+    });
+
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      throw new Error(data?.error || "Could not prepare attachment upload.");
+    }
+
+    const data = (await res.json()) as { files?: AttachmentUploadPlan[] };
+    return new Map((data.files || []).map((plan) => [plan.clientId, plan]));
+  }
+
   async function sendMessage() {
     const trimmed = message.trim();
     if (!trimmed && selectedAttachments.length === 0) {
@@ -299,11 +338,6 @@ export function ProjectChatWorkspace({
     };
 
     const attachmentsToSend = [...selectedAttachments];
-    const formData = new FormData();
-    formData.append("message", trimmed);
-    attachmentsToSend.forEach((attachment) =>
-      formData.append("attachments", attachment.file),
-    );
 
     setIsSubmitting(true);
     setError("");
@@ -312,10 +346,53 @@ export function ProjectChatWorkspace({
     setComments((prev) => [...prev, optimisticComment]);
 
     try {
-      const res = await fetch(`/api/projects/${projectId}/comments`, {
-        method: "POST",
-        body: formData,
-      });
+      const uploadPlans = await prepareAttachmentUploads(attachmentsToSend);
+      const directUploadIds: string[] = [];
+      const multipartAttachments: SelectedAttachment[] = [];
+
+      for (const attachment of attachmentsToSend) {
+        const plan = uploadPlans.get(attachment.id);
+        if (!plan) throw new Error("Could not prepare attachment upload.");
+
+        if (plan.strategy === "direct-s3") {
+          const uploadRes = await fetch(plan.uploadUrl, {
+            method: plan.uploadMethod,
+            headers: plan.uploadHeaders,
+            body: attachment.file,
+          });
+          if (!uploadRes.ok) {
+            throw new Error(`Could not upload ${attachment.file.name} to AWS S3.`);
+          }
+          directUploadIds.push(plan.uploadId);
+        } else {
+          multipartAttachments.push(attachment);
+        }
+      }
+
+      let res: Response;
+      if (multipartAttachments.length > 0) {
+        const formData = new FormData();
+        formData.append("message", trimmed);
+        if (directUploadIds.length > 0) {
+          formData.append("preparedAttachmentIds", JSON.stringify(directUploadIds));
+        }
+        multipartAttachments.forEach((attachment) =>
+          formData.append("attachments", attachment.file),
+        );
+        res = await fetch(`/api/projects/${projectId}/comments`, {
+          method: "POST",
+          body: formData,
+        });
+      } else {
+        res = await fetch(`/api/projects/${projectId}/comments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: trimmed,
+            preparedAttachmentIds: directUploadIds,
+          }),
+        });
+      }
 
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as {
@@ -339,6 +416,13 @@ export function ProjectChatWorkspace({
       attachmentsToSend.forEach((attachment) =>
         URL.revokeObjectURL(attachment.previewUrl),
       );
+    } catch (error) {
+      setComments((prev) =>
+        prev.filter((comment) => comment.id !== optimisticComment.id),
+      );
+      setMessage(trimmed);
+      setSelectedAttachments(attachmentsToSend);
+      setError(error instanceof Error ? error.message : "Could not send message.");
     } finally {
       setIsSubmitting(false);
     }
@@ -838,7 +922,7 @@ export function ProjectChatWorkspace({
               ) : (
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   Attach multiple files with the paperclip or drag-and-drop them
-                  here. Storage uses the configured local/Vercel Blob backend;
+                  here. Storage uses the configured local, Vercel Blob, or AWS S3 backend;
                   avoid uploading secrets unless this deployment is intended for
                   them.
                 </p>

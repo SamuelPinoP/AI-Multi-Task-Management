@@ -57,6 +57,7 @@ export async function PATCH(req: Request, context: RouteContext) {
         });
     }
 
+    // Waiting on prisma and checking if the user can edit the note
     const existingNote = await prisma.note.findFirst({
       where: {
         id,
@@ -66,6 +67,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       select: { projectId: true },
     });
     if (!existingNote)
+      // Acces denied
       return NextResponse.json({ error: "Note not found" }, { status: 404 });
     if (existingNote.projectId) {
       const existingAccess = await getProjectAccess(

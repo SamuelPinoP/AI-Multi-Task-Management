@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import "dotenv/config";
 
-const ALLOWED_STORAGE_PROVIDERS = new Set(["local", "vercel-blob"]);
+const ALLOWED_STORAGE_PROVIDERS = new Set(["local", "vercel-blob", "aws-s3"]);
 const ALLOWED_EMAIL_PROVIDERS = new Set(["disabled", "resend"]);
 const BOOLEAN_ENV_NAMES = ["SIGNUP_ENABLED", "GUEST_LOGIN_ENABLED"];
 
@@ -28,7 +28,9 @@ const isProductionLike = isProductionLikeEnvironment();
 const isVercelProduction = isVercelProductionEnvironment();
 
 const databaseUrl = cleanEnvValue("DATABASE_URL");
-const storageProvider = cleanEnvValue("PROJECT_CHAT_STORAGE_PROVIDER");
+const legacyStorageProvider = cleanEnvValue("PROJECT_CHAT_STORAGE_PROVIDER");
+const configuredDefaultStorageProvider = cleanEnvValue("PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER");
+const configuredVideoStorageProvider = cleanEnvValue("PROJECT_CHAT_VIDEO_STORAGE_PROVIDER");
 const blobToken = cleanEnvValue("BLOB_READ_WRITE_TOKEN");
 const emailProvider = cleanEnvValue("EMAIL_PROVIDER")?.toLowerCase();
 const resendApiKey = cleanEnvValue("RESEND_API_KEY");
@@ -38,16 +40,47 @@ if (!databaseUrl) {
   addMissing(errors, "DATABASE_URL");
 }
 
-if (!storageProvider) {
-  if (isProductionLike) {
-    addMissing(errors, "PROJECT_CHAT_STORAGE_PROVIDER");
-  }
-} else if (!ALLOWED_STORAGE_PROVIDERS.has(storageProvider)) {
-  errors.push('Invalid PROJECT_CHAT_STORAGE_PROVIDER. Use either "local" or "vercel-blob".');
-} else if (storageProvider === "vercel-blob" && !blobToken) {
+for (const [name, value] of [
+  ["PROJECT_CHAT_STORAGE_PROVIDER", legacyStorageProvider],
+  ["PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER", configuredDefaultStorageProvider],
+  ["PROJECT_CHAT_VIDEO_STORAGE_PROVIDER", configuredVideoStorageProvider],
+]) {
+  if (value && !ALLOWED_STORAGE_PROVIDERS.has(value)) errors.push(`Invalid ${name}. Use "local", "vercel-blob", or "aws-s3".`);
+}
+
+if (legacyStorageProvider) {
+  warnings.push("PROJECT_CHAT_STORAGE_PROVIDER is deprecated. Set PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER and PROJECT_CHAT_VIDEO_STORAGE_PROVIDER; explicit new variables take precedence.");
+}
+if (isProductionLike && !configuredDefaultStorageProvider && !legacyStorageProvider) {
+  addMissing(errors, "PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER");
+}
+
+const defaultStorageProvider = configuredDefaultStorageProvider || legacyStorageProvider || "local";
+const videoStorageProvider = configuredVideoStorageProvider || legacyStorageProvider || defaultStorageProvider;
+const selectedStorageProviders = new Set([defaultStorageProvider, videoStorageProvider]);
+
+if (selectedStorageProviders.has("vercel-blob") && !blobToken) {
   errors.push("Missing BLOB_READ_WRITE_TOKEN for Vercel Blob storage. Add it as a server-side secret environment variable.");
-} else if (storageProvider === "local" && isProductionLike) {
-  const message = 'PROJECT_CHAT_STORAGE_PROVIDER="local" is unsafe for production because serverless filesystem uploads are not durable. Use "vercel-blob" for Vercel production.';
+}
+if (selectedStorageProviders.has("aws-s3")) {
+  if (!cleanEnvValue("AWS_REGION")) addMissing(errors, "AWS_REGION");
+  if (!cleanEnvValue("AWS_S3_BUCKET_NAME")) addMissing(errors, "AWS_S3_BUCKET_NAME");
+  const accessKey = cleanEnvValue("AWS_ACCESS_KEY_ID");
+  const secretKey = cleanEnvValue("AWS_SECRET_ACCESS_KEY");
+  if (Boolean(accessKey) !== Boolean(secretKey)) {
+    errors.push("Set both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or omit both to use the AWS default credential provider chain.");
+  }
+  const forcePathStyle = cleanEnvValue("AWS_S3_FORCE_PATH_STYLE");
+  if (forcePathStyle && forcePathStyle !== "true" && forcePathStyle !== "false") {
+    errors.push('Invalid AWS_S3_FORCE_PATH_STYLE. Use "true" or "false" if this variable is set.');
+  }
+  const expiration = cleanEnvValue("AWS_S3_PRESIGNED_URL_EXPIRATION_SECONDS");
+  if (expiration && (!Number.isInteger(Number(expiration)) || Number(expiration) < 60 || Number(expiration) > 3600)) {
+    errors.push("AWS_S3_PRESIGNED_URL_EXPIRATION_SECONDS must be an integer from 60 through 3600.");
+  }
+}
+if (selectedStorageProviders.has("local") && isProductionLike) {
+  const message = 'A project-chat upload route selects "local" in production, but serverless filesystem uploads are not durable. Use "vercel-blob" or "aws-s3" for both production routing targets.';
   if (isVercelProduction) {
     errors.push(message);
   } else {

@@ -64,6 +64,7 @@ export async function POST(req: Request) {
       );
     }
 
+    // Error thrown if there is no user
     const user = await requireApiUser();
     if (!user)
       return NextResponse.json(
@@ -74,6 +75,7 @@ export async function POST(req: Request) {
     if (projectId) {
       const access = await getProjectAccess(projectId, user.id);
       if (!access)
+      
         return NextResponse.json({ error: "Invalid project" }, { status: 400 });
       if (!canEditProjectContent(access))
         return NextResponse.json(unauthorizedProjectResponse("create notes"), {

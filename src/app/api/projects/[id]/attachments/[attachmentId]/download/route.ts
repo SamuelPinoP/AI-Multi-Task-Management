@@ -46,6 +46,8 @@ export async function GET(_req: Request, context: RouteContext) {
         fileType: true,
         fileSize: true,
         url: true,
+        storageProvider: true,
+        storageKey: true,
       },
     });
 
@@ -55,11 +57,14 @@ export async function GET(_req: Request, context: RouteContext) {
         { status: 404 },
       );
 
-    const { body, contentType } = await readProjectChatAttachment(attachment);
+    const storedFile = await readProjectChatAttachment(attachment);
+    if (storedFile.kind === "redirect") {
+      return NextResponse.redirect(storedFile.url, { status: 307 });
+    }
 
-    return new Response(body, {
+    return new Response(storedFile.body, {
       headers: {
-        "Content-Type": contentType,
+        "Content-Type": storedFile.contentType,
         "Content-Length": String(attachment.fileSize),
         "Content-Disposition": contentDisposition(
           attachment.originalName || attachment.fileName,
