@@ -127,6 +127,8 @@ function LandingPage({
   signupEnabled: boolean;
   guestLoginEnabled: boolean;
 }) {
+  const accessNote = getLandingAccessNote(signupEnabled, guestLoginEnabled);
+
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.14),transparent_32%)] px-4 py-10 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-12">
@@ -181,11 +183,9 @@ function LandingPage({
                 </span>
               )}
             </div>
-            {!signupEnabled || !guestLoginEnabled ? (
+            {accessNote ? (
               <p className="max-w-2xl rounded-2xl border border-zinc-200 bg-white/75 px-4 py-3 text-sm text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
-                Access can be intentionally restricted for demos or class
-                review. Use a provided account, or ask the workspace owner to
-                enable signup/guest access.
+                {accessNote}
               </p>
             ) : null}
           </div>
@@ -241,6 +241,22 @@ function LandingPage({
       </div>
     </main>
   );
+}
+
+function getLandingAccessNote(signupEnabled: boolean, guestLoginEnabled: boolean) {
+  if (signupEnabled && !guestLoginEnabled) {
+    return "Guest access is disabled. Create an account or sign in to review the app.";
+  }
+
+  if (!signupEnabled && guestLoginEnabled) {
+    return "Public signup is disabled. Continue as a guest, or sign in with a provided account.";
+  }
+
+  if (!signupEnabled && !guestLoginEnabled) {
+    return "This deployment is restricted to known accounts. Sign in with credentials provided by the workspace owner.";
+  }
+
+  return null;
 }
 
 type TaskReminderGroup = "OVERDUE" | "DUE_TODAY" | "UPCOMING";

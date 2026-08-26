@@ -83,7 +83,8 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
           </form>
         ) : (
           <p className="mt-6 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-900">
-            Public signup is disabled. Ask the workspace owner for access.
+            Public signup is disabled for this deployment. Sign in with a
+            provided account.
           </p>
         )}
 

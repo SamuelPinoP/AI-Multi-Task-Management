@@ -8,14 +8,17 @@ import {
 } from "@/lib/auth";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 
-function getErrorMessage(error: string | undefined) {
+function getErrorMessage(error: string | undefined, signupEnabled: boolean) {
   if (error === "missing") return "Enter your email and password.";
   if (error === "created") return "Account created. Please sign in.";
   if (error === "logged-out") return "You have been logged out.";
   if (error === "invalid") return "Invalid email or password.";
   if (error === "reset") return "Password reset. Please sign in with your new password.";
-  if (error === "guest-disabled")
-    return "Guest access is disabled for this deployment.";
+  if (error === "guest-disabled") {
+    return signupEnabled
+      ? "Guest access is disabled. Create an account or sign in instead."
+      : "Guest access is disabled for this deployment.";
+  }
   return null;
 }
 
@@ -29,9 +32,9 @@ export default async function LoginPage({
 
   const { error, next } = await searchParams;
   const nextPath = getSafeRedirectPath(next);
-  const errorMessage = getErrorMessage(error);
   const guestLoginEnabled = isGuestLoginEnabled();
   const signupEnabled = isPublicSignupEnabled();
+  const errorMessage = getErrorMessage(error, signupEnabled);
   const isSuccessMessage = error === "created" || error === "logged-out" || error === "reset";
 
   return (
@@ -157,6 +160,30 @@ export default async function LoginPage({
                   out. You can still create a full account anytime.
                 </p>
               </form>
+            </div>
+          </aside>
+        ) : signupEnabled ? (
+          <aside className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 text-emerald-950 shadow-sm dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-100">
+            <div className="flex h-full flex-col justify-between gap-8">
+              <div className="space-y-3">
+                <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-100 dark:ring-emerald-800">
+                  Signup available
+                </span>
+                <h2 className="text-3xl font-semibold tracking-tight">
+                  Create an account to review the app.
+                </h2>
+                <p className="text-sm leading-6">
+                  Guest access is disabled, but public signup is open. Create an
+                  account to use your own login, or sign in if you already have
+                  credentials.
+                </p>
+              </div>
+              <Link
+                href="/signup"
+                className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 dark:bg-emerald-300 dark:text-emerald-950 dark:hover:bg-emerald-200"
+              >
+                Create an account
+              </Link>
             </div>
           </aside>
         ) : (
