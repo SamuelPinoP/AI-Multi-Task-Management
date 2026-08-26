@@ -123,7 +123,7 @@ export function AppShell({
   }, [currentUser, isPublicPage, router]);
 
   const shellLayoutClass = showWorkspaceShell
-    ? "flex min-h-screen flex-col overflow-x-hidden bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 lg:h-screen lg:overflow-hidden"
+    ? "flex h-screen min-h-0 flex-col overflow-hidden bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100"
     : "flex min-h-screen flex-col overflow-x-hidden bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100";
 
   return (
@@ -217,9 +217,9 @@ export function AppShell({
       </header>
 
       {showWorkspaceShell ? (
-        <div className="mx-auto flex w-full max-w-[104rem] flex-1 items-stretch lg:min-h-0">
+        <div className="mx-auto flex min-h-0 w-full max-w-[104rem] flex-1 items-stretch overflow-hidden">
           <SidebarNavigation pathname={pathname} />
-          <main className="min-w-0 flex-1 lg:h-full lg:overflow-y-auto">
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
             {children}
           </main>
         </div>

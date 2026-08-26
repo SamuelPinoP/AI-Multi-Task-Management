@@ -37,8 +37,8 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
   const readOnly = access?.accessLevel === "VIEWER";
 
   return (
-    <main className="flex min-h-screen flex-col bg-zinc-50 px-4 py-6 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 sm:px-6 lg:px-8">
-      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-3">
+    <main className="flex h-full min-h-0 flex-col overflow-hidden bg-zinc-50 px-4 py-6 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-3 overflow-hidden">
         <header className="rounded-2xl border border-zinc-200 bg-white/95 px-4 py-3 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none sm:px-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">

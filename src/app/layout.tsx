@@ -18,7 +18,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning className="h-full antialiased">
-      <body className="min-h-full flex flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+      <body className="h-full flex flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
         <ThemeInitScript />
         <ThemeProvider>
           <AppShell currentUser={currentUser}>{children}</AppShell>
