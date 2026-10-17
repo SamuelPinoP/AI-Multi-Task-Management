@@ -9,6 +9,7 @@ import {
 } from "@/components/ui";
 import { expandRecurringEventsForRange } from "@/lib/recurrence";
 import { getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
+import { eventWallTime, formatEventTime } from "@/lib/event-time";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
@@ -41,10 +42,7 @@ const fmtDate = (value: string) =>
   new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(
     getLocalDateOnly(value),
   );
-const fmtTime = (value: string) =>
-  new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(
-    new Date(value),
-  );
+const fmtTime = formatEventTime;
 
 function ProjectBadge({ project }: { project: Project | null | undefined }) {
   if (!project) return null;
@@ -101,11 +99,11 @@ export function TodayWorkspace({
         overdueTasks: overdue,
         dueTodayTasks: dueToday,
         todayEvents: expanded.filter((event) => {
-          const start = new Date(event.startTime);
+          const start = eventWallTime(event.startTime);
           return start >= today && start < tomorrow;
         }),
         upcomingEvents: expanded.filter((event) => {
-          const start = new Date(event.startTime);
+          const start = eventWallTime(event.startTime);
           return start >= tomorrow && start <= soonBoundary;
         }),
       };

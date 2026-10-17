@@ -27,6 +27,7 @@ import {
   normalizeRecurrence,
 } from "@/lib/recurrence";
 import { formatTaskDueDate, getLocalDateOnly } from "@/lib/task-date-buckets";
+import { formatEventTime } from "@/lib/event-time";
 
 /** Supported recurrence patterns for an event or recurring task. */
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
@@ -87,13 +88,6 @@ function formatDayKey(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-/** Formats an ISO datetime string as a short local time, e.g. "3:00 PM". */
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(
-    new Date(value),
-  );
 }
 
 export default function EventsCalendarPage() {
@@ -602,7 +596,7 @@ export default function EventsCalendarPage() {
                             className="block truncate rounded-xl bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
                           >
                             {event.hasStartTime
-                              ? formatTime(event.startTime)
+                              ? formatEventTime(event.startTime)
                               : "No time"}{" "}
                             {event.title}
                           </span>
@@ -702,7 +696,7 @@ export default function EventsCalendarPage() {
                                   }
                                 >
                                   {event.hasStartTime
-                                    ? formatTime(event.startTime)
+                                    ? formatEventTime(event.startTime)
                                     : "No time"}{" "}
                                   {event.title}
                                 </span>
@@ -790,10 +784,10 @@ export default function EventsCalendarPage() {
                     </div>
                     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
                       {event.hasStartTime
-                        ? formatTime(event.startTime)
+                        ? formatEventTime(event.startTime)
                         : "Time not specified"}
                       {event.endTime && event.hasEndTime
-                        ? ` - ${formatTime(event.endTime)}`
+                        ? ` - ${formatEventTime(event.endTime)}`
                         : ""}
                     </p>
                     {event.location && (

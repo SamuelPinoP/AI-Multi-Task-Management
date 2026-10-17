@@ -4,6 +4,7 @@ import { Priority, ProjectStatus, Recurrence, TaskStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma";
 import { projectAccessWhere } from "@/lib/project-access";
 import { expandRecurringEventsForRange, normalizeRecurrence } from "@/lib/recurrence";
+import { eventWallTime, toEventStorageTime } from "@/lib/event-time";
 import { getLocalDateOnly } from "@/lib/task-date-buckets";
 
 export type PlannerPriority = "HIGH" | "MEDIUM" | "LOW";
@@ -93,14 +94,14 @@ export async function generateSmartPlanner(userId: string, now = new Date()): Pr
       take: 80,
     }),
     prisma.event.findMany({
-      where: { deletedAt: null, startTime: { lte: soonEnd }, OR: [{ userId }, { project: accessibleProjectWhere }] },
+      where: { deletedAt: null, startTime: { lte: toEventStorageTime(soonEnd) }, OR: [{ userId }, { project: accessibleProjectWhere }] },
       include: { project: { select: { id: true, name: true } } },
       orderBy: { startTime: "asc" },
       take: 80,
     }),
     prisma.project.findMany({
       where: { AND: [accessibleProjectWhere, { status: ProjectStatus.ACTIVE }] },
-      select: { id: true, name: true, updatedAt: true, tasks: { where: { deletedAt: null }, select: { id: true, status: true, dueDate: true } }, events: { where: { deletedAt: null, startTime: { gte: todayStart, lte: soonEnd } }, select: { id: true } } },
+      select: { id: true, name: true, updatedAt: true, tasks: { where: { deletedAt: null }, select: { id: true, status: true, dueDate: true } }, events: { where: { deletedAt: null, startTime: { gte: toEventStorageTime(todayStart), lte: toEventStorageTime(soonEnd) } }, select: { id: true } } },
       orderBy: { updatedAt: "desc" },
       take: 40,
     }),
@@ -145,7 +146,7 @@ export async function generateSmartPlanner(userId: string, now = new Date()): Pr
 
   const eventOccurrences = expandRecurringEventsForRange(events.map((event) => ({ ...event, startTime: event.startTime.toISOString(), endTime: event.endTime?.toISOString() ?? null, recurrence: normalizeRecurrence(event.recurrence ?? Recurrence.NONE) })), todayStart, soonEnd);
   for (const event of eventOccurrences.slice(0, 10)) {
-    const starts = new Date(event.startTime);
+    const starts = eventWallTime(event.startTime);
     const diff = dayDiff(starts, now);
     upcoming.push({ id: `event-${event.id}-${starts.toISOString()}`, title: event.title, reason: diff === 0 ? "Happening today; protect time around this event." : `Upcoming event in ${diff} day${diff === 1 ? "" : "s"}.`, priority: diff === 0 ? "HIGH" : "MEDIUM", kind: "EVENT", related: { type: "EVENT", id: event.id, label: "Event" }, actionHref: eventHref(event.id), canCreateTask: true, suggestedTaskTitle: `Prepare for ${event.title}`, suggestedTaskDescription: "Created from Smart Planner event preparation suggestion." });
   }

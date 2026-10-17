@@ -8,6 +8,7 @@ import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
 import { ProjectTeamSection } from "@/components/project-team-section";
 import { ProjectAssignedTasksSection } from "@/components/project-assigned-tasks-section";
 import { ProjectChatPanel } from "@/components/project-chat-panel";
+import { eventWallTime, formatEventDateTime } from "@/lib/event-time";
 import {
   getProjectAccessForUser,
   projectAccessWhereForProject,
@@ -122,7 +123,7 @@ export default async function ProjectDetailPage({
     (task) => task.status !== "DONE" && isOverdueTask(task.dueDate, now),
   ).length;
   const upcomingEvents = project.events.filter(
-    (event) => event.startTime >= now,
+    (event) => eventWallTime(event.startTime) >= now,
   ).length;
   const completionPercentage =
     totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -388,9 +389,9 @@ export default async function ProjectDetailPage({
                     </span>
                   </div>
                   <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
-                    {new Date(event.startTime).toLocaleString()}
+                    {formatEventDateTime(event.startTime)}
                     {event.endTime
-                      ? ` → ${new Date(event.endTime).toLocaleString()}`
+                      ? ` → ${formatEventDateTime(event.endTime)}`
                       : ""}
                   </p>
                   <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">

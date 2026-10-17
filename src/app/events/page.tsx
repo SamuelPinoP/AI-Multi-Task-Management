@@ -31,6 +31,12 @@ import {
   normalizeRecurrence,
 } from "@/lib/recurrence";
 import { getLocalDateOnly } from "@/lib/task-date-buckets";
+import {
+  eventTimeInputValue,
+  eventWallTime,
+  formatEventDateTime,
+  formatEventTime,
+} from "@/lib/event-time";
 
 /** Supported recurrence patterns for an event. */
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
@@ -74,17 +80,6 @@ const ALL_PROJECTS_FILTER = "ALL";
 const NO_PROJECT_FILTER = "NO_PROJECT";
 
 /**
- * Formats an ISO datetime string as a medium date + short time string,
- * e.g. "Jan 5, 2025, 3:00 PM", using the browser's locale.
- */
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-/**
  * Formats a Date as a `YYYY-MM-DD` key using LOCAL (not UTC) date parts.
  * Used as the canonical lookup key for grouping events by calendar day.
  */
@@ -93,15 +88,6 @@ function formatDayKey(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-/**
- * Formats an ISO datetime string as a short local time, e.g. "3:00 PM".
- */
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeStyle: "short",
-  }).format(new Date(value));
 }
 
 /**
@@ -625,15 +611,13 @@ export default function EventsPage() {
     setEditTitle(event.title);
     setEditDescription(event.description ?? "");
     setEditLocation(event.location ?? "");
-    const start = new Date(event.startTime);
     setEditStartDate(formatDayKey(getLocalDayStart(event.startTime)));
     setEditStartTime(
-      event.hasStartTime ? start.toTimeString().slice(0, 5) : "",
+      event.hasStartTime ? eventTimeInputValue(event.startTime) : "",
     );
     if (event.endTime) {
-      const end = new Date(event.endTime);
       setEditEndDate(formatDayKey(getLocalDayStart(event.endTime)));
-      setEditEndTime(event.hasEndTime ? end.toTimeString().slice(0, 5) : "");
+      setEditEndTime(event.hasEndTime ? eventTimeInputValue(event.endTime) : "");
     } else {
       setEditEndDate("");
       setEditEndTime("");
@@ -1040,10 +1024,10 @@ export default function EventsPage() {
                       <p className="font-medium">{event.title}</p>
                       <p className="text-sm text-zinc-600 dark:text-zinc-300">
                         {event.hasStartTime
-                          ? formatTime(event.startTime)
+                          ? formatEventTime(event.startTime)
                           : "Time not specified"}
                         {event.endTime && event.hasEndTime
-                          ? ` - ${formatTime(event.endTime)}`
+                          ? ` - ${formatEventTime(event.endTime)}`
                           : ""}
                       </p>
                       {event.location && (
@@ -1105,11 +1089,10 @@ export default function EventsPage() {
                           const now = new Date();
                           const today = isEventToday(event, now);
                           // "Starts soon" = starts strictly in the future but within the next 48 hours.
+                          const startsAt = eventWallTime(event.startTime).getTime();
                           const startsSoon =
-                            new Date(event.startTime).getTime() >
-                              now.getTime() &&
-                            new Date(event.startTime).getTime() <=
-                              now.getTime() + 48 * 60 * 60 * 1000;
+                            startsAt > now.getTime() &&
+                            startsAt <= now.getTime() + 48 * 60 * 60 * 1000;
                           const badgeText = today
                             ? "Today"
                             : startsSoon
@@ -1327,12 +1310,12 @@ export default function EventsPage() {
                                     </p>
                                   )}
                                   <p className="mt-2 text-sm text-gray-700">
-                                    Start: {formatDateTime(event.startTime)}
+                                    Start: {formatEventDateTime(event.startTime)}
                                   </p>
                                   <p className="mt-1 text-sm text-gray-700">
                                     End:{" "}
                                     {event.endTime
-                                      ? formatDateTime(event.endTime)
+                                      ? formatEventDateTime(event.endTime)
                                       : "Not specified"}
                                   </p>
                                   <p className="mt-1 text-sm text-gray-700">
