@@ -11,7 +11,7 @@
     "seed": "tsx prisma/seed.ts",
     "validate:deploy-env": "node scripts/validate-deployment-env.mjs",
     "test:storage": "node --conditions react-server --import tsx --test src/lib/project-chat-*.test.ts",
-    "test:unit": "node --import tsx --test src/lib/event-time.test.ts",
+    "test:unit": "node --import tsx --test src/lib/event-time.test.ts src/lib/safe-redirect.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
