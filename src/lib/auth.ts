@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { DEMO_USER_EMAIL, GUEST_USER_EMAIL_DOMAIN, SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 
 export { DEMO_USER_EMAIL, GUEST_USER_EMAIL_DOMAIN, SESSION_COOKIE_NAME };
+export { getSafeRedirectPath } from "@/lib/safe-redirect";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const PASSWORD_KEYLEN = 64;
 
@@ -79,11 +80,6 @@ export function verifyPassword(password: string, storedHash: string | null | und
 
 function getSessionExpiresAt() {
   return new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
-}
-
-export function getSafeRedirectPath(nextPath: string | null | undefined) {
-  if (!nextPath || !nextPath.startsWith("/") || nextPath.startsWith("//")) return "/";
-  return nextPath;
 }
 
 export function getSessionCookieOptions(expiresAt: Date): SessionCookieOptions {
