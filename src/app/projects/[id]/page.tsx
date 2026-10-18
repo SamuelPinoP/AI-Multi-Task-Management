@@ -12,6 +12,7 @@ import {
   getProjectAccessForUser,
   projectAccessWhereForProject,
 } from "@/lib/project-access";
+import { OWNER_INVITATION_SELECT } from "@/lib/project-invitations";
 import { markProjectOpened } from "@/lib/recent-shortcuts";
 import { isOverdueTask } from "@/lib/task-date-buckets";
 
@@ -82,14 +83,7 @@ export default async function ProjectDetailPage({
       invitations: {
         where: { status: "PENDING" },
         orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          invitedEmail: true,
-          status: true,
-          createdAt: true,
-          invitedUser: { select: { name: true, email: true } },
-          role: true,
-        },
+        select: OWNER_INVITATION_SELECT,
       },
       comments: {
         orderBy: { createdAt: "asc" },

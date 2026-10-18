@@ -46,17 +46,39 @@ export async function PATCH(req: Request, context: RouteContext) {
         select: { id: true, status: true, projectId: true },
       });
 
-      await tx.projectMember.upsert({
-        where: { projectId_userId: { projectId: invitation.projectId, userId: user.id } },
-        update: { email: normalizeAuthEmail(user.email), name: user.name || user.email, role: invitation.role },
-        create: {
-          projectId: invitation.projectId,
-          userId: user.id,
-          name: user.name || user.email,
-          email: normalizeAuthEmail(user.email),
-          role: invitation.role,
-        },
+      // Adding a member with an email leaves an unlinked placeholder row for it.
+      // Link that row (keeping the owner's name and assignments) instead of
+      // creating a second member for the same person.
+      const placeholder = await tx.projectMember.findFirst({
+        where: { projectId: invitation.projectId, email: invitation.invitedEmail, userId: null },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
       });
+      const linkedMember = placeholder
+        ? await tx.projectMember.findUnique({
+            where: { projectId_userId: { projectId: invitation.projectId, userId: user.id } },
+            select: { id: true },
+          })
+        : null;
+
+      if (placeholder && !linkedMember) {
+        await tx.projectMember.update({
+          where: { id: placeholder.id },
+          data: { userId: user.id, email: normalizeAuthEmail(user.email), role: invitation.role },
+        });
+      } else {
+        await tx.projectMember.upsert({
+          where: { projectId_userId: { projectId: invitation.projectId, userId: user.id } },
+          update: { email: normalizeAuthEmail(user.email), name: user.name || user.email, role: invitation.role },
+          create: {
+            projectId: invitation.projectId,
+            userId: user.id,
+            name: user.name || user.email,
+            email: normalizeAuthEmail(user.email),
+            role: invitation.role,
+          },
+        });
+      }
 
       return updatedInvitation;
     });

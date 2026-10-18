@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { getProjectAccessForUser, projectAccessWhereForProject } from "@/lib/project-access";
+import { OWNER_INVITATION_SELECT } from "@/lib/project-invitations";
 import { deleteProjectChatAttachments } from "@/lib/project-chat-storage";
 
 
@@ -59,7 +60,7 @@ export async function GET(_req: Request, context: RouteContext) {
         invitations: {
           where: { status: "PENDING" },
           orderBy: { createdAt: "desc" },
-          select: { id: true, invitedEmail: true, status: true, createdAt: true, invitedUser: { select: { id: true, name: true, email: true } } },
+          select: OWNER_INVITATION_SELECT,
         },
         comments: {
           orderBy: { createdAt: "asc" },

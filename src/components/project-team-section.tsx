@@ -30,9 +30,9 @@ type PendingInvitation = {
   invitedEmail: string;
   status: "PENDING" | "ACCEPTED" | "DECLINED";
   createdAt: string;
-  invitedUser?: { name: string | null; email: string } | null;
   role: Role;
 };
+type EmailDelivery = { status: "disabled" | "sent" | "failed"; message: string };
 
 type ProjectTeamSectionProps = {
   projectId: string;
@@ -71,6 +71,10 @@ export function ProjectTeamSection({
 
   const workloadById = useMemo(() => new Map(workloadRows), [workloadRows]);
   const acceptedCollaborators = members.filter((member) => member.userId);
+  const pendingInviteEmails = useMemo(
+    () => new Set(invitations.map((invitation) => invitation.invitedEmail)),
+    [invitations],
+  );
 
   async function addMember(e: FormEvent) {
     e.preventDefault();
@@ -79,16 +83,36 @@ export function ProjectTeamSection({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, email, role }),
     });
-    if (!res.ok)
+    const data = (await res.json().catch(() => null)) as {
+      member?: Omit<Member, "userId" | "notes">;
+      invitation?: PendingInvitation | null;
+      email?: EmailDelivery | null;
+      error?: string;
+    } | null;
+    if (!res.ok || !data?.member) {
+      setInviteMessage("");
       return setError(
-        "Could not add member. Check the name, email, and role, then try again.",
+        data?.error ||
+          "Could not add member. Check the name, email, and role, then try again.",
       );
-    const member = (await res.json()) as Omit<Member, "notes">;
-    setMembers((prev) => [...prev, { ...member, notes: [] }]);
+    }
+    const { member, invitation } = data;
+    // New members are never linked to an account until they accept.
+    setMembers((prev) => [...prev, { ...member, userId: null, notes: [] }]);
+    if (invitation) setInvitations((prev) => [invitation, ...prev]);
     setName("");
     setEmail("");
     setRole("EDITOR");
     setError("");
+    const delivery =
+      data.email?.status === "sent"
+        ? ""
+        : " No email went out, so they will see it on their Projects page after signing in with that address.";
+    setInviteMessage(
+      invitation
+        ? `Invitation sent to ${invitation.invitedEmail}. ${member.name} gets access after accepting it.${delivery}`
+        : "",
+    );
   }
 
   async function inviteUser(e: FormEvent) {
@@ -102,7 +126,7 @@ export function ProjectTeamSection({
       | PendingInvitation
       | {
           invitation?: PendingInvitation;
-          email?: { status: "disabled" | "sent" | "failed"; message: string };
+          email?: EmailDelivery;
           message?: string;
           error?: string;
         }
@@ -204,9 +228,10 @@ export function ProjectTeamSection({
         {isOwner ? (
           <>
             <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
-              You are the project owner. You can invite registered users, add
-              planning-only members, remove non-owner members, and keep member
-              notes.
+              You are the project owner. You can invite collaborators by email,
+              add members for planning (adding an email also sends them an
+              invitation), remove non-owner members, and keep member notes.
+              Nobody gets access until they accept an invitation.
             </div>
             <form
               onSubmit={inviteUser}
@@ -214,7 +239,7 @@ export function ProjectTeamSection({
             >
               <div>
                 <label className="mb-1 block text-sm font-medium">
-                  Invite registered user by email
+                  Invite collaborator by email
                 </label>
                 <input
                   value={inviteEmail}
@@ -252,7 +277,7 @@ export function ProjectTeamSection({
               <input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email (optional)"
+                placeholder="Email (optional, sends an invitation)"
                 className="rounded-xl border px-3 py-2"
               />
               <select
@@ -280,7 +305,7 @@ export function ProjectTeamSection({
             <h3 className="text-sm font-semibold">Pending invitations</h3>
             {invitations.length === 0 ? (
               <p className="mt-1 text-sm text-zinc-500">
-                No pending invitations. Invite a registered teammate above when
+                No pending invitations. Invite a teammate by email above when
                 you are ready to collaborate.
               </p>
             ) : (
@@ -292,8 +317,9 @@ export function ProjectTeamSection({
                   >
                     <span>{invitation.invitedEmail} <span className="text-xs text-zinc-500">({invitation.role})</span></span>
                     <span className="text-xs text-zinc-500">
-                      Pending since{" "}
-                      {new Date(invitation.createdAt).toLocaleDateString()}
+                      Invitation sent{" "}
+                      {new Date(invitation.createdAt).toLocaleDateString()} •
+                      Waiting for acceptance
                     </span>
                   </li>
                 ))}
@@ -338,7 +364,11 @@ export function ProjectTeamSection({
                   {m.email ? <span>• {m.email}</span> : null}
                   {m.userId ? (
                     <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                      Account linked
+                      Has access
+                    </span>
+                  ) : m.email && pendingInviteEmails.has(m.email) ? (
+                    <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                      Waiting for acceptance
                     </span>
                   ) : null}
                   <span className="ml-auto text-xs text-zinc-600">
