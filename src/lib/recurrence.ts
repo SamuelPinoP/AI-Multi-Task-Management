@@ -1,3 +1,5 @@
+import { toEventStorageTime } from "@/lib/event-time";
+
 export const RECURRENCE_VALUES = [
   "NONE",
   "DAILY",
@@ -45,11 +47,20 @@ function addByRecurrence(date: Date, recurrence: RecurrenceValue) {
   return next;
 }
 
+/**
+ * Expands recurring events into the occurrences between `localRangeStart` and
+ * `localRangeEnd`. The bounds are local dates (like a calendar's first and last
+ * cell); event times are stored as wall-clock values (see `@/lib/event-time`),
+ * so the bounds are converted to that form before comparing.
+ */
 export function expandRecurringEventsForRange<T extends RecurringEventBase>(
   events: T[],
-  rangeStart: Date,
-  rangeEnd: Date
+  localRangeStart: Date,
+  localRangeEnd: Date
 ): T[] {
+  const rangeStart = toEventStorageTime(localRangeStart);
+  const rangeEnd = toEventStorageTime(localRangeEnd);
+
   return events.flatMap((event) => {
     const recurrence = normalizeRecurrence(event.recurrence);
     if (recurrence === "NONE") {

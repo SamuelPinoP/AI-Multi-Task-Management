@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { expandRecurringEventsForRange, normalizeRecurrence } from "@/lib/recurrence";
+import { eventWallTime, formatEventTime } from "@/lib/event-time";
 
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
@@ -26,10 +27,6 @@ function formatDayKey(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(new Date(value));
 }
 
 export function ProjectCalendar({ projectColor, events }: ProjectCalendarProps) {
@@ -82,7 +79,7 @@ export function ProjectCalendar({ projectColor, events }: ProjectCalendarProps) 
 
   const eventsByDay = useMemo(() => {
     return expandedEvents.reduce<Record<string, ProjectCalendarEvent[]>>((acc, event) => {
-      const key = formatDayKey(new Date(event.startTime));
+      const key = formatDayKey(eventWallTime(event.startTime));
       if (!acc[key]) acc[key] = [];
       acc[key].push(event);
       return acc;
@@ -170,8 +167,8 @@ export function ProjectCalendar({ projectColor, events }: ProjectCalendarProps) 
                   <p className="font-medium">{event.title}</p>
                 </div>
                 <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                  {event.hasStartTime ? formatTime(event.startTime) : "Time not specified"}
-                  {event.endTime && event.hasEndTime ? ` - ${formatTime(event.endTime)}` : ""}
+                  {event.hasStartTime ? formatEventTime(event.startTime) : "Time not specified"}
+                  {event.endTime && event.hasEndTime ? ` - ${formatEventTime(event.endTime)}` : ""}
                 </p>
               </article>
             ))}

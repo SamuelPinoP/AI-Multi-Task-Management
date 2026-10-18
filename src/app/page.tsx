@@ -8,6 +8,7 @@ import {
   isPublicSignupEnabled,
 } from "@/lib/auth";
 import { expandRecurringEventsForRange } from "@/lib/recurrence";
+import { eventWallTime, toEventStorageTime } from "@/lib/event-time";
 import { projectAccessWhere } from "@/lib/project-access";
 import { formatTaskDueDate, getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
 
@@ -455,7 +456,7 @@ export default async function DashboardPage() {
     prisma.event.findMany({
       where: {
         ...getAccessibleEventWhere(user.id),
-        startTime: { gte: todayStart },
+        startTime: { gte: toEventStorageTime(todayStart) },
       },
       orderBy: { startTime: "asc" },
       include: { project: { select: { name: true, color: true } } },
@@ -532,8 +533,8 @@ export default async function DashboardPage() {
   )
     .map((event) => ({
       ...event,
-      startTime: new Date(event.startTime),
-      endTime: event.endTime ? new Date(event.endTime) : null,
+      startTime: eventWallTime(event.startTime),
+      endTime: event.endTime ? eventWallTime(event.endTime) : null,
     }))
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
 

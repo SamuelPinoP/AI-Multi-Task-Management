@@ -8,7 +8,8 @@ import {
   normalizeRecurrence,
 } from "@/lib/recurrence";
 import { uiButtonClass, uiCardClass } from "@/components/ui";
-import { getLocalDateOnly } from "@/lib/task-date-buckets";
+import { formatTaskDueDate, getLocalDateOnly } from "@/lib/task-date-buckets";
+import { eventWallTime, formatEventDateTime } from "@/lib/event-time";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
@@ -75,11 +76,10 @@ function getRoadmapBucket(
   return "LATER";
 }
 
-function formatDateLabel(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+function formatDateLabel(item: RoadmapItem) {
+  return item.kind === "EVENT"
+    ? formatEventDateTime(item.when)
+    : formatTaskDueDate(item.when);
 }
 
 export default function RoadmapPage() {
@@ -176,7 +176,7 @@ export default function RoadmapPage() {
       kind: "EVENT",
       title: event.title,
       when: event.startTime,
-      timeMs: new Date(event.startTime).getTime(),
+      timeMs: eventWallTime(event.startTime).getTime(),
       recurrence: event.recurrence,
       project: event.project ?? null,
       eventId: event.sourceEventId ?? event.id,
@@ -220,7 +220,7 @@ export default function RoadmapPage() {
     const today = sectionedItems.TODAY.length;
     const thisWeek = sectionedItems.THIS_WEEK.length;
     const upcomingEvents = eventItems.filter(
-      (item) => new Date(item.when) >= getLocalDayStart(new Date()),
+      (item) => eventWallTime(item.when) >= getLocalDayStart(new Date()),
     ).length;
     return { overdue, today, thisWeek, upcomingEvents };
   }, [sectionedItems, eventItems]);
@@ -348,7 +348,7 @@ export default function RoadmapPage() {
                           <div>
                             <p className="font-medium">{item.title}</p>
                             <p className="text-sm text-zinc-600 dark:text-zinc-300">
-                              {formatDateLabel(item.when)}
+                              {formatDateLabel(item)}
                             </p>
                           </div>
                           <div className="flex flex-wrap items-center gap-2 text-xs">
