@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { getProjectAccess } from "@/lib/project-access";
+import { parseByteRange } from "@/lib/http-range";
 import {
   isPreviewableDocxAttachment,
   projectChatDocxPreviewResponse,
@@ -63,13 +64,37 @@ export async function GET(req: Request, context: RouteContext) {
       return NextResponse.redirect(storedFile.url, { status: 307 });
     }
 
+    const headers: Record<string, string> = {
+      "Content-Type": storedFile.contentType,
+      "Content-Disposition": projectChatAttachmentContentDisposition(attachmentName, disposition),
+      "X-Content-Type-Options": "nosniff",
+    };
+
+    // Local files arrive as one buffer: answer Range requests so videos can
+    // seek (Safari won't play video at all without them).
+    if (storedFile.body instanceof Uint8Array) {
+      const body = storedFile.body;
+      const size = body.byteLength;
+      headers["Accept-Ranges"] = "bytes";
+      const range = parseByteRange(req.headers.get("range"), size);
+      if (range === "unsatisfiable") {
+        return new Response(null, { status: 416, headers: { ...headers, "Content-Range": `bytes */${size}` } });
+      }
+      if (range) {
+        return new Response(body.subarray(range.start, range.end + 1) as Uint8Array<ArrayBuffer>, {
+          status: 206,
+          headers: {
+            ...headers,
+            "Content-Length": String(range.end - range.start + 1),
+            "Content-Range": `bytes ${range.start}-${range.end}/${size}`,
+          },
+        });
+      }
+      return new Response(body, { headers: { ...headers, "Content-Length": String(size) } });
+    }
+
     return new Response(storedFile.body, {
-      headers: {
-        "Content-Type": storedFile.contentType,
-        "Content-Length": String(attachment.fileSize),
-        "Content-Disposition": projectChatAttachmentContentDisposition(attachmentName, disposition),
-        "X-Content-Type-Options": "nosniff",
-      },
+      headers: { ...headers, "Content-Length": String(attachment.fileSize) },
     });
   } catch (error) {
     console.error(

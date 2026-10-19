@@ -12,11 +12,10 @@
     "validate:deploy-env": "node scripts/validate-deployment-env.mjs",
     "test:storage": "node --conditions react-server --import tsx --test src/lib/project-chat-*.test.ts",
     "verify:storage": "node --conditions react-server --import tsx scripts/verify-s3-storage.ts",
-    "test:unit": "node --import tsx --test src/lib/event-time.test.ts src/lib/safe-redirect.test.ts src/lib/project-chat-quota.test.ts",
+    "test:unit": "node --import tsx --test src/lib/event-time.test.ts src/lib/safe-redirect.test.ts src/lib/project-chat-quota.test.ts src/lib/project-chat-attachment-display.test.ts src/lib/http-range.test.ts",
     "typecheck": "tsc --noEmit",
     "test:e2e": "node scripts/run-playwright-e2e.mjs",
     "test:e2e:headed": "node scripts/run-playwright-e2e.mjs --headed"
-
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.864.0",
@@ -27,6 +26,7 @@
     "dotenv": "^17.4.2",
     "mammoth": "^1.12.1",
     "next": "16.2.4",
+    "pdfjs-dist": "^6.4.299",
     "pg": "^8.20.0",
     "prisma": "^7.8.0",
     "react": "19.2.4",
