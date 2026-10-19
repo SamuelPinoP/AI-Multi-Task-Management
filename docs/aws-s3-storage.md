@@ -10,6 +10,18 @@ On AWS, prefer an IAM role and omit static credentials so the SDK default creden
 
 S3 video uploads remain private and use collision-resistant keys under `project-chat/` (or the configured prefix). The application authorizes the user and project, creates a short-lived pending upload row, returns a presigned S3 PUT URL to the browser, and records the attachment only after confirming the object with `HeadObject`. Downloads are authorized by the application before it returns a short-lived presigned GET redirect. Deletion accepts only database-loaded keys inside that prefix. The application does not need `ListBucket`, public ACLs, CloudFront, Lambda, or any other AWS service.
 
+## Storage cap
+
+Some S3-compatible providers, such as Cloudflare R2, have no spending cap, so the application limits what it stores with `aws-s3` itself:
+
+- `PROJECT_CHAT_S3_QUOTA_BYTES` caps all users together (default 8 GB, under R2's 10 GB free tier).
+- `PROJECT_CHAT_USER_QUOTA_BYTES` caps each user (default 500 MB).
+- `PROJECT_CHAT_GUEST_UPLOADS_ENABLED` must be `"true"` for guest users to upload anything (default `"false"`).
+
+Usage is the sum of `fileSize` for saved `AWS_S3` attachments plus every pending direct upload row. The check runs before an upload URL is issued and before a multipart request stores files, and refuses with HTTP 413 when the new files would pass either limit. Upload URLs are issued under a Postgres advisory lock, so parallel requests can't each claim the same free space. Each presigned PUT signs `content-length`, so the browser can only upload the number of bytes that were counted.
+
+Pending upload rows keep counting after they expire, because the browser may already have put the object. One hour after expiry, the next upload request deletes the object and then the row. If the delete fails, the row stays and keeps counting until a later request removes it.
+
 ## Existing attachment migration
 
 The provider-identity migration backfills historical attachments from the metadata contract that existed before S3 support: `/uploads/project-chat/...` URLs are local and HTTP(S) URLs are Vercel Blob. Their existing `fileName` becomes the stable `storageKey`. Historical rows are never assigned to AWS. The migration deliberately aborts on any other URL or empty key rather than guessing.
@@ -50,7 +62,7 @@ Do these steps manually; the repository does not create or deploy AWS resources.
 ]
 ```
 
-4. Add a lifecycle expiration rule only if the product's retention policy permits automatic deletion. Direct uploads that complete in S3 but fail before comment persistence can leave unattached objects; until a cleanup job exists, periodically inspect and remove disposable test objects under the project-chat prefix.
+4. Add a lifecycle expiration rule only if the product's retention policy permits automatic deletion. Direct uploads that complete in S3 but are never attached to a comment are deleted by the application about an hour after their upload URL expires (see Storage cap).
 5. Create an IAM role/user dedicated to this application. Replace both placeholders below and attach only this object policy:
 
 ```json

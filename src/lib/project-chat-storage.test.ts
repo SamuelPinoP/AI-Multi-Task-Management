@@ -6,6 +6,7 @@ import {
   configuredUploadProviders,
   createProjectChatAttachmentUploadPlan,
   deleteProjectChatAttachments,
+  projectChatS3UploadBytes,
   projectChatStorageTestHooks,
   readProjectChatAttachment,
   saveProjectChatAttachments,
@@ -90,9 +91,40 @@ test("prepares browser-direct S3 upload plans for S3-routed videos", async () =>
   assert.equal(putCommand.input.Bucket, "private-test-bucket");
   assert.match(String(putCommand.input.Key), /^project-chat\/[0-9a-f-]+-clip\.mp4$/);
   assert.equal(putCommand.input.ContentType, "video/mp4");
+  assert.equal(putCommand.input.ContentLength, 5);
   assert.equal(plan.uploadUrl, "https://signed.example/upload");
   assert.deepEqual(plan.uploadHeaders, { "Content-Type": "video/mp4" });
   assert.equal(plan.storedAttachment.storageProvider, "AWS_S3");
+});
+
+test("presigned upload URLs only accept the declared number of bytes", async () => {
+  configureHybrid();
+  // Static fake credentials keep the real presigner offline.
+  process.env.AWS_ACCESS_KEY_ID = "AKIAEXAMPLE";
+  process.env.AWS_SECRET_ACCESS_KEY = "example-secret";
+  process.env.AWS_S3_ENDPOINT = "https://account.r2.cloudflarestorage.com";
+
+  const plan = await createProjectChatAttachmentUploadPlan({ name: "clip.mp4", type: "video/mp4", size: 1234 });
+  if (plan.strategy !== "direct-s3") throw new Error("expected direct S3 plan");
+  const signedHeaders = new URL(plan.uploadUrl).searchParams.get("X-Amz-SignedHeaders")?.split(";") ?? [];
+  assert.ok(signedHeaders.includes("content-length"), `signed headers: ${signedHeaders.join(";")}`);
+});
+
+test("projectChatS3UploadBytes counts only files routed to S3", () => {
+  configureHybrid();
+  const files = [
+    { name: "clip.mp4", size: 300 },
+    { name: "notes.pdf", size: 20 },
+    { name: "intro.mov", size: 100 },
+  ];
+  assert.equal(projectChatS3UploadBytes(files), 400);
+
+  process.env.PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER = "aws-s3";
+  assert.equal(projectChatS3UploadBytes(files), 420);
+
+  process.env.PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER = "local";
+  process.env.PROJECT_CHAT_VIDEO_STORAGE_PROVIDER = "local";
+  assert.equal(projectChatS3UploadBytes(files), 0);
 });
 
 test("hybrid upload stores Vercel provider identity for ordinary files", async () => {
