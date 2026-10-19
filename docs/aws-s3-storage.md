@@ -8,7 +8,19 @@ When either target is S3, also set `AWS_REGION` and `AWS_S3_BUCKET_NAME`. `PROJE
 
 On AWS, prefer an IAM role and omit static credentials so the SDK default credential chain is used. On Vercel, add `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` as encrypted server-side Environment Variables for the appropriate environments; never prefix them with `NEXT_PUBLIC_`, paste them into source control, or expose them to the browser. Redeploy after changing environment variables.
 
-S3 video uploads remain private and use collision-resistant keys under `project-chat/` (or the configured prefix). The application authorizes the user and project, creates a short-lived pending upload row, returns a presigned S3 PUT URL to the browser, and records the attachment only after confirming the object with `HeadObject`. Downloads are authorized by the application before it returns a short-lived presigned GET redirect. Deletion accepts only database-loaded keys inside that prefix. The application does not need `ListBucket`, public ACLs, CloudFront, Lambda, or any other AWS service.
+S3 video uploads remain private and use collision-resistant keys under `project-chat/` (or the configured prefix). The application authorizes the user and project, creates a short-lived pending upload row, returns a presigned S3 PUT URL to the browser, and records the attachment only after confirming the object with `HeadObject`. Downloads are authorized by the application before it returns a short-lived presigned GET redirect. The S3 client adds only the checksums an operation requires (`requestChecksumCalculation` and `responseChecksumValidation` are `WHEN_REQUIRED`). With the SDK defaults, a presigned PUT URL would carry a CRC32 of the still-empty body (`x-amz-checksum-crc32=AAAAAA==`), and storage could reject the real file as a checksum mismatch. Deletion accepts only database-loaded keys inside that prefix. The application does not need `ListBucket`, public ACLs, CloudFront, Lambda, or any other AWS service.
+
+## Storage cap
+
+Some S3-compatible providers, such as Cloudflare R2, have no spending cap, so the application limits what it stores with `aws-s3` itself:
+
+- `PROJECT_CHAT_S3_QUOTA_BYTES` caps all users together (default 8 GB, under R2's 10 GB free tier).
+- `PROJECT_CHAT_USER_QUOTA_BYTES` caps each user (default 500 MB).
+- `PROJECT_CHAT_GUEST_UPLOADS_ENABLED` must be `"true"` for guest users to upload anything (default `"false"`).
+
+Usage is the sum of `fileSize` for saved `AWS_S3` attachments plus every pending direct upload row. The check runs before an upload URL is issued and before a multipart request stores files, and refuses with HTTP 413 when the new files would pass either limit. Upload URLs are issued under a Postgres advisory lock, so parallel requests can't each claim the same free space. Each presigned PUT signs `content-length`, so the browser can only upload the number of bytes that were counted.
+
+Pending upload rows keep counting after they expire, because the browser may already have put the object. One hour after expiry, the next upload request deletes the object and then the row. If the delete fails, the row stays and keeps counting until a later request removes it.
 
 ## Existing attachment migration
 
@@ -50,7 +62,7 @@ Do these steps manually; the repository does not create or deploy AWS resources.
 ]
 ```
 
-4. Add a lifecycle expiration rule only if the product's retention policy permits automatic deletion. Direct uploads that complete in S3 but fail before comment persistence can leave unattached objects; until a cleanup job exists, periodically inspect and remove disposable test objects under the project-chat prefix.
+4. Add a lifecycle expiration rule only if the product's retention policy permits automatic deletion. Direct uploads that complete in S3 but are never attached to a comment are deleted by the application about an hour after their upload URL expires (see Storage cap).
 5. Create an IAM role/user dedicated to this application. Replace both placeholders below and attach only this object policy:
 
 ```json
@@ -69,7 +81,13 @@ Do these steps manually; the repository does not create or deploy AWS resources.
 
 No bucket listing permission is required. Keep the bucket policy private and restrict credentials to the deployment that needs them.
 
-6. Configure the environment values from `.env.example`. For local testing, use a non-production bucket and narrowly scoped temporary credentials, run `npm run dev`, upload/download/delete a disposable attachment, then remove it. Automated storage tests use mocks: `npm run test:storage` does **not** verify live AWS access.
+6. Configure the environment values from `.env.example`. For local testing, use a non-production bucket and narrowly scoped temporary credentials, run `npm run dev`, upload/download/delete a disposable attachment, then remove it. Automated storage tests use mocks: `npm run test:storage` does **not** verify live AWS access. To check the live bucket without a browser, run `npm run verify:storage`. It uses the app's storage code to upload two tiny objects through presigned URLs and checks that the wrong size is refused. It also reads one object back, checks CORS for `APP_BASE_URL`, and deletes both objects. It prints only HTTP statuses, never keys or URLs. To keep production keys out of `.env`, put the storage variables in a separate ignored file such as `.env.r2` and run:
+
+```bash
+DOTENV_CONFIG_PATH=.env.r2 npm run verify:storage
+```
+
+In PowerShell, set `$env:DOTENV_CONFIG_PATH=".env.r2"` first.
 7. Before production, run `npm run validate:deploy-env`, `npm run test:storage`, `npm run lint`, `npm run typecheck`, and `npm run build`.
 
 ## Security notes

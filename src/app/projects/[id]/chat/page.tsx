@@ -4,6 +4,7 @@ import { ProjectChatWorkspace } from "@/components/project-chat-workspace";
 import { prisma } from "@/lib/prisma";
 import { requirePageUser } from "@/lib/auth";
 import { getProjectAccessForUser, projectAccessWhereForProject } from "@/lib/project-access";
+import { PROJECT_CHAT_GUEST_UPLOADS_MESSAGE, projectChatGuestUploadsEnabled } from "@/lib/project-chat-quota";
 
 
 type ProjectChatPageProps = {
@@ -52,6 +53,7 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
           projectId={project.id}
           currentUser={{ name: user.name, email: user.email }}
           readOnly={readOnly}
+          attachmentsDisabledMessage={user.isGuest && !projectChatGuestUploadsEnabled() ? PROJECT_CHAT_GUEST_UPLOADS_MESSAGE : undefined}
           initialComments={project.comments.map((comment) => ({
             id: comment.id,
             message: comment.message,

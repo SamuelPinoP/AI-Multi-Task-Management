@@ -183,6 +183,11 @@ function s3Config() {
       ...(process.env.AWS_S3_ENDPOINT?.trim() ? { endpoint: process.env.AWS_S3_ENDPOINT.trim() } : {}),
       ...(forcePathStyle ? { forcePathStyle: forcePathStyle === "true" } : {}),
       ...(accessKeyId && secretAccessKey ? { credentials: { accessKeyId, secretAccessKey } } : {}),
+      // By default the SDK puts a CRC32 of the still-empty body into presigned
+      // PUT URLs (x-amz-checksum-crc32=AAAAAA==), so storage can reject the real
+      // file as a checksum mismatch. Only add checksums an operation requires.
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
     }),
   };
 }
@@ -368,6 +373,9 @@ export async function createProjectChatAttachmentUploadPlan(file: Pick<File, "na
       Bucket: config.bucket,
       Key: storedAttachment.storageKey,
       ContentType: storedAttachment.fileType,
+      // Signs content-length into the URL, so the browser can only PUT the
+      // number of bytes the storage quota reserved for this upload.
+      ContentLength: storedAttachment.fileSize,
     });
     const uploadUrl = await projectChatStorageTestHooks.presign(config.client, command, { expiresIn: config.expiresIn });
     return {
@@ -415,6 +423,16 @@ export async function saveProjectChatAttachments(files: File[]): Promise<Project
     const provider = selectUploadProvider({ mimeType: type, ...configured });
     return resolveProjectChatStorageProvider(provider).upload(file);
   }));
+}
+
+/** Total size of the files that the current routing would store in AWS S3. */
+export function projectChatS3UploadBytes(files: Pick<File, "name" | "size">[]) {
+  if (files.length === 0) return 0;
+  const configured = configuredUploadProviders();
+  return files.reduce((total, file) => {
+    const provider = selectUploadProvider({ mimeType: attachmentContentType(file), ...configured });
+    return provider === "aws-s3" ? total + file.size : total;
+  }, 0);
 }
 
 export async function readProjectChatAttachment(attachment: ProjectChatStoredAttachmentReference, options?: ProjectChatAttachmentReadOptions) {

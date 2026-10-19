@@ -43,9 +43,15 @@ Optional production variables:
 ```env
 PROJECT_CHAT_BLOB_PREFIX="project-chat"
 PROJECT_CHAT_S3_PREFIX="project-chat"
+PROJECT_CHAT_S3_QUOTA_BYTES="8589934592"
+PROJECT_CHAT_USER_QUOTA_BYTES="524288000"
+PROJECT_CHAT_GUEST_UPLOADS_ENABLED="false"
 APP_BASE_URL="https://your-production-app.example.com"
 EMAIL_PROVIDER="disabled"
 ```
+
+- `PROJECT_CHAT_S3_QUOTA_BYTES` (default 8 GB) and `PROJECT_CHAT_USER_QUOTA_BYTES` (default 500 MB) cap the bytes stored with `aws-s3`, in total and per user. Uploads past either limit are refused with HTTP 413. Keep the total under your storage provider's free tier; Cloudflare R2 has no spending cap of its own. Values must be whole numbers of bytes.
+- `PROJECT_CHAT_GUEST_UPLOADS_ENABLED` defaults to `"false"`, which blocks file uploads from guest users. It must be exactly `"true"` or `"false"` if present.
 
 Optional Resend invitation email variables:
 

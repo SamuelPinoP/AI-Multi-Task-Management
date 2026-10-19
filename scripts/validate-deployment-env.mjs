@@ -3,7 +3,10 @@ import "dotenv/config";
 
 const ALLOWED_STORAGE_PROVIDERS = new Set(["local", "vercel-blob", "aws-s3"]);
 const ALLOWED_EMAIL_PROVIDERS = new Set(["disabled", "resend"]);
-const BOOLEAN_ENV_NAMES = ["SIGNUP_ENABLED", "GUEST_LOGIN_ENABLED"];
+const BOOLEAN_ENV_NAMES = ["SIGNUP_ENABLED", "GUEST_LOGIN_ENABLED", "PROJECT_CHAT_GUEST_UPLOADS_ENABLED"];
+const BYTE_LIMIT_ENV_NAMES = ["PROJECT_CHAT_S3_QUOTA_BYTES", "PROJECT_CHAT_USER_QUOTA_BYTES"];
+// Cloudflare R2's free tier is 10 GB-month. Compare against decimal GB, the smaller reading.
+const R2_FREE_TIER_BYTES = 10 * 1000 ** 3;
 
 function cleanEnvValue(name) {
   const value = process.env[name];
@@ -97,6 +100,20 @@ if (emailProvider !== undefined && !ALLOWED_EMAIL_PROVIDERS.has(emailProvider)) 
   if (!emailFrom) {
     errors.push('Missing EMAIL_FROM for EMAIL_PROVIDER="resend". Add a verified sender address as a server-side environment variable.');
   }
+}
+
+const byteLimits = {};
+for (const name of BYTE_LIMIT_ENV_NAMES) {
+  const value = cleanEnvValue(name);
+  if (!value) continue;
+  if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))) {
+    errors.push(`Invalid ${name}. Use a whole number of bytes, for example "8589934592" for 8 GB.`);
+  } else {
+    byteLimits[name] = Number(value);
+  }
+}
+if (byteLimits.PROJECT_CHAT_S3_QUOTA_BYTES > R2_FREE_TIER_BYTES) {
+  warnings.push("PROJECT_CHAT_S3_QUOTA_BYTES is above Cloudflare R2's 10 GB free tier. Uploads past 10 GB may be billed.");
 }
 
 for (const name of BOOLEAN_ENV_NAMES) {

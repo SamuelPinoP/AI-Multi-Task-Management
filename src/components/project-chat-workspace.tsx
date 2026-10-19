@@ -222,11 +222,14 @@ export function ProjectChatWorkspace({
   initialComments,
   currentUser,
   readOnly = false,
+  attachmentsDisabledMessage,
 }: {
   projectId: string;
   initialComments: ProjectComment[];
   currentUser: CurrentUser;
   readOnly?: boolean;
+  /** Shown instead of accepting files when this user can't upload. */
+  attachmentsDisabledMessage?: string;
 }) {
   const [comments, setComments] = useState(initialComments);
   const [message, setMessage] = useState("");
@@ -252,6 +255,11 @@ export function ProjectChatWorkspace({
   function addFiles(fileList: FileList | File[]) {
     const nextFiles = Array.from(fileList).filter((file) => file.size > 0);
     if (nextFiles.length === 0) return;
+
+    if (attachmentsDisabledMessage) {
+      setError(attachmentsDisabledMessage);
+      return;
+    }
 
     const availableSlots = MAX_FILES_PER_MESSAGE - selectedAttachments.length;
     if (availableSlots <= 0) {
@@ -862,7 +870,10 @@ export function ProjectChatWorkspace({
                 <button
                   type="button"
                   className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-start rounded-xl bg-white text-zinc-600 shadow-sm ring-1 ring-zinc-200 transition hover:-translate-y-0.5 hover:text-zinc-950 hover:ring-zinc-300 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:text-zinc-50 dark:hover:ring-zinc-700 sm:h-auto sm:min-h-9"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => {
+                    if (attachmentsDisabledMessage) setError(attachmentsDisabledMessage);
+                    else fileInputRef.current?.click();
+                  }}
                   disabled={isSubmitting}
                   aria-label="Attach files"
                   title="Attach files"

@@ -6,9 +6,18 @@ import { getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } 
 import {
   confirmProjectChatDirectUploadedAttachment,
   isProjectChatStorageConfigError,
+  projectChatS3UploadBytes,
   uploadAndPersistProjectChatAttachments,
   type ProjectChatStoredAttachment,
 } from "@/lib/project-chat-storage";
+import {
+  assertProjectChatGuestUploadsAllowed,
+  assertProjectChatS3Quota,
+  isProjectChatQuotaConfigError,
+  isProjectChatQuotaError,
+  lockProjectChatQuota,
+  projectChatQuotaConfig,
+} from "@/lib/project-chat-quota";
 import {
   attachmentSizeLimit,
   formatAttachmentSize,
@@ -164,6 +173,15 @@ export async function POST(req: Request, context: RouteContext) {
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
+    // Prepared uploads were counted when their upload URLs were issued; only
+    // files sent in this request add new bytes to S3.
+    const quotaConfig = files.length > 0 || preparedAttachmentIds.length > 0 ? projectChatQuotaConfig() : null;
+    if (quotaConfig) assertProjectChatGuestUploadsAllowed(user, quotaConfig);
+    const incomingS3Bytes = projectChatS3UploadBytes(files);
+    if (quotaConfig && incomingS3Bytes > 0) {
+      await assertProjectChatS3Quota(prisma, { userId: user.id, incomingBytes: incomingS3Bytes, config: quotaConfig });
+    }
+
     const preparedAttachments = await confirmedPreparedAttachments({
       projectId: project.id,
       userId: user.id,
@@ -173,6 +191,12 @@ export async function POST(req: Request, context: RouteContext) {
     const comment = await uploadAndPersistProjectChatAttachments(
       files,
       (storedAttachments) => prisma.$transaction(async (tx) => {
+        if (quotaConfig && incomingS3Bytes > 0) {
+          // Check again under the lock: a parallel request may have used the
+          // space while these files uploaded. Failing here deletes them again.
+          await lockProjectChatQuota(tx);
+          await assertProjectChatS3Quota(tx, { userId: user.id, incomingBytes: incomingS3Bytes, config: quotaConfig });
+        }
         const createdComment = await tx.projectComment.create({
           data: {
             projectId: project.id,
@@ -219,11 +243,14 @@ export async function POST(req: Request, context: RouteContext) {
       { status: 201 },
     );
   } catch (error) {
+    if (isProjectChatQuotaError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("POST /api/projects/[id]/comments error:", error);
     if (error instanceof ProjectChatCommentRequestError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
-    if (isProjectChatStorageConfigError(error)) {
+    if (isProjectChatStorageConfigError(error) || isProjectChatQuotaConfigError(error)) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
