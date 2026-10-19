@@ -33,6 +33,12 @@ the final development default.
 - `vercel-blob` uses `BLOB_READ_WRITE_TOKEN` and optional `PROJECT_CHAT_BLOB_PREFIX`.
 - `aws-s3` uses a private S3 bucket. AWS configuration is required only when one routing target selects S3; static access keys remain optional because the SDK default credential provider chain supports IAM roles.
 
+Files stored with `aws-s3` count against a storage cap: 8 GB in total
+(`PROJECT_CHAT_S3_QUOTA_BYTES`) and 500 MB per user
+(`PROJECT_CHAT_USER_QUOTA_BYTES`). Uploads that would pass either limit are
+refused with HTTP 413, and guests can't upload unless
+`PROJECT_CHAT_GUEST_UPLOADS_ENABLED="true"`.
+
 When videos route to S3, the browser uploads them directly with a short-lived presigned PUT URL so large video bodies do not pass through a Vercel Function. S3 downloads are authorized by the existing application route before it creates a short-lived presigned GET URL (10 minutes by default). An expiring URL limits the time a copied link can access the private object; it is not a permanent public URL. See [the AWS S3 storage guide](docs/aws-s3-storage.md) for setup, security, Vercel deployment, cleanup, CORS, and cost controls.
 
 Run storage tests with `npm run test:storage`. No test contacts AWS or needs real credentials.

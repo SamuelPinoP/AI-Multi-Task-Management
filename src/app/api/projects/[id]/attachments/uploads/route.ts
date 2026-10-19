@@ -4,8 +4,18 @@ import { requireApiUser } from "@/lib/auth";
 import { getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import {
   createProjectChatAttachmentUploadPlan,
+  deleteProjectChatAttachments,
   isProjectChatStorageConfigError,
 } from "@/lib/project-chat-storage";
+import {
+  assertProjectChatGuestUploadsAllowed,
+  assertProjectChatS3Quota,
+  cleanupExpiredProjectChatUploads,
+  isProjectChatQuotaConfigError,
+  isProjectChatQuotaError,
+  lockProjectChatQuota,
+  projectChatQuotaConfig,
+} from "@/lib/project-chat-quota";
 import {
   attachmentSizeLimit,
   formatAttachmentSize,
@@ -74,42 +84,70 @@ export async function POST(req: Request, context: RouteContext) {
     if (!access) return NextResponse.json({ error: "Project not found" }, { status: 404 });
     if (!canEditProjectContent(access)) return NextResponse.json(unauthorizedProjectResponse("upload attachments"), { status: 403 });
 
-    const plans = await Promise.all(files.map(async (file) => {
-      const plan = await createProjectChatAttachmentUploadPlan(file);
-      if (plan.strategy === "multipart") {
-        return {
-          clientId: file.clientId,
-          strategy: "multipart" as const,
-          provider: plan.provider,
-        };
+    const quotaConfig = projectChatQuotaConfig();
+    assertProjectChatGuestUploadsAllowed(user, quotaConfig);
+
+    // Signing is local, so nothing reaches storage until a URL is returned below.
+    const preparedFiles = await Promise.all(files.map(async (file) => ({
+      file,
+      plan: await createProjectChatAttachmentUploadPlan(file),
+    })));
+    const incomingBytes = preparedFiles.reduce(
+      (total, { plan }) => (plan.strategy === "direct-s3" ? total + plan.storedAttachment.fileSize : total),
+      0,
+    );
+
+    if (incomingBytes > 0) {
+      await cleanupExpiredProjectChatUploads({ db: prisma, deleteStoredObjects: deleteProjectChatAttachments }).catch((error) => {
+        console.error("project_chat_expired_upload_cleanup_failed", { errorName: error instanceof Error ? error.name : "UnknownError" });
+      });
+    }
+
+    const plans = await prisma.$transaction(async (tx) => {
+      if (incomingBytes > 0) {
+        await lockProjectChatQuota(tx);
+        await assertProjectChatS3Quota(tx, { userId: user.id, incomingBytes, config: quotaConfig });
       }
 
-      const expiresAt = new Date(Date.now() + plan.expiresIn * 1000);
-      const upload = await prisma.projectChatAttachmentUpload.create({
-        data: {
-          projectId,
-          userId: user.id,
-          ...plan.storedAttachment,
-          expiresAt,
-        },
-        select: { id: true },
-      });
+      return Promise.all(preparedFiles.map(async ({ file, plan }) => {
+        if (plan.strategy === "multipart") {
+          return {
+            clientId: file.clientId,
+            strategy: "multipart" as const,
+            provider: plan.provider,
+          };
+        }
 
-      return {
-        clientId: file.clientId,
-        strategy: "direct-s3" as const,
-        uploadId: upload.id,
-        uploadUrl: plan.uploadUrl,
-        uploadMethod: plan.uploadMethod,
-        uploadHeaders: plan.uploadHeaders,
-        expiresAt: expiresAt.toISOString(),
-      };
-    }));
+        const expiresAt = new Date(Date.now() + plan.expiresIn * 1000);
+        const upload = await tx.projectChatAttachmentUpload.create({
+          data: {
+            projectId,
+            userId: user.id,
+            ...plan.storedAttachment,
+            expiresAt,
+          },
+          select: { id: true },
+        });
+
+        return {
+          clientId: file.clientId,
+          strategy: "direct-s3" as const,
+          uploadId: upload.id,
+          uploadUrl: plan.uploadUrl,
+          uploadMethod: plan.uploadMethod,
+          uploadHeaders: plan.uploadHeaders,
+          expiresAt: expiresAt.toISOString(),
+        };
+      }));
+    });
 
     return NextResponse.json({ files: plans });
   } catch (error) {
+    if (isProjectChatQuotaError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("POST /api/projects/[id]/attachments/uploads error:", error);
-    if (isProjectChatStorageConfigError(error)) {
+    if (isProjectChatStorageConfigError(error) || isProjectChatQuotaConfigError(error)) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: "Failed to prepare attachment uploads" }, { status: 500 });
