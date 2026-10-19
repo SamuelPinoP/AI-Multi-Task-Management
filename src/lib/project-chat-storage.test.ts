@@ -110,6 +110,24 @@ test("presigned upload URLs only accept the declared number of bytes", async () 
   assert.ok(signedHeaders.includes("content-length"), `signed headers: ${signedHeaders.join(";")}`);
 });
 
+test("presigned URLs carry no SDK checksum of the empty request body", async () => {
+  configureHybrid();
+  // Static fake credentials keep the real presigner offline.
+  process.env.AWS_ACCESS_KEY_ID = "AKIAEXAMPLE";
+  process.env.AWS_SECRET_ACCESS_KEY = "example-secret";
+  process.env.AWS_S3_ENDPOINT = "https://account.r2.cloudflarestorage.com";
+
+  const plan = await createProjectChatAttachmentUploadPlan({ name: "clip.mp4", type: "video/mp4", size: 1234 });
+  if (plan.strategy !== "direct-s3") throw new Error("expected direct S3 plan");
+  const download = await readProjectChatAttachment(plan.storedAttachment);
+  if (download.kind !== "redirect") throw new Error("expected presigned download redirect");
+
+  for (const url of [plan.uploadUrl, download.url]) {
+    const checksumParams = [...new URL(url).searchParams.keys()].filter((key) => key.toLowerCase().includes("checksum"));
+    assert.deepEqual(checksumParams, [], url.split("?")[0]);
+  }
+});
+
 test("projectChatS3UploadBytes counts only files routed to S3", () => {
   configureHybrid();
   const files = [

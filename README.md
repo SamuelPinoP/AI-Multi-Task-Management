@@ -42,6 +42,12 @@ refused with HTTP 413, and guests can't upload unless
 When videos route to S3, the browser uploads them directly with a short-lived presigned PUT URL so large video bodies do not pass through a Vercel Function. S3 downloads are authorized by the existing application route before it creates a short-lived presigned GET URL (10 minutes by default). An expiring URL limits the time a copied link can access the private object; it is not a permanent public URL. See [the AWS S3 storage guide](docs/aws-s3-storage.md) for setup, security, Vercel deployment, cleanup, CORS, and cost controls.
 
 Run storage tests with `npm run test:storage`. No test contacts AWS or needs real credentials.
+
+To check a real bucket (AWS S3 or Cloudflare R2), run `npm run verify:storage`
+with that bucket's storage variables. It uploads two tiny objects through
+presigned URLs, checks that an upload of the wrong size is refused, reads one
+back, checks CORS for `APP_BASE_URL`, and deletes both. Point
+`DOTENV_CONFIG_PATH` at a separate env file to keep production keys out of `.env`.
 - PostgreSQL database modeled with Prisma migrations
 - Production deployment on Vercel with Neon PostgreSQL and server-side environment validation
 - Smart Daily Planner that analyzes overdue tasks, due-today work, upcoming events, active projects, recent notes, and project follow-up signals without relying on a paid external AI service
