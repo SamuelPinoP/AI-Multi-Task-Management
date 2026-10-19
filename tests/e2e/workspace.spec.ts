@@ -19,6 +19,26 @@ async function continueAsGuest(page: Page) {
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 }
 
+// Guests can't upload chat attachments, so upload tests use a fresh account.
+async function signUpAndLogIn(page: Page) {
+  const id = randomUUID().slice(0, 8);
+  const email = `e2e-${id}@example.test`;
+  const password = `e2e-${randomUUID()}`;
+
+  await page.goto("/signup");
+  await page.getByLabel("Name").fill(`E2E user ${id}`);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByLabel("Confirm password").fill(password);
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page).toHaveURL(/\/login\?error=created/);
+
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+}
+
 test("guest can create and search a note", async ({ page }) => {
   const noteTitle = uniqueName("E2E note");
   const noteBody = "Created by Playwright to prove the notes flow works.";
@@ -39,13 +59,13 @@ test("guest can create and search a note", async ({ page }) => {
   await expect(page.getByRole("heading", { name: noteTitle })).toBeVisible();
 });
 
-test("guest can create a project and upload a local video attachment", async ({
+test("member can create a project and upload a local video attachment", async ({
   page,
 }) => {
   const projectName = uniqueName("E2E upload project");
   const chatMessage = uniqueName("Local video upload proof");
 
-  await continueAsGuest(page);
+  await signUpAndLogIn(page);
   await page.getByRole("link", { name: "Projects" }).click();
 
   await expect(
