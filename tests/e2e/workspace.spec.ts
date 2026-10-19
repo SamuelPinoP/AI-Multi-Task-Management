@@ -212,8 +212,12 @@ test("chat shows several attachments and opens them in the viewer", async ({
   await expect(
     messageCard.getByRole("button", { name: "Open sample-tasks.csv" }),
   ).toBeVisible();
-  // The page count comes from pdf.js reading the stored PDF.
+  // The page count comes from pdf.js reading the stored PDF, which starts when
+  // the card nears the visible part of the chat.
   // The first run compiles pdf.js, which can take a while in dev mode.
+  await messageCard
+    .getByRole("button", { name: "Open sample-brief.pdf" })
+    .scrollIntoViewIfNeeded();
   await expect(messageCard.getByText(/PDF document .* 2 pages/)).toBeVisible({
     timeout: 30_000,
   });

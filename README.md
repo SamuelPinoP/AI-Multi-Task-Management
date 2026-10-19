@@ -83,7 +83,15 @@ The first job applies all migrations to an empty PostgreSQL database, fails if
 `prisma/schema.prisma` and the migrations disagree, then runs lint (no warnings
 allowed), typecheck, unit and storage tests, `npm audit` for high or critical
 advisories in production dependencies, and a build. The second job runs the
-Playwright tests against the production build with the server in UTC.
+Playwright tests against the production build with the server in UTC, on a
+desktop browser and a phone-sized one.
+
+Every CI run records a video, a trace and screenshots of each Playwright test
+and keeps the HTML report as a run artifact for 14 days; the run summary links
+to it. Unzip it and open `playwright-report/index.html`, or open a `trace.zip`
+at https://trace.playwright.dev. To also publish the latest report from `main`
+on GitHub Pages, enable Pages with "GitHub Actions" as the source and set the
+repository variable `PUBLISH_PLAYWRIGHT_REPORT` to `true`.
 
 ## Tech Stack
 
