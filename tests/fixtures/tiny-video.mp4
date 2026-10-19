@@ -1,0 +1,1 @@
+Tiny local-only Playwright fixture. The app validates attachment routing by extension and size; this file is never uploaded to AWS during E2E tests.

@@ -53,6 +53,27 @@ back, checks CORS for `APP_BASE_URL`, and deletes both. Point
 - Smart Daily Planner that analyzes overdue tasks, due-today work, upcoming events, active projects, recent notes, and project follow-up signals without relying on a paid external AI service
 - Dark mode and responsive UI
 
+## Testing
+
+```bash
+npm run typecheck
+npm run lint
+npm run test:storage
+npm run test:e2e
+```
+
+`npm run test:storage` runs Node tests for project-chat attachment validation,
+provider selection, S3 upload planning, provider-aware downloads/deletes, and
+failure cleanup. These tests mock storage behavior and do not contact AWS.
+
+`npm run test:e2e` starts a local Next.js dev server on port `3100` by default
+and runs Playwright browser tests against it. The E2E runner forces
+`PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER=local` and
+`PROJECT_CHAT_VIDEO_STORAGE_PROVIDER=local`, so E2E attachment tests exercise
+the real upload UI without using Vercel Blob or AWS S3. Set `E2E_PORT` to use a
+different local port. If you already have a server running, set
+`PLAYWRIGHT_BASE_URL` to test that server instead.
+
 ## Tech Stack
 
 - Frontend: Next.js App Router, React, TypeScript, Tailwind CSS

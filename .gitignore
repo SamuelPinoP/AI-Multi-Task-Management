@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/playwright-report
+/test-results
 
 # next.js
 /.next/
@@ -45,3 +47,7 @@ next-env.d.ts
 
 # Local uploaded files
 public/uploads/
+
+# Local generated output (PDFs, screenshots)
+/output/
+/tmp/
