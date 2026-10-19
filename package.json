@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "vercel-build": "npm run validate:deploy-env && prisma validate && prisma generate && prisma migrate deploy && next build",
+    "vercel-build": "npm run validate:deploy-env && prisma validate && prisma generate && node scripts/migrate-if-production.mjs && next build",
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
