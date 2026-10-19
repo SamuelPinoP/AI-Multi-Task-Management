@@ -72,7 +72,18 @@ and runs Playwright browser tests against it. The E2E runner forces
 `PROJECT_CHAT_VIDEO_STORAGE_PROVIDER=local`, so E2E attachment tests exercise
 the real upload UI without using Vercel Blob or AWS S3. Set `E2E_PORT` to use a
 different local port. If you already have a server running, set
-`PLAYWRIGHT_BASE_URL` to test that server instead.
+`PLAYWRIGHT_BASE_URL` to test that server instead. To test the production
+build, run `npm run build` and then `npm run test:e2e` with
+`E2E_SERVER_MODE=start`.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request.
+The first job applies all migrations to an empty PostgreSQL database, fails if
+`prisma/schema.prisma` and the migrations disagree, then runs lint (no warnings
+allowed), typecheck, unit and storage tests, `npm audit` for high or critical
+advisories in production dependencies, and a build. The second job runs the
+Playwright tests against the production build with the server in UTC.
 
 ## Tech Stack
 

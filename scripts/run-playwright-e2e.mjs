@@ -6,6 +6,9 @@ const root = process.cwd();
 const e2ePort = process.env.E2E_PORT || "3100";
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${e2ePort}`;
 const shouldStartServer = !process.env.PLAYWRIGHT_BASE_URL;
+// "start" serves the production build (run `npm run build` first); CI uses it
+// because a cold dev server compiles every route on first use.
+const serverMode = process.env.E2E_SERVER_MODE === "start" ? "start" : "dev";
 
 const e2eEnv = {
   ...process.env,
@@ -81,8 +84,7 @@ async function main() {
         process.execPath,
         [
           nextCli,
-          "dev",
-          "--webpack",
+          ...(serverMode === "start" ? ["start"] : ["dev", "--webpack"]),
           "--hostname",
           "localhost",
           "--port",
