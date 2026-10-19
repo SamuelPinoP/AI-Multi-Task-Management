@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { signUpAndLogIn, uniqueName } from "./helpers";
 
 const videoFixturePath = path.join(
   process.cwd(),
@@ -9,33 +9,9 @@ const videoFixturePath = path.join(
   "tiny-video.mp4",
 );
 
-function uniqueName(prefix: string) {
-  return `${prefix} ${randomUUID().slice(0, 8)}`;
-}
-
 async function continueAsGuest(page: Page) {
   await page.goto("/login");
   await page.getByRole("button", { name: /continue as guest/i }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-}
-
-// Guests can't upload chat attachments, so upload tests use a fresh account.
-async function signUpAndLogIn(page: Page) {
-  const id = randomUUID().slice(0, 8);
-  const email = `e2e-${id}@example.test`;
-  const password = `e2e-${randomUUID()}`;
-
-  await page.goto("/signup");
-  await page.getByLabel("Name").fill(`E2E user ${id}`);
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(password);
-  await page.getByLabel("Confirm password").fill(password);
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/login\?error=created/);
-
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Log in" }).click();
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 }
 
@@ -65,6 +41,7 @@ test("member can create a project and upload a local video attachment", async ({
   const projectName = uniqueName("E2E upload project");
   const chatMessage = uniqueName("Local video upload proof");
 
+  // Guests can't upload chat attachments, so this test uses a fresh account.
   await signUpAndLogIn(page);
   await page.getByRole("link", { name: "Projects" }).click();
 
