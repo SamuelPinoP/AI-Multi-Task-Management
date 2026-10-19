@@ -12,7 +12,9 @@
     "validate:deploy-env": "node scripts/validate-deployment-env.mjs",
     "test:storage": "node --conditions react-server --import tsx --test src/lib/project-chat-*.test.ts",
     "test:unit": "node --import tsx --test src/lib/event-time.test.ts src/lib/safe-redirect.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "node scripts/run-playwright-e2e.mjs",
+    "test:e2e:headed": "node scripts/run-playwright-e2e.mjs --headed"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.864.0",
@@ -30,6 +32,7 @@
     "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
