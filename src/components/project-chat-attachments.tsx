@@ -81,7 +81,15 @@ function posterSrc(src: string) {
   return `${src}#t=0.1`;
 }
 
-/** Sets `true` once the element has come near the viewport, then stays true. */
+function scrollParent(element: Element) {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if (overflowY === "auto" || overflowY === "scroll") return node;
+  }
+  return null;
+}
+
+/** Sets `true` once the element has come near the visible area, then stays true. */
 function useNearViewport<T extends Element>(ref: RefObject<T | null>) {
   const [near, setNear] = useState(false);
 
@@ -95,7 +103,9 @@ function useNearViewport<T extends Element>(ref: RefObject<T | null>) {
           observer.disconnect();
         }
       },
-      { rootMargin: "300px" },
+      // Observe within the chat's own scroller: the margin only applies to the
+      // root, so with the page viewport as root nothing would load early.
+      { root: scrollParent(element), rootMargin: "300px" },
     );
     observer.observe(element);
     return () => observer.disconnect();

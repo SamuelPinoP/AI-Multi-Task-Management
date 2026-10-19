@@ -87,12 +87,46 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run build
       - run: npm run test:e2e
-      - name: Keep the Playwright report when tests fail
+      # Every run keeps its report with a video, trace and screenshot of each test.
+      - name: Upload the Playwright report and recordings
+        id: report
         uses: actions/upload-artifact@v7
-        if: failure()
+        if: ${{ !cancelled() }}
         with:
           name: playwright-report-${{ github.run_number }}
           path: |
             playwright-report/
             test-results/
           retention-days: 14
+      - name: Link the report from the run summary
+        if: ${{ !cancelled() && steps.report.outputs.artifact-url }}
+        run: |
+          {
+            echo "### Playwright report"
+            echo ""
+            echo "[Download the report with videos and traces](${{ steps.report.outputs.artifact-url }}) (kept 14 days)."
+            echo "Unzip it and open \`playwright-report/index.html\`, or drop a \`trace.zip\` on https://trace.playwright.dev."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the report for GitHub Pages
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && vars.PUBLISH_PLAYWRIGHT_REPORT == 'true' }}
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: playwright-report/
+
+  # Optional: publishes the latest report from main to GitHub Pages. Off until
+  # Pages is enabled (source: GitHub Actions) and the repository variable
+  # PUBLISH_PLAYWRIGHT_REPORT is set to true.
+  publish-report:
+    name: Publish the latest Playwright report
+    needs: e2e
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && vars.PUBLISH_PLAYWRIGHT_REPORT == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5
