@@ -183,6 +183,11 @@ function s3Config() {
       ...(process.env.AWS_S3_ENDPOINT?.trim() ? { endpoint: process.env.AWS_S3_ENDPOINT.trim() } : {}),
       ...(forcePathStyle ? { forcePathStyle: forcePathStyle === "true" } : {}),
       ...(accessKeyId && secretAccessKey ? { credentials: { accessKeyId, secretAccessKey } } : {}),
+      // By default the SDK puts a CRC32 of the still-empty body into presigned
+      // PUT URLs (x-amz-checksum-crc32=AAAAAA==), so storage can reject the real
+      // file as a checksum mismatch. Only add checksums an operation requires.
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
     }),
   };
 }
