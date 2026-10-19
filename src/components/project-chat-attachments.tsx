@@ -586,11 +586,11 @@ export function AttachmentViewer({
         </div>
         {!item.pending ? (
           <>
-            <a href={item.src} target="_blank" rel="noopener noreferrer" className={viewerButtonClass} title="Open in a new tab">
+            <a href={item.src} target="_blank" rel="noopener noreferrer" className={viewerButtonClass} title="Open in a new tab" aria-label="Open in a new tab">
               <Icon path={EXTERNAL_PATH} />
               <span className="hidden sm:inline">Open</span>
             </a>
-            <a href={item.downloadUrl} download={attachment.originalName} className={viewerButtonClass} title="Download">
+            <a href={item.downloadUrl} download={attachment.originalName} className={viewerButtonClass} title="Download" aria-label={`Download ${attachment.originalName}`}>
               <Icon path={DOWNLOAD_PATH} />
               <span className="hidden sm:inline">Download</span>
             </a>
