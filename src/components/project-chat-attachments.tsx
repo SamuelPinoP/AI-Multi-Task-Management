@@ -715,7 +715,7 @@ function ViewerStage({ item }: { item: GalleryItem }) {
 function NoPreview({ item, message }: { item: GalleryItem; message?: string }) {
   const { attachment, kind } = item;
   return (
-    <div className="flex max-w-sm flex-col items-center gap-4 rounded-3xl bg-white/5 px-8 py-10 text-center ring-1 ring-white/10">
+    <div className="flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-white/5 px-8 py-10 text-center ring-1 ring-white/10">
       <FileBadge kind={kind} fileName={attachment.originalName} size="lg" />
       <div>
         <p className="break-all text-base font-semibold">{attachment.originalName}</p>

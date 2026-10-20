@@ -191,8 +191,8 @@ function LandingPage({
             ) : null}
           </div>
 
-          <div className="rounded-[2rem] border border-zinc-200 bg-white/85 p-5 shadow-2xl shadow-zinc-300/40 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/75 dark:shadow-none">
-            <div className="rounded-[1.5rem] border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-950/70">
+          <div className="rounded-2xl border border-zinc-200 bg-white/85 p-5 shadow-2xl shadow-zinc-300/40 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/75 dark:shadow-none">
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-950/70">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
@@ -228,7 +228,7 @@ function LandingPage({
           {landingFeatures.map((feature) => (
             <article
               key={feature.title}
-              className="rounded-3xl border border-zinc-200 bg-white/85 p-6 shadow-sm backdrop-blur transition hover:-translate-y-1 hover:shadow-lg dark:border-zinc-800 dark:bg-zinc-900/70"
+              className="rounded-2xl border border-zinc-200 bg-white/85 p-6 shadow-sm backdrop-blur transition hover:-translate-y-1 hover:shadow-lg dark:border-zinc-800 dark:bg-zinc-900/70"
             >
               <h2 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
                 {feature.title}

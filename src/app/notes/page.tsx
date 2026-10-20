@@ -480,7 +480,7 @@ export default function NotesPage() {
             <button
               type="button"
               onClick={() => void handleDoneWriting(note.id)}
-              className="rounded-full bg-zinc-950 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white dark:focus:ring-offset-zinc-950"
+              className="rounded-lg bg-accent px-4 py-1.5 text-xs font-semibold text-accent-ink shadow-sm transition-colors hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
             >
               Done
             </button>
@@ -576,7 +576,7 @@ export default function NotesPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="rounded-xl bg-black px-5 py-3 text-white transition hover:opacity-90 disabled:opacity-50"
+                className="rounded-xl px-5 py-3 bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-50"
               >
                 {loading ? "Creating..." : "Create Note"}
               </button>
@@ -613,7 +613,7 @@ export default function NotesPage() {
                 Loading notes...
               </p>
             ) : notes.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-zinc-300 bg-white/70 p-8 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
+              <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-8 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
                 <h3 className="text-lg font-semibold">No notes yet.</h3>
                 <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
                   Capture a meeting recap, class takeaway, research source, or
@@ -634,7 +634,7 @@ export default function NotesPage() {
                     <article
                       key={note.id}
                       id={`note-${note.id}`}
-                      className={`rounded-3xl border p-5 shadow-sm transition ${openedNoteId === note.id ? "border-blue-300 bg-blue-50/60 ring-2 ring-blue-200 dark:border-blue-800 dark:bg-blue-950/20 dark:ring-blue-900/60" : "border-zinc-200 bg-white/70 dark:border-zinc-800 dark:bg-zinc-950/40"}`}
+                      className={`rounded-2xl border p-5 shadow-sm transition ${openedNoteId === note.id ? "border-blue-300 bg-blue-50/60 ring-2 ring-blue-200 dark:border-blue-800 dark:bg-blue-950/20 dark:ring-blue-900/60" : "border-zinc-200 bg-white/70 dark:border-zinc-800 dark:bg-zinc-950/40"}`}
                     >
                       {isEditing ? (
                         renderEditor(note)
@@ -722,7 +722,7 @@ export default function NotesPage() {
                 × Close
               </button>
             </div>
-            <div className="rounded-[2rem] border border-zinc-200 bg-zinc-50/80 p-4 shadow-2xl shadow-zinc-300/30 dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none sm:p-7">
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50/80 p-4 shadow-2xl shadow-zinc-300/30 dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none sm:p-7">
               {renderEditor(activeNote, true)}
             </div>
           </div>

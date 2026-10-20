@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { ThemeInitScript, ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/toaster";
 import { getCurrentUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
@@ -18,10 +19,11 @@ export default async function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning className="h-full antialiased">
-      <body className="h-full flex flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+      <body className="h-full flex flex-col bg-canvas text-ink">
         <ThemeInitScript />
         <ThemeProvider>
           <AppShell currentUser={currentUser}>{children}</AppShell>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

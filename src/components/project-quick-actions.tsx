@@ -202,7 +202,7 @@ export function ProjectQuickActions({ projectId }: { projectId: string }) {
           />
           <button
             disabled={isSubmitting}
-            className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            className="rounded-xl px-4 py-2 text-sm bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-60"
           >
             {isSubmitting ? "Saving..." : "Create note"}
           </button>
@@ -253,7 +253,7 @@ export function ProjectQuickActions({ projectId }: { projectId: string }) {
           />
           <button
             disabled={isSubmitting}
-            className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60 md:col-span-2"
+            className="rounded-xl px-4 py-2 text-sm bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-60 md:col-span-2"
           >
             {isSubmitting ? "Saving..." : "Create task"}
           </button>
@@ -321,7 +321,7 @@ export function ProjectQuickActions({ projectId }: { projectId: string }) {
           </select>
           <button
             disabled={isSubmitting}
-            className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60 md:col-span-2"
+            className="rounded-xl px-4 py-2 text-sm bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-60 md:col-span-2"
           >
             {isSubmitting ? "Saving..." : "Create event"}
           </button>
