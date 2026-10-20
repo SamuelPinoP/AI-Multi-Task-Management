@@ -47,9 +47,9 @@ export default async function BoardPage({ searchParams }: BoardPageProps) {
   return (
     <div className="px-4 py-6 sm:px-6 lg:py-8">
       <div className="mx-auto max-w-7xl space-y-5">
-        <section className="rounded-[2rem] border border-zinc-200/80 bg-zinc-50/80 p-3 shadow-sm shadow-zinc-200/60 ring-1 ring-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/50 dark:shadow-none dark:ring-zinc-800/40">
+        <section className="rounded-2xl border border-zinc-200/80 bg-zinc-50/80 p-3 shadow-sm shadow-zinc-200/60 ring-1 ring-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/50 dark:shadow-none dark:ring-zinc-800/40">
           <nav
-            className="flex flex-col gap-3 rounded-[1.5rem] border border-zinc-200/80 bg-white/90 p-3 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-900/80 dark:shadow-none sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-3 rounded-2xl border border-zinc-200/80 bg-white/90 p-3 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-900/80 dark:shadow-none sm:flex-row sm:items-center sm:justify-between"
             aria-label="Board toolbar"
           >
             <div className="min-w-0 px-1 sm:px-2">
@@ -92,7 +92,7 @@ export default async function BoardPage({ searchParams }: BoardPageProps) {
           </nav>
         </section>
 
-        <section className="rounded-[2rem] border border-zinc-200/80 bg-white/70 p-3 shadow-sm shadow-zinc-200/60 ring-1 ring-white/80 dark:border-zinc-800 dark:bg-zinc-950/30 dark:shadow-none dark:ring-zinc-800/40 sm:p-4">
+        <section className="rounded-2xl border border-zinc-200/80 bg-white/70 p-3 shadow-sm shadow-zinc-200/60 ring-1 ring-white/80 dark:border-zinc-800 dark:bg-zinc-950/30 dark:shadow-none dark:ring-zinc-800/40 sm:p-4">
           {view === "tree" ? (
             <TreeBoard
               initialPages={treePages.map((page) => ({

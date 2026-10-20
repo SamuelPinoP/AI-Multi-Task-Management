@@ -127,7 +127,7 @@ export default async function LoginPage({
         </div>
 
         {guestLoginEnabled ? (
-          <aside className="rounded-3xl border border-zinc-200 bg-gradient-to-br from-zinc-950 to-zinc-800 p-6 text-white shadow-sm dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-950">
+          <aside className="rounded-2xl border border-zinc-200 bg-gradient-to-br from-zinc-950 to-zinc-800 p-6 text-white shadow-sm dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-950">
             <div className="flex h-full flex-col justify-between gap-8">
               <div className="space-y-3">
                 <span className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-medium ring-1 ring-white/15">
@@ -163,7 +163,7 @@ export default async function LoginPage({
             </div>
           </aside>
         ) : signupEnabled ? (
-          <aside className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 text-emerald-950 shadow-sm dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-100">
+          <aside className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-emerald-950 shadow-sm dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-100">
             <div className="flex h-full flex-col justify-between gap-8">
               <div className="space-y-3">
                 <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-100 dark:ring-emerald-800">
@@ -187,7 +187,7 @@ export default async function LoginPage({
             </div>
           </aside>
         ) : (
-          <aside className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-900 shadow-sm dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
+          <aside className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900 shadow-sm dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
             <div className="space-y-3">
               <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/40 dark:text-amber-100 dark:ring-amber-800">
                 Restricted access

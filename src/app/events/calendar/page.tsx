@@ -670,7 +670,7 @@ export default function EventsCalendarPage() {
                             {day.getDate()}
                           </span>
                           {itemCount > 0 && (
-                            <span className="rounded-full bg-black px-2 py-0.5 text-xs text-white">
+                            <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink">
                               {itemCount}
                             </span>
                           )}

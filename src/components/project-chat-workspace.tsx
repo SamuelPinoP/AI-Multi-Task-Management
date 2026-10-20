@@ -562,7 +562,7 @@ export function ProjectChatWorkspace({
 
   return (
     <>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-xl shadow-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl shadow-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
         {pinnedComments.length > 0 ? (
           <section
             className="bg-white/95 px-4 py-3 dark:bg-zinc-950 sm:px-6"
@@ -598,7 +598,7 @@ export function ProjectChatWorkspace({
         <div className="min-h-0 flex-1 overflow-y-auto bg-zinc-100/60 px-4 py-4 dark:bg-zinc-950 sm:px-6 lg:px-8">
           <div className="mx-auto flex max-w-5xl flex-col gap-4">
             {comments.length === 0 ? (
-              <div className="rounded-3xl bg-white/80 p-8 text-center shadow-sm ring-1 ring-zinc-200/70 dark:bg-zinc-900/70 dark:ring-zinc-800/70">
+              <div className="rounded-2xl bg-white/80 p-8 text-center shadow-sm ring-1 ring-zinc-200/70 dark:bg-zinc-900/70 dark:ring-zinc-800/70">
                 <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
                   Start the project conversation.
                 </p>
@@ -620,7 +620,7 @@ export function ProjectChatWorkspace({
                   <article
                     id={`comment-${comment.id}`}
                     key={comment.id}
-                    className={`rounded-3xl bg-white/95 p-4 text-sm shadow-sm shadow-zinc-200/60 ring-1 transition dark:bg-zinc-900/80 dark:shadow-none ${
+                    className={`rounded-2xl bg-white/95 p-4 text-sm shadow-sm shadow-zinc-200/60 ring-1 transition dark:bg-zinc-900/80 dark:shadow-none ${
                       isPending
                         ? "opacity-80 ring-zinc-300 dark:ring-zinc-700"
                         : comment.pinned
@@ -846,7 +846,7 @@ export function ProjectChatWorkspace({
                 </button>
 
                 <div
-                  className={`min-w-0 flex-1 rounded-3xl bg-zinc-50/80 ring-1 transition dark:bg-zinc-900/70 ${
+                  className={`min-w-0 flex-1 rounded-2xl bg-zinc-50/80 ring-1 transition dark:bg-zinc-900/70 ${
                     isDragging
                       ? "ring-4 ring-zinc-300 dark:ring-zinc-700"
                       : "ring-zinc-200 focus-within:ring-zinc-400 dark:ring-zinc-800 dark:focus-within:ring-zinc-600"
@@ -871,7 +871,7 @@ export function ProjectChatWorkspace({
                     }}
                     placeholder="Share an update, decision, blocker, or handoff..."
                     rows={1}
-                    className="min-h-9 w-full resize-none rounded-3xl border-0 bg-transparent px-4 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+                    className="min-h-9 w-full resize-none rounded-2xl border-0 bg-transparent px-4 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
                   />
                   {selectedAttachments.length > 0 ? (
                     <ComposerAttachmentTray

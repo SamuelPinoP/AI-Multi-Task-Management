@@ -74,7 +74,7 @@ function SidebarNavigation({ pathname }: { pathname: string }) {
   return (
     <aside className="hidden h-full w-80 shrink-0 p-4 lg:block xl:w-[22rem]">
       <nav
-        className="flex h-full flex-col gap-4 rounded-[2rem] border border-zinc-200/70 bg-white/55 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/45"
+        className="flex h-full flex-col gap-4 rounded-2xl border border-zinc-200/70 bg-white/55 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/45"
         aria-label="Main workspace navigation"
       >
         {workspaceLinks.map((link) => {
@@ -85,7 +85,7 @@ function SidebarNavigation({ pathname }: { pathname: string }) {
               key={link.href}
               href={link.href}
               aria-current={active ? "page" : undefined}
-              className={`group flex flex-1 items-center justify-center rounded-[1.75rem] border px-6 py-7 text-center text-2xl font-semibold tracking-tight transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-700 dark:focus-visible:outline-zinc-300 ${
+              className={`group flex flex-1 items-center justify-center rounded-2xl border px-6 py-7 text-center text-2xl font-semibold tracking-tight transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-700 dark:focus-visible:outline-zinc-300 ${
                 active
                   ? "border-zinc-300 bg-white text-zinc-950 shadow-sm shadow-zinc-200/70 ring-1 ring-zinc-300/70 dark:border-zinc-700 dark:bg-zinc-800/95 dark:text-white dark:shadow-none dark:ring-zinc-700/80"
                   : "border-zinc-200/70 bg-zinc-100/70 text-zinc-800 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950 dark:border-zinc-800/80 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/80 dark:hover:text-white"
