@@ -1,985 +1,348 @@
+import { ArrowRight, NotebookPen, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
-import { ProjectStatus, Recurrence, TaskStatus } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
-import {
-  getCurrentUser,
-  isGuestLoginEnabled,
-  isPublicSignupEnabled,
-} from "@/lib/auth";
-import { expandRecurringEventsForRange } from "@/lib/recurrence";
-import { eventWallTime, toEventStorageTime } from "@/lib/event-time";
-import { projectAccessWhere } from "@/lib/project-access";
-import { formatTaskDueDate, getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
-import { getUserNow } from "@/lib/user-time-server";
+import type { ReactNode } from "react";
+import { FocusList } from "@/components/home/focus-list";
+import { QUICK_ADD_INPUT_ID, QuickAdd } from "@/components/home/quick-add";
+import { Sparkline } from "@/components/home/sparkline";
+import { LandingPage } from "@/components/landing-page";
+import { uiButtonClass } from "@/components/ui";
+import { getCurrentUser, isGuestLoginEnabled, isPublicSignupEnabled } from "@/lib/auth";
+import { cn } from "@/lib/cn";
+import { eventWallTime, formatEventTime } from "@/lib/event-time";
+import { getHomeData, type HomeEvent, type HomeProjectHealth } from "@/lib/home-data";
+import { daysFrom, dueLabel, greetingFor, relativeTime, taskSummary } from "@/lib/home-summary";
+import { paletteColor, projectColor } from "@/lib/project-color";
+import { getUserNow, getUserTimeZone } from "@/lib/user-time-server";
 
-const REMINDER_LOOKAHEAD_DAYS = 7;
+const linkClass = "inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline";
 
-const analyticsAccentClasses = {
-  zinc: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200",
-  emerald:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
-  amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
-  red: "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300",
-  blue: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
-  violet:
-    "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300",
-} as const;
-
-const landingFeatures = [
-  {
-    title: "Notes",
-    description:
-      "Capture research notes, meeting takeaways, and project context, then connect them to projects when helpful.",
-  },
-  {
-    title: "Tasks",
-    description:
-      "Track priorities, due dates, recurrence, assignments, and status from a list or a visual board.",
-  },
-  {
-    title: "Projects",
-    description:
-      "Organize team workspaces with members, workload summaries, quick actions, calendars, and shared task context.",
-  },
-  {
-    title: "Team collaboration",
-    description:
-      "Invite registered collaborators, show owner/shared access clearly, and keep member notes and permissions understandable.",
-  },
-  {
-    title: "Project chat + attachments",
-    description:
-      "Discuss decisions and blockers in project chat, pin key messages, and attach files through local, Vercel Blob, or private AWS S3 storage.",
-  },
-  {
-    title: "Planner and Today",
-    description:
-      "Use focused Today, Planner, Roadmap, and Calendar views to understand what needs attention next.",
-  },
-];
-
-const demoFeatures = [
-  "Database-backed auth/session flow",
-  "Real project invitations and collaboration labels",
-  "Project chat with file attachments",
-  "Task board, Today, Planner, and Roadmap views",
-];
-
-type RecentShortcutItem = {
-  href: string;
-  label: "Continue last Project" | "Continue last Note";
-  color: string | null;
-};
-
-function normalizeShortcutColor(color: string | null | undefined) {
-  if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return "#3b82f6";
-  return color;
-}
-
-function RecentShortcutBookmark({ item }: { item: RecentShortcutItem }) {
-  const accent = normalizeShortcutColor(item.color);
-
+function Card({ title, aside, className, children }: { title: ReactNode; aside?: ReactNode; className?: string; children: ReactNode }) {
   return (
-    <Link
-      href={item.href}
-      aria-label={item.label}
-      className="group relative isolate flex min-h-11 w-full items-center overflow-hidden rounded-xl border border-zinc-200/75 bg-white/75 px-4 py-2.5 shadow-[0_8px_20px_rgba(15,23,42,0.045)] backdrop-blur-md transition duration-200 hover:-translate-y-0.5 hover:border-zinc-300/90 hover:shadow-[0_12px_26px_rgba(15,23,42,0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/70 focus-visible:ring-offset-2 dark:border-zinc-800/85 dark:bg-zinc-950/55 dark:shadow-[0_8px_22px_rgba(0,0,0,0.18)] dark:hover:border-zinc-700/90 dark:focus-visible:ring-zinc-500 dark:focus-visible:ring-offset-zinc-950"
-      style={{
-        backgroundImage: `linear-gradient(105deg, ${accent}14 0%, transparent 46%), linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0.52))`,
-      }}
-    >
-      <span
-        aria-hidden="true"
-        className="absolute inset-y-2 left-2 w-0.5 rounded-full opacity-55 transition duration-200 group-hover:inset-y-1.5 group-hover:opacity-75"
-        style={{ backgroundColor: accent }}
-      />
-      <span
-        aria-hidden="true"
-        className="absolute -right-8 top-1/2 h-16 w-16 -translate-y-1/2 rounded-full opacity-[0.07] blur-2xl transition duration-200 group-hover:opacity-[0.12]"
-        style={{ backgroundColor: accent }}
-      />
-      <span className="min-w-0 pl-4 text-sm font-semibold leading-5 tracking-[-0.01em] text-zinc-800 transition duration-200 group-hover:text-zinc-950 dark:text-zinc-100 dark:group-hover:text-white">
-        {item.label}
-      </span>
-    </Link>
+    <section className={cn("rounded-xl border border-line bg-surface p-4", className)}>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold">{title}</h2>
+        {aside ? <span className="text-xs text-muted">{aside}</span> : null}
+      </div>
+      {children}
+    </section>
   );
 }
 
-function DashboardRecentShortcuts({
-  shortcuts,
-}: {
-  shortcuts: RecentShortcutItem[];
-}) {
-  if (shortcuts.length === 0) return null;
-
+function EmptyState({ children, action }: { children: ReactNode; action: ReactNode }) {
   return (
-    <div className="flex w-full flex-col gap-2 sm:w-72 md:w-80">
-      {shortcuts.map((shortcut) => (
-        <RecentShortcutBookmark key={shortcut.label} item={shortcut} />
-      ))}
+    <div className="grid justify-items-start gap-1.5 py-2">
+      <p className="text-sm text-muted">{children}</p>
+      {action}
     </div>
   );
 }
 
-function LandingPage({
-  signupEnabled,
-  guestLoginEnabled,
-}: {
-  signupEnabled: boolean;
-  guestLoginEnabled: boolean;
-}) {
-  const accessNote = getLandingAccessNote(signupEnabled, guestLoginEnabled);
-
-  return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.14),transparent_32%)] px-4 py-10 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-12">
-        <section className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-          <div className="space-y-7">
-            <div className="inline-flex rounded-full border border-zinc-200 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-600 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300">
-              AI-Multi Task-Management
-            </div>
-            <div className="space-y-4">
-              <h1 className="max-w-4xl text-4xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-6xl">
-                A polished workspace for notes, tasks, projects, and team
-                execution.
-              </h1>
-              <p className="max-w-2xl text-lg leading-8 text-zinc-600 dark:text-zinc-300">
-                Plan class projects, capstones, and team work in one place:
-                capture notes, manage tasks, coordinate projects, chat with
-                collaborators, attach files, and focus each day with Today and
-                Planner views.
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Link
-                href="/login"
-                className={`${uiPrimaryButtonClass} justify-center px-5 py-3`}
-              >
-                Log in
-              </Link>
-              {signupEnabled ? (
-                <Link
-                  href="/signup"
-                  className="inline-flex items-center justify-center rounded-xl border border-zinc-300 bg-white/90 px-5 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:-translate-y-0.5 hover:bg-white dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-50 dark:hover:bg-zinc-900"
-                >
-                  Sign up
-                </Link>
-              ) : (
-                <span className="inline-flex items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-medium text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
-                  Signup is restricted on this deployment
-                </span>
-              )}
-              {guestLoginEnabled ? (
-                <form action="/api/auth/guest" method="post">
-                  <button
-                    type="submit"
-                    className="inline-flex w-full items-center justify-center rounded-xl border border-zinc-300 bg-white/80 px-5 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:-translate-y-0.5 hover:bg-white dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-50 dark:hover:bg-zinc-900 sm:w-auto"
-                  >
-                    Continue as guest
-                  </button>
-                </form>
-              ) : (
-                <span className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white/70 px-5 py-3 text-sm font-medium text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-300">
-                  Guest access is disabled
-                </span>
-              )}
-            </div>
-            {accessNote ? (
-              <p className="max-w-2xl rounded-2xl border border-zinc-200 bg-white/75 px-4 py-3 text-sm text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
-                {accessNote}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="rounded-2xl border border-zinc-200 bg-white/85 p-5 shadow-2xl shadow-zinc-300/40 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/75 dark:shadow-none">
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-950/70">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
-                    Demo dashboard
-                  </p>
-                  <h2 className="mt-1 text-2xl font-semibold">
-                    What reviewers can evaluate quickly
-                  </h2>
-                </div>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                  Demo-ready
-                </span>
-              </div>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                {demoFeatures.map((feature) => (
-                  <div
-                    key={feature}
-                    className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm font-medium text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
-                  >
-                    {feature}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-5 rounded-2xl bg-zinc-900 p-4 text-sm leading-6 text-zinc-200 dark:bg-zinc-100 dark:text-zinc-800">
-                Built with Next.js, React, TypeScript, Prisma, and PostgreSQL,
-                with deployment-ready docs and Vercel-friendly storage support.
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {landingFeatures.map((feature) => (
-            <article
-              key={feature.title}
-              className="rounded-2xl border border-zinc-200 bg-white/85 p-6 shadow-sm backdrop-blur transition hover:-translate-y-1 hover:shadow-lg dark:border-zinc-800 dark:bg-zinc-900/70"
-            >
-              <h2 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-                {feature.title}
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                {feature.description}
-              </p>
-            </article>
-          ))}
-        </section>
-      </div>
-    </main>
-  );
-}
-
-function getLandingAccessNote(signupEnabled: boolean, guestLoginEnabled: boolean) {
-  if (signupEnabled && !guestLoginEnabled) {
-    return "Guest access is disabled. Create an account or sign in to review the app.";
-  }
-
-  if (!signupEnabled && guestLoginEnabled) {
-    return "Public signup is disabled. Continue as a guest, or sign in with a provided account.";
-  }
-
-  if (!signupEnabled && !guestLoginEnabled) {
-    return "This deployment is restricted to known accounts. Sign in with credentials provided by the workspace owner.";
-  }
-
-  return null;
-}
-
-type TaskReminderGroup = "OVERDUE" | "DUE_TODAY" | "UPCOMING";
-type EventReminderGroup = "TODAY" | "UPCOMING";
-
-function getAccessibleTaskWhere(userId: string) {
-  return {
-    deletedAt: null,
-    OR: [{ userId }, { project: projectAccessWhere(userId) }],
-  };
-}
-
-function getAccessibleEventWhere(userId: string) {
-  return {
-    deletedAt: null,
-    OR: [{ userId }, { project: projectAccessWhere(userId) }],
-  };
-}
-
-function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
-}
-
-function getLocalDayStart(date: Date) {
-  return getLocalDateOnly(date);
-}
-
-function getTaskReminderGroup(
-  taskDueDate: Date,
-  now: Date,
-): TaskReminderGroup | null {
-  const bucket = getTaskDateBucket(taskDueDate, now);
-  if (bucket !== "UPCOMING") return bucket;
-
-  const dueStart = getLocalDayStart(taskDueDate);
-  const todayStart = getLocalDayStart(now);
-  const dayDiff = Math.round(
-    (dueStart.getTime() - todayStart.getTime()) / 86400000,
-  );
-
-  return dayDiff <= REMINDER_LOOKAHEAD_DAYS ? "UPCOMING" : null;
-}
-
-function getEventReminderGroup(
-  startTime: Date,
-  now: Date,
-): EventReminderGroup | null {
-  const startOfToday = getLocalDayStart(now);
-  const startOfTomorrow = new Date(startOfToday);
-  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
-  const upcomingBoundary = new Date(startOfToday);
-  upcomingBoundary.setDate(
-    upcomingBoundary.getDate() + REMINDER_LOOKAHEAD_DAYS + 1,
-  );
-
-  if (startTime >= startOfToday && startTime < startOfTomorrow) return "TODAY";
-  if (startTime >= startOfTomorrow && startTime < upcomingBoundary)
-    return "UPCOMING";
-  return null;
-}
-
-function ProjectBadge({
-  project,
-}: {
-  project: { name: string; color: string | null } | null;
-}) {
-  if (!project) return null;
-
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
-      style={
-        project.color
-          ? { borderColor: project.color, color: project.color }
-          : undefined
-      }
-    >
-      {project.name}
-    </span>
-  );
-}
-
-function AnalyticsCard({
-  label,
-  value,
-  description,
-  accent,
-}: {
+function Stat({ label, value, tone, note, series, seriesLabel }: {
   label: string;
   value: number;
-  description: string;
-  accent: keyof typeof analyticsAccentClasses;
+  tone?: "danger";
+  note?: ReactNode;
+  series: number[];
+  seriesLabel: string;
 }) {
   return (
-    <article className="rounded-2xl border border-zinc-200 bg-white/95 p-5 shadow-sm shadow-zinc-200/60 transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-            {label}
-          </p>
-          <p className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-            {value}
-          </p>
-        </div>
-        <span
-          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${analyticsAccentClasses[accent]}`}
-        >
-          Live
-        </span>
+    <div role="group" aria-label={`${label}: ${value}`} className="flex items-center justify-between gap-2 rounded-xl border border-line bg-surface px-3 py-2.5">
+      <div className="min-w-0">
+        <p className="truncate text-xs text-muted">{label}</p>
+        <p className="flex flex-wrap items-baseline gap-x-1.5">
+          <span className={cn("text-xl font-bold tabular-nums", tone === "danger" && value > 0 && "text-danger")}>{value}</span>
+          {note}
+        </p>
       </div>
-      <p className="mt-3 text-sm leading-5 text-zinc-600 dark:text-zinc-300">
-        {description}
-      </p>
-    </article>
+      <span className="hidden sm:block">
+        <Sparkline values={series} label={seriesLabel} />
+      </span>
+    </div>
   );
 }
 
-export default async function DashboardPage() {
-  const user = await getCurrentUser();
+function eventRange(event: HomeEvent) {
+  if (!event.hasStartTime) return "All day";
+  const start = formatEventTime(event.startTime);
+  return event.endTime ? `${start} to ${formatEventTime(event.endTime)}` : start;
+}
 
+function TodayTimeline({ events, now }: { events: HomeEvent[]; now: Date }) {
+  const nowLabel = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(now);
+  // The "now" line goes before the first timed event that hasn't started yet.
+  const nextIndex = events.findIndex((event) => event.hasStartTime && eventWallTime(event.startTime) > now);
+  const nowAt = nextIndex === -1 ? events.length : nextIndex;
+  const nowLine = (
+    <li key="now" className="col-span-2 my-0.5 flex items-center gap-1.5 text-[10.5px] font-bold text-project-3" aria-label={`Now, ${nowLabel}`}>
+      <span aria-hidden="true">NOW {nowLabel}</span>
+      <span aria-hidden="true" className="h-px flex-1 bg-project-3" />
+    </li>
+  );
+
+  return (
+    <ol className="grid grid-cols-[3.25rem_1fr] gap-x-2.5">
+      {events.flatMap((event, index) => {
+        const color = event.project ? projectColor(event.project) : "var(--accent)";
+        const row = [
+          <li key={event.id} className="contents">
+            <span className="pt-2 text-xs tabular-nums text-muted">
+              {event.hasStartTime ? formatEventTime(event.startTime).replace(/\s?[AP]M$/, "") : "All day"}
+            </span>
+            <Link
+              href={`/events?event=${event.sourceId}`}
+              className="my-1 block rounded-r-lg border-l-[3px] px-2.5 py-1.5 transition-opacity hover:opacity-80"
+              style={{ borderColor: color, backgroundColor: `color-mix(in srgb, ${color} 10%, var(--surface))` }}
+            >
+              <span className="block truncate text-[13px] font-semibold">{event.title}</span>
+              <span className="block truncate text-xs text-muted">
+                {eventRange(event)}
+                {event.location ? ` · ${event.location}` : ""}
+              </span>
+            </Link>
+          </li>,
+        ];
+        return index === nowAt ? [nowLine, ...row] : row;
+      })}
+      {nowAt === events.length ? nowLine : null}
+    </ol>
+  );
+}
+
+const healthStyles: Record<HomeProjectHealth["status"], { label: string; className: string }> = {
+  ON_TRACK: { label: "On track", className: "bg-success-soft text-success" },
+  AT_RISK: { label: "At risk", className: "bg-danger-soft text-danger" },
+  STALE: { label: "Stale", className: "bg-caution-soft text-caution" },
+};
+
+function healthDetail(project: HomeProjectHealth) {
+  if (project.status === "STALE") return `No updates in ${project.idleDays} days`;
+  const done = `${project.percentDone}% done`;
+  if (project.status === "AT_RISK") return `${done} · ${project.overdueTasks} overdue`;
+  if (!project.totalTasks) return "No tasks yet";
+  return `${done} · ${project.doneTasks} of ${project.totalTasks} tasks`;
+}
+
+export default async function HomePage() {
+  const user = await getCurrentUser();
   if (!user) {
-    return (
-      <LandingPage
-        signupEnabled={isPublicSignupEnabled()}
-        guestLoginEnabled={isGuestLoginEnabled()}
-      />
-    );
+    return <LandingPage signupEnabled={isPublicSignupEnabled()} guestLoginEnabled={isGuestLoginEnabled()} />;
   }
 
   // The user's wall clock, so "today" follows their time zone, not the server's (#125).
-  const now = await getUserNow();
-  const todayStart = getLocalDayStart(now);
-  const reminderRangeEnd = new Date(todayStart);
-  reminderRangeEnd.setDate(
-    reminderRangeEnd.getDate() + REMINDER_LOOKAHEAD_DAYS + 1,
-  );
+  const [now, timeZone] = await Promise.all([getUserNow(), getUserTimeZone()]);
+  const home = await getHomeData(user.id, now, timeZone);
+  const realNow = new Date();
+  const { stats } = home;
 
-  const [
-    recentNotes,
-    recentActivities,
-    upcomingTasks,
-    reminderTasks,
-    reminderEvents,
-    totalTasks,
-    activeTasks,
-    completedTasks,
-    totalEvents,
-    activeProjects,
-    recentShortcut,
-    lastModifiedNote,
-    fallbackProject,
-  ] = await Promise.all([
-    prisma.note.findMany({
-      where: { userId: user.id, deletedAt: null },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-    }),
-    prisma.activity.findMany({
-      where: {
-        OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }],
-      },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-      include: {
-        project: {
-          select: { name: true, color: true },
-        },
-      },
-    }),
-    prisma.task.findMany({
-      where: {
-        ...getAccessibleTaskWhere(user.id),
-        dueDate: { not: null },
-        status: { not: TaskStatus.DONE },
-      },
-      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-      take: 5,
-      include: { project: { select: { name: true, color: true } } },
-    }),
-    prisma.task.findMany({
-      where: {
-        ...getAccessibleTaskWhere(user.id),
-        dueDate: { not: null },
-        status: { not: TaskStatus.DONE },
-      },
-      orderBy: [
-        { dueDate: "asc" },
-        { priority: "desc" },
-        { createdAt: "desc" },
-      ],
-      include: { project: { select: { name: true, color: true } } },
-    }),
-    prisma.event.findMany({
-      where: {
-        AND: [
-          getAccessibleEventWhere(user.id),
-          { startTime: { lt: toEventStorageTime(reminderRangeEnd) } },
-          // Repeating events that started before today can still happen in
-          // the reminder window; expandRecurringEventsForRange picks the dates.
-          {
-            OR: [
-              { startTime: { gte: toEventStorageTime(todayStart) } },
-              { recurrence: { not: Recurrence.NONE } },
-            ],
-          },
-        ],
-      },
-      orderBy: { startTime: "asc" },
-      include: { project: { select: { name: true, color: true } } },
-    }),
-    prisma.task.count({ where: getAccessibleTaskWhere(user.id) }),
-    prisma.task.count({
-      where: {
-        ...getAccessibleTaskWhere(user.id),
-        status: { not: TaskStatus.DONE },
-      },
-    }),
-    prisma.task.count({
-      where: { ...getAccessibleTaskWhere(user.id), status: TaskStatus.DONE },
-    }),
-    prisma.event.count({ where: getAccessibleEventWhere(user.id) }),
-    prisma.project.count({
-      where: { ...projectAccessWhere(user.id), status: ProjectStatus.ACTIVE },
-    }),
-    prisma.recentShortcut.findUnique({
-      where: { userId: user.id },
-      include: {
-        project: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            status: true,
-            userId: true,
-            members: { where: { userId: user.id }, select: { userId: true } },
-          },
-        },
-      },
-    }),
-    prisma.note.findFirst({
-      where: {
-        deletedAt: null,
-        OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }],
-      },
-      orderBy: { updatedAt: "desc" },
-      select: { id: true, title: true, project: { select: { color: true } } },
-    }),
-    prisma.project.findFirst({
-      where: { ...projectAccessWhere(user.id), status: ProjectStatus.ACTIVE },
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      select: { id: true, color: true },
-    }),
-  ]);
-
-  const overdueTasks = reminderTasks.filter(
-    (task) =>
-      task.dueDate && getTaskReminderGroup(task.dueDate, now) === "OVERDUE",
-  );
-  const dueTodayTasks = reminderTasks.filter(
-    (task) =>
-      task.dueDate && getTaskReminderGroup(task.dueDate, now) === "DUE_TODAY",
-  );
-  const upcomingReminderTasks = reminderTasks.filter(
-    (task) =>
-      task.dueDate && getTaskReminderGroup(task.dueDate, now) === "UPCOMING",
-  );
-
-  const recurringCandidates = reminderEvents.map((event) => ({
-    ...event,
-    startTime: event.startTime.toISOString(),
-    endTime: event.endTime?.toISOString() ?? null,
-    recurrence: event.recurrence ?? Recurrence.NONE,
-    sourceEventId: event.id,
+  const firstName = user.isGuest ? null : (user.name || user.email).trim().split(/[\s@]/)[0];
+  const greeting = `${greetingFor(now.getHours())}${firstName ? `, ${firstName}` : ""}`;
+  const dateLine = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" }).format(now);
+  const nextEvent = home.todayEvents.find((event) => event.hasStartTime && eventWallTime(event.startTime) > now);
+  const eventSummary = nextEvent
+    ? ` Your next event, ${nextEvent.title}, starts at ${formatEventTime(nextEvent.startTime)}.`
+    : home.todayEvents.length
+      ? " No more events today."
+      : "";
+  const weekDelta = stats.doneThisWeek - stats.doneLastWeek;
+  const focusRows = home.focus.map((task) => ({
+    ...task,
+    dueLabel: task.dueDate ? dueLabel(task.dueDate, now) : null,
+    late: Boolean(task.dueDate && daysFrom(task.dueDate, now) < 0),
   }));
-
-  const expandedReminderEvents = expandRecurringEventsForRange(
-    recurringCandidates,
-    todayStart,
-    reminderRangeEnd,
-  )
-    .map((event) => ({
-      ...event,
-      startTime: eventWallTime(event.startTime),
-      endTime: event.endTime ? eventWallTime(event.endTime) : null,
-    }))
-    .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
-
-  const todayEvents = expandedReminderEvents.filter(
-    (event) => getEventReminderGroup(event.startTime, now) === "TODAY",
-  );
-  const upcomingEvents = expandedReminderEvents.filter(
-    (event) => getEventReminderGroup(event.startTime, now) === "UPCOMING",
-  );
-
-  const accessibleProjectActivity = recentActivities.filter(
-    (activity) => activity.projectId !== null,
-  );
-
-  const recentProject =
-    recentShortcut?.project &&
-    recentShortcut.project.status === ProjectStatus.ACTIVE &&
-    (recentShortcut.project.userId === user.id ||
-      recentShortcut.project.members.length > 0)
-      ? recentShortcut.project
-      : fallbackProject;
-  const recentNote = lastModifiedNote;
-  const shortcuts: RecentShortcutItem[] = [
-    ...(recentProject
-      ? [
-          {
-            href: `/projects/${recentProject.id}`,
-            label: "Continue last Project" as const,
-            color: recentProject.color,
-          },
-        ]
-      : []),
-    ...(recentNote
-      ? [
-          {
-            href: `/notes?openNote=${recentNote.id}&focus=content`,
-            label: "Continue last Note" as const,
-            color: recentNote.project?.color ?? null,
-          },
-        ]
-      : []),
-  ];
-
-  const dashboardAnalytics = [
-    {
-      label: "Total tasks",
-      value: totalTasks,
-      description:
-        "All non-trashed tasks you own or can access through shared projects.",
-      accent: "zinc" as const,
-    },
-    {
-      label: "Completed tasks",
-      value: completedTasks,
-      description:
-        "Tasks marked done across your personal and accessible project work.",
-      accent: "emerald" as const,
-    },
-    {
-      label: "Incomplete tasks",
-      value: activeTasks,
-      description: "Open tasks still in todo or in-progress states.",
-      accent: "amber" as const,
-    },
-    {
-      label: "Overdue tasks",
-      value: overdueTasks.length,
-      description: "Incomplete tasks with due dates before today.",
-      accent: "red" as const,
-    },
-    {
-      label: "Due soon",
-      value: upcomingReminderTasks.length + dueTodayTasks.length,
-      description: `Tasks due today or within the next ${REMINDER_LOOKAHEAD_DAYS} days.`,
-      accent: "blue" as const,
-    },
-    {
-      label: "Upcoming events",
-      value: todayEvents.length + upcomingEvents.length,
-      description: `Calendar events starting within the next ${REMINDER_LOOKAHEAD_DAYS} days.`,
-      accent: "violet" as const,
-    },
-    {
-      label: "Active projects",
-      value: activeProjects,
-      description:
-        "Active project workspaces you own or have been invited to access.",
-      accent: "emerald" as const,
-    },
-    {
-      label: "Project activity",
-      value: accessibleProjectActivity.length,
-      description:
-        "Recent project-linked updates visible under your access rules.",
-      accent: "zinc" as const,
-    },
-  ];
-
-  const hasUrgentReminders =
-    overdueTasks.length > 0 ||
-    dueTodayTasks.length > 0 ||
-    upcomingReminderTasks.length > 0 ||
-    todayEvents.length > 0 ||
-    upcomingEvents.length > 0;
+  const eventCount = home.todayEvents.length;
 
   return (
-    <main className="min-h-screen px-6 py-10">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-8 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="mb-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">
-              {user.isGuest ? "Guest mode" : "Workspace"}
-            </p>
-            <h1 className="text-4xl font-bold">Dashboard</h1>
-            <p className="mt-2 text-zinc-600 dark:text-zinc-300">
-              Welcome to AI-Multi Task-Management. Here&apos;s a quick look at
-              your productivity.
-            </p>
-          </div>
-          <div className="flex flex-col gap-3 md:items-end">
-            <DashboardRecentShortcuts shortcuts={shortcuts} />
-            {user.isGuest ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
-                You&apos;re using a database-backed guest workspace. Keep this
-                browser session to keep access.
-              </div>
-            ) : null}
-          </div>
+    <div className="mx-auto grid w-full max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs text-muted">{dateLine}</p>
+          <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight">{greeting}</h1>
+          <p className="mt-0.5 text-sm text-muted">
+            {taskSummary(stats.dueToday, stats.overdue)}
+            {eventSummary}
+          </p>
+        </div>
+        <Link href="/planner" className={cn(uiButtonClass, "px-3 py-1.5")}>
+          <Sparkles aria-hidden="true" className="h-4 w-4 text-accent" />
+          Plan my day
+        </Link>
+      </header>
+
+      <QuickAdd />
+
+      <section aria-label="Your numbers" className="grid grid-cols-3 gap-2 sm:gap-3">
+        <Stat label="Due today" value={stats.dueToday} series={stats.dueTodaySeries} seriesLabel="Tasks due on each of the last 7 days" />
+        <Stat label="Overdue" value={stats.overdue} tone="danger" series={stats.overdueSeries} seriesLabel="Overdue tasks at the end of each of the last 7 days" />
+        <Stat
+          label="Done this week"
+          value={stats.doneThisWeek}
+          series={stats.doneSeries}
+          seriesLabel="Tasks completed on each of the last 7 days"
+          note={
+            weekDelta !== 0 ? (
+              <span className={cn("hidden text-[11px] font-semibold sm:inline", weekDelta > 0 ? "text-success" : "text-muted")}>
+                {weekDelta > 0 ? "+" : ""}
+                {weekDelta} vs last week
+              </span>
+            ) : null
+          }
+        />
+      </section>
+
+      <div className="grid items-start gap-4 lg:grid-cols-[1.25fr_1fr]">
+        <div className="grid gap-4">
+          <Card title="Focus" aside={home.openTaskCount ? "Sorted by due date and priority" : undefined}>
+            {focusRows.length ? (
+              <>
+                <FocusList tasks={focusRows} />
+                {home.openTaskCount > focusRows.length ? (
+                  <Link href="/tasks" className={cn(linkClass, "mt-2")}>
+                    All {home.openTaskCount} open tasks <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
+                  </Link>
+                ) : null}
+              </>
+            ) : (
+              <EmptyState action={<label htmlFor={QUICK_ADD_INPUT_ID} className={cn(linkClass, "cursor-pointer")}>Add your first task</label>}>
+                Nothing to focus on yet.
+              </EmptyState>
+            )}
+          </Card>
+
+          <Card title="Today" aside={eventCount ? `${eventCount} event${eventCount === 1 ? "" : "s"}` : undefined}>
+            {eventCount ? (
+              <TodayTimeline events={home.todayEvents} now={now} />
+            ) : (
+              <EmptyState action={<Link href="/events" className={linkClass}>Plan an event</Link>}>No events today.</EmptyState>
+            )}
+          </Card>
         </div>
 
-        <section className="mb-8">
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                Analytics
-              </p>
-              <h2 className="text-2xl font-semibold">
-                Productivity at a glance
-              </h2>
-            </div>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Personal work plus shared projects you can access
-            </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {dashboardAnalytics.map((item) => (
-              <AnalyticsCard key={item.label} {...item} />
-            ))}
-          </div>
-        </section>
-
-        <section className="mb-8 rounded-2xl border border-zinc-200 p-6 shadow-sm dark:border-zinc-800">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <h2 className="text-2xl font-semibold">Reminders</h2>
-            <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-              Next {REMINDER_LOOKAHEAD_DAYS} days
-            </span>
-          </div>
-
-          {!hasUrgentReminders ? (
-            <p className="rounded-xl border border-dashed border-zinc-300 p-4 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
-              There are no urgent reminders.
-            </p>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              <article className="rounded-xl border border-red-200 bg-red-50/60 p-4 dark:border-red-900/60 dark:bg-red-950/20">
-                <h3 className="font-semibold text-red-700 dark:text-red-300">
-                  Overdue Tasks
-                </h3>
-                {overdueTasks.length === 0 ? (
-                  <p className="mt-2 text-sm text-zinc-500">None</p>
-                ) : (
-                  <ul className="mt-3 space-y-2">
-                    {overdueTasks.map((task) => (
-                      <li
-                        key={task.id}
-                        className="rounded-lg border border-red-100 bg-white/70 p-3 dark:border-red-900/40 dark:bg-zinc-900/30"
-                      >
-                        <p className="font-medium">{task.title}</p>
-                        <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                          Due {formatTaskDueDate(task.dueDate as Date)} ·{" "}
-                          {task.priority} · {task.status.replace("_", " ")}
-                        </p>
-                        <div className="mt-2">
-                          <ProjectBadge project={task.project} />
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </article>
-
-              <article className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-                <h3 className="font-semibold text-amber-700 dark:text-amber-300">
-                  Due Today
-                </h3>
-                {dueTodayTasks.length === 0 ? (
-                  <p className="mt-2 text-sm text-zinc-500">None</p>
-                ) : (
-                  <ul className="mt-3 space-y-2">
-                    {dueTodayTasks.map((task) => (
-                      <li
-                        key={task.id}
-                        className="rounded-lg border border-amber-100 bg-white/70 p-3 dark:border-amber-900/40 dark:bg-zinc-900/30"
-                      >
-                        <p className="font-medium">{task.title}</p>
-                        <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                          Due {formatTaskDueDate(task.dueDate as Date)} ·{" "}
-                          {task.priority} · {task.status.replace("_", " ")}
-                        </p>
-                        <div className="mt-2">
-                          <ProjectBadge project={task.project} />
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </article>
-
-              <article className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900/60 dark:bg-blue-950/20">
-                <h3 className="font-semibold text-blue-700 dark:text-blue-300">
-                  Upcoming Tasks
-                </h3>
-                {upcomingReminderTasks.length === 0 ? (
-                  <p className="mt-2 text-sm text-zinc-500">None</p>
-                ) : (
-                  <ul className="mt-3 space-y-2">
-                    {upcomingReminderTasks.map((task) => (
-                      <li
-                        key={task.id}
-                        className="rounded-lg border border-blue-100 bg-white/70 p-3 dark:border-blue-900/40 dark:bg-zinc-900/30"
-                      >
-                        <p className="font-medium">{task.title}</p>
-                        <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                          Due {formatTaskDueDate(task.dueDate as Date)} ·{" "}
-                          {task.priority} · {task.status.replace("_", " ")}
-                        </p>
-                        <div className="mt-2">
-                          <ProjectBadge project={task.project} />
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </article>
-
-              <article className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
-                <h3 className="font-semibold text-violet-700 dark:text-violet-300">
-                  Today&apos;s Events
-                </h3>
-                {todayEvents.length === 0 ? (
-                  <p className="mt-2 text-sm text-zinc-500">None</p>
-                ) : (
-                  <ul className="mt-3 space-y-2">
-                    {todayEvents.map((event) => (
-                      <li
-                        key={event.id}
-                        className="rounded-lg border border-violet-100 bg-white/70 p-3 dark:border-violet-900/40 dark:bg-zinc-900/30"
-                      >
-                        <p className="font-medium">{event.title}</p>
-                        <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                          {formatDate(event.startTime)}
-                        </p>
-                        <div className="mt-2">
-                          <ProjectBadge project={event.project ?? null} />
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </article>
-
-              <article className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20 md:col-span-2">
-                <h3 className="font-semibold text-emerald-700 dark:text-emerald-300">
-                  Upcoming Events
-                </h3>
-                {upcomingEvents.length === 0 ? (
-                  <p className="mt-2 text-sm text-zinc-500">None</p>
-                ) : (
-                  <ul className="mt-3 grid gap-2 md:grid-cols-2">
-                    {upcomingEvents.map((event) => (
-                      <li
-                        key={event.id}
-                        className="rounded-lg border border-emerald-100 bg-white/70 p-3 dark:border-emerald-900/40 dark:bg-zinc-900/30"
-                      >
-                        <p className="font-medium">{event.title}</p>
-                        <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-                          {formatDate(event.startTime)}
-                        </p>
-                        <div className="mt-2">
-                          <ProjectBadge project={event.project ?? null} />
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </article>
-            </div>
-          )}
-        </section>
-
-        <section className={`${uiCardClass} mb-10`}>
-          <div className="grid gap-5 md:grid-cols-[1.2fr_0.8fr] md:items-center">
-            <div>
-              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                Productivity snapshot
-              </p>
-              <h2 className="mt-1 text-2xl font-semibold">
-                Keep the day in focus
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                Use this dashboard to scan current workload, upcoming reminders,
-                recent changes, and the newest notes without repeating every
-                workspace destination.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              {[
-                { label: "Events", value: totalEvents },
-                { label: "Active projects", value: activeProjects },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/50"
-                >
-                  <p className="text-zinc-500 dark:text-zinc-400">
-                    {item.label}
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-zinc-950 dark:text-zinc-50">
-                    {item.value}
-                  </p>
+        <div className="grid gap-4">
+          <Card
+            title={
+              <span className="flex items-center gap-1.5 text-accent">
+                <Sparkles aria-hidden="true" className="h-4 w-4" />
+                Suggested next
+              </span>
+            }
+            aside="Planner"
+            className="border-transparent bg-accent-soft"
+          >
+            {home.suggestion ? (
+              <>
+                <p className="text-[13px] font-semibold">{home.suggestion.title}</p>
+                <p className="mt-1 text-xs text-muted">{home.suggestion.reason}</p>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {home.suggestion.actionHref ? (
+                    <Link
+                      href={home.suggestion.actionHref}
+                      className="rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-accent-ink transition-colors hover:bg-accent-hover"
+                    >
+                      Open
+                    </Link>
+                  ) : null}
+                  <Link href="/planner" className="rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-surface-hover">
+                    See the full plan
+                  </Link>
                 </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className={`${uiCardClass} mb-10`}>
-          <h2 className="mb-4 text-2xl font-semibold">Recent Activity</h2>
-          {recentActivities.length === 0 ? (
-            <p className="text-zinc-600 dark:text-zinc-300">
-              No recent activity yet.
-            </p>
-          ) : (
-            <ul className="space-y-3">
-              {recentActivities.map((activity) => (
-                <li
-                  key={activity.id}
-                  className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800"
-                >
-                  <p className="font-medium">{activity.message}</p>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-                    <span>{formatDate(activity.createdAt)}</span>
-                    {activity.project ? (
-                      <ProjectBadge project={activity.project} />
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="rounded-2xl border border-zinc-200 p-6 shadow-sm dark:border-zinc-800">
-            <h2 className="mb-4 text-2xl font-semibold">Recent Notes</h2>
-            {recentNotes.length === 0 ? (
-              <p className="text-zinc-600 dark:text-zinc-300">
-                No notes yet. Create one to get started.
-              </p>
+              </>
             ) : (
-              <ul className="space-y-3">
-                {recentNotes.map((note) => (
-                  <li
-                    key={note.id}
-                    className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800"
-                  >
-                    <p className="font-medium">{note.title}</p>
-                    {note.content ? (
-                      <p className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-300">
-                        {note.content}
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                        No content.
-                      </p>
-                    )}
-                    <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                      Created {formatDate(note.createdAt)}
-                    </p>
+              <p className="text-sm text-muted">You&apos;re all caught up. Add a task to get a suggestion.</p>
+            )}
+          </Card>
+
+          <Card title="Project health" aside={home.projects.length ? "Active projects" : undefined}>
+            {home.projects.length ? (
+              <ul>
+                {home.projects.map((project) => {
+                  const style = healthStyles[project.status];
+                  const color = projectColor(project);
+                  return (
+                    <li key={project.id} className="border-t border-line py-2 first:border-t-0">
+                      <div className="flex items-center gap-2">
+                        <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-[3px]" style={{ backgroundColor: color }} />
+                        <Link href={`/projects/${project.id}`} className="min-w-0 flex-1 truncate text-[13px] font-semibold hover:text-accent">
+                          {project.name}
+                        </Link>
+                        <span className={cn("shrink-0 rounded-full px-2 py-px text-[10.5px] font-bold", style.className)}>{style.label}</span>
+                      </div>
+                      <div
+                        className="mt-1.5 h-1.5 overflow-hidden rounded-full border border-line bg-canvas"
+                        role="progressbar"
+                        aria-label={`${project.name} progress`}
+                        aria-valuenow={project.percentDone}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                      >
+                        <div className="h-full" style={{ width: `${project.percentDone}%`, backgroundColor: color }} />
+                      </div>
+                      <p className="mt-1 text-xs text-muted">{healthDetail(project)}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <EmptyState action={<Link href="/projects" className={linkClass}>Create your first project</Link>}>
+                No active projects.
+              </EmptyState>
+            )}
+          </Card>
+
+          <Card title="Activity" aside={home.activity.length ? "You and your teammates" : undefined}>
+            {home.activity.length ? (
+              <ul className="grid gap-1">
+                {home.activity.map((activity) => (
+                  <li key={activity.id} className="flex items-start gap-2 py-1 text-[13px]">
+                    <span
+                      aria-hidden="true"
+                      className="mt-px grid h-5 w-5 shrink-0 place-items-center rounded-full text-[9.5px] font-bold text-white"
+                      style={{ backgroundColor: paletteColor(activity.user.id) }}
+                    >
+                      {activity.user.name.charAt(0).toUpperCase()}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      {activity.message}
+                      {activity.project ? <span className="text-muted"> · {activity.project.name}</span> : null}
+                    </span>
+                    <time dateTime={activity.createdAt.toISOString()} className="shrink-0 text-xs text-muted">
+                      {relativeTime(activity.createdAt, realNow)}
+                    </time>
                   </li>
                 ))}
               </ul>
-            )}
-          </section>
-
-          <section className="rounded-2xl border border-zinc-200 p-6 shadow-sm dark:border-zinc-800">
-            <h2 className="mb-4 text-2xl font-semibold">Upcoming Tasks</h2>
-            {upcomingTasks.length === 0 ? (
-              <p className="text-zinc-600 dark:text-zinc-300">
-                No upcoming tasks with due dates.
-              </p>
             ) : (
-              <ul className="space-y-3">
-                {upcomingTasks.map((task) => (
-                  <li
-                    key={task.id}
-                    className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="font-medium">{task.title}</p>
-                      <span className="rounded-lg bg-zinc-100 px-2 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-                        {task.priority}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-                      Status: {task.status.replace("_", " ")}
-                    </p>
-                    {task.dueDate && (
-                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        Due {formatTaskDueDate(task.dueDate)}
-                      </p>
-                    )}
-                    <div className="mt-2">
-                      <ProjectBadge project={task.project} />
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <EmptyState action={<Link href="/projects" className={linkClass}>Invite a teammate</Link>}>
+                Activity from you and your teammates shows up here.
+              </EmptyState>
             )}
-          </section>
+          </Card>
+
+          {home.shortcuts.project || home.shortcuts.note ? (
+            <Card title="Jump back in">
+              <div className="grid gap-1.5">
+                {home.shortcuts.project ? (
+                  <Link href={`/projects/${home.shortcuts.project.id}`} className="flex items-center gap-2 rounded-lg px-1 py-1 text-[13px] hover:bg-surface-hover">
+                    <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-[3px]" style={{ backgroundColor: projectColor(home.shortcuts.project) }} />
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="text-muted">Project: </span>
+                      {home.shortcuts.project.name}
+                    </span>
+                  </Link>
+                ) : null}
+                {home.shortcuts.note ? (
+                  <Link href={`/notes?openNote=${home.shortcuts.note.id}`} className="flex items-center gap-2 rounded-lg px-1 py-1 text-[13px] hover:bg-surface-hover">
+                    <NotebookPen aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted" />
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="text-muted">Note: </span>
+                      {home.shortcuts.note.title || "Untitled note"}
+                    </span>
+                  </Link>
+                ) : null}
+              </div>
+            </Card>
+          ) : null}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

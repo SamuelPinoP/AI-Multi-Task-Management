@@ -68,11 +68,11 @@ function priorityFromTask(priority: Priority, overdue = false): PlannerPriority 
 }
 
 function taskHref(id: string) {
-  return `/tasks?highlight=${encodeURIComponent(id)}`;
+  return `/tasks?task=${encodeURIComponent(id)}`;
 }
 
 function eventHref(id: string) {
-  return `/events?highlight=${encodeURIComponent(id)}`;
+  return `/events?event=${encodeURIComponent(id)}`;
 }
 
 function projectHref(id: string) {
@@ -165,7 +165,7 @@ export async function generateSmartPlanner(userId: string, now = new Date(), rea
   }
 
   for (const note of notes.slice(0, 5)) {
-    suggestedFocus.push({ id: `note-${note.id}`, title: `Turn note into action: ${note.title}`, reason: "Recently updated note may contain decisions or next steps worth converting into work.", priority: "LOW", kind: "NOTE", related: { type: "NOTE", id: note.id, label: note.project?.name ?? "Recent note" }, actionHref: `/notes?highlight=${encodeURIComponent(note.id)}`, projectId: note.project?.id ?? null, canCreateTask: true, suggestedTaskTitle: `Action from note: ${note.title}`, suggestedTaskDescription: "Created from Smart Planner recent-note suggestion." });
+    suggestedFocus.push({ id: `note-${note.id}`, title: `Turn note into action: ${note.title}`, reason: "Recently updated note may contain decisions or next steps worth converting into work.", priority: "LOW", kind: "NOTE", related: { type: "NOTE", id: note.id, label: note.project?.name ?? "Recent note" }, actionHref: `/notes?openNote=${encodeURIComponent(note.id)}`, projectId: note.project?.id ?? null, canCreateTask: true, suggestedTaskTitle: `Action from note: ${note.title}`, suggestedTaskDescription: "Created from Smart Planner recent-note suggestion." });
   }
 
   for (const comment of comments.slice(0, 4)) {

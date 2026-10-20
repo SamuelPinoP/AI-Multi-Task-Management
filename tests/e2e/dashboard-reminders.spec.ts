@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { uniqueName } from "./helpers";
+import { continueAsGuest, uniqueName } from "./helpers";
 
 /** A `YYYY-MM-DD` date input value, counted from today in this process's time zone. */
 function dateInputValue(daysFromToday: number) {
@@ -10,13 +10,11 @@ function dateInputValue(daysFromToday: number) {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-test("reminders include today's occurrence of a weekly event that started weeks ago", async ({ page }) => {
+test("Home's Today card includes a weekly event that started weeks ago (#146)", async ({ page }) => {
   const weekly = uniqueName("Weekly stand-up");
   const oneOff = uniqueName("Old one-off event");
 
-  await page.goto("/login");
-  await page.getByRole("button", { name: /continue as guest/i }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await continueAsGuest(page);
 
   // Both start three weeks ago; only the weekly one happens again today.
   for (const [title, recurrence] of [[weekly, "WEEKLY"], [oneOff, "NONE"]]) {
@@ -27,12 +25,7 @@ test("reminders include today's occurrence of a weekly event that started weeks 
   }
 
   await page.reload();
-  const reminders = page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: "Reminders", exact: true }) });
-  const todaysEvents = reminders
-    .locator("article")
-    .filter({ has: page.getByRole("heading", { name: "Today's Events" }) });
-  await expect(todaysEvents.getByText(weekly)).toBeVisible();
-  await expect(reminders.getByText(oneOff)).toHaveCount(0);
+  const today = page.locator("section").filter({ has: page.getByRole("heading", { name: "Today", exact: true }) });
+  await expect(today.getByRole("link", { name: new RegExp(weekly) })).toBeVisible();
+  await expect(today.getByText(oneOff)).toHaveCount(0);
 });

@@ -5,11 +5,16 @@ export function uniqueName(prefix: string) {
   return `${prefix} ${randomUUID().slice(0, 8)}`;
 }
 
+/** Waits for the signed-in home screen ("Good morning", "Good afternoon", ...). */
+export async function expectHome(page: Page) {
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
+}
+
 /** Starts a guest workspace (local server only: guest login is off in production). */
 export async function continueAsGuest(page: Page) {
   await page.goto("/login");
   await page.getByRole("button", { name: /continue as guest/i }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expectHome(page);
 }
 
 /**
@@ -42,7 +47,7 @@ export async function signUpAndLogIn(page: Page, label = "E2E user") {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Log in" }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expectHome(page);
 
   return { name, email };
 }
