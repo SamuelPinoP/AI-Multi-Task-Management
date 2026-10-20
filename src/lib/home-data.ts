@@ -11,7 +11,8 @@ import {
 } from "@/lib/home-summary";
 import { prisma } from "@/lib/prisma";
 import { projectAccessWhere } from "@/lib/project-access";
-import { expandRecurringEventsForRange, normalizeRecurrence } from "@/lib/recurrence";
+import { occurrencesInRange } from "@/lib/event-occurrences";
+import { normalizeRecurrence } from "@/lib/recurrence";
 import { generateSmartPlanner, type PlannerSuggestion } from "@/lib/smart-planner";
 import { getLocalDateOnly } from "@/lib/task-date-buckets";
 import { toWallClock } from "@/lib/user-time";
@@ -138,7 +139,14 @@ export async function getHomeData(userId: string, now: Date, timeZone: string | 
           AND: [
             { deletedAt: null, OR: [{ userId }, { project: projectAccessWhere(userId) }] },
             { startTime: { lt: toEventStorageTime(tomorrowStart) } },
-            { OR: [{ startTime: { gte: toEventStorageTime(todayStart) } }, { recurrence: { not: Recurrence.NONE } }] },
+            {
+              OR: [
+                { startTime: { gte: toEventStorageTime(todayStart) } },
+                { recurrence: { not: Recurrence.NONE } },
+                // Started earlier and still going on today.
+                { endTime: { gte: toEventStorageTime(todayStart) } },
+              ],
+            },
           ],
         },
         select: {
@@ -239,13 +247,12 @@ export async function getHomeData(userId: string, now: Date, timeZone: string | 
       assignee: task.assignee,
     }));
 
-  const todayEvents = expandRecurringEventsForRange(
+  const todayEvents = occurrencesInRange(
     events.map((event) => ({
       ...event,
       startTime: event.startTime.toISOString(),
       endTime: event.endTime?.toISOString() ?? null,
       recurrence: normalizeRecurrence(event.recurrence),
-      sourceId: event.id,
     })),
     todayStart,
     tomorrowStart,
@@ -257,7 +264,7 @@ export async function getHomeData(userId: string, now: Date, timeZone: string | 
     .sort((a, b) => Number(a.hasStartTime) - Number(b.hasStartTime) || a.startTime.localeCompare(b.startTime))
     .map((event) => ({
       id: event.id,
-      sourceId: event.sourceId,
+      sourceId: event.sourceEventId,
       title: event.title,
       location: event.location,
       startTime: event.startTime,
