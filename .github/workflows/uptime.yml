@@ -1,0 +1,60 @@
+name: Uptime check
+
+# Every 30 minutes, checks production the way a visitor would
+# (scripts/uptime-check.mjs, which retries for about two minutes before
+# calling it down). When it's down, opens one "Production is down" issue
+# assigned to the repository owner, so GitHub notifies them; when it's back,
+# comments and closes it. GitHub may start scheduled runs a few minutes late.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Check production
+        id: check
+        run: |
+          set +e
+          node scripts/uptime-check.mjs > uptime-report.md
+          echo "down=$([ $? -ne 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          cat uptime-report.md
+          cat uptime-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Open or close the downtime issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          DOWN: ${{ steps.check.outputs.down }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create downtime --color B60205 --description "Production is not answering" 2>/dev/null || true
+          open=$(gh issue list --label downtime --state open --json number --jq '.[0].number // empty')
+          if [ "$DOWN" = "true" ] && [ -z "$open" ]; then
+            {
+              echo "The uptime check couldn't reach production. Details from [this run]($RUN_URL):"
+              echo
+              cat uptime-report.md
+              echo
+              echo "What to check: the latest deployment on Vercel, Vercel's status page (https://www.vercel-status.com), and Neon's (https://neonstatus.com)."
+              echo "This issue closes itself when the site answers again."
+            } > issue.md
+            gh issue create --title "Production is down" --label downtime --assignee "$OWNER" --body-file issue.md
+          elif [ "$DOWN" = "false" ] && [ -n "$open" ]; then
+            gh issue comment "$open" --body "Production is answering again ($(date -u +'%Y-%m-%d %H:%M UTC'), [run]($RUN_URL)). Closing."
+            gh issue close "$open"
+          fi
