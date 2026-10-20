@@ -7,6 +7,7 @@ import { createActivity } from "@/lib/activity";
 import { prisma } from "@/lib/prisma";
 import { projectAccessWhereForProject } from "@/lib/project-access";
 import { generateSmartPlanner, type PlannerPriority, type PlannerSuggestion } from "@/lib/smart-planner";
+import { getUserNow } from "@/lib/user-time-server";
 
 function priorityClass(priority: PlannerPriority) {
   if (priority === "HIGH") return "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-200";
@@ -81,7 +82,7 @@ function SuggestionCard({ suggestion }: { suggestion: PlannerSuggestion }) {
 
 export default async function PlannerPage() {
   const user = await requirePageUser();
-  const planner = await generateSmartPlanner(user.id);
+  const planner = await generateSmartPlanner(user.id, await getUserNow());
   const hasSuggestions = planner.sections.some((section) => section.suggestions.length > 0);
 
   return (

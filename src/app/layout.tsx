@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { ThemeInitScript, ThemeProvider } from "@/components/theme-provider";
+import { TimeZoneCookie } from "@/components/time-zone-cookie";
 import { Toaster } from "@/components/ui/toaster";
 import { getCurrentUser } from "@/lib/auth";
 import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/sidebar-state";
@@ -29,6 +30,7 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning className="h-full antialiased">
       <body className="h-full flex flex-col bg-canvas text-ink">
         <ThemeInitScript />
+        <TimeZoneCookie />
         <ThemeProvider>
           <AppShell currentUser={currentUser} initialNav={initialNav} initialSidebarCollapsed={sidebarCollapsed}>
             {children}

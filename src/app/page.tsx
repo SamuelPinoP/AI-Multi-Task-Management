@@ -11,6 +11,7 @@ import { expandRecurringEventsForRange } from "@/lib/recurrence";
 import { eventWallTime, toEventStorageTime } from "@/lib/event-time";
 import { projectAccessWhere } from "@/lib/project-access";
 import { formatTaskDueDate, getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
+import { getUserNow } from "@/lib/user-time-server";
 
 const REMINDER_LOOKAHEAD_DAYS = 7;
 
@@ -391,7 +392,8 @@ export default async function DashboardPage() {
     );
   }
 
-  const now = new Date();
+  // The user's wall clock, so "today" follows their time zone, not the server's (#125).
+  const now = await getUserNow();
   const todayStart = getLocalDayStart(now);
   const reminderRangeEnd = new Date(todayStart);
   reminderRangeEnd.setDate(

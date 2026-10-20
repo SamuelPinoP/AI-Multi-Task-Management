@@ -16,6 +16,7 @@ import {
 import { OWNER_INVITATION_SELECT } from "@/lib/project-invitations";
 import { markProjectOpened } from "@/lib/recent-shortcuts";
 import { isOverdueTask } from "@/lib/task-date-buckets";
+import { getUserNow } from "@/lib/user-time-server";
 
 type ProjectDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -104,7 +105,7 @@ export default async function ProjectDetailPage({
   const isOwner = access?.accessLevel === "OWNER";
   const canEditProjectContent = access?.accessLevel === "OWNER" || access?.accessLevel === "EDITOR";
   const roleLabel = access?.accessLevel === "VIEWER" ? "Viewer (read-only)" : isOwner ? "Owner" : "Editor";
-  const now = new Date();
+  const now = await getUserNow();
   const totalNotes = project.notes.length;
   const totalTasks = project.tasks.length;
   const completedTasks = project.tasks.filter(
