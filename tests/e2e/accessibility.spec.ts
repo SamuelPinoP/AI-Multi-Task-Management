@@ -63,6 +63,14 @@ for (const theme of ["light", "dark"] as const) {
       found.push(...(await violations(page, path)));
     }
 
+    // At 320px wide, tables scroll sideways whatever the fonts; they must stay keyboard-reachable.
+    const viewport = page.viewportSize();
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto(`/projects/${projectId}`);
+    await page.waitForLoadState("networkidle");
+    found.push(...(await violations(page, "project page at 320px")));
+    if (viewport) await page.setViewportSize(viewport);
+
     // Dialogs and sheets too.
     await page.goto("/tasks");
     await page.waitForLoadState("networkidle");

@@ -454,8 +454,14 @@ export function ProjectTeamSection({
       </div>
 
       <section className="mt-8">
-        <h2 className="mb-4 text-2xl font-semibold">Workload Summary</h2>
-        <div className="overflow-x-auto rounded-2xl border border-zinc-200 dark:border-zinc-800">
+        <h2 id="workload-summary-heading" className="mb-4 text-2xl font-semibold">Workload Summary</h2>
+        {/* Focusable so keyboard users can scroll the table sideways on small screens. */}
+        <div
+          role="region"
+          aria-labelledby="workload-summary-heading"
+          tabIndex={0}
+          className="overflow-x-auto rounded-2xl border border-zinc-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent dark:border-zinc-800"
+        >
           <table className="min-w-full text-sm">
             <thead className="bg-zinc-100 dark:bg-zinc-900">
               <tr>
