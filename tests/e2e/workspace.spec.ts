@@ -16,17 +16,26 @@ test("guest can create and search a note", async ({ page }) => {
   await continueAsGuest(page);
   await openSection(page, "Notes");
 
-  await expect(
-    page.getByRole("heading", { name: "Create a Note" }),
-  ).toBeVisible();
   await expect(page.getByRole("heading", { name: "No notes yet." })).toBeVisible();
-  await page.getByPlaceholder("Title (optional)").fill(noteTitle);
-  await page.getByPlaceholder("Write your note here...").fill(noteBody);
-  await page.getByRole("button", { name: "Create Note" }).click();
 
-  await expect(page.getByRole("heading", { name: noteTitle })).toBeVisible();
-  await page.getByPlaceholder(/search notes by title or content/i).fill(noteTitle);
-  await expect(page.getByRole("heading", { name: noteTitle })).toBeVisible();
+  // Quick add creates the note and opens it for writing; it saves as you type.
+  await page.getByLabel("New note title").fill(noteTitle);
+  await page.getByLabel("New note title").press("Enter");
+  const editor = page.getByRole("dialog");
+  await expect(editor.getByLabel("Title")).toHaveValue(noteTitle);
+  await editor.getByLabel("Note", { exact: true }).fill(noteBody);
+  await expect(editor.getByRole("status")).toHaveText("Saved");
+  await editor.getByRole("button", { name: "Done" }).click();
+  await expect(editor).toBeHidden();
+
+  const card = page.getByRole("button", { name: noteTitle });
+  await expect(card).toContainText(noteBody);
+  await page.getByLabel("Search notes").fill(noteTitle);
+  await expect(card).toBeVisible();
+
+  // The text survives a reload.
+  await page.reload();
+  await expect(page.getByRole("button", { name: noteTitle })).toContainText(noteBody);
 });
 
 test("member can create a project and upload a local video attachment", async ({

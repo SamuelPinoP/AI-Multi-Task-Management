@@ -9,8 +9,10 @@ import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 export const QUICK_ADD_INPUT_ID = "quick-add-input";
 
 type QuickAddProps = {
-  /** Called after the item is created, for pages that hold their own list. */
-  onAdded?: () => void;
+  /** Called with the new item's id and the typed text, for pages that hold their own list. */
+  onAdded?: (id: string, text: string) => void;
+  /** Skip the success toast (for pages that open the new item right away). */
+  quiet?: boolean;
   placeholder?: string;
   /** The input's accessible name. */
   label?: string;
@@ -22,7 +24,7 @@ type QuickAddProps = {
   editHref?: (id: string) => string;
 };
 
-/** One-line capture (Home, Tasks, Projects): type and press Enter. Creates a task by default. */
+/** One-line capture (Home, Tasks, Projects, Notes): type and press Enter. Creates a task by default. */
 export function QuickAdd({
   onAdded,
   placeholder = "Add a task and press Enter",
@@ -31,6 +33,7 @@ export function QuickAdd({
   field = "title",
   successMessage = "Task added",
   editHref = (id) => `/tasks?task=${id}`,
+  quiet = false,
 }: QuickAddProps = {}) {
   const router = useRouter();
   const [text, setText] = useState("");
@@ -56,8 +59,9 @@ export function QuickAdd({
       const id = body.id;
       setText("");
       notifyWorkspaceChanged();
-      onAdded?.();
+      onAdded?.(id, trimmed);
       router.refresh();
+      if (quiet) return;
       toast.success(successMessage, {
         description: trimmed,
         action: { label: "Edit", onClick: () => router.push(editHref(id)) },
