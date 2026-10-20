@@ -1,0 +1,21 @@
+name: Dependabot auto-merge
+
+# Turns on auto-merge for Dependabot's pull requests. GitHub merges one only
+# after every check the "Protect main" ruleset requires has passed, so a red
+# check leaves it open for a person to look at.
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable-auto-merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable auto-merge
+        run: gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

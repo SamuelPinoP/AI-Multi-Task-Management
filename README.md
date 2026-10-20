@@ -101,7 +101,15 @@ when the secret isn't set. Run them locally with
 `npm run test:e2e -- --grep @smoke`.
 
 Dependabot (`.github/dependabot.yml`) opens weekly update PRs for npm packages,
-with minor and patch updates grouped, and for GitHub Actions.
+with minor and patch updates grouped, and for GitHub Actions. Major versions
+are skipped; security updates still arrive. `dependabot-auto-merge.yml` turns
+on auto-merge for each Dependabot PR, so GitHub merges it once every required
+check passes and leaves it open if one fails.
+
+CI also fails if any `@radix-ui` package is installed in more than one version
+(`scripts/check-single-radix.mjs`). Duplicate Radix copies can break a menu
+inside a dialog. The `overrides` entry in `package.json` keeps Prisma Studio on
+the app's Radix release; update it when Radix is updated.
 
 ## Tech Stack
 
