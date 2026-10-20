@@ -11,6 +11,9 @@ const vercelBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 60_000,
+  // One worker: a cold dev server compiling routes for two workers at once
+  // aborts navigations, and the suite is small.
+  workers: 1,
   expect: { timeout: 10_000 },
   reporter: isCI
     ? [["list"], ["github"], ["html", { open: "never" }]]

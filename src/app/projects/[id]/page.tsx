@@ -287,7 +287,8 @@ export default async function ProjectDetailPage({
           }))}
           workloadRows={Array.from(workload.entries())}
           isOwner={isOwner}
-          pendingInvitations={project.invitations.map((invitation) => ({
+          // Invitee emails are for the owner only; don't ship them to other members.
+          pendingInvitations={(isOwner ? project.invitations : []).map((invitation) => ({
             ...invitation,
             createdAt: invitation.createdAt.toISOString(),
           }))}
