@@ -6,6 +6,7 @@ import {
   SquareCheckBig,
   FolderKanban,
   House,
+  Keyboard,
   Map as MapIcon,
   Moon,
   NotebookPen,
@@ -76,10 +77,12 @@ export function CommandPalette({
   open,
   onOpenChange,
   onNewTask,
+  onShowShortcuts,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNewTask: () => void;
+  onShowShortcuts: () => void;
 }) {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
@@ -110,6 +113,7 @@ export function CommandPalette({
   const visiblePages = pages.filter((page) => matches(query, page.label, page.keywords));
   const showNewTask = matches(query, "new task", "add task", "create task");
   const showTheme = matches(query, "theme", "dark", "light", "appearance");
+  const showShortcuts = matches(query, "keyboard shortcuts", "keys", "help");
 
   function close() {
     onOpenChange(false);
@@ -132,18 +136,26 @@ export function CommandPalette({
           <CommandList>
             <CommandEmpty>No results for “{query.trim()}”.</CommandEmpty>
 
-            {showNewTask || showTheme ? (
+            {showNewTask || showTheme || showShortcuts ? (
               <CommandGroup heading="Actions">
                 {showNewTask ? (
                   <CommandItem value="action-new-task" onSelect={() => { close(); onNewTask(); }}>
                     <Plus />
                     New task
+                    <CommandShortcut>N</CommandShortcut>
                   </CommandItem>
                 ) : null}
                 {showTheme ? (
                   <CommandItem value="action-theme" onSelect={() => { setTheme(theme === "dark" ? "light" : "dark"); close(); }}>
                     {theme === "dark" ? <Sun /> : <Moon />}
                     Switch to {theme === "dark" ? "light" : "dark"} theme
+                  </CommandItem>
+                ) : null}
+                {showShortcuts ? (
+                  <CommandItem value="action-shortcuts" onSelect={() => { close(); onShowShortcuts(); }}>
+                    <Keyboard />
+                    Keyboard shortcuts
+                    <CommandShortcut>?</CommandShortcut>
                   </CommandItem>
                 ) : null}
               </CommandGroup>

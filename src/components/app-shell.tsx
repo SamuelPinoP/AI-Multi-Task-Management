@@ -6,6 +6,7 @@ import {
   CalendarDays,
   FolderKanban,
   House,
+  Keyboard,
   LogOut,
   Map as MapIcon,
   Menu,
@@ -27,6 +28,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { CommandPalette } from "@/components/command-palette";
 import { NewTaskDialog } from "@/components/new-task-dialog";
+import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ThemeToggle, useTheme } from "@/components/theme-provider";
 import {
   DropdownMenu,
@@ -39,6 +41,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { isNavItemActive, pageTitleFor, type NavMatch } from "@/lib/app-nav";
 import { cn } from "@/lib/cn";
+import { isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
 import { paletteColor, projectColor } from "@/lib/project-color";
 import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/sidebar-state";
 import { WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
@@ -181,7 +184,14 @@ function Sidebar({
         )}
       >
         <Plus aria-hidden="true" className="h-4 w-4" />
-        {collapsed ? <span className="sr-only">New task</span> : "New task"}
+        {collapsed ? (
+          <span className="sr-only">New task</span>
+        ) : (
+          <>
+            New task
+            <kbd aria-hidden="true" className="ml-auto rounded border border-current px-1 font-sans text-[10px] opacity-75">N</kbd>
+          </>
+        )}
       </button>
 
       {mainItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
@@ -261,7 +271,7 @@ function Sidebar({
   );
 }
 
-function UserMenu({ user }: { user: NonNullable<ShellUser> }) {
+function UserMenu({ user, onShowShortcuts }: { user: NonNullable<ShellUser>; onShowShortcuts: () => void }) {
   const { theme, setTheme } = useTheme();
   const logoutForm = useRef<HTMLFormElement>(null);
 
@@ -299,6 +309,12 @@ function UserMenu({ user }: { user: NonNullable<ShellUser> }) {
             <Moon />
             Dark
             {theme === "dark" ? <span className="ml-auto text-xs text-accent">On</span> : null}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={onShowShortcuts}>
+            <Keyboard />
+            Keyboard shortcuts
+            <span className="ml-auto text-xs text-muted">?</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => logoutForm.current?.requestSubmit()}>
@@ -346,12 +362,14 @@ function TopBar({
   pathname,
   onOpenMenu,
   onOpenSearch,
+  onShowShortcuts,
 }: {
   user: NonNullable<ShellUser>;
   nav: WorkspaceNav;
   pathname: string;
   onOpenMenu: () => void;
   onOpenSearch: () => void;
+  onShowShortcuts: () => void;
 }) {
   const { parent, title } = pageTitleFor(pathname, nav.projects);
 
@@ -392,7 +410,7 @@ function TopBar({
         <Search aria-hidden="true" className="h-4 w-4" />
       </button>
       <NotificationsMenu pendingInvitations={nav.pendingInvitations} />
-      <UserMenu user={user} />
+      <UserMenu user={user} onShowShortcuts={onShowShortcuts} />
     </header>
   );
 }
@@ -461,6 +479,7 @@ export function AppShell({
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useEffect(() => {
     if (!currentUser && !isPublicPage) {
@@ -488,17 +507,46 @@ export function AppShell({
     };
   }, [pathname, showWorkspaceShell]);
 
+  // Keyboard shortcuts (DES-06): Ctrl/Cmd+K, /, N, ? and "g then a letter"; see @/lib/shortcuts.
   useEffect(() => {
     if (!showWorkspaceShell) return;
+    let goPending = false;
+    let goTimer: number | undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setSearchOpen((open) => !open);
+        return;
+      }
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
+      if (isTypingTarget(event.target)) return;
+      // Leave keys alone while a dialog, sheet or menu is open.
+      if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
+
+      const action = resolveShortcut(event.key, goPending);
+      goPending = false;
+      window.clearTimeout(goTimer);
+      if (!action) return;
+      event.preventDefault();
+      if (action.type === "start-go") {
+        goPending = true;
+        goTimer = window.setTimeout(() => (goPending = false), 1500);
+      } else if (action.type === "go") {
+        router.push(action.href);
+      } else if (action.type === "search") {
+        setSearchOpen(true);
+      } else if (action.type === "new-task") {
+        setNewTaskOpen(true);
+      } else if (action.type === "help") {
+        setShortcutsOpen(true);
       }
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [showWorkspaceShell]);
+    return () => {
+      window.clearTimeout(goTimer);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [router, showWorkspaceShell]);
 
   function toggleCollapsed() {
     setCollapsed((current) => {
@@ -575,6 +623,7 @@ export function AppShell({
           pathname={pathname}
           onOpenMenu={() => setMenuOpen(true)}
           onOpenSearch={() => setSearchOpen(true)}
+          onShowShortcuts={() => setShortcutsOpen(true)}
         />
         <main id="main-content" className="min-h-0 flex-1 overflow-y-auto pb-24 lg:pb-0">
           {children}
@@ -583,8 +632,14 @@ export function AppShell({
 
       <MobileTabs pathname={pathname} onNewTask={openNewTask} />
 
-      <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} onNewTask={openNewTask} />
+      <CommandPalette
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        onNewTask={openNewTask}
+        onShowShortcuts={() => setShortcutsOpen(true)}
+      />
       <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} projects={nav.projects} />
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );
 }

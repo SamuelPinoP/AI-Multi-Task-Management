@@ -17,6 +17,7 @@
  *    event (with confirmation) directly from the day-detail panel.
  */
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
@@ -466,7 +467,7 @@ export default function EventsCalendarPage() {
               }).format(month)}
             </h2>
             <div className="flex flex-wrap items-center gap-2">
-              <select
+              <select aria-label="Project"
                 value={projectFilter}
                 onChange={(e) => setProjectFilter(e.target.value)}
                 className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
@@ -570,7 +571,7 @@ export default function EventsCalendarPage() {
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
                             {new Intl.DateTimeFormat("en-US", {
                               weekday: "long",
                             }).format(day)}
@@ -657,7 +658,7 @@ export default function EventsCalendarPage() {
                           isSelected
                             ? "border-black bg-zinc-100 dark:bg-zinc-800"
                             : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-700"
-                        } ${!isCurrentMonth ? "opacity-45" : ""}`}
+                        } ${!isCurrentMonth ? "bg-zinc-50/60 text-zinc-500 dark:bg-zinc-900/30" : ""}`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <span
@@ -746,13 +747,7 @@ export default function EventsCalendarPage() {
                 {selectedDayEvents.map((event) => (
                   <article
                     key={event.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openEvent(event)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") openEvent(event);
-                    }}
-                    className="cursor-pointer rounded-lg border border-zinc-200 p-3 transition hover:border-blue-300 hover:bg-blue-50/50 dark:border-zinc-700 dark:hover:border-blue-800 dark:hover:bg-blue-950/20"
+                    className="relative rounded-lg border border-zinc-200 p-3 transition hover:border-accent/50 hover:bg-accent-soft/40 dark:border-zinc-700"
                     style={
                       selectedProject && event.projectId === selectedProject.id
                         ? {
@@ -763,19 +758,21 @@ export default function EventsCalendarPage() {
                     }
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <p className="font-medium">{event.title}</p>
+                      {/* The title opens the event; its ::after covers the card so the whole card is clickable. */}
                       <button
                         type="button"
-                        onClick={(e) => {
-                          // Prevent the delete click from also triggering
-                          // the card's onClick (which would navigate away).
-                          e.stopPropagation();
-                          setConfirmDeleteId(event.sourceEventId ?? event.id);
-                        }}
+                        onClick={() => openEvent(event)}
+                        className="text-left font-medium after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent"
+                      >
+                        {event.title}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(event.sourceEventId ?? event.id)}
                         disabled={
                           deletingEventId === (event.sourceEventId ?? event.id)
                         }
-                        className="inline-flex shrink-0 items-center rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="relative z-10 inline-flex shrink-0 items-center rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {deletingEventId === (event.sourceEventId ?? event.id)
                           ? "Deleting..."
@@ -810,42 +807,26 @@ export default function EventsCalendarPage() {
                 {selectedDayTasks.map((task) => (
                   <article
                     key={task.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() =>
-                      router.push(`/tasks?task=${encodeURIComponent(task.id)}`)
-                    }
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        router.push(
-                          `/tasks?task=${encodeURIComponent(task.id)}`,
-                        );
-                      }
-                    }}
-                    className={`cursor-pointer rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 transition hover:border-emerald-400 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:hover:border-emerald-700 dark:focus:ring-offset-zinc-950 ${task.status === "DONE" ? "opacity-65" : ""}`}
+                    className={`relative rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 transition hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:hover:border-emerald-700 ${task.status === "DONE" ? "opacity-65" : ""}`}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
-                      <p
-                        className={`font-medium ${task.status === "DONE" ? "line-through" : ""}`}
+                      {/* The title opens the task; its ::after covers the card so the whole card is clickable. */}
+                      <Link
+                        href={`/tasks?task=${encodeURIComponent(task.id)}`}
+                        className={`font-medium after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-emerald-500 ${task.status === "DONE" ? "line-through" : ""}`}
                       >
                         {task.title}
-                      </p>
+                      </Link>
                       {task.status === "DONE" ? (
-                        <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">
+                        <span className="relative z-10 rounded-full bg-emerald-700 px-2 py-0.5 text-xs font-semibold text-white">
                           Task
                         </span>
                       ) : (
                         <button
                           type="button"
-                          onClick={(e) => {
-                            // Prevent the "Done" click from also triggering
-                            // the card's onClick (which would navigate away).
-                            e.stopPropagation();
-                            void handleCompleteTask(task);
-                          }}
+                          onClick={() => void handleCompleteTask(task)}
                           disabled={completingTaskId === task.id}
-                          className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="relative z-10 rounded-full bg-emerald-700 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {completingTaskId === task.id ? "Saving…" : "Done"}
                         </button>

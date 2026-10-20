@@ -502,7 +502,7 @@ export default function EventsPage() {
                     "relative grid h-9 place-items-center rounded-lg text-[13px] tabular-nums transition-colors",
                     selected ? "bg-accent font-semibold text-accent-ink" : "hover:bg-surface-hover",
                     !selected && key === todayKey && "font-bold text-accent",
-                    !selected && !inMonth && "text-muted/60",
+                    !selected && !inMonth && "text-muted",
                   )}
                 >
                   {day.getDate()}
