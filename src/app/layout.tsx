@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { ThemeInitScript, ThemeProvider } from "@/components/theme-provider";
+import { TimeZoneCookie } from "@/components/time-zone-cookie";
 import { getCurrentUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
@@ -20,6 +21,7 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning className="h-full antialiased">
       <body className="h-full flex flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
         <ThemeInitScript />
+        <TimeZoneCookie />
         <ThemeProvider>
           <AppShell currentUser={currentUser}>{children}</AppShell>
         </ThemeProvider>
