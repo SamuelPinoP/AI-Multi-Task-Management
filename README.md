@@ -111,6 +111,14 @@ CI also fails if any `@radix-ui` package is installed in more than one version
 inside a dialog. The `overrides` entry in `package.json` keeps Prisma Studio on
 the app's Radix release; update it when Radix is updated.
 
+On the 1st of each month, `.github/workflows/maintenance-report.yml` opens a
+"Monthly maintenance check" issue assigned to the repository owner, so GitHub
+sends a notification. It lists major upgrades Dependabot skips, Dependabot PRs
+stuck on a failing check, `npm audit` and CodeQL findings, the Node.js
+end-of-life date, and a short checklist (usage and billing dashboards). It
+closes the previous month's issue. Run it any time from the Actions tab
+("Run workflow").
+
 ## Tech Stack
 
 - Frontend: Next.js App Router, React, TypeScript, Tailwind CSS

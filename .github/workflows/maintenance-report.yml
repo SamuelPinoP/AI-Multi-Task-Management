@@ -1,0 +1,48 @@
+name: Monthly maintenance check
+
+# On the 1st of each month, opens one issue listing upkeep that needs a
+# person (major upgrades Dependabot skips, stuck Dependabot PRs, security
+# findings, Node.js end of life, and a short checklist) and assigns it to the
+# repository owner, so GitHub notifies them. Last month's issue is closed.
+on:
+  schedule:
+    - cron: "0 14 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  security-events: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Write the report
+        run: node scripts/maintenance-report.mjs > maintenance-report.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Open this month's issue and close last month's
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          gh label create maintenance --color 0E8A16 --description "Recurring upkeep" 2>/dev/null || true
+          previous=$(gh issue list --label maintenance --state open --json number --jq '.[].number')
+          url=$(gh issue create \
+            --title "Monthly maintenance check: $(date -u +'%B %Y')" \
+            --label maintenance \
+            --assignee "$OWNER" \
+            --body-file maintenance-report.md)
+          echo "Opened $url"
+          for number in $previous; do
+            gh issue close "$number" --comment "Superseded by $url, which lists everything still outstanding."
+          done
