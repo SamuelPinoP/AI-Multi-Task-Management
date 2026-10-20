@@ -25,15 +25,24 @@ export async function GET(req: Request) {
           statusFilter ? { status: statusFilter } : {},
         ],
       },
-      include: { members: { where: { userId: user.id }, select: { userId: true, role: true } } },
+      include: {
+        members: { where: { userId: user.id }, select: { userId: true, role: true } },
+        _count: { select: { members: true, tasks: { where: { deletedAt: null, status: { not: "DONE" } } } } },
+      },
       orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json(projects.map((project) => {
       const access = getProjectAccessForUser(project, user.id);
-      const { members, ...projectData } = project;
+      const { members, _count, ...projectData } = project;
       void members;
-      return { ...projectData, accessLevel: access?.accessLevel ?? "OWNER", memberRole: access?.memberRole ?? "OWNER" };
+      return {
+        ...projectData,
+        accessLevel: access?.accessLevel ?? "OWNER",
+        memberRole: access?.memberRole ?? "OWNER",
+        openTaskCount: _count.tasks,
+        memberCount: _count.members,
+      };
     }));
   } catch (error) {
     console.error("GET /api/projects error:", error);

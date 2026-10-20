@@ -1,687 +1,389 @@
 "use client";
 
+/**
+ * Projects: the list first, the form second (DES-02).
+ *
+ * - Quick add (name only) and a New project sheet for the details.
+ * - Pending invitations, when there are any, at the top.
+ * - A status filter and a grid of project cards with open tasks and members.
+ * - Owners edit in the sheet, archive, or delete (after a clear warning).
+ */
+
+import { Archive, ArchiveRestore, Check, MoreHorizontal, Pencil, Plus, Trash2, Users, X } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { QuickAdd } from "@/components/home/quick-add";
+import {
+  ProjectSheet,
+  projectStatusLabels,
+  type EditableProject,
+  type ProjectInput,
+  type ProjectStatus,
+} from "@/components/projects/project-sheet";
+import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "@/components/ui/toaster";
+import { cn } from "@/lib/cn";
+import { projectColor } from "@/lib/project-color";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
-// Lifecycle status a project can be in.
-type ProjectStatus = "ACTIVE" | "COMPLETED" | "ARCHIVED";
-
-// Filter value used by the "Your projects" list. "ALL" means no filtering.
+type Role = "OWNER" | "EDITOR" | "VIEWER";
 type StatusFilter = "ALL" | ProjectStatus;
 
-/**
- * A project as returned by the /api/projects endpoint, from the perspective
- * of the currently authenticated user (includes their access level/role on
- * that project).
- */
-type Project = {
-  id: string;
-  name: string;
-  description: string | null;
-  color: string | null;
-  status: ProjectStatus;
+type Project = EditableProject & {
   createdAt: string;
   updatedAt: string;
-  // Coarse-grained access bucket used purely for UI decisions
-  // (e.g. showing Edit/Delete vs. "Open shared project").
-  accessLevel: "OWNER" | "EDITOR" | "VIEWER";
-  // The user's specific role on the project.
+  accessLevel: Role;
   memberRole: Role;
+  openTaskCount: number;
+  memberCount: number;
 };
 
-// Role a member can hold on a project.
-type Role = "OWNER" | "EDITOR" | "VIEWER";
-
-/**
- * A pending invitation for the current user to join a project.
- * Only PENDING invitations are ever fetched/shown on this page; once
- * accepted or declined they are removed from local state.
- */
 type Invitation = {
   id: string;
-  invitedEmail: string;
-  status: "PENDING";
-  createdAt: string;
-  // Minimal project info needed to render the invitation card.
-  project: {
-    id: string;
-    name: string;
-    description: string | null;
-    color: string | null;
-    status: ProjectStatus;
-  };
-  // Who sent the invitation, for display purposes.
+  project: { id: string; name: string; color: string | null };
   inviterUser: { name: string | null; email: string };
 };
 
-// Fallback swatch color used when a project/edit form has no color chosen yet.
-const DEFAULT_COLOR = "#6366f1";
+const roleLabels: Record<Role, string> = { OWNER: "Owner", EDITOR: "Editor", VIEWER: "Viewer" };
 
-// All selectable project statuses, used to populate the status <select>.
-const STATUS_OPTIONS: ProjectStatus[] = ["ACTIVE", "COMPLETED", "ARCHIVED"];
-
-/**
- * Converts a ProjectStatus enum value (e.g. "ACTIVE") into a
- * human-friendly, title-cased label (e.g. "Active") for display.
- */
-function formatStatus(status: ProjectStatus) {
-  return status.charAt(0) + status.slice(1).toLowerCase();
+async function errorMessage(response: Response, fallback: string) {
+  const body = (await response.json().catch(() => null)) as { error?: string } | null;
+  return body?.error ?? fallback;
 }
 
-/**
- * ProjectsPage
- *
- * Top-level dashboard for a user's projects. Responsibilities:
- *  - List projects the user owns or is a member of, with status filtering.
- *  - Create new projects.
- *  - Edit/delete projects the user owns, inline in the card.
- *  - List and respond to (accept/decline) pending project invitations.
- *
- * All data is fetched client-side from the /api/projects and
- * /api/project-invitations REST endpoints; there is no server component
- * data-fetching involved here.
- */
 export default function ProjectsPage() {
-  // Projects visible to the current user (owned + shared-with-me).
   const [projects, setProjects] = useState<Project[]>([]);
-  // Pending invitations addressed to the current user.
   const [invitations, setInvitations] = useState<Invitation[]>([]);
-  // Currently selected status filter for the "Your projects" grid.
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [fetching, setFetching] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ACTIVE");
+  const [sheet, setSheet] = useState<{ open: boolean; project: Project | null }>({ open: false, project: null });
+  const [confirmDelete, setConfirmDelete] = useState<Project | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
 
-  // --- "Create a project" form state ---
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [color, setColor] = useState("");
-  const [loading, setLoading] = useState(false); // create-project submit in flight
-
-  // --- Initial data loading state ---
-  const [fetching, setFetching] = useState(true); // projects list loading
-  const [fetchingInvitations, setFetchingInvitations] = useState(true); // invitations list loading
-
-  // --- Inline "edit project" state ---
-  // editingProjectId is the id of the project currently being edited in-place
-  // within the grid (or null if no card is in edit mode).
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(
-    null,
-  );
-  const [editName, setEditName] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editColor, setEditColor] = useState("");
-  const [editStatus, setEditStatus] = useState<ProjectStatus>("ACTIVE");
-  const [savingEdit, setSavingEdit] = useState(false); // edit submit in flight
-
-  // id of the project currently being deleted, used to show a per-card
-  // "Deleting..." state and disable its delete button.
-  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(
-    null,
-  );
-
-  // Shared error banner message shown above the create-project form.
-  const [error, setError] = useState("");
-
-  /**
-   * Fetches the current user's pending project invitations and stores them
-   * in state. On failure, surfaces a generic error message via `error`.
-   */
-  async function fetchInvitations() {
-    try {
-      const res = await fetch("/api/project-invitations");
-      if (!res.ok) throw new Error("Failed to fetch invitations");
-      setInvitations((await res.json()) as Invitation[]);
-    } catch {
-      setError("Could not load invitations.");
-    } finally {
-      setFetchingInvitations(false);
-    }
-  }
-
-  /**
-   * Fetches the list of projects visible to the current user (owned and
-   * shared) and stores them in state. On failure, surfaces a generic error
-   * message via `error`.
-   */
   async function fetchProjects() {
     try {
-      setError("");
-      const res = await fetch("/api/projects");
-      if (!res.ok) throw new Error("Failed to fetch projects");
-      setProjects((await res.json()) as Project[]);
+      const response = await fetch("/api/projects");
+      if (!response.ok) throw new Error();
+      setProjects((await response.json()) as Project[]);
+      setLoadError("");
     } catch {
-      setError("Could not load projects.");
+      setLoadError("Could not load projects.");
     } finally {
       setFetching(false);
     }
   }
 
-  // On mount, load projects and invitations in parallel.
+  async function fetchInvitations() {
+    try {
+      const response = await fetch("/api/project-invitations");
+      if (response.ok) setInvitations((await response.json()) as Invitation[]);
+    } catch {
+      // Invitations stay hidden; projects still load.
+    }
+  }
+
   useEffect(() => {
-    async function loadInitialProjects() {
+    async function loadInitialData() {
       await Promise.all([fetchProjects(), fetchInvitations()]);
     }
-
-    void loadInitialProjects();
+    void loadInitialData();
   }, []);
 
-  /**
-   * Accepts or declines a pending invitation.
-   *
-   * Optimistically removes the invitation from local state once the server
-   * confirms the update. If the invitation was accepted, re-fetches the
-   * projects list so the newly joined project appears immediately.
-   *
-   * @param invitationId - id of the invitation being responded to
-   * @param action - "ACCEPT" to join the project, "DECLINE" to reject it
-   */
-  async function respondToInvitation(
-    invitationId: string,
-    action: "ACCEPT" | "DECLINE",
-  ) {
+  const counts = {
+    ACTIVE: projects.filter((project) => project.status === "ACTIVE").length,
+    COMPLETED: projects.filter((project) => project.status === "COMPLETED").length,
+    ARCHIVED: projects.filter((project) => project.status === "ARCHIVED").length,
+  };
+  const sharedCount = projects.filter((project) => project.accessLevel !== "OWNER").length;
+  const visible = projects.filter((project) => statusFilter === "ALL" || project.status === statusFilter);
+
+  async function respond(invitation: Invitation, action: "ACCEPT" | "DECLINE") {
+    setRespondingId(invitation.id);
     try {
-      setError("");
-      const res = await fetch(`/api/project-invitations/${invitationId}`, {
+      const response = await fetch(`/api/project-invitations/${invitation.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Failed to update invitation");
-      }
-      setInvitations((prev) =>
-        prev.filter((invitation) => invitation.id !== invitationId),
-      );
+      if (!response.ok) throw new Error(await errorMessage(response, "Could not answer the invitation."));
+      setInvitations((current) => current.filter((item) => item.id !== invitation.id));
       notifyWorkspaceChanged();
-      if (action === "ACCEPT") await fetchProjects();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not update invitation.",
-      );
-    }
-  }
-
-  /**
-   * Handles submission of the "Create a project" form.
-   * Validates that a name was provided, POSTs the new project to the API,
-   * resets the form on success, and refreshes both the projects and
-   * invitations lists (invitations are refreshed in case creating a project
-   * affects invitation-related UI state elsewhere).
-   */
-  async function handleCreateProject(e: FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return setError("Project name is required.");
-
-    try {
-      setLoading(true);
-      setError("");
-      const res = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, description, color }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Failed to create project");
+      if (action === "ACCEPT") {
+        await fetchProjects();
+        toast.success(`You joined ${invitation.project.name}`);
       }
-      setName("");
-      setDescription("");
-      setColor("");
-      notifyWorkspaceChanged();
-      await Promise.all([fetchProjects(), fetchInvitations()]);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not create project.",
-      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not answer the invitation.");
     } finally {
-      setLoading(false);
+      setRespondingId(null);
     }
   }
 
-  /**
-   * Puts a project card into inline edit mode, pre-filling the edit form
-   * fields with the project's current values.
-   */
-  function startEditing(project: Project) {
-    setEditingProjectId(project.id);
-    setEditName(project.name);
-    setEditDescription(project.description ?? "");
-    setEditColor(project.color ?? "");
-    setEditStatus(project.status);
-    setError("");
+  async function saveProject(input: ProjectInput) {
+    const editing = sheet.project;
+    const response = await fetch(editing ? `/api/projects/${editing.id}` : "/api/projects", {
+      method: editing ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editing ? input : { name: input.name, description: input.description, color: input.color }),
+    });
+    if (!response.ok) return errorMessage(response, editing ? "Could not save the project." : "Could not create the project.");
+    notifyWorkspaceChanged();
+    await fetchProjects();
+    if (!editing) setStatusFilter((current) => (current === "ALL" ? current : "ACTIVE"));
+    toast.success(editing ? "Project saved" : "Project created", { description: input.name });
+    return null;
   }
 
-  /**
-   * Exits inline edit mode and resets the edit form fields to their
-   * defaults. Used both for the "Cancel" button and after a successful save.
-   */
-  function cancelEditing() {
-    setEditingProjectId(null);
-    setEditName("");
-    setEditDescription("");
-    setEditColor("");
-    setEditStatus("ACTIVE");
+  async function setStatus(project: Project, status: ProjectStatus) {
+    const response = await fetch(`/api/projects/${project.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: project.name, description: project.description ?? "", color: project.color ?? "", status }),
+    });
+    if (!response.ok) {
+      toast.error(await errorMessage(response, "Could not update the project."));
+      return;
+    }
+    notifyWorkspaceChanged();
+    await fetchProjects();
+    toast.success(status === "ARCHIVED" ? "Project archived" : "Project restored", { description: project.name });
   }
 
-  /**
-   * Saves edits made to a project via the inline edit form.
-   * Validates that a name was provided, PATCHes the project, then refreshes
-   * the projects/invitations lists and exits edit mode on success.
-   *
-   * @param projectId - id of the project being updated
-   */
-  async function handleUpdateProject(projectId: string) {
-    if (!editName.trim()) return setError("Project name is required.");
-
+  async function deleteProject(project: Project) {
+    setDeleting(true);
     try {
-      setSavingEdit(true);
-      setError("");
-      const res = await fetch(`/api/projects/${projectId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: editName,
-          description: editDescription,
-          color: editColor,
-          status: editStatus,
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Failed to update project");
-      }
+      const response = await fetch(`/api/projects/${project.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(await errorMessage(response, "Could not delete the project."));
+      setProjects((current) => current.filter((item) => item.id !== project.id));
       notifyWorkspaceChanged();
-      await Promise.all([fetchProjects(), fetchInvitations()]);
-      cancelEditing();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not update project.",
-      );
+      toast.success("Project deleted", { description: project.name });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete the project.");
     } finally {
-      setSavingEdit(false);
+      setDeleting(false);
+      setConfirmDelete(null);
     }
   }
-
-  /**
-   * Deletes a project (owner-only action).
-   * Removes the project from local state immediately on success, and exits
-   * edit mode if the deleted project was the one being edited.
-   *
-   * @param projectId - id of the project to delete
-   */
-  async function handleDeleteProject(projectId: string) {
-    /* unchanged */
-    try {
-      setDeletingProjectId(projectId);
-      setError("");
-      const res = await fetch(`/api/projects/${projectId}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Failed to delete project");
-      }
-      setProjects((prev) => prev.filter((project) => project.id !== projectId));
-      notifyWorkspaceChanged();
-      if (editingProjectId === projectId) cancelEditing();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not delete project.",
-      );
-    } finally {
-      setDeletingProjectId(null);
-    }
-  }
-
-  // Projects to actually render in the grid, after applying the selected
-  // status filter ("ALL" shows everything).
-  const filteredProjects = projects.filter(
-    (project) => statusFilter === "ALL" || project.status === statusFilter,
-  );
 
   return (
-    <main className="min-h-screen px-6 py-10">
-      <div className="mx-auto max-w-5xl space-y-10">
-        {/* Page header / intro copy */}
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-              Collaborative workspaces
-            </p>
-            <h1 className="mt-1 text-4xl font-bold">Projects</h1>
-            <p className="mt-2 max-w-2xl text-zinc-600 dark:text-zinc-300">
-              Create project spaces for tasks, notes, members, chat,
-              attachments, and shared planning. Ownership and shared access are
-              labeled on every card.
-            </p>
-          </div>
-        </header>
+    <div className="mx-auto grid w-full max-w-5xl gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight">Projects</h1>
+          <p className="mt-0.5 text-sm text-muted">
+            {fetching ? "Loading..." : `${counts.ACTIVE} active${sharedCount ? ` · ${sharedCount} shared with you` : ""}`}
+          </p>
+        </div>
+        <button type="button" onClick={() => setSheet({ open: true, project: null })} className={cn(uiPrimaryButtonClass, "px-3 py-1.5")}>
+          <Plus aria-hidden="true" className="h-4 w-4" />
+          New project
+        </button>
+      </header>
 
-        {/* "Create a project" form */}
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60">
-          <div className="mb-5">
-            <h2 className="text-2xl font-semibold">Create a project</h2>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              Start with a name and optional color; you can invite collaborators
-              from the project detail page.
-            </p>
-          </div>
-          <form onSubmit={handleCreateProject} className="space-y-4">
-            <div>
-              <label className="mb-2 block text-sm font-medium">Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Capstone demo, Research sprint"
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-950"
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium">
-                Description (optional)
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={4}
-                placeholder="What is this project trying to accomplish?"
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-950"
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium">
-                Color (optional)
-              </label>
-              <div className="flex flex-wrap items-center gap-3">
-                <input
-                  type="color"
-                  value={color || DEFAULT_COLOR}
-                  onChange={(e) => setColor(e.target.value)}
-                  className="h-11 w-16"
-                />
-                <button
-                  type="button"
-                  onClick={() => setColor("")}
-                  className="rounded-lg border px-3 py-2 text-sm dark:border-zinc-700"
-                >
-                  Clear
-                </button>
-                <span className="text-sm text-zinc-500">
-                  {color || "No color selected"}
+      <QuickAdd
+        label="Add a project"
+        placeholder="Add a project and press Enter"
+        endpoint="/api/projects"
+        field="name"
+        successMessage="Project created"
+        editHref={(id) => `/projects/${id}`}
+        onAdded={() => {
+          setStatusFilter((current) => (current === "ALL" ? current : "ACTIVE"));
+          void fetchProjects();
+        }}
+      />
+
+      {invitations.length ? (
+        <section aria-labelledby="invitations-heading" className="rounded-xl border border-accent/30 bg-accent-soft p-4">
+          <h2 id="invitations-heading" className="text-sm font-semibold">
+            {invitations.length === 1 ? "You're invited to a project" : `You're invited to ${invitations.length} projects`}
+          </h2>
+          <ul className="mt-2 grid gap-2">
+            {invitations.map((invitation) => (
+              <li key={invitation.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-surface px-3 py-2">
+                <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: projectColor(invitation.project) }} />
+                <span className="min-w-0 flex-1 text-sm">
+                  <span className="font-semibold">{invitation.project.name}</span>
+                  <span className="text-muted"> · from {invitation.inviterUser.name || invitation.inviterUser.email}</span>
                 </span>
-              </div>
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-xl px-5 py-3 bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-50"
-            >
-              {loading ? "Creating..." : "Create project"}
-            </button>
-          </form>
-          {error && (
-            <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900">
-              {error}
-            </p>
-          )}
-        </section>
-
-        {/* Pending invitations list */}
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-semibold">My invitations</h2>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                Accept an invitation to make the project appear as “Shared with
-                me”.
-              </p>
-            </div>
-            <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-              {invitations.length} pending
-            </span>
-          </div>
-          {fetchingInvitations ? (
-            <p className="mt-4 text-sm text-zinc-500">Loading invitations...</p>
-          ) : invitations.length === 0 ? (
-            <p className="mt-4 rounded-2xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-              No pending project invitations. When a teammate invites this
-              account, the request will show up here.
-            </p>
-          ) : (
-            <div className="mt-4 space-y-3">
-              {invitations.map((invitation) => (
-                <article
-                  key={invitation.id}
-                  className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800"
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h3 className="font-semibold">
-                        {invitation.project.name}
-                      </h3>
-                      <p className="text-sm text-zinc-600 dark:text-zinc-300">
-                        Invited by{" "}
-                        {invitation.inviterUser.name ||
-                          invitation.inviterUser.email}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void respondToInvitation(invitation.id, "ACCEPT")
-                        }
-                        className="rounded-lg px-4 py-2 text-sm bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover"
-                      >
-                        Accept
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void respondToInvitation(invitation.id, "DECLINE")
-                        }
-                        className="rounded-lg border px-4 py-2 text-sm dark:border-zinc-700"
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* "Your projects" grid, with status filter and inline edit/delete */}
-        <section>
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold">Your projects</h2>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                Owner projects can be edited here. Shared projects keep
-                collaboration actions in the detail page.
-              </p>
-            </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            >
-              <option value="ALL">All</option>
-              <option value="ACTIVE">Active</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="ARCHIVED">Archived</option>
-            </select>
-          </div>
-          {fetching ? (
-            <p className="text-zinc-600 dark:text-zinc-300">
-              Loading projects...
-            </p>
-          ) : filteredProjects.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-8 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
-              <h3 className="text-lg font-semibold">
-                No projects match this view yet.
-              </h3>
-              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                Create your first project above, or accept an invitation from a
-                teammate to start collaborating.
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {filteredProjects.map((project) => {
-                // Whether this specific card is currently in edit mode.
-                const isEditing = editingProjectId === project.id;
-                // Whether this specific card's delete request is in flight.
-                const isDeleting = deletingProjectId === project.id;
-                // Only owners get edit/delete controls; others get a
-                // read-only "Open shared project" link instead.
-                const isOwner = project.accessLevel === "OWNER";
-                return (
-                  <article
-                    key={project.id}
-                    className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60"
+                <span className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => void respond(invitation, "ACCEPT")}
+                    disabled={respondingId === invitation.id}
+                    className={cn(uiPrimaryButtonClass, "px-2.5 py-1 text-xs")}
                   >
-                    {isEditing ? (
-                      // --- Inline edit form for this project ---
-                      <div className="space-y-3">
-                        <input
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          className="w-full rounded-lg border px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
-                        />
-                        <textarea
-                          value={editDescription}
-                          onChange={(e) => setEditDescription(e.target.value)}
-                          rows={3}
-                          className="w-full rounded-lg border px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
-                        />
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="color"
-                            value={editColor || DEFAULT_COLOR}
-                            onChange={(e) => setEditColor(e.target.value)}
-                            className="h-10 w-14"
-                          />
-                          <select
-                            value={editStatus}
-                            onChange={(e) =>
-                              setEditStatus(e.target.value as ProjectStatus)
-                            }
-                            className="rounded-lg border px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-                          >
-                            {STATUS_OPTIONS.map((status) => (
-                              <option key={status} value={status}>
-                                {formatStatus(status)}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void handleUpdateProject(project.id)}
-                            disabled={savingEdit}
-                            className="rounded-lg px-4 py-2 text-sm bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover"
-                          >
-                            {savingEdit ? "Saving..." : "Save"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={cancelEditing}
-                            className="rounded-lg border px-4 py-2 text-sm dark:border-zinc-700"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      // --- Read-only card view ---
-                      <>
-                        <Link
-                          href={`/projects/${project.id}`}
-                          className="block"
-                        >
-                          <div className="mb-3 flex items-start justify-between gap-3">
-                            <div>
-                              <h3 className="text-xl font-semibold">
-                                {project.name}
-                              </h3>
-                              {project.description && (
-                                <p className="mt-2 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-                                  {project.description}
-                                </p>
-                              )}
-                            </div>
-                            {/* Project color swatch */}
-                            <span
-                              className="mt-1 inline-block h-4 w-4 shrink-0 rounded-full border"
-                              style={{
-                                backgroundColor: project.color || "transparent",
-                              }}
-                            />
-                          </div>
-                        </Link>
-                        {/* Status / ownership / role badges */}
-                        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-                          <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs dark:border-zinc-700">
-                            {formatStatus(project.status)}
-                          </span>
-                          <span
-                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${isOwner ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300" : "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"}`}
-                          >
-                            {isOwner ? "Owner" : "Shared with me"}
-                          </span>
-                          <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs dark:border-zinc-700">
-                            Role: {project.memberRole}
-                          </span>
-                        </div>
-                        <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-                          {isOwner
-                            ? "You can edit details, manage invitations, and remove collaborators."
-                            : "You can view the project, participate in chat, and contribute to permitted collaborative areas."}
-                        </p>
-                        {/* Owner-only actions vs. shared-member link */}
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {isOwner ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => startEditing(project)}
-                                className="rounded-lg border px-4 py-2 text-sm dark:border-zinc-700"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void handleDeleteProject(project.id)
-                                }
-                                disabled={isDeleting}
-                                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white disabled:opacity-50"
-                              >
-                                {isDeleting ? "Deleting..." : "Delete"}
-                              </button>
-                            </>
-                          ) : (
-                            <Link
-                              href={`/projects/${project.id}`}
-                              className="rounded-lg border px-4 py-2 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-200"
-                            >
-                              Open shared project
-                            </Link>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
-          )}
+                    <Check aria-hidden="true" className="h-3.5 w-3.5" />
+                    Accept
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void respond(invitation, "DECLINE")}
+                    disabled={respondingId === invitation.id}
+                    className={cn(uiButtonClass, "px-2.5 py-1 text-xs")}
+                  >
+                    <X aria-hidden="true" className="h-3.5 w-3.5" />
+                    Decline
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
+      ) : null}
+
+      <div role="radiogroup" aria-label="Status" className="flex w-fit flex-wrap rounded-lg border border-line bg-surface p-0.5">
+        {(["ACTIVE", "COMPLETED", "ARCHIVED", "ALL"] as StatusFilter[]).map((value) => (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={statusFilter === value}
+            onClick={() => setStatusFilter(value)}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-sm transition-colors",
+              statusFilter === value ? "bg-accent-soft font-semibold text-accent" : "text-muted hover:text-ink",
+            )}
+          >
+            {value === "ALL" ? "All" : projectStatusLabels[value]}
+            {value !== "ALL" && counts[value] ? <span className="ml-1 text-xs opacity-70">{counts[value]}</span> : null}
+          </button>
+        ))}
       </div>
-    </main>
+
+      {loadError ? (
+        <p role="alert" className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
+          {loadError}{" "}
+          <button type="button" onClick={() => void fetchProjects()} className="font-semibold underline">Try again</button>
+        </p>
+      ) : null}
+
+      {fetching ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading projects">
+          {Array.from({ length: 3 }, (_, index) => (
+            <div key={index} className="h-32 animate-pulse rounded-xl border border-line bg-surface" />
+          ))}
+        </div>
+      ) : visible.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-line bg-surface px-6 py-10 text-center">
+          <h2 className="text-base font-semibold">
+            {projects.length === 0 ? "No projects yet." : `No ${statusFilter === "ALL" ? "" : `${projectStatusLabels[statusFilter as ProjectStatus].toLowerCase()} `}projects.`}
+          </h2>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted">
+            {projects.length === 0
+              ? "A project groups tasks, notes, events and a team chat. Type a name above and press Enter to start one."
+              : "Switch the filter to see your other projects."}
+          </p>
+          {projects.length === 0 ? (
+            <button type="button" onClick={() => setSheet({ open: true, project: null })} className={cn(uiButtonClass, "mt-4 px-3 py-1.5")}>
+              Create your first project
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {visible.map((project) => {
+            const owner = project.accessLevel === "OWNER";
+            return (
+              <li key={project.id} className="group relative flex flex-col rounded-xl border border-line bg-surface p-4 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700">
+                <div className="flex items-start gap-2">
+                  <span aria-hidden="true" className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: projectColor(project) }} />
+                  <h2 className="min-w-0 flex-1 text-[15px] font-semibold">
+                    {/* The whole card opens the project; the menu sits above the link. */}
+                    <Link href={`/projects/${project.id}`} className="line-clamp-2 after:absolute after:inset-0 after:rounded-xl hover:text-accent">
+                      {project.name}
+                    </Link>
+                  </h2>
+                  {owner ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        aria-label={`More actions for ${project.name}`}
+                        className="relative z-10 -mr-1 -mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-lg text-muted outline-none hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => setSheet({ open: true, project })}>
+                          <Pencil />
+                          Edit
+                        </DropdownMenuItem>
+                        {project.status === "ARCHIVED" ? (
+                          <DropdownMenuItem onSelect={() => void setStatus(project, "ACTIVE")}>
+                            <ArchiveRestore />
+                            Restore
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem onSelect={() => void setStatus(project, "ARCHIVED")}>
+                            <Archive />
+                            Archive
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => setConfirmDelete(project)} className="text-danger [&_svg]:text-danger">
+                          <Trash2 />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
+                </div>
+                <p className={cn("mt-1.5 line-clamp-2 text-sm", project.description ? "text-muted" : "text-muted/70")}>
+                  {project.description || "No description"}
+                </p>
+                <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-3 text-xs text-muted">
+                  <span>{project.openTaskCount} open task{project.openTaskCount === 1 ? "" : "s"}</span>
+                  {project.memberCount ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Users aria-hidden="true" className="h-3.5 w-3.5" />
+                      {project.memberCount} member{project.memberCount === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-px font-semibold",
+                      owner ? "bg-canvas text-muted" : "bg-accent-soft text-accent",
+                    )}
+                  >
+                    {owner ? "Owner" : `Shared · ${roleLabels[project.memberRole]}`}
+                  </span>
+                  {project.status !== "ACTIVE" ? (
+                    <span className="rounded-full bg-caution-soft px-2 py-px font-semibold text-caution">{projectStatusLabels[project.status]}</span>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <ProjectSheet
+        open={sheet.open}
+        onOpenChange={(open) => setSheet((current) => ({ ...current, open }))}
+        project={sheet.project}
+        onSubmit={saveProject}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title={confirmDelete ? `Delete “${confirmDelete.name}”?` : "Delete project?"}
+        message="This can't be undone. Its chat, files, members and invitations are deleted. Its tasks, notes and events stay, without the project."
+        confirmLabel="Delete project"
+        loading={deleting}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          if (confirmDelete) void deleteProject(confirmDelete);
+        }}
+      />
+    </div>
   );
 }
