@@ -8,8 +8,8 @@ import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 export const QUICK_ADD_INPUT_ID = "quick-add-input";
 
-/** One-line task capture at the top of Home: type a title and press Enter. */
-export function QuickAdd() {
+/** One-line task capture (Home, Tasks): type a title and press Enter. */
+export function QuickAdd({ onAdded, placeholder = "Add a task and press Enter" }: { onAdded?: () => void; placeholder?: string } = {}) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
@@ -34,6 +34,7 @@ export function QuickAdd() {
       const taskId = body.id;
       setTitle("");
       notifyWorkspaceChanged();
+      onAdded?.();
       router.refresh();
       toast.success("Task added", {
         description: trimmed,
@@ -59,7 +60,7 @@ export function QuickAdd() {
         id={QUICK_ADD_INPUT_ID}
         value={title}
         onChange={(event) => setTitle(event.target.value)}
-        placeholder="Add a task and press Enter"
+        placeholder={placeholder}
         maxLength={200}
         autoComplete="off"
         className="min-w-0 flex-1 bg-transparent py-1 text-sm text-ink outline-none placeholder:text-muted"
