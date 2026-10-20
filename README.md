@@ -119,6 +119,13 @@ end-of-life date, and a short checklist (usage and billing dashboards). It
 closes the previous month's issue. Run it any time from the Actions tab
 ("Run workflow").
 
+Every 30 minutes, `.github/workflows/uptime.yml` checks production the way a
+visitor would (`scripts/uptime-check.mjs`: the login page, the signed-out
+redirect, and the API). If it still fails after about two minutes of retries,
+it opens a "Production is down" issue assigned to the repository owner, and
+closes it with a note once the site answers again. The checks don't touch the
+database, so they don't use Neon's free compute hours.
+
 ## Tech Stack
 
 - Frontend: Next.js App Router, React, TypeScript, Tailwind CSS
