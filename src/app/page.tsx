@@ -455,8 +455,18 @@ export default async function DashboardPage() {
     }),
     prisma.event.findMany({
       where: {
-        ...getAccessibleEventWhere(user.id),
-        startTime: { gte: toEventStorageTime(todayStart) },
+        AND: [
+          getAccessibleEventWhere(user.id),
+          { startTime: { lt: toEventStorageTime(reminderRangeEnd) } },
+          // Repeating events that started before today can still happen in
+          // the reminder window; expandRecurringEventsForRange picks the dates.
+          {
+            OR: [
+              { startTime: { gte: toEventStorageTime(todayStart) } },
+              { recurrence: { not: Recurrence.NONE } },
+            ],
+          },
+        ],
       },
       orderBy: { startTime: "asc" },
       include: { project: { select: { name: true, color: true } } },
