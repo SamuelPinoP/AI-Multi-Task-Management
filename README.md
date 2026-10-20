@@ -112,7 +112,7 @@ with minor and patch updates grouped, and for GitHub Actions.
 - Database: PostgreSQL, Prisma ORM, pgAdmin 4
 - Storage: local filesystem, Vercel Blob, or private AWS S3 with hybrid routing
 - Deployment: Vercel
-- Email: Resend optional, in-app invitations supported without email
+- Email: optional Gmail SMTP, Brevo or Resend; in-app invitations work without email
 
 ## Screenshots
 
