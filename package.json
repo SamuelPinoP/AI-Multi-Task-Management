@@ -5,14 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "vercel-build": "npm run validate:deploy-env && prisma validate && prisma generate && node scripts/migrate-if-production.mjs && next build",
+    "vercel-build": "npm run validate:deploy-env && prisma validate && prisma generate && node scripts/migrate-deployment-database.mjs && next build",
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
     "validate:deploy-env": "node scripts/validate-deployment-env.mjs",
     "test:storage": "node --conditions react-server --import tsx --test src/lib/project-chat-*.test.ts",
     "verify:storage": "node --conditions react-server --import tsx scripts/verify-s3-storage.ts",
-    "test:unit": "node --import tsx --test src/lib/event-time.test.ts src/lib/safe-redirect.test.ts src/lib/project-chat-quota.test.ts src/lib/project-chat-attachment-display.test.ts src/lib/http-range.test.ts",
+    "test:unit": "node --import tsx --test src/lib/event-time.test.ts src/lib/safe-redirect.test.ts src/lib/project-chat-quota.test.ts src/lib/project-chat-attachment-display.test.ts src/lib/http-range.test.ts src/lib/database-url.test.ts",
     "typecheck": "tsc --noEmit",
     "test:e2e": "node scripts/run-playwright-e2e.mjs",
     "test:e2e:headed": "node scripts/run-playwright-e2e.mjs --headed"

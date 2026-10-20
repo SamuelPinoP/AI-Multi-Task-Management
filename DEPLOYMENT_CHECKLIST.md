@@ -79,10 +79,10 @@ The same check runs automatically at the start of `npm run vercel-build`. It val
 The Vercel Build Command runs:
 
 ```bash
-npm run validate:deploy-env && prisma validate && prisma generate && node scripts/migrate-if-production.mjs && next build
+npm run validate:deploy-env && prisma validate && prisma generate && node scripts/migrate-deployment-database.mjs && next build
 ```
 
-This means deployment environment variables are checked first, Prisma Client is generated during the build, and pending migrations are applied with Prisma's production-safe `migrate deploy` command before `next build` runs. `scripts/migrate-if-production.mjs` runs `prisma migrate deploy` only when `VERCEL_ENV` is `production`: Preview deployments currently share the production database, so a pull request's preview must never apply its migrations. Migrations reach the database only when the pull request is merged to `main`. Use an empty or properly backed-up hosted PostgreSQL database for the first deployment. Do not run destructive reset commands, such as `prisma migrate reset`, against production.
+This means deployment environment variables are checked first, Prisma Client is generated during the build, and pending migrations are applied with Prisma's production-safe `migrate deploy` command before `next build` runs. Preview deployments have their own database: the Neon resource `ai-multi-task-preview`, connected to the Preview environment only with the `PREVIEW_` prefix. When `VERCEL_ENV` is `preview` and `PREVIEW_DATABASE_URL` is set, the app and Prisma use it instead of `DATABASE_URL` (`src/lib/database-url.ts`). `scripts/migrate-deployment-database.mjs` runs `prisma migrate deploy` in production and in previews that have their own database; a preview without one would share production's database, so it skips migrations. A pull request's migrations reach production only when it is merged to `main`. The preview database starts empty and is shared by all previews. Use an empty or properly backed-up hosted PostgreSQL database for the first deployment. Do not run destructive reset commands, such as `prisma migrate reset`, against production.
 
 If you prefer to separate migrations from the Vercel build step, run the same Prisma commands from a trusted machine or CI environment with the production `DATABASE_URL`, then deploy with the same migration state.
 
