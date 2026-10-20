@@ -7,7 +7,17 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    # Skip major versions: they usually need code changes, so they're planned
+    # as separate tasks. Security updates still arrive regardless.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    # Skip major versions: they usually need code changes, so they're planned
+    # as separate tasks. Security updates still arrive regardless.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
