@@ -8,7 +8,7 @@ import {
   type OutgoingEmail,
 } from "@/lib/email-config";
 
-const APP_NAME = "AI-Multi Task-Management";
+const APP_NAME = "AI Multi";
 const RESEND_API_URL = "https://api.resend.com/emails";
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 // Vercel functions have short time limits; give up on a slow mail server.

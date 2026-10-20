@@ -10,7 +10,7 @@ import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/sidebar-state";
 import { getWorkspaceNav } from "@/lib/workspace-nav";
 
 export const metadata: Metadata = {
-  title: "AI-Multi Task-Management",
+  title: "AI Multi",
   description: "AI productivity app for notes, tasks, and events.",
 };
 
