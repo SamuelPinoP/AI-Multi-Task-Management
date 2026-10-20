@@ -4,6 +4,9 @@ const e2ePort = process.env.E2E_PORT || "3100";
 const baseURL =
   process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${e2ePort}`;
 const isCI = Boolean(process.env.CI);
+// Vercel preview URLs are behind Deployment Protection; CI passes this secret
+// so the @smoke tests can reach them.
+const vercelBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -17,6 +20,12 @@ export default defineConfig({
     : [["list"], ["html", { open: "never" }]],
   use: {
     baseURL,
+    extraHTTPHeaders: vercelBypassSecret
+      ? {
+          "x-vercel-protection-bypass": vercelBypassSecret,
+          "x-vercel-set-bypass-cookie": "true",
+        }
+      : undefined,
     // CI records every test (video, trace, screenshot) so each run can be
     // watched afterwards from the HTML report.
     screenshot: isCI ? "on" : "only-on-failure",

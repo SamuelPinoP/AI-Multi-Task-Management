@@ -93,6 +93,18 @@ at https://trace.playwright.dev. To also publish the latest report from `main`
 on GitHub Pages, enable Pages with "GitHub Actions" as the source and set the
 repository variable `PUBLISH_PLAYWRIGHT_REPORT` to `true`.
 
+`.github/workflows/preview-smoke.yml` runs the Playwright tests tagged
+`@smoke` (`tests/e2e/smoke.spec.ts`) against each Vercel preview once it is
+deployed. Previews share the production database, so smoke tests must stay
+read-only: no sign-ups, sign-ins or writes. Preview URLs are behind Vercel
+Deployment Protection; the workflow sends the `VERCEL_AUTOMATION_BYPASS_SECRET`
+repository secret as the `x-vercel-protection-bypass` header and skips itself
+when the secret isn't set. Run them locally with
+`npm run test:e2e -- --grep @smoke`.
+
+Dependabot (`.github/dependabot.yml`) opens weekly update PRs for npm packages,
+with minor and patch updates grouped, and for GitHub Actions.
+
 ## Tech Stack
 
 - Frontend: Next.js App Router, React, TypeScript, Tailwind CSS
