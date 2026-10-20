@@ -73,9 +73,9 @@ function TodayTimeline({ events, now }: { events: HomeEvent[]; now: Date }) {
   const nextIndex = events.findIndex((event) => event.hasStartTime && eventWallTime(event.startTime) > now);
   const nowAt = nextIndex === -1 ? events.length : nextIndex;
   const nowLine = (
-    <li key="now" className="col-span-2 my-0.5 flex items-center gap-1.5 text-[10.5px] font-bold text-project-3" aria-label={`Now, ${nowLabel}`}>
+    <li key="now" className="col-span-2 my-0.5 flex items-center gap-1.5 text-[10.5px] font-bold text-danger" aria-label={`Now, ${nowLabel}`}>
       <span aria-hidden="true">NOW {nowLabel}</span>
-      <span aria-hidden="true" className="h-px flex-1 bg-project-3" />
+      <span aria-hidden="true" className="h-px flex-1 bg-danger" />
     </li>
   );
 

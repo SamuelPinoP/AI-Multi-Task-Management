@@ -156,7 +156,7 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
     <div className="space-y-4">
       <section className="flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white/95 p-4 shadow-sm shadow-zinc-200/60 dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none sm:p-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">Kanban View</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Kanban View</p>
           <h1 className="mt-1 truncate text-2xl font-bold tracking-tight">{projectName}</h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             {canEdit ? "Move cards or create new tasks directly on the board." : "Viewer access is read-only."}
@@ -183,11 +183,11 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
                 <div className="mb-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
                   <input value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="Task title" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
                   <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                    <select value={newTaskPriority} onChange={(e) => setNewTaskPriority(e.target.value as Priority)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900">{PRIORITIES.map((priority) => <option key={priority} value={priority}>{formatEnum(priority)}</option>)}</select>
+                    <select aria-label="Priority" value={newTaskPriority} onChange={(e) => setNewTaskPriority(e.target.value as Priority)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900">{PRIORITIES.map((priority) => <option key={priority} value={priority}>{formatEnum(priority)}</option>)}</select>
                     <input type="date" value={newTaskDueDate} onChange={(e) => setNewTaskDueDate(e.target.value)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
                   </div>
-                  {!projectId && projects.length > 0 && <select value={newTaskProjectId} onChange={(e) => { setNewTaskProjectId(e.target.value); setNewTaskAssigneeId(""); }} className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="">Personal task</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>}
-                  {members.length > 0 && <select value={newTaskAssigneeId} onChange={(e) => setNewTaskAssigneeId(e.target.value)} className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="">Unassigned</option>{members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>}
+                  {!projectId && projects.length > 0 && <select aria-label="Project" value={newTaskProjectId} onChange={(e) => { setNewTaskProjectId(e.target.value); setNewTaskAssigneeId(""); }} className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="">Personal task</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>}
+                  {members.length > 0 && <select aria-label="Assignee" value={newTaskAssigneeId} onChange={(e) => setNewTaskAssigneeId(e.target.value)} className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="">Unassigned</option>{members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>}
                   <div className="mt-3 flex gap-2"><button type="button" onClick={() => void createTask(column.status)} disabled={updatingTaskId === "new-task" || !newTaskTitle.trim()} className={`${uiPrimaryButtonClass} px-3 py-1.5 text-xs`}>Create</button><button type="button" onClick={() => setCreatingStatus(null)} className={`${uiButtonClass} px-3 py-1.5 text-xs`}>Cancel</button></div>
                 </div>
               ) : <button type="button" onClick={() => setCreatingStatus(column.status)} className={`${uiButtonClass} mb-3 w-full border-dashed py-2 text-xs`}>+ Add task to {column.title}</button>)}

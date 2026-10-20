@@ -121,6 +121,11 @@
   --color-zinc-950: #0e1413;
 }
 
+/* In dark mode zinc-500 carries muted text on dark surfaces, so it is lifted to pass WCAG AA (4.5:1). */
+.dark {
+  --color-zinc-500: #8b9995;
+}
+
 body {
   background: var(--canvas);
   color: var(--ink);

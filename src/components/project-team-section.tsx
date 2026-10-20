@@ -252,7 +252,7 @@ export function ProjectTeamSection({
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Role</label>
-                <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as Exclude<Role, "OWNER">)} className="w-full rounded-xl border px-3 py-2">
+                <select aria-label="Role" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as Exclude<Role, "OWNER">)} className="w-full rounded-xl border px-3 py-2">
                   <option value="EDITOR">Editor</option>
                   <option value="VIEWER">Viewer</option>
                 </select>
@@ -280,7 +280,7 @@ export function ProjectTeamSection({
                 placeholder="Email (optional, sends an invitation)"
                 className="rounded-xl border px-3 py-2"
               />
-              <select
+              <select aria-label="Role"
                 value={role}
                 onChange={(e) => setRole(e.target.value as Exclude<Role, "OWNER">)}
                 className="rounded-xl border px-3 py-2"
@@ -377,7 +377,7 @@ export function ProjectTeamSection({
                     {memberWorkload.overdue}
                   </span>
                   {isOwner && m.role !== "OWNER" && (
-                    <select value={m.role} onChange={(e) => void updateMemberRole(m.id, e.target.value as Exclude<Role, "OWNER">)} className="rounded-lg border px-2 py-1 text-xs">
+                    <select aria-label="Role" value={m.role} onChange={(e) => void updateMemberRole(m.id, e.target.value as Exclude<Role, "OWNER">)} className="rounded-lg border px-2 py-1 text-xs">
                       <option value="EDITOR">Editor</option>
                       <option value="VIEWER">Viewer</option>
                     </select>
@@ -403,7 +403,7 @@ export function ProjectTeamSection({
                     placeholder={`Add note for ${m.name}`}
                     className="w-full rounded-lg border px-3 py-1.5 text-sm"
                   />
-                  <select
+                  <select aria-label="Note visibility"
                     value={visibilityDrafts[m.id] ?? "TEAM"}
                     onChange={(e) =>
                       setVisibilityDrafts((prev) => ({
@@ -434,7 +434,7 @@ export function ProjectTeamSection({
                             Private
                           </span>
                         ) : null}
-                        <span className="text-zinc-400">
+                        <span className="text-zinc-500">
                           {" "}
                           • {new Date(note.createdAt).toLocaleString()}
                         </span>
@@ -454,8 +454,14 @@ export function ProjectTeamSection({
       </div>
 
       <section className="mt-8">
-        <h2 className="mb-4 text-2xl font-semibold">Workload Summary</h2>
-        <div className="overflow-x-auto rounded-2xl border border-zinc-200 dark:border-zinc-800">
+        <h2 id="workload-summary-heading" className="mb-4 text-2xl font-semibold">Workload Summary</h2>
+        {/* Focusable so keyboard users can scroll the table sideways on small screens. */}
+        <div
+          role="region"
+          aria-labelledby="workload-summary-heading"
+          tabIndex={0}
+          className="overflow-x-auto rounded-2xl border border-zinc-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent dark:border-zinc-800"
+        >
           <table className="min-w-full text-sm">
             <thead className="bg-zinc-100 dark:bg-zinc-900">
               <tr>

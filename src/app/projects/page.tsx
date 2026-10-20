@@ -337,7 +337,7 @@ export default function ProjectsPage() {
                     </DropdownMenu>
                   ) : null}
                 </div>
-                <p className={cn("mt-1.5 line-clamp-2 text-sm", project.description ? "text-muted" : "text-muted/70")}>
+                <p className={cn("mt-1.5 line-clamp-2 text-sm text-muted", !project.description && "italic")}>
                   {project.description || "No description"}
                 </p>
                 <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-3 text-xs text-muted">
