@@ -10,6 +10,7 @@ import {
 import { uiButtonClass, uiCardClass } from "@/components/ui";
 import { formatTaskDueDate, getLocalDateOnly } from "@/lib/task-date-buckets";
 import { eventWallTime, formatEventDateTime } from "@/lib/event-time";
+import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
@@ -234,6 +235,7 @@ export default function RoadmapPage() {
         body: JSON.stringify({ status: "DONE" }),
       });
       if (!res.ok) throw new Error("Failed to update task");
+      notifyWorkspaceChanged();
       await fetchData(false);
     } finally {
       setUpdatingTaskId(null);

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
+import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 // Lifecycle status a project can be in.
 type ProjectStatus = "ACTIVE" | "COMPLETED" | "ARCHIVED";
@@ -191,6 +192,7 @@ export default function ProjectsPage() {
       setInvitations((prev) =>
         prev.filter((invitation) => invitation.id !== invitationId),
       );
+      notifyWorkspaceChanged();
       if (action === "ACCEPT") await fetchProjects();
     } catch (err) {
       setError(
@@ -225,6 +227,7 @@ export default function ProjectsPage() {
       setName("");
       setDescription("");
       setColor("");
+      notifyWorkspaceChanged();
       await Promise.all([fetchProjects(), fetchInvitations()]);
     } catch (err) {
       setError(
@@ -287,6 +290,7 @@ export default function ProjectsPage() {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error || "Failed to update project");
       }
+      notifyWorkspaceChanged();
       await Promise.all([fetchProjects(), fetchInvitations()]);
       cancelEditing();
     } catch (err) {
@@ -318,6 +322,7 @@ export default function ProjectsPage() {
         throw new Error(data?.error || "Failed to delete project");
       }
       setProjects((prev) => prev.filter((project) => project.id !== projectId));
+      notifyWorkspaceChanged();
       if (editingProjectId === projectId) cancelEditing();
     } catch (err) {
       setError(

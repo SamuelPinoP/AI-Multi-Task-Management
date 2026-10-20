@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 type QuickAction = "NOTE" | "TASK" | "EVENT";
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
@@ -48,6 +49,7 @@ export function ProjectQuickActions({ projectId }: { projectId: string }) {
   function resetAndRefresh() {
     setError("");
     setActiveAction(null);
+    notifyWorkspaceChanged();
     router.refresh();
   }
 

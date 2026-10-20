@@ -10,6 +10,7 @@ import {
 import { expandRecurringEventsForRange } from "@/lib/recurrence";
 import { getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
 import { eventWallTime, formatEventTime } from "@/lib/event-time";
+import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
@@ -122,6 +123,7 @@ export function TodayWorkspace({
         }),
       });
       if (!res.ok) throw new Error("Failed to update task");
+      notifyWorkspaceChanged();
       setTasks((current) =>
         current.map((item) =>
           item.id === task.id ? { ...item, status: "DONE" } : item,
