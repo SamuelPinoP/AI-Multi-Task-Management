@@ -1043,6 +1043,16 @@ function ViewerText({ item }: { item: GalleryItem }) {
 
 export type ComposerAttachment = { id: string; file: File; previewUrl: string };
 
+/**
+ * Previews of picked files are object URLs, which the browser generates as
+ * `blob:<origin>/<uuid>`. Refuse anything else so a preview can never be a
+ * script URL. encodeURI leaves such URLs unchanged; it marks the value as a
+ * URL for code scanning, which otherwise traces the file name into `src`.
+ */
+function localPreviewUrl(url: string) {
+  return url.startsWith("blob:") ? encodeURI(url) : undefined;
+}
+
 /** Thumbnails of the files picked for the next message. */
 export function ComposerAttachmentTray({
   attachments,
@@ -1055,15 +1065,16 @@ export function ComposerAttachmentTray({
     <ul aria-label="Files to send" className="flex gap-3 overflow-x-auto px-3 pb-3 pt-2">
       {attachments.map(({ id, file, previewUrl }) => {
         const kind = attachmentKind(file.type, file.name);
+        const preview = localPreviewUrl(previewUrl);
         return (
           <li key={id} className="relative w-24 shrink-0">
             <div className="relative h-20 w-24 overflow-hidden rounded-xl bg-zinc-100 ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700">
-              {kind === "image" ? (
+              {kind === "image" && preview ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={previewUrl} alt="" className="h-full w-full object-cover" />
-              ) : kind === "video" ? (
+                <img src={preview} alt="" className="h-full w-full object-cover" />
+              ) : kind === "video" && preview ? (
                 <>
-                  <video src={posterSrc(previewUrl)} preload="metadata" muted playsInline aria-hidden="true" className="h-full w-full bg-zinc-900 object-cover" />
+                  <video src={posterSrc(preview)} preload="metadata" muted playsInline aria-hidden="true" className="h-full w-full bg-zinc-900 object-cover" />
                   <span className="absolute inset-0 flex items-center justify-center">
                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-zinc-950 shadow">
                       <PlayGlyph className="ml-0.5 h-4 w-4" />
