@@ -1,9 +1,18 @@
 import "server-only";
+import {
+  brevoPayload,
+  parseEmailProvider,
+  parseMailbox,
+  smtpSettings,
+  type EmailProvider,
+  type OutgoingEmail,
+} from "@/lib/email-config";
 
 const APP_NAME = "AI-Multi Task-Management";
 const RESEND_API_URL = "https://api.resend.com/emails";
-
-type EmailProvider = "disabled" | "resend";
+const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
+// Vercel functions have short time limits; give up on a slow mail server.
+const SMTP_TIMEOUT_MS = 10_000;
 
 export type EmailDeliveryResult = {
   status: "disabled" | "sent" | "failed";
@@ -29,10 +38,7 @@ function cleanEnvValue(name: string) {
 }
 
 function getEmailProvider(): EmailProvider | "invalid" {
-  const provider = cleanEnvValue("EMAIL_PROVIDER")?.toLowerCase();
-  if (!provider || provider === "disabled") return "disabled";
-  if (provider === "resend") return "resend";
-  return "invalid";
+  return parseEmailProvider(cleanEnvValue("EMAIL_PROVIDER"));
 }
 
 function getAppBaseUrl(fallbackOrigin?: string) {
@@ -80,29 +86,11 @@ async function sendEmail({
     return { status: "failed", message: failureMessage };
   }
 
-  const apiKey = cleanEnvValue("RESEND_API_KEY");
-  const from = cleanEnvValue("EMAIL_FROM");
-
-  if (!apiKey || !from) {
-    return { status: "failed", message: failureMessage };
-  }
-
   try {
-    const response = await fetch(RESEND_API_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ from, to, subject, text, html }),
-    });
-
-    if (!response.ok) {
-      console.warn("Email request failed.", { provider, status: response.status });
-      return { status: "failed", message: failureMessage };
-    }
-
-    return { status: "sent", message: successMessage };
+    const sent = await deliver(provider, { to, subject, text, html });
+    return sent
+      ? { status: "sent", message: successMessage }
+      : { status: "failed", message: failureMessage };
   } catch (error) {
     console.warn("Email request failed.", {
       provider,
@@ -110,6 +98,57 @@ async function sendEmail({
     });
     return { status: "failed", message: failureMessage };
   }
+}
+
+/** Sends through the configured provider. Returns false when it isn't set up or refuses the message. */
+async function deliver(provider: Exclude<EmailProvider, "disabled">, email: OutgoingEmail) {
+  if (provider === "smtp") {
+    const settings = smtpSettings(process.env);
+    if (!settings) return false;
+
+    const { createTransport } = await import("nodemailer");
+    const transport = createTransport({
+      host: settings.host,
+      port: settings.port,
+      secure: settings.secure,
+      auth: { user: settings.user, pass: settings.pass },
+      connectionTimeout: SMTP_TIMEOUT_MS,
+      greetingTimeout: SMTP_TIMEOUT_MS,
+      socketTimeout: SMTP_TIMEOUT_MS,
+    });
+    // Gmail sends as the signed-in account, so the sender is always SMTP_USER.
+    await transport.sendMail({ from: { name: APP_NAME, address: settings.user }, ...email });
+    return true;
+  }
+
+  if (provider === "brevo") {
+    const apiKey = cleanEnvValue("BREVO_API_KEY");
+    const from = parseMailbox(cleanEnvValue("EMAIL_FROM"));
+    if (!apiKey || !from) return false;
+
+    const response = await fetch(BREVO_API_URL, {
+      method: "POST",
+      headers: { "api-key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(brevoPayload(from, email)),
+    });
+    if (!response.ok) console.warn("Email request failed.", { provider, status: response.status });
+    return response.ok;
+  }
+
+  const apiKey = cleanEnvValue("RESEND_API_KEY");
+  const from = cleanEnvValue("EMAIL_FROM");
+  if (!apiKey || !from) return false;
+
+  const response = await fetch(RESEND_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ from, ...email }),
+  });
+  if (!response.ok) console.warn("Email request failed.", { provider, status: response.status });
+  return response.ok;
 }
 
 export async function sendProjectInvitationEmail({

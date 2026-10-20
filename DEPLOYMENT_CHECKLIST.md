@@ -53,16 +53,29 @@ EMAIL_PROVIDER="disabled"
 - `PROJECT_CHAT_S3_QUOTA_BYTES` (default 8 GB) and `PROJECT_CHAT_USER_QUOTA_BYTES` (default 500 MB) cap the bytes stored with `aws-s3`, in total and per user. Uploads past either limit are refused with HTTP 413. Keep the total under your storage provider's free tier; Cloudflare R2 has no spending cap of its own. Values must be whole numbers of bytes.
 - `PROJECT_CHAT_GUEST_UPLOADS_ENABLED` defaults to `"false"`, which blocks file uploads from guest users. It must be exactly `"true"` or `"false"` if present.
 
-Optional Resend invitation email variables:
+Email (invitations and password resets). `APP_BASE_URL` is required on Vercel production, because email links are built from it. Pick one provider:
 
 ```env
+APP_BASE_URL="https://your-production-app.example.com"
+
+# Gmail SMTP (free): a dedicated Gmail account with 2-Step Verification and an app password
+EMAIL_PROVIDER="smtp"
+SMTP_USER="your-app@gmail.com"
+SMTP_PASS="your gmail app password"
+# SMTP_HOST and SMTP_PORT default to smtp.gmail.com and 465
+
+# Brevo (free tier, HTTP API)
+EMAIL_PROVIDER="brevo"
+BREVO_API_KEY="xkeysib-your-brevo-key"
+EMAIL_FROM="AI-Multi Task-Management <sender-verified-in-brevo@example.com>"
+
+# Resend (delivers only to your own address until you verify a domain)
 EMAIL_PROVIDER="resend"
 RESEND_API_KEY="re_your_resend_api_key"
 EMAIL_FROM="AI-Multi Task-Management <noreply@example.com>"
-APP_BASE_URL="https://your-production-app.example.com"
 ```
 
-Invitation email notifications are disabled when `EMAIL_PROVIDER` is omitted or set to `"disabled"`. In-app invitations continue to work either way. If Resend is enabled, keep `RESEND_API_KEY` and `EMAIL_FROM` server-only with no `NEXT_PUBLIC_` prefix.
+Email notifications are disabled when `EMAIL_PROVIDER` is omitted or set to `"disabled"`. In-app invitations continue to work either way. Keep every key and password server-only, with no `NEXT_PUBLIC_` prefix. With Gmail SMTP, mail is sent from `SMTP_USER` under the app's name. Each send waits at most 10 seconds for the mail server, so a slow server can't hang a request.
 
 ## Deployment environment validation
 
@@ -128,7 +141,7 @@ When any storage route selects `aws-s3`, `npm run validate:deploy-env` requires 
 
 ### Invitation email configuration
 
-`EMAIL_PROVIDER` may be omitted or set to `"disabled"` for in-app-only invitations. If `EMAIL_PROVIDER="resend"`, `npm run validate:deploy-env` requires both `RESEND_API_KEY` and `EMAIL_FROM`. If `EMAIL_PROVIDER` is any other value, validation fails clearly without printing secret values.
+`EMAIL_PROVIDER` may be omitted or set to `"disabled"` for in-app-only invitations. `npm run validate:deploy-env` requires `SMTP_USER` and `SMTP_PASS` for `"smtp"`, `BREVO_API_KEY` and `EMAIL_FROM` for `"brevo"`, and `RESEND_API_KEY` and `EMAIL_FROM` for `"resend"`. If `EMAIL_PROVIDER` is any other value, validation fails clearly without printing secret values.
 
 ### Disabled signup or guest login
 

@@ -2,7 +2,7 @@
 import "dotenv/config";
 
 const ALLOWED_STORAGE_PROVIDERS = new Set(["local", "vercel-blob", "aws-s3"]);
-const ALLOWED_EMAIL_PROVIDERS = new Set(["disabled", "resend"]);
+const ALLOWED_EMAIL_PROVIDERS = new Set(["disabled", "resend", "smtp", "brevo"]);
 const BOOLEAN_ENV_NAMES = ["SIGNUP_ENABLED", "GUEST_LOGIN_ENABLED", "PROJECT_CHAT_GUEST_UPLOADS_ENABLED"];
 const BYTE_LIMIT_ENV_NAMES = ["PROJECT_CHAT_S3_QUOTA_BYTES", "PROJECT_CHAT_USER_QUOTA_BYTES"];
 // Cloudflare R2's free tier is 10 GB-month. Compare against decimal GB, the smaller reading.
@@ -92,7 +92,21 @@ if (selectedStorageProviders.has("local") && isProductionLike) {
 }
 
 if (emailProvider !== undefined && !ALLOWED_EMAIL_PROVIDERS.has(emailProvider)) {
-  errors.push('Invalid EMAIL_PROVIDER. Omit it, use "disabled", or use "resend".');
+  errors.push('Invalid EMAIL_PROVIDER. Omit it, or use "disabled", "resend", "smtp" or "brevo".');
+} else if (emailProvider === "smtp") {
+  if (!cleanEnvValue("SMTP_USER")) addMissing(errors, "SMTP_USER");
+  if (!cleanEnvValue("SMTP_PASS")) {
+    errors.push('Missing SMTP_PASS for EMAIL_PROVIDER="smtp". Use a Gmail app password, never the account password, as a server-side secret.');
+  }
+  const smtpPort = cleanEnvValue("SMTP_PORT");
+  if (smtpPort && !/^\d+$/.test(smtpPort)) errors.push("Invalid SMTP_PORT. Use a port number such as 465.");
+} else if (emailProvider === "brevo") {
+  if (!cleanEnvValue("BREVO_API_KEY")) {
+    errors.push('Missing BREVO_API_KEY for EMAIL_PROVIDER="brevo". Add it as a server-side secret environment variable.');
+  }
+  if (!emailFrom) {
+    errors.push('Missing EMAIL_FROM for EMAIL_PROVIDER="brevo". Use a sender address verified in Brevo.');
+  }
 } else if (emailProvider === "resend") {
   if (!resendApiKey) {
     errors.push('Missing RESEND_API_KEY for EMAIL_PROVIDER="resend". Add it as a server-side secret environment variable.');
@@ -100,6 +114,14 @@ if (emailProvider !== undefined && !ALLOWED_EMAIL_PROVIDERS.has(emailProvider)) 
   if (!emailFrom) {
     errors.push('Missing EMAIL_FROM for EMAIL_PROVIDER="resend". Add a verified sender address as a server-side environment variable.');
   }
+}
+
+// Password reset and invitation emails build their links from APP_BASE_URL.
+const appBaseUrl = cleanEnvValue("APP_BASE_URL");
+if (isVercelProduction && !appBaseUrl) {
+  errors.push("Missing APP_BASE_URL. Without it, password reset and invitation links point to http://localhost:3000.");
+} else if (appBaseUrl && !/^https?:\/\/[^\s/]+/.test(appBaseUrl)) {
+  warnings.push("APP_BASE_URL should be the site's full address, such as https://your-app.vercel.app.");
 }
 
 const byteLimits = {};
