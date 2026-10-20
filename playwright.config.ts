@@ -58,7 +58,7 @@ export default defineConfig({
       // The browser flows again on a phone-sized screen.
       name: "mobile",
       use: { ...devices["Pixel 7"] },
-      testMatch: /(workspace|app-shell)\.spec\.ts/,
+      testMatch: /(workspace|app-shell|home)\.spec\.ts/,
     },
   ],
 });

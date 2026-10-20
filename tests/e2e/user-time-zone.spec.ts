@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { uniqueName } from "./helpers";
+import { continueAsGuest, uniqueName } from "./helpers";
 
 // A time zone whose date differs from UTC right now: Kiritimati (UTC+14) is
 // already on the next day from 10:00 UTC, Pago Pago (UTC-11) is still on the
@@ -7,12 +7,10 @@ import { uniqueName } from "./helpers";
 const timezoneId = new Date().getUTCHours() >= 10 ? "Pacific/Kiritimati" : "Pacific/Pago_Pago";
 test.use({ timezoneId });
 
-test(`"Due Today" follows the browser's time zone (${timezoneId})`, async ({ page }) => {
+test(`"Due today" follows the browser's time zone (${timezoneId})`, async ({ page }) => {
   const title = uniqueName("Due in my time zone");
 
-  await page.goto("/login");
-  await page.getByRole("button", { name: /continue as guest/i }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await continueAsGuest(page);
   await expect
     .poll(async () => (await page.context().cookies()).find((cookie) => cookie.name === "tz")?.value)
     .toBe(encodeURIComponent(timezoneId));
@@ -25,9 +23,8 @@ test(`"Due Today" follows the browser's time zone (${timezoneId})`, async ({ pag
   expect(response.ok()).toBe(true);
 
   await page.reload();
-  const reminders = page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: "Reminders", exact: true }) });
-  const dueToday = reminders.locator("article").filter({ has: page.getByRole("heading", { name: "Due Today" }) });
-  await expect(dueToday.getByText(title)).toBeVisible();
+  await expect(page.getByRole("group", { name: "Due today: 1" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Overdue: 0" })).toBeVisible();
+  const focus = page.locator("section").filter({ has: page.getByRole("heading", { name: "Focus", exact: true }) });
+  await expect(focus.getByRole("listitem").filter({ hasText: title })).toContainText("Today");
 });
