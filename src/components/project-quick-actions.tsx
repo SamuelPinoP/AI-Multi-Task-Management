@@ -229,7 +229,7 @@ export function ProjectQuickActions({ projectId }: { projectId: string }) {
             rows={3}
             className="rounded-xl border border-zinc-300 px-4 py-2 outline-none focus:border-black dark:border-zinc-700 md:col-span-2"
           />
-          <select
+          <select aria-label="Priority"
             value={taskPriority}
             onChange={(e) => setTaskPriority(e.target.value as Priority)}
             className="rounded-xl border border-zinc-300 px-4 py-2 dark:border-zinc-700"
@@ -238,7 +238,7 @@ export function ProjectQuickActions({ projectId }: { projectId: string }) {
             <option value="MEDIUM">Medium</option>
             <option value="HIGH">High</option>
           </select>
-          <select
+          <select aria-label="Status"
             value={taskStatus}
             onChange={(e) => setTaskStatus(e.target.value as TaskStatus)}
             className="rounded-xl border border-zinc-300 px-4 py-2 dark:border-zinc-700"
@@ -310,7 +310,7 @@ export function ProjectQuickActions({ projectId }: { projectId: string }) {
             onChange={(e) => setEventEndTime(e.target.value)}
             className="rounded-xl border border-zinc-300 px-4 py-2 dark:border-zinc-700"
           />
-          <select
+          <select aria-label="Repeats"
             value={eventRecurrence}
             onChange={(e) => setEventRecurrence(e.target.value as Recurrence)}
             className="rounded-xl border border-zinc-300 px-4 py-2 dark:border-zinc-700 md:col-span-2"

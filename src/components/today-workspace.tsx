@@ -11,6 +11,7 @@ import { expandRecurringEventsForRange } from "@/lib/recurrence";
 import { getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
 import { eventWallTime, formatEventTime } from "@/lib/event-time";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
+import { projectColor } from "@/lib/project-color";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
@@ -48,14 +49,12 @@ const fmtTime = formatEventTime;
 function ProjectBadge({ project }: { project: Project | null | undefined }) {
   if (!project) return null;
   return (
-    <span
-      className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs"
-      style={
-        project.color
-          ? { borderColor: project.color, color: project.color }
-          : undefined
-      }
-    >
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-xs text-muted">
+      <span
+        aria-hidden="true"
+        className="h-2 w-2 rounded-[3px]"
+        style={{ backgroundColor: projectColor(project) }}
+      />
       {project.name}
     </span>
   );

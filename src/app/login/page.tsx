@@ -155,7 +155,7 @@ export default async function LoginPage({
                 >
                   Continue as Guest
                 </button>
-                <p className="text-xs text-zinc-400">
+                <p className="text-xs text-zinc-500">
                   Guest access persists until the session expires or you log
                   out. You can still create a full account anytime.
                 </p>

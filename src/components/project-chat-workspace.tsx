@@ -641,7 +641,7 @@ export function ProjectChatWorkspace({
                             {comment.author.name || comment.author.email}
                           </p>
                           {isOwnMessage ? (
-                            <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
                               You
                             </p>
                           ) : null}
