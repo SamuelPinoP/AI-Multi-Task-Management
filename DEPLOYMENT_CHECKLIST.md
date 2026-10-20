@@ -1,6 +1,6 @@
 # First Vercel Deploy Checklist
 
-Use this checklist before the first production deployment of AI-Multi Task-Management to Vercel with hosted PostgreSQL, Vercel Blob, and private S3 video storage.
+Use this checklist before the first production deployment of AI Multi to Vercel with hosted PostgreSQL, Vercel Blob, and private S3 video storage.
 
 ## Vercel project settings
 
@@ -67,12 +67,12 @@ SMTP_PASS="your gmail app password"
 # Brevo (free tier, HTTP API)
 EMAIL_PROVIDER="brevo"
 BREVO_API_KEY="xkeysib-your-brevo-key"
-EMAIL_FROM="AI-Multi Task-Management <sender-verified-in-brevo@example.com>"
+EMAIL_FROM="AI Multi <sender-verified-in-brevo@example.com>"
 
 # Resend (delivers only to your own address until you verify a domain)
 EMAIL_PROVIDER="resend"
 RESEND_API_KEY="re_your_resend_api_key"
-EMAIL_FROM="AI-Multi Task-Management <noreply@example.com>"
+EMAIL_FROM="AI Multi <noreply@example.com>"
 ```
 
 Email notifications are disabled when `EMAIL_PROVIDER` is omitted or set to `"disabled"`. In-app invitations continue to work either way. Keep every key and password server-only, with no `NEXT_PUBLIC_` prefix. With Gmail SMTP, mail is sent from `SMTP_USER` under the app's name. Each send waits at most 10 seconds for the mail server, so a slow server can't hang a request.

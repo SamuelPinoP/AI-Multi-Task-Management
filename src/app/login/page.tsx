@@ -47,7 +47,7 @@ export default async function LoginPage({
             </p>
             <h1 className="text-2xl font-semibold">Log in to your workspace</h1>
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Use your AI-Multi Task-Management account to continue to notes,
+              Use your AI Multi account to continue to notes,
               tasks, projects, chat, and planning views.
             </p>
           </div>

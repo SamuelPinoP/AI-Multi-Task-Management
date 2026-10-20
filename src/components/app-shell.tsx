@@ -562,7 +562,7 @@ export function AppShell({
         <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <span className="flex items-center gap-2 text-sm font-semibold">
             <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-[10px] font-extrabold text-accent-ink" aria-hidden="true">AM</span>
-            AI-Multi Task-Management
+            AI Multi
           </span>
           <ThemeToggle />
         </header>
