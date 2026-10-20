@@ -3,6 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 const e2ePort = process.env.E2E_PORT || "3100";
 const baseURL =
   process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${e2ePort}`;
+const isCI = Boolean(process.env.CI);
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -11,12 +12,16 @@ export default defineConfig({
   // aborts navigations, and the suite is small.
   workers: 1,
   expect: { timeout: 10_000 },
-  reporter: [["list"], ["html", { open: "never" }]],
+  reporter: isCI
+    ? [["list"], ["github"], ["html", { open: "never" }]]
+    : [["list"], ["html", { open: "never" }]],
   use: {
     baseURL,
-    screenshot: "only-on-failure",
-    trace: "on-first-retry",
-    video: "retain-on-failure",
+    // CI records every test (video, trace, screenshot) so each run can be
+    // watched afterwards from the HTML report.
+    screenshot: isCI ? "on" : "only-on-failure",
+    trace: isCI ? "on" : "on-first-retry",
+    video: isCI ? "on" : "retain-on-failure",
   },
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
@@ -39,6 +44,12 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      // The browser flows again on a phone-sized screen.
+      name: "mobile",
+      use: { ...devices["Pixel 7"] },
+      testMatch: /workspace\.spec\.ts/,
     },
   ],
 });

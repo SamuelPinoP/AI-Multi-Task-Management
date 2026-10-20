@@ -1,0 +1,2 @@
+# Test fixtures are byte-exact files (media, PDFs, documents): never convert line endings.
+tests/fixtures/** binary

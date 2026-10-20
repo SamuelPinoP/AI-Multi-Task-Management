@@ -99,7 +99,7 @@ export async function projectChatDocxPreviewResponse(
       "Content-Type": "text/html; charset=utf-8",
       "Content-Disposition": projectChatAttachmentContentDisposition(`${fileName}.html`, "inline"),
       "Cache-Control": "private, no-store",
-      "Content-Security-Policy": "default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "Content-Security-Policy": "default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
       "X-Content-Type-Options": "nosniff",
     },
   });

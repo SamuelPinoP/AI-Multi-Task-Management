@@ -31,7 +31,7 @@ import {
   uiDangerButtonClass,
   uiPrimaryButtonClass,
 } from "@/components/ui";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   compareTaskDueDates,
@@ -284,18 +284,22 @@ export default function TasksPage() {
    * present, reset all list controls (so the task is guaranteed to be
    * visible) and open that task in edit mode.
    */
+  // An effect event, so the effect re-runs only when the deep link or the
+  // loaded tasks change, not whenever startEditing is recreated.
+  const openDeepLinkedTask = useEffectEvent((task: Task) => {
+    setFilter("ALL");
+    setPriorityFilter("ALL");
+    setProjectFilter("");
+    setSearchQuery("");
+    startEditing(task);
+  });
+
   useEffect(() => {
     if (!highlightedTaskId || fetching) return;
     const task = tasks.find((item) => item.id === highlightedTaskId);
     if (!task) return;
 
-    const timer = window.setTimeout(() => {
-      setFilter("ALL");
-      setPriorityFilter("ALL");
-      setProjectFilter("");
-      setSearchQuery("");
-      startEditing(task);
-    }, 0);
+    const timer = window.setTimeout(() => openDeepLinkedTask(task), 0);
     return () => window.clearTimeout(timer);
   }, [fetching, highlightedTaskId, tasks]);
 

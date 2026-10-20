@@ -2,7 +2,9 @@
 
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { AttachmentGallery, ComposerAttachmentTray } from "@/components/project-chat-attachments";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import { formatFileSize } from "@/lib/project-chat-attachment-display";
 
 type ProjectCommentAttachment = {
   id: string;
@@ -12,6 +14,8 @@ type ProjectCommentAttachment = {
   fileSize: number;
   url: string;
   createdAt: string;
+  /** Object URL of the local file while the message is still sending. */
+  localUrl?: string;
 };
 
 type ProjectComment = {
@@ -51,12 +55,8 @@ const MAX_FILES_PER_MESSAGE = 5;
 const STANDARD_FILE_SIZE_LIMIT = 10 * 1024 * 1024;
 const VIDEO_FILE_SIZE_LIMIT = 100 * 1024 * 1024;
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".m4v"]);
-
-function formatFileSize(size: number) {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
+const ACCEPTED_FILE_TYPES =
+  ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.webm,.m4v,.zip";
 
 function getFileExtension(fileName: string) {
   const dotIndex = fileName.lastIndexOf(".");
@@ -74,21 +74,34 @@ function fileSizeLimit(file: File) {
   return isVideoFile(file) ? VIDEO_FILE_SIZE_LIMIT : STANDARD_FILE_SIZE_LIMIT;
 }
 
-function getFileKind(fileType: string, fileName: string) {
-  const lowerName = fileName.toLowerCase();
-  if (fileType.startsWith("image/")) return "image";
-  if (fileType.startsWith("video/")) return "video";
-  if (fileType === "application/pdf" || lowerName.endsWith(".pdf"))
-    return "pdf";
-  if (lowerName.endsWith(".doc") || lowerName.endsWith(".docx")) return "word";
-  return "file";
-}
-
-function canPreviewAttachment(fileName: string, fileType: string) {
-  return (
-    fileName.toLowerCase().endsWith(".docx") ||
-    fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  );
+/** Like fetch, but reports upload progress, which fetch can't. */
+function sendWithProgress(
+  url: string,
+  init: { method: string; headers?: Record<string, string>; body: XMLHttpRequestBodyInit },
+  onProgress: (fraction: number) => void,
+) {
+  return new Promise<Response>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(init.method, url);
+    for (const [name, value] of Object.entries(init.headers ?? {})) {
+      xhr.setRequestHeader(name, value);
+    }
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(event.loaded / event.total);
+    };
+    xhr.onload = () => {
+      const hasBody = ![204, 205, 304].includes(xhr.status);
+      resolve(
+        new Response(hasBody ? xhr.responseText : null, {
+          status: xhr.status,
+          headers: { "Content-Type": xhr.getResponseHeader("Content-Type") || "text/plain" },
+        }),
+      );
+    };
+    xhr.onerror = () => reject(new Error("The upload was interrupted. Check your connection and try again."));
+    xhr.onabort = () => reject(new Error("The upload was cancelled."));
+    xhr.send(init.body);
+  });
 }
 
 function isEdited(comment: ProjectComment) {
@@ -143,80 +156,6 @@ function PaperclipIcon({ className = "h-5 w-5" }: { className?: string }) {
   );
 }
 
-function AttachmentCard({
-  attachment,
-  projectId,
-}: {
-  attachment: ProjectCommentAttachment;
-  projectId: string;
-}) {
-  const kind = getFileKind(attachment.fileType, attachment.originalName);
-  const attachmentBaseUrl = `/api/projects/${encodeURIComponent(projectId)}/attachments/${encodeURIComponent(attachment.id)}`;
-  const rawOpenUrl = `${attachmentBaseUrl}/download`;
-  const openUrl = canPreviewAttachment(attachment.originalName, attachment.fileType)
-    ? `${attachmentBaseUrl}/preview`
-    : rawOpenUrl;
-  const downloadUrl = `${rawOpenUrl}?download=1`;
-
-  return (
-    <div
-      className="group block overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 text-zinc-800 transition hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
-    >
-      {kind === "image" ? (
-        <a href={openUrl} target="_blank" rel="noopener noreferrer">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={openUrl}
-            alt={attachment.originalName}
-            className="h-32 w-full object-cover"
-          />
-        </a>
-      ) : kind === "video" ? (
-        <video
-          src={openUrl}
-          className="h-32 w-full bg-black object-cover"
-          controls
-          preload="metadata"
-        />
-      ) : null}
-      <div className="flex items-center gap-3 p-3">
-        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-200 text-xs font-bold uppercase text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-          {kind === "pdf"
-            ? "PDF"
-            : kind === "word"
-              ? "DOC"
-              : kind === "video"
-                ? "VID"
-                : kind === "image"
-                  ? "IMG"
-                  : "FILE"}
-        </span>
-        <span className="min-w-0 flex-1">
-          <a
-            href={openUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block truncate text-sm font-semibold group-hover:underline"
-          >
-            {attachment.originalName}
-          </a>
-          <span className="block text-xs text-zinc-500 dark:text-zinc-400">
-            {attachment.fileType || "File"} •{" "}
-            {formatFileSize(attachment.fileSize)}
-          </span>
-        </span>
-        <a
-          href={downloadUrl}
-          download={attachment.originalName}
-          className="shrink-0 rounded-full px-2 py-1 text-xs font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-        >
-          Download
-        </a>
-      </div>
-    </div>
-  );
-}
-
 export function ProjectChatWorkspace({
   projectId,
   initialComments,
@@ -244,6 +183,10 @@ export function ProjectChatWorkspace({
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [mutatingCommentId, setMutatingCommentId] = useState<string | null>(
     null,
+  );
+  // Upload progress (0 to 1) of the message being sent, by pending attachment id.
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>(
+    {},
   );
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -356,6 +299,7 @@ export function ProjectChatWorkspace({
         fileType: attachment.file.type || "application/octet-stream",
         fileSize: attachment.file.size,
         url: attachment.previewUrl,
+        localUrl: attachment.previewUrl,
         createdAt: now,
       }));
 
@@ -375,31 +319,46 @@ export function ProjectChatWorkspace({
     setError("");
     setMessage("");
     setSelectedAttachments([]);
+    setUploadProgress({});
     setComments((prev) => [...prev, optimisticComment]);
+
+    const reportProgress = (attachments: SelectedAttachment[], fraction: number) =>
+      setUploadProgress((prev) => {
+        const next = { ...prev };
+        for (const attachment of attachments) next[`pending-${attachment.id}`] = fraction;
+        return next;
+      });
 
     try {
       const uploadPlans = await prepareAttachmentUploads(attachmentsToSend);
-      const directUploadIds: string[] = [];
+      const directUploads: {
+        attachment: SelectedAttachment;
+        plan: Extract<AttachmentUploadPlan, { strategy: "direct-s3" }>;
+      }[] = [];
       const multipartAttachments: SelectedAttachment[] = [];
 
       for (const attachment of attachmentsToSend) {
         const plan = uploadPlans.get(attachment.id);
         if (!plan) throw new Error("Could not prepare attachment upload.");
-
-        if (plan.strategy === "direct-s3") {
-          const uploadRes = await fetch(plan.uploadUrl, {
-            method: plan.uploadMethod,
-            headers: plan.uploadHeaders,
-            body: attachment.file,
-          });
-          if (!uploadRes.ok) {
-            throw new Error(`Could not upload ${attachment.file.name} to AWS S3.`);
-          }
-          directUploadIds.push(plan.uploadId);
-        } else {
-          multipartAttachments.push(attachment);
-        }
+        if (plan.strategy === "direct-s3") directUploads.push({ attachment, plan });
+        else multipartAttachments.push(attachment);
       }
+
+      // Upload straight to storage, all files at once.
+      await Promise.all(
+        directUploads.map(async ({ attachment, plan }) => {
+          const uploadRes = await sendWithProgress(
+            plan.uploadUrl,
+            { method: plan.uploadMethod, headers: plan.uploadHeaders, body: attachment.file },
+            (fraction) => reportProgress([attachment], fraction),
+          );
+          if (!uploadRes.ok) {
+            throw new Error(`Could not upload ${attachment.file.name}. Try again in a moment.`);
+          }
+          reportProgress([attachment], 1);
+        }),
+      );
+      const directUploadIds = directUploads.map(({ plan }) => plan.uploadId);
 
       let res: Response;
       if (multipartAttachments.length > 0) {
@@ -411,10 +370,11 @@ export function ProjectChatWorkspace({
         multipartAttachments.forEach((attachment) =>
           formData.append("attachments", attachment.file),
         );
-        res = await fetch(`/api/projects/${projectId}/comments`, {
-          method: "POST",
-          body: formData,
-        });
+        res = await sendWithProgress(
+          `/api/projects/${projectId}/comments`,
+          { method: "POST", body: formData },
+          (fraction) => reportProgress(multipartAttachments, fraction),
+        );
       } else {
         res = await fetch(`/api/projects/${projectId}/comments`, {
           method: "POST",
@@ -457,6 +417,7 @@ export function ProjectChatWorkspace({
       setError(error instanceof Error ? error.message : "Could not send message.");
     } finally {
       setIsSubmitting(false);
+      setUploadProgress({});
     }
   }
 
@@ -824,15 +785,17 @@ export function ProjectChatWorkspace({
                       </p>
                     ) : null}
                     {comment.attachments.length > 0 ? (
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {comment.attachments.map((attachment) => (
-                          <AttachmentCard
-                            key={attachment.id}
-                            attachment={attachment}
-                            projectId={projectId}
-                          />
-                        ))}
-                      </div>
+                      <AttachmentGallery
+                        projectId={projectId}
+                        attachments={
+                          isPending
+                            ? comment.attachments.map((attachment) => ({
+                                ...attachment,
+                                progress: uploadProgress[attachment.id],
+                              }))
+                            : comment.attachments
+                        }
+                      />
                     ) : null}
                   </article>
                 );
@@ -857,6 +820,7 @@ export function ProjectChatWorkspace({
               ref={fileInputRef}
               type="file"
               multiple
+              accept={ACCEPTED_FILE_TYPES}
               className="hidden"
               onChange={handleFileChange}
             />
@@ -910,33 +874,10 @@ export function ProjectChatWorkspace({
                     className="min-h-9 w-full resize-none rounded-3xl border-0 bg-transparent px-4 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
                   />
                   {selectedAttachments.length > 0 ? (
-                    <div className="px-3 pb-3">
-                      <div className="flex max-h-24 flex-wrap gap-2 overflow-y-auto pr-1">
-                        {selectedAttachments.map((attachment) => (
-                          <div
-                            key={attachment.id}
-                            className="flex max-w-full items-center gap-2 rounded-full bg-white px-2.5 py-1.5 text-xs shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-950 dark:ring-zinc-800"
-                          >
-                            <span className="max-w-44 truncate font-medium text-zinc-800 dark:text-zinc-100">
-                              {attachment.file.name}
-                            </span>
-                            <span className="shrink-0 text-zinc-500">
-                              {formatFileSize(attachment.file.size)}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                removeSelectedAttachment(attachment.id)
-                              }
-                              className="shrink-0 rounded-full px-1.5 py-0.5 font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                              aria-label={`Remove ${attachment.file.name}`}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    <ComposerAttachmentTray
+                      attachments={selectedAttachments}
+                      onRemove={removeSelectedAttachment}
+                    />
                   ) : null}
                 </div>
 
