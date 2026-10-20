@@ -79,10 +79,14 @@ function projectHref(id: string) {
   return `/projects/${id}`;
 }
 
-export async function generateSmartPlanner(userId: string, now = new Date()): Promise<SmartPlanner> {
+/**
+ * `now` is the user's wall clock (see `@/lib/user-time`) and decides what
+ * "today" is; `realNow` is the actual time, compared with stored timestamps.
+ */
+export async function generateSmartPlanner(userId: string, now = new Date(), realNow = new Date()): Promise<SmartPlanner> {
   const todayStart = dayStart(now);
   const soonEnd = addDays(todayStart, 8);
-  const recentStart = addDays(now, -7);
+  const recentStart = addDays(realNow, -7);
 
   const accessibleProjectWhere = projectAccessWhere(userId);
 
@@ -154,7 +158,7 @@ export async function generateSmartPlanner(userId: string, now = new Date()): Pr
   for (const project of projects) {
     const openTasks = project.tasks.filter((task) => task.status !== TaskStatus.DONE);
     const overdue = openTasks.filter((task) => task.dueDate && dayDiff(task.dueDate, now) < 0);
-    const stale = project.updatedAt < addDays(now, -5);
+    const stale = project.updatedAt < addDays(realNow, -5);
     if (overdue.length || openTasks.length >= 4 || stale || project.events.length) {
       projectFollowUp.push({ id: `project-${project.id}`, title: `Review ${project.name}`, reason: overdue.length ? `${overdue.length} overdue project task${overdue.length === 1 ? "" : "s"} need follow-up.` : stale ? "Active project has not changed in several days." : `${openTasks.length} open task${openTasks.length === 1 ? "" : "s"} and ${project.events.length} upcoming event${project.events.length === 1 ? "" : "s"}.`, priority: overdue.length ? "HIGH" : "MEDIUM", kind: "PROJECT", related: { type: "PROJECT", id: project.id, label: project.name }, actionHref: projectHref(project.id), projectId: project.id, canCreateTask: true, suggestedTaskTitle: `Follow up on ${project.name}`, suggestedTaskDescription: "Created from Smart Planner project follow-up suggestion." });
     }
