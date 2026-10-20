@@ -1,20 +1,30 @@
-// This page is interactive, so it must run in the browser.
-// It uses React state, effects, refs, focus control, autosave timers, and browser URL parameters.
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+/**
+ * Notes: the list first, the editor second (DES-02).
+ *
+ * - Quick add takes a title and opens the new note for writing.
+ * - Search and a project filter above a grid of note cards.
+ * - Notes open in a side sheet editor that autosaves while you type
+ *   (debounced), on blur, on Done and when the page is hidden. It can
+ *   expand to the full width.
+ * - `/notes?openNote=<id>&focus=title|content` opens a note directly.
+ */
+
+import { Maximize2, Minimize2, Search, Trash2 } from "lucide-react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { QUICK_ADD_INPUT_ID, QuickAdd } from "@/components/home/quick-add";
+import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { toast } from "@/components/ui/toaster";
+import { cn } from "@/lib/cn";
+import { relativeTime } from "@/lib/home-summary";
+import { projectColor } from "@/lib/project-color";
+import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
-// This is not different to the data class in Kotlin
-type Project = {
-  id: string;
-  name: string;
-  color: string | null;
-};
+type Project = { id: string; name: string; color: string | null };
 
-// This is not different to the data class in Kotlin
-// A Note represents the data shape the Notes page frontend expects from the backend.
-// This matches the note information returned by /api/notes and used by the UI.
 type Note = {
   id: string;
   title: string;
@@ -25,141 +35,87 @@ type Note = {
   project: Project | null;
 };
 
-// The editor can focus either the title input or the content textarea.
 type FocusTarget = "title" | "content";
+type Draft = { noteId: string; title: string; content: string; projectId: string };
 
-// Builds the text preview shown on note cards.
-// If a note has no title, the content becomes the preview so body-only notes still look clean.
-function getNotePreview(note: Pick<Note, "title" | "content">) {
-  return note.title.trim() || (note.content ?? "").trim();
-}
+const emptyDraft: Draft = { noteId: "", title: "", content: "", projectId: "" };
 
-// Reads the note id from /notes?openNote=<id> so it opens the correct note.
+/** Reads /notes?openNote=<id> so a link opens the right note. */
 function getInitialOpenNoteId() {
   if (typeof window === "undefined") return null;
   return new URLSearchParams(window.location.search).get("openNote");
 }
 
-// Decides if the note is being edited in the content or title.
+/** Reads /notes?focus=title|content. */
 function getInitialFocusTarget(): FocusTarget {
   if (typeof window === "undefined") return "content";
-  return new URLSearchParams(window.location.search).get("focus") === "title"
-    ? "title"
-    : "content";
+  return new URLSearchParams(window.location.search).get("focus") === "title" ? "title" : "content";
 }
 
-// Loaded data from the backend.
-// notes renders the note list, and projects fills the project dropdowns.
+function draftsMatch(a: Draft, b: Draft) {
+  return a.noteId === b.noteId && a.title === b.title && a.content === b.content && a.projectId === b.projectId;
+}
+
+const controlClass =
+  "min-w-0 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/25";
+
 export default function NotesPage() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-
-  // Create-note form state.
-  // These values belong to the form at the top of the Notes page.
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [projectId, setProjectId] = useState("");
-
-  // UI status state for loading, fetching, deleting, and errors.
-  const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
-  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(() =>
-    getInitialOpenNoteId(),
-  );
-
-  // Editing state.
-  // These values belong to the currently opened note in Writing mode.
-  const [editTitle, setEditTitle] = useState("");
-  const [editContent, setEditContent] = useState("");
-  const [editProjectId, setEditProjectId] = useState("");
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<
-    "idle" | "saving" | "saved" | "error"
-  >("idle");
-  const [error, setError] = useState("");
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-
-  // Search and filter state used to decide which notes are visible.
+  const [loadError, setLoadError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
 
-  // Focus and fullscreen state.
-  // These values control which note is opened, where the cursor goes, and whether the editor is fullscreen.
-  const [openedNoteId, setOpenedNoteId] = useState<string | null>(() =>
-    getInitialOpenNoteId(),
-  );
-  const [focusTarget, setFocusTarget] = useState<FocusTarget>(() =>
-    getInitialFocusTarget(),
-  );
+  // The note open in the editor sheet, and its fields.
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(() => getInitialOpenNoteId());
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [editProjectId, setEditProjectId] = useState("");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState("");
+  const [focusTarget, setFocusTarget] = useState<FocusTarget>(() => getInitialFocusTarget());
   const [focusRequest, setFocusRequest] = useState(0);
-  const [fullscreenNoteId, setFullscreenNoteId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<Note | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  // Refs point directly to DOM elements or mutable values without causing re-renders.
-  // They are used here for focusing inputs and managing autosave.
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
-  
-  // latestDraftRef stores the newest unsaved editor values.
-  // lastSavedDraftRef stores the last version successfully saved.
-  // Comparing them prevents unnecessary autosave requests.
-  const latestDraftRef = useRef({
-    noteId: "",
-    title: "",
-    content: "",
-    projectId: "",
-  });
-  const lastSavedDraftRef = useRef({
-    noteId: "",
-    title: "",
-    content: "",
-    projectId: "",
-  });
+  // The newest editor values, and the last version the server accepted.
+  // Comparing them avoids saving when nothing changed.
+  const latestDraftRef = useRef<Draft>(emptyDraft);
+  const lastSavedDraftRef = useRef<Draft>(emptyDraft);
 
-  // Computes the notes that should appear after applying search and project filters. This is for the search functionality.
-  // useMemo avoids recalculating unless notes, search text, or project filter changes.
   const visibleNotes = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-
-    return notes.filter((note) => {
-      const matchesProject = !projectFilter || note.projectId === projectFilter;
-      if (!matchesProject) return false;
-      if (!normalizedQuery) return true;
-
-      const titleMatches = note.title.toLowerCase().includes(normalizedQuery);
-      const contentMatches = (note.content ?? "")
-        .toLowerCase()
-        .includes(normalizedQuery);
-      return titleMatches || contentMatches;
-    });
+    const query = searchQuery.trim().toLowerCase();
+    return notes.filter(
+      (note) =>
+        (!projectFilter || note.projectId === projectFilter) &&
+        (!query || note.title.toLowerCase().includes(query) || (note.content ?? "").toLowerCase().includes(query)),
+    );
   }, [notes, projectFilter, searchQuery]);
 
-  // Loads the user's notes from the backend API and stores them in state.
-  async function fetchNotes(showLoading = true) {
+  async function fetchNotes() {
     try {
-      if (showLoading) setFetching(true);
-      setError("");
-      const res = await fetch("/api/notes");
-      if (!res.ok) throw new Error("Failed to fetch notes");
-      const data = (await res.json()) as Note[];
-      setNotes(data);
+      const response = await fetch("/api/notes");
+      if (!response.ok) throw new Error();
+      setNotes((await response.json()) as Note[]);
+      setLoadError("");
     } catch {
-      setError("Could not load notes.");
+      setLoadError("Could not load notes.");
     } finally {
       setFetching(false);
     }
   }
 
-  // Loads projects so notes can be attached to a project from the dropdown.
   async function fetchProjects() {
     try {
-      const res = await fetch("/api/projects");
-      if (!res.ok) throw new Error("Failed to fetch projects");
-      const data = (await res.json()) as Project[];
-      setProjects(data);
+      const response = await fetch("/api/projects");
+      if (response.ok) setProjects((await response.json()) as Project[]);
     } catch {
-      setError("Could not load projects.");
+      // The project selects stay empty; notes still load.
     }
   }
 
@@ -170,83 +126,38 @@ export default function NotesPage() {
     void loadInitialData();
   }, []);
 
+  // A linked note (?openNote=) fills the editor once the notes have loaded.
+  const fillLinkedNote = useEffectEvent((note: Note) => loadIntoEditor(note));
   useEffect(() => {
-    if (!openedNoteId) return;
-    void markNoteOpened(openedNoteId);
-  }, [openedNoteId]);
-
-  useEffect(() => {
-    if (!editingNoteId || editTitle || editContent || editProjectId) return;
+    if (!editingNoteId || latestDraftRef.current.noteId === editingNoteId) return;
     const note = notes.find((item) => item.id === editingNoteId);
     if (!note) return;
-    const timer = window.setTimeout(() => {
-      setEditTitle(note.title);
-      setEditContent(note.content ?? "");
-      setEditProjectId(note.projectId ?? "");
-      latestDraftRef.current = {
-        noteId: note.id,
-        title: note.title,
-        content: note.content ?? "",
-        projectId: note.projectId ?? "",
-      };
-      lastSavedDraftRef.current = latestDraftRef.current;
-      setSaveStatus("saved");
-      setFocusRequest((count) => count + 1);
-    }, 0);
+    const timer = window.setTimeout(() => fillLinkedNote(note), 0);
     return () => window.clearTimeout(timer);
-  }, [editContent, editProjectId, editTitle, editingNoteId, notes]);
+  }, [editingNoteId, notes]);
 
   useEffect(() => {
     if (!editingNoteId) return;
     const frame = window.requestAnimationFrame(() => {
-      const target =
-        focusTarget === "title"
-          ? titleInputRef.current
-          : contentTextareaRef.current;
+      const target = focusTarget === "title" ? titleInputRef.current : contentTextareaRef.current;
       target?.focus();
-      if (
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLInputElement
-      ) {
-        const end = target.value.length;
-        target.setSelectionRange(end, end);
-      }
-      document
-        .getElementById(`note-${editingNoteId}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (target) target.setSelectionRange(target.value.length, target.value.length);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [editingNoteId, focusRequest, focusTarget]);
 
+  // Debounced autosave while typing.
   useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setFullscreenNoteId(null);
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  useEffect(() => {
-    if (!editingNoteId) return;
-    latestDraftRef.current = {
-      noteId: editingNoteId,
-      title: editTitle,
-      content: editContent,
-      projectId: editProjectId,
-    };
+    if (!editingNoteId || latestDraftRef.current.noteId !== editingNoteId) return;
+    latestDraftRef.current = { noteId: editingNoteId, title: editTitle, content: editContent, projectId: editProjectId };
     if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
-    autosaveTimerRef.current = window.setTimeout(
-      () => void saveDraft(editingNoteId),
-      250,
-    );
+    autosaveTimerRef.current = window.setTimeout(() => void saveDraft(editingNoteId), 250);
     return () => {
-      if (autosaveTimerRef.current)
-        window.clearTimeout(autosaveTimerRef.current);
+      if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
     };
-    // saveDraft reads refs for the latest draft; including it would reschedule on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editContent, editProjectId, editTitle, editingNoteId]);
 
+  // Save right away when the tab is hidden or the page unloads.
   useEffect(() => {
     function handleVisibilityChange() {
       if (document.visibilityState === "hidden") flushAutosave();
@@ -259,7 +170,7 @@ export default function NotesPage() {
     };
   });
 
-  // Marks a note as recently opened so Dashboard shortcuts can continue from it.
+  /** Marks a note as recently opened so Home's "Jump back in" can continue from it. */
   async function markNoteOpened(noteId: string) {
     try {
       await fetch("/api/recent-shortcuts", {
@@ -270,476 +181,313 @@ export default function NotesPage() {
     } catch {}
   }
 
-  // Handles the Create Note form.
-  // It allows title-only notes, body-only notes, or notes with both.
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!title.trim() && !content.trim()) {
-      setError("Add a title or note content before saving.");
-      return;
-    }
-    try {
-      setLoading(true);
-      setError("");
-      const res = await fetch("/api/notes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, content, projectId }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Failed to create note");
-      }
-      setTitle("");
-      setContent("");
-      setProjectId("");
-      await fetchNotes();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create note.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // Opens a note in Writing mode, fills the editor state, focuses the requested field,
-  // records the note as recently opened, and updates the URL.
-  function openNote(note: Note, target: FocusTarget) {
-    setOpenedNoteId(note.id);
-    setEditingNoteId(note.id);
+  function loadIntoEditor(note: Note) {
     setEditTitle(note.title);
     setEditContent(note.content ?? "");
     setEditProjectId(note.projectId ?? "");
-    latestDraftRef.current = {
-      noteId: note.id,
-      title: note.title,
-      content: note.content ?? "",
-      projectId: note.projectId ?? "",
-    };
+    latestDraftRef.current = { noteId: note.id, title: note.title, content: note.content ?? "", projectId: note.projectId ?? "" };
     lastSavedDraftRef.current = latestDraftRef.current;
     setSaveStatus("saved");
-    setFocusTarget(target);
+    setSaveError("");
     setFocusRequest((count) => count + 1);
-    setError("");
     void markNoteOpened(note.id);
-    const params = new URLSearchParams({ openNote: note.id, focus: target });
-    window.history.replaceState(null, "", `/notes?${params.toString()}`);
   }
 
-  // Compares two drafts so autosave only runs when something actually changed.
-  function draftsMatch(
-    a: typeof latestDraftRef.current,
-    b: typeof latestDraftRef.current,
-  ) {
-    return (
-      a.noteId === b.noteId &&
-      a.title === b.title &&
-      a.content === b.content &&
-      a.projectId === b.projectId
-    );
+  function openNote(note: Note, target: FocusTarget) {
+    setEditingNoteId(note.id);
+    setFocusTarget(target);
+    loadIntoEditor(note);
+    window.history.replaceState(null, "", `/notes?${new URLSearchParams({ openNote: note.id, focus: target })}`);
   }
 
-  // Saves the latest editor draft to /api/notes/[id] using PATCH.
-  // Debounced saves happen while typing; flush saves happen on blur, Done, or page exit.
-  async function saveDraft(
-    noteId: string,
-    mode: "debounced" | "flush" = "debounced",
-  ) {
+  async function saveDraft(noteId: string, mode: "debounced" | "flush" = "debounced") {
     const draft = latestDraftRef.current;
-    if (
-      draft.noteId !== noteId ||
-      draftsMatch(draft, lastSavedDraftRef.current)
-    )
-      return;
-
-    // Does not save if the note is empty
+    if (draft.noteId !== noteId || draftsMatch(draft, lastSavedDraftRef.current)) return;
     if (!draft.title.trim() && !draft.content.trim()) {
       setSaveStatus("error");
-      setError("Add a title or note content before saving.");
+      setSaveError("Add a title or some text before saving.");
       return;
     }
     try {
-      setSavingEdit(true);
       setSaveStatus("saving");
-      setError("");
-      const res = await fetch(`/api/notes/${noteId}`, {
+      setSaveError("");
+      const response = await fetch(`/api/notes/${noteId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         keepalive: mode === "flush",
-        body: JSON.stringify({
-          title: draft.title,
-          content: draft.content,
-          projectId: draft.projectId,
-        }),
+        body: JSON.stringify({ title: draft.title, content: draft.content, projectId: draft.projectId }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Failed to update note");
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error || "Could not save the note.");
       }
-      const updatedNote = (await res.json()) as Note;
+      const updated = (await response.json()) as Note;
       lastSavedDraftRef.current = draft;
-      setNotes((prevNotes) =>
-        prevNotes.map((note) =>
+      // Keep what is in the editor now, in case the user typed during the request.
+      const latest = latestDraftRef.current;
+      setNotes((current) =>
+        current.map((note) =>
           note.id === noteId
-            ? {
-                ...updatedNote,
-                title:
-                  latestDraftRef.current.noteId === noteId
-                    ? latestDraftRef.current.title
-                    : updatedNote.title,
-                content:
-                  latestDraftRef.current.noteId === noteId
-                    ? latestDraftRef.current.content
-                    : updatedNote.content,
-                projectId:
-                  latestDraftRef.current.noteId === noteId
-                    ? latestDraftRef.current.projectId || null
-                    : updatedNote.projectId,
-              }
+            ? latest.noteId === noteId
+              ? { ...updated, title: latest.title, content: latest.content, projectId: latest.projectId || null }
+              : updated
             : note,
         ),
       );
       setSaveStatus("saved");
-    } catch (err) {
+    } catch (error) {
       setSaveStatus("error");
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Could not autosave note. Offline / retrying.",
-      );
-    } finally {
-      setSavingEdit(false);
+      setSaveError(error instanceof Error ? error.message : "Could not save. Retrying when you type again.");
     }
   }
 
-  // Forces any pending autosave to run immediately so no content is lost.
   function flushAutosave() {
     if (!editingNoteId) return;
     if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
     void saveDraft(editingNoteId, "flush");
   }
 
-  // Finishes Writing mode by saving the latest draft, closing fullscreen,
-  // clearing the active editor, and returning the URL to /notes.
-  async function handleDoneWriting(noteId: string) {
+  /**
+   * Closes the editor right away and saves the latest draft in the
+   * background (saveDraft reads the draft before its first await, and the
+   * keepalive request outlives a navigation).
+   */
+  function closeEditor() {
+    const noteId = editingNoteId;
     if (autosaveTimerRef.current) {
       window.clearTimeout(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
     }
-    await saveDraft(noteId, "flush");
-    setFullscreenNoteId(null);
+    if (noteId) void saveDraft(noteId, "flush");
     setEditingNoteId(null);
+    setExpanded(false);
     window.history.replaceState(null, "", "/notes");
   }
 
-  // Updates the editor content state when the user types in the textarea.
-  function handleContentChange(value: string) {
-    setEditContent(value);
-  }
-
-  // Deletes a note through the API and removes it from the current UI list.
-  async function handleDelete(noteId: string) {
+  async function deleteNote(note: Note) {
+    setDeleting(true);
     try {
-      setDeletingNoteId(noteId);
-      setError("");
-      const res = await fetch(`/api/notes/${noteId}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Failed to delete note");
+      const response = await fetch(`/api/notes/${note.id}`, { method: "DELETE" });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error || "Could not delete the note.");
       }
-      setNotes((prevNotes) => prevNotes.filter((note) => note.id !== noteId));
-      if (editingNoteId === noteId) setEditingNoteId(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not delete note.");
+      if (editingNoteId === note.id) {
+        if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
+        setEditingNoteId(null);
+        setExpanded(false);
+        latestDraftRef.current = emptyDraft;
+        lastSavedDraftRef.current = emptyDraft;
+        window.history.replaceState(null, "", "/notes");
+      }
+      setNotes((current) => current.filter((item) => item.id !== note.id));
+      notifyWorkspaceChanged();
+      toast.success("Moved to Trash", { description: note.title || "Untitled note" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete the note.");
     } finally {
-      setDeletingNoteId(null);
+      setDeleting(false);
+      setConfirmDelete(null);
     }
   }
-  
-  // Finds the active note object for fullscreen rendering.
-  const activeNote = editingNoteId
-    ? notes.find((note) => note.id === editingNoteId)
-    : null;
 
-  // Renders the Writing mode editor used both inline and in fullscreen.
-  function renderEditor(note: Note, compact = false) {
-    const isFullscreen = fullscreenNoteId === note.id;
-    return (
-      <div className={compact ? "space-y-4" : "space-y-5"}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
-            Writing mode
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setFullscreenNoteId(note.id)}
-              className="rounded-full border border-zinc-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-zinc-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-200 dark:hover:bg-zinc-800"
-            >
-              Full screen
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleDoneWriting(note.id)}
-              className="rounded-lg bg-accent px-4 py-1.5 text-xs font-semibold text-accent-ink shadow-sm transition-colors hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-        <input
-          ref={titleInputRef}
-          type="text"
-          value={editTitle}
-          onChange={(e) => setEditTitle(e.target.value)}
-          onBlur={flushAutosave}
-          className="w-full rounded-2xl border border-zinc-200 bg-white/90 px-5 py-4 text-2xl font-semibold outline-none shadow-sm transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-zinc-800 dark:bg-zinc-950/80 dark:focus:ring-blue-950/60"
-        />
-        <textarea
-          ref={contentTextareaRef}
-          value={editContent}
-          onChange={(e) => handleContentChange(e.target.value)}
-          onBlur={flushAutosave}
-          rows={isFullscreen ? 18 : 10}
-          placeholder="Start writing..."
-          className="min-h-80 w-full resize-y rounded-2xl border border-zinc-200 bg-white/90 px-5 py-4 text-base leading-8 outline-none shadow-sm transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-zinc-800 dark:bg-zinc-950/80 dark:focus:ring-blue-950/60 sm:text-lg"
-        />
-        <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-          <select
-            value={editProjectId}
-            onChange={(e) => setEditProjectId(e.target.value)}
-            onBlur={flushAutosave}
-            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-950 dark:focus:ring-blue-950/60"
-          >
-            <option value="">No project</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-          <span
-            className={`justify-self-start rounded-full border px-3 py-1.5 text-xs font-semibold sm:justify-self-end ${saveStatus === "error" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200" : "border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"}`}
-          >
-            {saveStatus === "saving" || savingEdit
-              ? "Saving…"
-              : saveStatus === "error"
-                ? "Offline / retrying"
-                : "Saved"}
-          </span>
-        </div>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Last updated {new Date(note.updatedAt).toLocaleString()}. Press Escape
-          to exit full-screen.
-        </p>
-      </div>
-    );
-  }
+  const activeNote = editingNoteId ? notes.find((note) => note.id === editingNoteId) ?? null : null;
+  const realNow = new Date();
 
   return (
-    <>
-      <main className="min-h-screen px-6 py-10">
-        <div className="mx-auto max-w-5xl">
-          <h1 className="mb-2 text-4xl font-bold">Notes</h1>
-          <p className="mb-8 text-zinc-600 dark:text-zinc-300">
-            Create and manage your notes for AI-Multi Task-Management.
-          </p>
-
-          <section className="mb-10 rounded-2xl border border-zinc-200 p-6 shadow-sm dark:border-zinc-800">
-            <h2 className="mb-4 text-2xl font-semibold">Create a Note</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Title (optional)"
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black dark:border-zinc-700"
-              />
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="Write your note here..."
-                rows={6}
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black dark:border-zinc-700"
-              />
-              <select
-                value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
-                className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 outline-none focus:border-black dark:border-zinc-700 dark:bg-zinc-950"
-              >
-                <option value="">No project</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="submit"
-                disabled={loading}
-                className="rounded-xl px-5 py-3 bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-50"
-              >
-                {loading ? "Creating..." : "Create Note"}
-              </button>
-            </form>
-            {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-          </section>
-
-          <section>
-            <h2 className="mb-4 text-2xl font-semibold">Your Notes</h2>
-            <div className="mb-4 grid gap-3 sm:grid-cols-2">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search notes by title or content..."
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black dark:border-zinc-700"
-              />
-              <select
-                value={projectFilter}
-                onChange={(e) => setProjectFilter(e.target.value)}
-                className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 outline-none focus:border-black dark:border-zinc-700 dark:bg-zinc-950"
-              >
-                <option value="">All projects</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {fetching ? (
-              <p className="text-zinc-600 dark:text-zinc-300">
-                Loading notes...
-              </p>
-            ) : notes.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-8 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
-                <h3 className="text-lg font-semibold">No notes yet.</h3>
-                <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-                  Capture a meeting recap, class takeaway, research source, or
-                  project decision using the form above.
-                </p>
-              </div>
-            ) : visibleNotes.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
-                No notes match your filters.
-              </p>
-            ) : (
-              <div className="space-y-5">
-                {visibleNotes.map((note) => {
-                  const isDeleting = deletingNoteId === note.id;
-                  const isEditing = editingNoteId === note.id;
-                  const notePreview = getNotePreview(note);
-                  return (
-                    <article
-                      key={note.id}
-                      id={`note-${note.id}`}
-                      className={`rounded-2xl border p-5 shadow-sm transition ${openedNoteId === note.id ? "border-blue-300 bg-blue-50/60 ring-2 ring-blue-200 dark:border-blue-800 dark:bg-blue-950/20 dark:ring-blue-900/60" : "border-zinc-200 bg-white/70 dark:border-zinc-800 dark:bg-zinc-950/40"}`}
-                    >
-                      {isEditing ? (
-                        renderEditor(note)
-                      ) : (
-                        <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-                          <button
-                            type="button"
-                            onClick={() => openNote(note, "title")}
-                            className="min-w-0 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-2xl"
-                          >
-                            {note.title.trim() ? (
-                              <h3 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-                                {note.title}
-                              </h3>
-                            ) : (
-                              <p className="line-clamp-2 text-lg font-medium leading-7 text-zinc-800 dark:text-zinc-100">
-                                {notePreview}
-                              </p>
-                            )}
-                            {note.project ? (
-                              <span className="mt-2 inline-flex rounded-full border border-zinc-300 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
-                                {note.project.name}
-                              </span>
-                            ) : null}
-                          </button>
-                          <div className="flex gap-2 sm:justify-end">
-                            <button
-                              type="button"
-                              onClick={() => openNote(note, "content")}
-                              className="rounded-lg border border-blue-300 px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/40"
-                            >
-                              Open & write
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(note.id)}
-                              disabled={isDeleting}
-                              className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {isDeleting ? "Deleting..." : "Delete"}
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => openNote(note, "content")}
-                            className="text-left sm:col-span-2 rounded-2xl p-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            {note.content ? (
-                              <p className="whitespace-pre-wrap text-gray-700 dark:text-zinc-300">
-                                {note.content}
-                              </p>
-                            ) : (
-                              <p className="text-gray-400">
-                                No content. Click here to start writing.
-                              </p>
-                            )}
-                            <p className="mt-4 text-sm text-gray-500">
-                              Updated:{" "}
-                              {new Date(note.updatedAt).toLocaleString()}
-                            </p>
-                          </button>
-                        </div>
-                      )}
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+    <div className="mx-auto grid w-full max-w-5xl gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight">Notes</h1>
+          <p className="mt-0.5 text-sm text-muted">{fetching ? "Loading..." : `${notes.length} note${notes.length === 1 ? "" : "s"}`}</p>
         </div>
-      </main>
+      </header>
 
-      {fullscreenNoteId && activeNote ? (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-white/95 px-4 py-5 backdrop-blur-xl transition dark:bg-zinc-950/95 sm:px-6 sm:py-8">
-          <div className="mx-auto max-w-5xl">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                Focused note
-              </p>
-              <button
-                type="button"
-                onClick={() => setFullscreenNoteId(null)}
-                className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-              >
-                × Close
-              </button>
-            </div>
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50/80 p-4 shadow-2xl shadow-zinc-300/30 dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none sm:p-7">
-              {renderEditor(activeNote, true)}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <ConfirmDialog
-        open={Boolean(confirmDeleteId)}
-        title="Confirm delete"
-        message="This will move the item to Trash."
-        loading={Boolean(deletingNoteId)}
-        onCancel={() => setConfirmDeleteId(null)}
-        onConfirm={() => {
-          if (confirmDeleteId) void handleDelete(confirmDeleteId);
-          setConfirmDeleteId(null);
+      <QuickAdd
+        label="New note title"
+        placeholder="Name a new note and press Enter"
+        endpoint="/api/notes"
+        field="title"
+        quiet
+        onAdded={(id, title) => {
+          // Open the new note for writing right away; the refetch brings the server's copy.
+          const now = new Date().toISOString();
+          const note: Note = { id, title, content: "", createdAt: now, updatedAt: now, projectId: null, project: null };
+          setNotes((current) => [note, ...current]);
+          openNote(note, "content");
+          void fetchNotes();
         }}
       />
-    </>
+
+      <div className="flex flex-wrap items-center gap-2" role="search" aria-label="Filter notes">
+        <label className="relative flex min-w-48 flex-1 items-center">
+          <span className="sr-only">Search notes</span>
+          <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 h-4 w-4 text-muted" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search notes"
+            className={cn(controlClass, "w-full pl-8")}
+          />
+        </label>
+        <select aria-label="Project" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} className={controlClass}>
+          <option value="">All projects</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>{project.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {loadError ? (
+        <p role="alert" className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
+          {loadError}{" "}
+          <button type="button" onClick={() => void fetchNotes()} className="font-semibold underline">Try again</button>
+        </p>
+      ) : null}
+
+      {fetching ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading notes">
+          {Array.from({ length: 3 }, (_, index) => (
+            <div key={index} className="h-36 animate-pulse rounded-xl border border-line bg-surface" />
+          ))}
+        </div>
+      ) : visibleNotes.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-line bg-surface px-6 py-10 text-center">
+          <h2 className="text-base font-semibold">{notes.length === 0 ? "No notes yet." : "No notes match these filters."}</h2>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted">
+            {notes.length === 0
+              ? "Capture meeting takeaways, research and ideas. Link a note to a project to share it with the team."
+              : "Clear the search or switch back to all projects."}
+          </p>
+          {notes.length === 0 ? (
+            <label htmlFor={QUICK_ADD_INPUT_ID} className={cn(uiButtonClass, "mt-4 cursor-pointer px-3 py-1.5")}>
+              Write your first note
+            </label>
+          ) : null}
+        </div>
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {visibleNotes.map((note) => {
+            const title = note.title.trim();
+            const body = (note.content ?? "").trim();
+            return (
+              <li key={note.id} id={`note-${note.id}`}>
+                <button
+                  type="button"
+                  onClick={() => openNote(note, "content")}
+                  aria-label={title || body.slice(0, 60) || "Untitled note"}
+                  className={cn(
+                    "flex h-full w-full flex-col rounded-xl border bg-surface p-4 text-left transition-colors hover:border-zinc-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent dark:hover:border-zinc-700",
+                    editingNoteId === note.id ? "border-accent" : "border-line",
+                  )}
+                >
+                  <span className={cn("line-clamp-2 text-[15px] font-semibold", !title && "text-muted")}>{title || "Untitled note"}</span>
+                  {body ? <span className="mt-1.5 line-clamp-4 whitespace-pre-line text-sm text-muted">{body}</span> : null}
+                  <span className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-3 text-xs text-muted">
+                    {note.project ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span aria-hidden="true" className="h-2 w-2 rounded-[3px]" style={{ backgroundColor: projectColor(note.project) }} />
+                        {note.project.name}
+                      </span>
+                    ) : null}
+                    <span>Edited {relativeTime(new Date(note.updatedAt), realNow) === "now" ? "just now" : `${relativeTime(new Date(note.updatedAt), realNow)} ago`}</span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <Sheet open={Boolean(editingNoteId)} onOpenChange={(open) => {
+          if (!open) closeEditor();
+        }}>
+        <SheetContent hideClose className={cn("gap-3 p-4 sm:p-6", expanded ? "max-w-none" : "max-w-2xl")}>
+          <SheetTitle className="sr-only">{activeNote?.title || "Note"}</SheetTitle>
+          <SheetDescription className="sr-only">Changes save as you type.</SheetDescription>
+          <div className="flex items-center gap-2">
+            <span
+              role="status"
+              className={cn(
+                "rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                saveStatus === "error" ? "bg-warning-soft text-warning" : "bg-canvas text-muted",
+              )}
+            >
+              {saveStatus === "saving" ? "Saving…" : saveStatus === "error" ? "Not saved" : "Saved"}
+            </span>
+            <span className="ml-auto flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setExpanded((value) => !value)}
+                aria-label={expanded ? "Exit full width" : "Full width"}
+                title={expanded ? "Exit full width" : "Full width"}
+                className="hidden h-8 w-8 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink sm:grid"
+              >
+                {expanded ? <Minimize2 aria-hidden="true" className="h-4 w-4" /> : <Maximize2 aria-hidden="true" className="h-4 w-4" />}
+              </button>
+              {activeNote ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(activeNote)}
+                  aria-label="Delete note"
+                  title="Delete note"
+                  className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-danger-soft hover:text-danger"
+                >
+                  <Trash2 aria-hidden="true" className="h-4 w-4" />
+                </button>
+              ) : null}
+              <button type="button" onClick={closeEditor} className={cn(uiPrimaryButtonClass, "ml-1 px-3 py-1.5")}>
+                Done
+              </button>
+            </span>
+          </div>
+          {saveError ? <p role="alert" className="text-sm text-warning">{saveError}</p> : null}
+          <label className="sr-only" htmlFor="note-title">Title</label>
+          <input
+            id="note-title"
+            ref={titleInputRef}
+            value={editTitle}
+            onChange={(event) => setEditTitle(event.target.value)}
+            onBlur={flushAutosave}
+            placeholder="Untitled note"
+            className="w-full bg-transparent text-2xl font-bold tracking-tight text-ink outline-none placeholder:text-muted/70"
+          />
+          <label className="sr-only" htmlFor="note-content">Note</label>
+          <textarea
+            id="note-content"
+            ref={contentTextareaRef}
+            value={editContent}
+            onChange={(event) => setEditContent(event.target.value)}
+            onBlur={flushAutosave}
+            placeholder="Start writing..."
+            className="min-h-64 w-full flex-1 resize-none bg-transparent text-base leading-7 text-ink outline-none placeholder:text-muted/70"
+          />
+          <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3 text-xs text-muted">
+            <label className="flex items-center gap-2">
+              Project
+              <select value={editProjectId} onChange={(event) => setEditProjectId(event.target.value)} onBlur={flushAutosave} className={controlClass}>
+                <option value="">No project</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>{project.name}</option>
+                ))}
+              </select>
+            </label>
+            {activeNote ? <span className="ml-auto">Last updated {new Date(activeNote.updatedAt).toLocaleString()}</span> : null}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title="Delete this note?"
+        message={confirmDelete ? `“${confirmDelete.title || "Untitled note"}” moves to Trash, where you can restore it.` : ""}
+        loading={deleting}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          if (confirmDelete) void deleteNote(confirmDelete);
+        }}
+      />
+    </div>
   );
 }
