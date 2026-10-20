@@ -126,6 +126,24 @@ it opens a "Production is down" issue assigned to the repository owner, and
 closes it with a note once the site answers again. The checks don't touch the
 database, so they don't use Neon's free compute hours.
 
+## Database backups
+
+Every day at about 07:00 UTC, Vercel Cron calls `/api/cron/backup`
+(`vercel.json`). It exports every table to one gzipped JSON file in the private
+R2 bucket under `backups/database/` and keeps the newest 30. Login sessions,
+password reset tokens and pending upload slots are left out; they're
+short-lived and useless after a restore. A second call within 20 hours does
+nothing, so the route is safe to leave public; set `CRON_SECRET` in Vercel to
+require it anyway. Locally the backups go to `./backups/` (ignored by git).
+
+To restore: create an empty database (for example a new Neon branch), run
+`npx prisma migrate deploy` against it, then
+`RESTORE_DATABASE_URL="<target>" npm run restore:database -- <backup.json.gz>`.
+Add `DOTENV_CONFIG_PATH=.env.r2` and `--from-r2 latest` to fetch the newest
+backup straight from R2. The script refuses targets that already have data
+and checks that the target has the backup's migrations. It restores in one
+transaction, so a failure leaves the target empty.
+
 ## Tech Stack
 
 - Frontend: Next.js App Router, React, TypeScript, Tailwind CSS
