@@ -1045,10 +1045,12 @@ export type ComposerAttachment = { id: string; file: File; previewUrl: string };
 
 /**
  * Previews of picked files are object URLs, which the browser generates as
- * `blob:` URLs. Refuse anything else so a preview can never be a script URL.
+ * `blob:<origin>/<uuid>`. Refuse anything else so a preview can never be a
+ * script URL. encodeURI leaves such URLs unchanged; it marks the value as a
+ * URL for code scanning, which otherwise traces the file name into `src`.
  */
 function localPreviewUrl(url: string) {
-  return url.startsWith("blob:") ? url : undefined;
+  return url.startsWith("blob:") ? encodeURI(url) : undefined;
 }
 
 /** Thumbnails of the files picked for the next message. */
