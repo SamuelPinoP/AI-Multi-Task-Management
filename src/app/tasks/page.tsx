@@ -33,6 +33,7 @@ import {
 } from "@/components/ui";
 import { FormEvent, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { notifyWorkspaceChanged, TASK_CREATED_EVENT } from "@/lib/workspace-events";
 import {
   compareTaskDueDates,
   formatTaskDueDate,
@@ -461,6 +462,13 @@ export default function TasksPage() {
     void loadInitialTasks();
   }, []);
 
+  /** Refetch when the app shell's New task dialog adds a task. */
+  useEffect(() => {
+    const refresh = () => void fetchTasks(false);
+    window.addEventListener(TASK_CREATED_EVENT, refresh);
+    return () => window.removeEventListener(TASK_CREATED_EVENT, refresh);
+  }, []);
+
   /**
    * Submits the create-task form: validates the title, posts the new task
    * to `POST /api/tasks`, resets the form fields on success, and
@@ -506,6 +514,7 @@ export default function TasksPage() {
       setRecurrence("NONE");
       setProjectId("");
       setAssigneeId("");
+      notifyWorkspaceChanged();
       await fetchTasks(false);
     } catch (err) {
       const message =
@@ -589,6 +598,7 @@ export default function TasksPage() {
       setTasks((prev) =>
         prev.map((task) => (task.id === taskId ? updatedTask : task)),
       );
+      notifyWorkspaceChanged();
       cancelEditing();
     } catch (err) {
       const message =
@@ -635,6 +645,7 @@ export default function TasksPage() {
       setTasks((prev) =>
         prev.map((item) => (item.id === task.id ? updatedTask : item)),
       );
+      notifyWorkspaceChanged();
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Could not update task status.";
@@ -661,6 +672,7 @@ export default function TasksPage() {
       }
 
       setTasks((prev) => prev.filter((task) => task.id !== taskId));
+      notifyWorkspaceChanged();
       if (editingTaskId === taskId) {
         cancelEditing();
       }

@@ -3,6 +3,7 @@
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { formatTaskDueDate, getLocalDateOnly } from "@/lib/task-date-buckets";
 import { useMemo, useState } from "react";
+import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
@@ -105,6 +106,7 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
       }
       const updatedTask = (await res.json()) as Task;
       setTasks((current) => current.map((item) => (item.id === task.id ? updatedTask : item)));
+      notifyWorkspaceChanged();
     } catch (err) {
       setTasks(previousTasks);
       setError(err instanceof Error ? err.message : "Could not update task status.");
@@ -136,6 +138,7 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
       }
       const createdTask = (await res.json()) as Task;
       setTasks((current) => [createdTask, ...current]);
+      notifyWorkspaceChanged();
       setNewTaskTitle("");
       setNewTaskPriority("MEDIUM");
       setNewTaskDueDate("");

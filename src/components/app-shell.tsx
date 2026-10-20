@@ -1,120 +1,466 @@
 "use client";
 
+import {
+  Bell,
+  CalendarClock,
+  CalendarDays,
+  FolderKanban,
+  House,
+  LogOut,
+  Map as MapIcon,
+  Menu,
+  Moon,
+  NotebookPen,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Search,
+  Sparkles,
+  SquareCheckBig,
+  SquareKanban,
+  Sun,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { ThemeToggle } from "./theme-provider";
-import { GlobalCommandCenter } from "./global-command-center";
-
-type NavLinkItem = {
-  href: string;
-  label: string;
-  exact?: boolean;
-};
-
-const workspaceLinks: NavLinkItem[] = [
-  { href: "/notes", label: "Notes" },
-  { href: "/tasks", label: "Tasks", exact: true },
-  { href: "/events", label: "Events", exact: true },
-  { href: "/projects", label: "Projects" },
-  { href: "/events/calendar", label: "Calendar" },
-];
-
-const topLinks: NavLinkItem[] = [
-  { href: "/", label: "Dashboard" },
-  { href: "/today", label: "Today" },
-];
-
-const toolLinks: NavLinkItem[] = [
-  { href: "/board", label: "Task Board" },
-  { href: "/planner", label: "Planner" },
-  { href: "/roadmap", label: "Roadmap" },
-  { href: "/trash", label: "Trash" },
-];
-
-const mobileLinks: NavLinkItem[] = [
-  ...topLinks,
-  ...workspaceLinks,
-  ...toolLinks,
-];
-
-const publicPaths = new Set(["/login", "/signup", "/forgot-password", "/reset-password"]);
+import { useEffect, useRef, useState } from "react";
+import { CommandPalette } from "@/components/command-palette";
+import { NewTaskDialog } from "@/components/new-task-dialog";
+import { ThemeToggle, useTheme } from "@/components/theme-provider";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { isNavItemActive, pageTitleFor, type NavMatch } from "@/lib/app-nav";
+import { cn } from "@/lib/cn";
+import { paletteColor, projectColor } from "@/lib/project-color";
+import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/sidebar-state";
+import { WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
+import type { WorkspaceNav } from "@/lib/workspace-nav";
 
 type ShellUser = {
+  id: string;
   name: string | null;
   email: string;
   isGuest: boolean;
 } | null;
 
-function isActive(pathname: string, href: string, exact = false) {
-  if (href === "/" || exact) return pathname === href;
-  return pathname === href || pathname.startsWith(`${href}/`);
+type NavItem = NavMatch & {
+  label: string;
+  icon: LucideIcon;
+  count?: number;
+};
+
+const publicPaths = new Set(["/login", "/signup", "/forgot-password", "/reset-password"]);
+
+function firstName(user: NonNullable<ShellUser>) {
+  if (user.isGuest) return "Guest";
+  return (user.name || user.email).trim().split(/[\s@]/)[0] || "You";
 }
 
-function TopBarLink({ href, label, exact }: NavLinkItem) {
-  const pathname = usePathname();
-  const active = isActive(pathname, href, exact);
+function initial(user: NonNullable<ShellUser>) {
+  return firstName(user).charAt(0).toUpperCase();
+}
+
+/** A visual count; the link's aria-label says it in words. */
+function Count({ value }: { value: number }) {
+  return (
+    <span aria-hidden="true" className="ml-auto text-[11px] tabular-nums text-muted">
+      {value}
+    </span>
+  );
+}
+
+function SidebarLink({
+  item,
+  pathname,
+  collapsed,
+  onNavigate,
+}: {
+  item: NavItem;
+  pathname: string;
+  collapsed: boolean;
+  onNavigate?: () => void;
+}) {
+  const active = isNavItemActive(pathname, item);
+  const Icon = item.icon;
 
   return (
     <Link
-      href={href}
+      href={item.href}
+      onClick={onNavigate}
       aria-current={active ? "page" : undefined}
-      className={`shrink-0 rounded-full border px-3 py-2 text-sm font-medium transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-700 dark:focus-visible:outline-zinc-300 ${
-        active
-          ? "border-zinc-900 bg-zinc-900 text-white shadow-sm shadow-zinc-300/60 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950 dark:shadow-none"
-          : "border-zinc-200 bg-white/80 text-zinc-700 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
-      }`}
+      aria-label={!collapsed && item.count ? `${item.label}, ${item.count} open` : undefined}
+      title={collapsed ? item.label : undefined}
+      className={cn(
+        "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-hover",
+        active && "bg-surface font-semibold shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
+        collapsed && "justify-center px-0 py-2",
+      )}
     >
-      {label}
+      <Icon aria-hidden="true" className={cn("h-4 w-4 shrink-0", active ? "text-accent" : "text-muted")} />
+      {collapsed ? <span className="sr-only">{item.label}</span> : <span className="truncate">{item.label}</span>}
+      {!collapsed && item.count ? <Count value={item.count} /> : null}
     </Link>
   );
 }
 
-function SidebarNavigation({ pathname }: { pathname: string }) {
+function GroupLabel({ children, collapsed }: { children: React.ReactNode; collapsed: boolean }) {
+  if (collapsed) return <div className="mx-3 my-2 h-px bg-line" aria-hidden="true" />;
   return (
-    <aside className="hidden h-full w-80 shrink-0 p-4 lg:block xl:w-[22rem]">
-      <nav
-        className="flex h-full flex-col gap-4 rounded-2xl border border-zinc-200/70 bg-white/55 p-4 dark:border-zinc-800/80 dark:bg-zinc-900/45"
-        aria-label="Main workspace navigation"
-      >
-        {workspaceLinks.map((link) => {
-          const active = isActive(pathname, link.href, link.exact);
+    <p className="flex items-center justify-between px-2.5 pb-1 pt-4 text-[10.5px] font-bold uppercase tracking-[0.08em] text-muted">
+      {children}
+    </p>
+  );
+}
 
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              aria-current={active ? "page" : undefined}
-              className={`group flex flex-1 items-center justify-center rounded-2xl border px-6 py-7 text-center text-2xl font-semibold tracking-tight transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-700 dark:focus-visible:outline-zinc-300 ${
-                active
-                  ? "border-zinc-300 bg-white text-zinc-950 shadow-sm shadow-zinc-200/70 ring-1 ring-zinc-300/70 dark:border-zinc-700 dark:bg-zinc-800/95 dark:text-white dark:shadow-none dark:ring-zinc-700/80"
-                  : "border-zinc-200/70 bg-zinc-100/70 text-zinc-800 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950 dark:border-zinc-800/80 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/80 dark:hover:text-white"
-              }`}
-            >
-              {link.label}
+function Sidebar({
+  user,
+  nav,
+  pathname,
+  collapsed,
+  onToggleCollapsed,
+  onNewTask,
+  onNavigate,
+}: {
+  user: NonNullable<ShellUser>;
+  nav: WorkspaceNav;
+  pathname: string;
+  collapsed: boolean;
+  onToggleCollapsed?: () => void;
+  onNewTask: () => void;
+  onNavigate?: () => void;
+}) {
+  const mainItems: NavItem[] = [
+    { href: "/", label: "Home", icon: House },
+    { href: "/today", label: "My day", icon: Sun },
+  ];
+  const workItems: NavItem[] = [
+    { href: "/tasks", label: "Tasks", icon: SquareCheckBig, exact: true, count: nav.openTasks },
+    { href: "/events", label: "Events", icon: CalendarClock, exact: true },
+    { href: "/events/calendar", label: "Calendar", icon: CalendarDays },
+    { href: "/notes", label: "Notes", icon: NotebookPen },
+    { href: "/board", label: "Boards", icon: SquareKanban, match: ["/tasks/board"] },
+  ];
+  const toolItems: NavItem[] = [
+    { href: "/planner", label: "Planner", icon: Sparkles },
+    { href: "/roadmap", label: "Roadmap", icon: MapIcon },
+    { href: "/trash", label: "Trash", icon: Trash2 },
+  ];
+  const workspaceName = user.isGuest ? "Guest workspace" : `${firstName(user)}'s workspace`;
+  const projectSummary = `${nav.activeProjectCount} active project${nav.activeProjectCount === 1 ? "" : "s"}`;
+  const linkProps = { pathname, collapsed, onNavigate };
+
+  return (
+    <nav aria-label="Workspace" className="flex h-full flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2.5 py-3">
+      <div className={cn("flex items-center gap-2.5 px-1.5 pb-3", collapsed && "justify-center px-0")}>
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-[11px] font-extrabold text-accent-ink" aria-hidden="true">
+          AM
+        </span>
+        {collapsed ? null : (
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{workspaceName}</p>
+            <p className="truncate text-xs text-muted">{projectSummary}</p>
+          </div>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={onNewTask}
+        title={collapsed ? "New task" : undefined}
+        className={cn(
+          "mb-2 flex items-center gap-2 rounded-lg bg-accent px-2.5 py-2 text-sm font-semibold text-accent-ink transition-colors hover:bg-accent-hover",
+          collapsed && "justify-center px-0",
+        )}
+      >
+        <Plus aria-hidden="true" className="h-4 w-4" />
+        {collapsed ? <span className="sr-only">New task</span> : "New task"}
+      </button>
+
+      {mainItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
+
+      <GroupLabel collapsed={collapsed}>Work</GroupLabel>
+      {workItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
+
+      <GroupLabel collapsed={collapsed}>
+        <Link href="/projects" onClick={onNavigate} className="hover:text-ink">Projects</Link>
+        <Link href="/projects" onClick={onNavigate} className="rounded p-0.5 hover:bg-surface-hover hover:text-ink" title="Create a project">
+          <Plus aria-hidden="true" className="h-3.5 w-3.5" />
+          <span className="sr-only">Create a project</span>
+        </Link>
+      </GroupLabel>
+      {collapsed ? (
+        <SidebarLink item={{ href: "/projects", label: "Projects", icon: FolderKanban }} {...linkProps} />
+      ) : nav.projects.length ? (
+        <>
+          {nav.projects.map((project) => {
+            const href = `/projects/${project.id}`;
+            const active = pathname === href || pathname.startsWith(`${href}/`);
+            return (
+              <Link
+                key={project.id}
+                href={href}
+                onClick={onNavigate}
+                aria-current={active ? "page" : undefined}
+                aria-label={project.openTasks ? `${project.name}, ${project.openTasks} open tasks` : undefined}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors hover:bg-surface-hover",
+                  active && "bg-surface font-semibold shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className="mx-1 h-2 w-2 shrink-0 rounded-[3px]"
+                  style={{ backgroundColor: projectColor(project) }}
+                />
+                <span className="truncate">{project.name}</span>
+                {project.openTasks ? <Count value={project.openTasks} /> : null}
+              </Link>
+            );
+          })}
+          {nav.activeProjectCount > nav.projects.length ? (
+            <Link href="/projects" onClick={onNavigate} className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted hover:bg-surface-hover hover:text-ink">
+              All {nav.activeProjectCount} projects
             </Link>
-          );
-        })}
-      </nav>
-    </aside>
+          ) : null}
+        </>
+      ) : (
+        <Link href="/projects" onClick={onNavigate} className="rounded-lg px-2.5 py-1.5 text-xs text-muted hover:bg-surface-hover hover:text-ink">
+          No projects yet. Create one
+        </Link>
+      )}
+
+      <GroupLabel collapsed={collapsed}>Tools</GroupLabel>
+      {toolItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
+
+      {onToggleCollapsed ? (
+        <div className="mt-auto pt-3">
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className={cn(
+              "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-muted transition-colors hover:bg-surface-hover hover:text-ink",
+              collapsed && "justify-center px-0",
+            )}
+          >
+            {collapsed ? <PanelLeftOpen aria-hidden="true" className="h-4 w-4" /> : <PanelLeftClose aria-hidden="true" className="h-4 w-4" />}
+            {collapsed ? null : "Collapse"}
+          </button>
+        </div>
+      ) : null}
+    </nav>
+  );
+}
+
+function UserMenu({ user }: { user: NonNullable<ShellUser> }) {
+  const { theme, setTheme } = useTheme();
+  const logoutForm = useRef<HTMLFormElement>(null);
+
+  return (
+    <>
+      <form ref={logoutForm} action="/api/auth/logout" method="post" className="hidden" />
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label="Account menu"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white outline-none ring-offset-2 ring-offset-surface focus-visible:ring-2 focus-visible:ring-accent"
+          style={{ backgroundColor: paletteColor(user.id) }}
+        >
+          {initial(user)}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuLabel className="text-ink">
+            <span className="flex items-center gap-2">
+              <span className="truncate text-sm font-semibold">{user.isGuest ? "Guest workspace" : user.name || user.email}</span>
+              {user.isGuest ? <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-semibold text-warning">Guest</span> : null}
+            </span>
+            {user.isGuest ? (
+              <span className="mt-0.5 block text-xs font-normal text-muted">Keep this browser session to keep access.</span>
+            ) : (
+              <span className="mt-0.5 block truncate text-xs font-normal text-muted">{user.email}</span>
+            )}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>Theme</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => setTheme("light")} aria-checked={theme === "light"} role="menuitemradio">
+            <Sun />
+            Light
+            {theme === "light" ? <span className="ml-auto text-xs text-accent">On</span> : null}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setTheme("dark")} aria-checked={theme === "dark"} role="menuitemradio">
+            <Moon />
+            Dark
+            {theme === "dark" ? <span className="ml-auto text-xs text-accent">On</span> : null}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => logoutForm.current?.requestSubmit()}>
+            <LogOut />
+            Log out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
+}
+
+function NotificationsMenu({ pendingInvitations }: { pendingInvitations: number }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={pendingInvitations ? `Notifications, ${pendingInvitations} new` : "Notifications"}
+        className="relative grid h-8 w-8 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <Bell aria-hidden="true" className="h-4 w-4" />
+        {pendingInvitations ? (
+          <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border-2 border-surface bg-project-3" />
+        ) : null}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+        {pendingInvitations ? (
+          <DropdownMenuItem asChild>
+            <Link href="/projects">
+              <FolderKanban />
+              {pendingInvitations} project invitation{pendingInvitations === 1 ? "" : "s"} waiting for you
+            </Link>
+          </DropdownMenuItem>
+        ) : (
+          <p className="px-2.5 pb-3 pt-1 text-sm text-muted">You&apos;re all caught up.</p>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function TopBar({
+  user,
+  nav,
+  pathname,
+  onOpenMenu,
+  onOpenSearch,
+}: {
+  user: NonNullable<ShellUser>;
+  nav: WorkspaceNav;
+  pathname: string;
+  onOpenMenu: () => void;
+  onOpenSearch: () => void;
+}) {
+  const { parent, title } = pageTitleFor(pathname, nav.projects);
+
+  return (
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface/95 px-3 backdrop-blur sm:gap-3 sm:px-5">
+      <button
+        type="button"
+        onClick={onOpenMenu}
+        aria-label="Open navigation"
+        className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink lg:hidden"
+      >
+        <Menu aria-hidden="true" className="h-5 w-5" />
+      </button>
+      <div className="flex min-w-0 items-center gap-1.5 text-sm">
+        {parent ? (
+          <>
+            <Link href="/projects" className="hidden text-muted hover:text-ink sm:inline">{parent}</Link>
+            <span aria-hidden="true" className="hidden text-muted sm:inline">/</span>
+          </>
+        ) : null}
+        <span className="truncate font-bold">{title}</span>
+      </div>
+      <button
+        type="button"
+        onClick={onOpenSearch}
+        className="ml-auto hidden w-full max-w-xs items-center gap-2 rounded-lg border border-line bg-canvas px-2.5 py-1.5 text-sm text-muted transition-colors hover:border-zinc-300 sm:flex lg:max-w-sm dark:hover:border-zinc-700"
+      >
+        <Search aria-hidden="true" className="h-4 w-4" />
+        Search or run a command
+        <kbd className="ml-auto rounded border border-line px-1.5 font-sans text-[10px]">Ctrl K</kbd>
+      </button>
+      <button
+        type="button"
+        onClick={onOpenSearch}
+        aria-label="Search"
+        className="ml-auto grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink sm:hidden"
+      >
+        <Search aria-hidden="true" className="h-4 w-4" />
+      </button>
+      <NotificationsMenu pendingInvitations={nav.pendingInvitations} />
+      <UserMenu user={user} />
+    </header>
+  );
+}
+
+function MobileTabs({ pathname, onNewTask }: { pathname: string; onNewTask: () => void }) {
+  const tabs: NavItem[] = [
+    { href: "/", label: "Home", icon: House },
+    { href: "/tasks", label: "Tasks", icon: SquareCheckBig, exact: true },
+    { href: "/events/calendar", label: "Calendar", icon: CalendarDays },
+    { href: "/projects", label: "Projects", icon: FolderKanban },
+  ];
+
+  const tab = (item: NavItem) => {
+    const active = isNavItemActive(pathname, item);
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        aria-current={active ? "page" : undefined}
+        className={cn("grid justify-items-center gap-0.5 py-1 text-[10.5px]", active ? "font-bold text-accent" : "text-muted")}
+      >
+        <item.icon aria-hidden="true" className="h-5 w-5" />
+        {item.label}
+      </Link>
+    );
+  };
+
+  return (
+    <nav
+      aria-label="Primary"
+      className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 items-center border-t border-line bg-surface/95 px-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur lg:hidden"
+    >
+      {tabs.slice(0, 2).map(tab)}
+      <button
+        type="button"
+        onClick={onNewTask}
+        aria-label="New task"
+        className="grid h-11 w-11 place-items-center justify-self-center rounded-xl bg-accent text-accent-ink shadow-sm transition-colors hover:bg-accent-hover"
+      >
+        <Plus aria-hidden="true" className="h-5 w-5" />
+      </button>
+      {tabs.slice(2).map(tab)}
+    </nav>
   );
 }
 
 export function AppShell({
   children,
   currentUser,
+  initialNav,
+  initialSidebarCollapsed,
 }: {
   children: React.ReactNode;
   currentUser: ShellUser;
+  initialNav: WorkspaceNav | null;
+  initialSidebarCollapsed: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const isLoggedOutLanding = !currentUser && pathname === "/";
   const isPublicPage = publicPaths.has(pathname) || isLoggedOutLanding;
-  const displayName = currentUser?.isGuest
-    ? "Guest Workspace"
-    : currentUser?.name || currentUser?.email;
-  const showWorkspaceShell = Boolean(currentUser && !isPublicPage);
+  const showWorkspaceShell = Boolean(currentUser && initialNav && !isPublicPage);
+
+  const [nav, setNav] = useState(initialNav);
+  const [collapsed, setCollapsed] = useState(initialSidebarCollapsed);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
 
   useEffect(() => {
     if (!currentUser && !isPublicPage) {
@@ -122,110 +468,123 @@ export function AppShell({
     }
   }, [currentUser, isPublicPage, router]);
 
-  const shellLayoutClass = showWorkspaceShell
-    ? "flex h-screen min-h-0 flex-col overflow-hidden bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100"
-    : "flex min-h-screen flex-col overflow-x-hidden bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100";
+  // Keep sidebar counts fresh as the user moves around and after the shell creates something.
+  useEffect(() => {
+    if (!showWorkspaceShell) return;
+    const controller = new AbortController();
+    const refresh = async () => {
+      try {
+        const response = await fetch("/api/workspace-nav", { signal: controller.signal, cache: "no-store" });
+        if (response.ok) setNav((await response.json()) as WorkspaceNav);
+      } catch {
+        // Aborted or offline: keep the last counts.
+      }
+    };
+    void refresh();
+    window.addEventListener(WORKSPACE_CHANGED_EVENT, refresh);
+    return () => {
+      controller.abort();
+      window.removeEventListener(WORKSPACE_CHANGED_EVENT, refresh);
+    };
+  }, [pathname, showWorkspaceShell]);
+
+  useEffect(() => {
+    if (!showWorkspaceShell) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showWorkspaceShell]);
+
+  function toggleCollapsed() {
+    setCollapsed((current) => {
+      const next = !current;
+      document.cookie = `${SIDEBAR_COLLAPSED_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+      return next;
+    });
+  }
+
+  if (!showWorkspaceShell || !currentUser || !nav) {
+    return (
+      <div className="flex min-h-screen flex-col overflow-x-hidden bg-canvas text-ink">
+        <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <span className="flex items-center gap-2 text-sm font-semibold">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-[10px] font-extrabold text-accent-ink" aria-hidden="true">AM</span>
+            AI-Multi Task-Management
+          </span>
+          <ThemeToggle />
+        </header>
+        {children}
+      </div>
+    );
+  }
+
+  const openNewTask = () => {
+    setMenuOpen(false);
+    setNewTaskOpen(true);
+  };
 
   return (
-    <div className={shellLayoutClass}>
-      <header className="sticky top-0 z-20 shrink-0 border-b border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
-        <div className="mx-auto flex max-w-[104rem] items-center gap-3 px-4 py-3 sm:px-6">
-          {currentUser ? (
-            <div className="hidden min-w-0 flex-1 items-center gap-2 overflow-x-auto whitespace-nowrap rounded-full px-1 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden lg:flex">
-              <div className="shrink-0">
-                <GlobalCommandCenter />
-              </div>
+    <div className="flex h-dvh min-h-0 overflow-hidden bg-canvas text-ink">
+      <a
+        href="#main-content"
+        className="sr-only z-50 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-ink focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
+      >
+        Skip to content
+      </a>
 
-              <nav
-                className="flex shrink-0 items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50/90 p-1 dark:border-zinc-800 dark:bg-zinc-950/50"
-                aria-label="Top tools"
-              >
-                {[...topLinks, ...toolLinks].map((link) => (
-                  <TopBarLink key={link.href} {...link} />
-                ))}
-              </nav>
-            </div>
-          ) : (
-            <div className="min-w-0 flex-1" />
-          )}
+      <aside
+        className={cn(
+          "hidden shrink-0 border-r border-line bg-sunken transition-[width] duration-200 lg:block",
+          collapsed ? "w-16" : "w-60",
+        )}
+      >
+        <Sidebar
+          user={currentUser}
+          nav={nav}
+          pathname={pathname}
+          collapsed={collapsed}
+          onToggleCollapsed={toggleCollapsed}
+          onNewTask={openNewTask}
+        />
+      </aside>
 
-          <div className="flex shrink-0 items-center justify-end gap-2">
-            {currentUser ? (
-              <div className="hidden shrink-0 items-center gap-2 rounded-full bg-zinc-100 px-3 py-1.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 xl:flex">
-                {currentUser.isGuest ? (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                    Guest
-                  </span>
-                ) : null}
-                <span className="max-w-36 truncate font-medium">
-                  {displayName}
-                </span>
-                {!currentUser.isGuest && currentUser.name ? (
-                  <span className="hidden max-w-36 truncate text-zinc-500 dark:text-zinc-400 2xl:inline">
-                    {currentUser.email}
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
+      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+        <SheetContent side="left" className="w-72 bg-sunken p-0">
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <SheetDescription className="sr-only">All pages and your projects</SheetDescription>
+          <Sidebar
+            user={currentUser}
+            nav={nav}
+            pathname={pathname}
+            collapsed={false}
+            onNewTask={openNewTask}
+            onNavigate={() => setMenuOpen(false)}
+          />
+        </SheetContent>
+      </Sheet>
 
-            {currentUser ? (
-              <form action="/api/auth/logout" method="post" className="shrink-0">
-                <button
-                  type="submit"
-                  className="rounded-full px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  Logout
-                </button>
-              </form>
-            ) : null}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TopBar
+          user={currentUser}
+          nav={nav}
+          pathname={pathname}
+          onOpenMenu={() => setMenuOpen(true)}
+          onOpenSearch={() => setSearchOpen(true)}
+        />
+        <main id="main-content" className="min-h-0 flex-1 overflow-y-auto pb-24 lg:pb-0">
+          {children}
+        </main>
+      </div>
 
-            <div className="shrink-0">
-              <ThemeToggle />
-            </div>
-          </div>
-        </div>
+      <MobileTabs pathname={pathname} onNewTask={openNewTask} />
 
-        {currentUser ? (
-          <div className="border-t border-zinc-200 px-4 py-2 lg:hidden dark:border-zinc-800 sm:px-6">
-            <div className="mb-2">
-              <GlobalCommandCenter />
-            </div>
-            <nav
-              className="flex items-center gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-              aria-label="Mobile navigation"
-            >
-              {mobileLinks.map((link) => {
-                const active = isActive(pathname, link.href, link.exact);
-
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className={`shrink-0 rounded-xl border px-3 py-2 text-sm shadow-sm transition ${
-                      active
-                        ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
-                        : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                    }`}
-                  >
-                    {link.label}
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-        ) : null}
-      </header>
-
-      {showWorkspaceShell ? (
-        <div className="mx-auto flex min-h-0 w-full max-w-[104rem] flex-1 items-stretch overflow-hidden">
-          <SidebarNavigation pathname={pathname} />
-          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-            {children}
-          </main>
-        </div>
-      ) : (
-        children
-      )}
+      <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} onNewTask={openNewTask} />
+      <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} projects={nav.projects} />
     </div>
   );
 }
