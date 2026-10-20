@@ -42,6 +42,9 @@ const emailFrom = cleanEnvValue("EMAIL_FROM");
 if (!databaseUrl) {
   addMissing(errors, "DATABASE_URL");
 }
+if (process.env.VERCEL_ENV === "preview" && !cleanEnvValue("PREVIEW_DATABASE_URL")) {
+  warnings.push("PREVIEW_DATABASE_URL is not set, so this preview uses the production database and skips migrations. Connect the preview Neon database to the Preview environment.");
+}
 
 for (const [name, value] of [
   ["PROJECT_CHAT_STORAGE_PROVIDER", legacyStorageProvider],
