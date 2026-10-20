@@ -1,1373 +1,572 @@
 "use client";
 
 /**
- * EventsPage
- * ----------
- * Client-side page component for the "Events" feature of the AI-Multi
- * Task-Management app.
+ * Events: the agenda first, the form second (DES-02).
  *
- * Responsibilities:
- *  - Fetch the user's events and projects from the API on mount.
- *  - Provide a form to create new events (with optional recurrence and
- *    project association).
- *  - Render a month calendar with per-day event counts, and a detail list
- *    of events for whichever day is selected.
- *  - Render a chronological list of events grouped into sections
- *    (Today / Upcoming Soon / Later / Past), filterable by project.
- *  - Support inline editing and deletion (with confirmation) of events.
- *  - Support deep-linking: if the URL contains an `event` query param,
- *    the matching event is highlighted, scrolled into view, and opened
- *    for editing automatically.
+ * - Quick entry takes a title and opens the New event sheet for the date and time.
+ * - An agenda of today and the next 60 days, grouped by day. Repeating events
+ *   show their real occurrences (they used to appear only on their first date).
+ * - Past events behind a toggle.
+ * - On wide screens, a month calendar with the selected day's events.
+ * - `?event=<id>` opens that event in the sheet (links from search and Home).
+ *
+ * Event times are stored wall-clock values; see `@/lib/event-time`.
  */
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CalendarDays, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Plus, Repeat, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { uiPrimaryButtonClass } from "@/components/ui";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useEffectEvent, useMemo, useState, type FormEvent } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { EventSheet, type EventInput, type EventItem, type EventProject } from "@/components/events/event-sheet";
+import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import {
-  expandRecurringEventsForRange,
-  formatRecurrenceLabel,
-  normalizeRecurrence,
-} from "@/lib/recurrence";
-import { getLocalDateOnly } from "@/lib/task-date-buckets";
-import {
-  eventTimeInputValue,
-  eventWallTime,
-  formatEventDateTime,
-  formatEventTime,
-} from "@/lib/event-time";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "@/components/ui/toaster";
+import { cn } from "@/lib/cn";
+import { formatEventTime } from "@/lib/event-time";
+import { projectColor } from "@/lib/project-color";
+import { occurrencesInRange } from "@/lib/event-occurrences";
+import { normalizeRecurrence } from "@/lib/recurrence";
+import { formatTaskDayKey, getLocalDateOnly } from "@/lib/task-date-buckets";
+import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
-/** Supported recurrence patterns for an event. */
-type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+const AGENDA_DAYS = 60;
+const PAST_LIMIT = 30;
+const ALL = "ALL";
+const NO_PROJECT = "NO_PROJECT";
 
-/**
- * Shape of an event as used by the UI. Mirrors the API's event response,
- * with an added optional `sourceEventId` used when an event has been
- * "expanded" from a recurring series into individual calendar occurrences
- * (see `expandRecurringEventsForRange`), so each occurrence can be traced
- * back to the original stored event.
- */
-type EventItem = {
-  id: string;
-  /** Present on expanded recurrence occurrences; points back to the original event's id. */
-  sourceEventId?: string;
-  title: string;
-  description: string | null;
-  location: string | null;
-  /** ISO datetime string for when the event starts. */
-  startTime: string;
-  /** ISO datetime string for when the event ends, or null if unset. */
-  endTime: string | null;
-  /** Whether the user specified a start time (vs. an all-day/date-only event). */
-  hasStartTime: boolean;
-  /** Whether the user specified an end time. */
-  hasEndTime: boolean;
-  createdAt: string;
-  updatedAt: string;
-  recurrence?: Recurrence | null;
-  projectId?: string | null;
-  /** Populated project relation, if the event belongs to one. */
-  project?: Project | null;
-};
+const controlClass =
+  "min-w-0 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/25";
 
-/** Minimal project shape needed to display project filters/badges. */
-type Project = { id: string; name: string; color: string | null };
-
-/** Sentinel value for the "show events from every project" filter option. */
-const ALL_PROJECTS_FILTER = "ALL";
-/** Sentinel value for the "show only events with no project" filter option. */
-const NO_PROJECT_FILTER = "NO_PROJECT";
-
-/**
- * Formats a Date as a `YYYY-MM-DD` key using LOCAL (not UTC) date parts.
- * Used as the canonical lookup key for grouping events by calendar day.
- */
-function formatDayKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 }
 
-/**
- * Returns the local, time-stripped (midnight) Date for a given date/string.
- * Thin wrapper around the shared `getLocalDateOnly` utility so this file's
- * calendar-bucketing logic reads consistently as "day starts".
- */
-function getLocalDayStart(date: Date | string) {
-  return getLocalDateOnly(date);
+function dayLabel(dayKey: string, todayKey: string, tomorrowKey: string) {
+  if (dayKey === todayKey) return "Today";
+  if (dayKey === tomorrowKey) return "Tomorrow";
+  const [year, month, day] = dayKey.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(year, month - 1, day));
 }
 
-/**
- * Compares two dates/strings to see if they fall on the same local calendar
- * day (ignoring time-of-day).
- */
-function isSameLocalDay(left: Date | string, right: Date | string) {
-  return formatDayKey(getLocalDayStart(left)) === formatDayKey(getLocalDayStart(right));
+function timeRange(event: EventItem) {
+  if (!event.hasStartTime) return "All day";
+  const start = formatEventTime(event.startTime);
+  if (!event.endTime || !event.hasEndTime) return start;
+  // A multi-day event shows its end date too.
+  const sameDay = formatTaskDayKey(event.endTime) === formatTaskDayKey(event.startTime);
+  return sameDay ? `${start} – ${formatEventTime(event.endTime)}` : `${start} – ${dayLabel(formatTaskDayKey(event.endTime), "", "")}`;
 }
 
-/** Whether an event's start time falls on the same local day as `now`. */
-function isEventToday(event: EventItem, now: Date) {
-  return isSameLocalDay(event.startTime, now);
+async function errorMessage(response: Response, fallback: string) {
+  const body = (await response.json().catch(() => null)) as { error?: string } | null;
+  return body?.error ?? fallback;
 }
 
-/**
- * Validates the create/edit event form fields before submitting to the API.
- *
- * Rules enforced:
- *  - Title must be non-empty (after trimming whitespace).
- *  - Start date is required.
- *  - End date, if provided, cannot be earlier than the start date.
- *  - If start and end dates are the same day and both times are provided,
- *    the end time must be strictly after the start time.
- *
- * @returns An empty string if valid, otherwise a human-readable error message.
- */
-function validateEventInput(input: {
-  title: string;
-  startDate: string;
-  startTime?: string;
-  endDate?: string;
-  endTime?: string;
+function EventRow({
+  event,
+  highlighted,
+  showDate = false,
+  onOpen,
+  onDelete,
+}: {
+  event: EventItem;
+  highlighted: boolean;
+  /** For lists not grouped by day (past events). */
+  showDate?: boolean;
+  onOpen: (event: EventItem) => void;
+  onDelete: (event: EventItem) => void;
 }) {
-  if (!input.title.trim()) return "Title is required.";
-  if (!input.startDate) return "Start date is required.";
-  if (input.endDate && input.endDate < input.startDate)
-    return "End date cannot be before start date.";
-  if (
-    input.endDate &&
-    input.endDate === input.startDate &&
-    input.startTime &&
-    input.endTime &&
-    input.endTime <= input.startTime
-  ) {
-    return "End time must be after start time when the dates are the same.";
-  }
-  return "";
+  const color = event.project ? projectColor(event.project) : "var(--accent)";
+  const repeats = normalizeRecurrence(event.recurrence) !== "NONE";
+  return (
+    <li className={cn("flex items-center gap-3 border-t border-line px-3 py-2 first:border-t-0 sm:px-4", highlighted && "bg-accent-soft/60")}>
+      <span className="w-[4.5rem] shrink-0 text-xs tabular-nums text-muted sm:w-24">
+        {showDate ? <span className="block font-semibold text-ink">{dayLabel(formatTaskDayKey(event.startTime), "", "")}</span> : null}
+        {timeRange(event)}
+      </span>
+      <span aria-hidden="true" className="h-8 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      <button type="button" onClick={() => onOpen(event)} aria-label={event.title} className="min-w-0 flex-1 text-left">
+        <span className="block truncate text-sm font-medium hover:text-accent">{event.title}</span>
+        {event.location || event.project ? (
+          <span className="block truncate text-xs text-muted">
+            {[event.location, event.project?.name].filter(Boolean).join(" · ")}
+          </span>
+        ) : null}
+      </button>
+      {repeats ? (
+        <span title="Repeats" className="shrink-0 text-muted">
+          <Repeat aria-hidden="true" className="h-3.5 w-3.5" />
+          <span className="sr-only">Repeats</span>
+        </span>
+      ) : null}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label={`More actions for ${event.title}`}
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-muted outline-none hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => onOpen(event)}>
+            <Pencil />
+            Edit
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => onDelete(event)} className="text-danger [&_svg]:text-danger">
+            <Trash2 />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </li>
+  );
 }
 
 export default function EventsPage() {
-  // ---------------------------------------------------------------------
-  // Core data state
-  // ---------------------------------------------------------------------
-  /** All events belonging to the current user, as returned by the API. */
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const linkedEventId = searchParams.get("event");
+
   const [events, setEvents] = useState<EventItem[]>([]);
-  /** All projects belonging to the current user, used for filters/badges/selects. */
-  const [projects, setProjects] = useState<Project[]>([]);
-
-  // ---------------------------------------------------------------------
-  // Async / loading state
-  // ---------------------------------------------------------------------
-  /** True while the initial events fetch is in flight (controls the loading message). */
+  const [projects, setProjects] = useState<EventProject[]>([]);
   const [fetching, setFetching] = useState(true);
-  /** True while the "create event" request is in flight. */
-  const [loading, setLoading] = useState(false);
-  /** True while an "edit event" save request is in flight. */
-  const [savingEdit, setSavingEdit] = useState(false);
-  /** Id of the event currently being deleted, or null if none. Used to show a per-item spinner state. */
-  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
-  /** Id of the event currently open in inline-edit mode, or null if none. */
-  const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  /** Current error message shown near the create form, or empty string if none. */
-  const [error, setError] = useState("");
-  /** Id of the event pending delete confirmation (drives the ConfirmDialog), or null if closed. */
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-
-  // ---------------------------------------------------------------------
-  // Calendar navigation state
-  // ---------------------------------------------------------------------
-  /** First-of-month Date representing which month the calendar grid is showing. */
+  const [loadError, setLoadError] = useState("");
+  const [projectFilter, setProjectFilter] = useState(ALL);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showPast, setShowPast] = useState(false);
+  const [quickTitle, setQuickTitle] = useState("");
+  const [sheet, setSheet] = useState<{ open: boolean; event: EventItem | null; draft?: Partial<EventInput> }>({ open: false, event: null });
+  const [confirmDelete, setConfirmDelete] = useState<EventItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  /** `YYYY-MM-DD` key for the day currently selected in the calendar (defaults to today). */
-  const [selectedDayKey, setSelectedDayKey] = useState(() =>
-    formatDayKey(new Date()),
-  );
+  const [selectedDayKey, setSelectedDayKey] = useState(() => formatTaskDayKey(new Date()));
 
-  // ---------------------------------------------------------------------
-  // "Create event" form state
-  // ---------------------------------------------------------------------
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [location, setLocation] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [recurrence, setRecurrence] = useState<Recurrence>("NONE");
-  const [projectId, setProjectId] = useState("");
-
-  // ---------------------------------------------------------------------
-  // "Edit event" (inline) form state — mirrors the create form fields,
-  // but scoped to whichever event is being edited (`editingEventId`).
-  // ---------------------------------------------------------------------
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editLocation, setEditLocation] = useState("");
-  const [editStartDate, setEditStartDate] = useState("");
-  const [editStartTime, setEditStartTime] = useState("");
-  const [editEndDate, setEditEndDate] = useState("");
-  const [editEndTime, setEditEndTime] = useState("");
-  const [editRecurrence, setEditRecurrence] = useState<Recurrence>("NONE");
-  const [editProjectId, setEditProjectId] = useState("");
-
-  /** Currently selected project filter: ALL_PROJECTS_FILTER, NO_PROJECT_FILTER, or a project id. */
-  const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS_FILTER);
-
-  // ---------------------------------------------------------------------
-  // Deep-link support: ?event=<id> in the URL highlights & opens an event
-  // ---------------------------------------------------------------------
-  const searchParams = useSearchParams();
-  /** Event id requested via the `event` query param, if any. */
-  const highlightedEventId = searchParams.get("event");
-  /** Ref to the DOM node of the highlighted event's <article>, used to scroll it into view. */
-  const highlightedEventRef = useRef<HTMLElement | null>(null);
-
-  // ---------------------------------------------------------------------
-  // Derived data (memoized)
-  // ---------------------------------------------------------------------
-
-  /**
-   * Events filtered by the active project filter and sorted chronologically
-   * by local start day. This is the base list that both the "list" section
-   * and (indirectly) other derived views build on.
-   */
-  const visibleEvents = useMemo(() => {
-    return events
-      .filter((event) => {
-        if (projectFilter === ALL_PROJECTS_FILTER) return true;
-        if (projectFilter === NO_PROJECT_FILTER)
-          return event.projectId === null || event.projectId === undefined;
-        return event.projectId === projectFilter;
-      })
-      .sort(
-        (a, b) =>
-          getLocalDayStart(a.startTime).getTime() - getLocalDayStart(b.startTime).getTime(),
-      );
-  }, [events, projectFilter]);
-
-  /** The Project object matching the current project filter, or null if filtering by ALL/NO_PROJECT. */
-  const selectedProject = useMemo(
-    () => projects.find((project) => project.id === projectFilter) ?? null,
-    [projects, projectFilter],
-  );
-
-  /**
-   * Buckets `visibleEvents` into four display sections for the "Your Events"
-   * list, relative to the current moment:
-   *  - Today: starts on the same local day as now.
-   *  - Upcoming Soon: starts between tomorrow and 7 days from today (inclusive).
-   *  - Later: starts more than 7 days from today.
-   *  - Past: has already ended (or started, if no end time) before today.
-   */
-  const eventSections = useMemo(() => {
-    const now = new Date();
-    const todayStart = getLocalDayStart(now);
-    const tomorrowStart = new Date(todayStart);
-    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-    const soonBoundary = new Date(todayStart);
-    soonBoundary.setDate(soonBoundary.getDate() + 7);
-
-    const today = visibleEvents.filter((event) => isEventToday(event, now));
-    const upcoming = visibleEvents.filter((event) => {
-      const start = getLocalDayStart(event.startTime);
-      return start >= tomorrowStart && start <= soonBoundary;
-    });
-    const later = visibleEvents.filter(
-      (event) => getLocalDayStart(event.startTime) > soonBoundary,
-    );
-    const past = visibleEvents.filter((event) =>
-      event.endTime
-        ? getLocalDayStart(event.endTime) < todayStart
-        : getLocalDayStart(event.startTime) < todayStart,
-    );
-
-    return [
-      { key: "TODAY", title: "Today", events: today },
-      { key: "UPCOMING", title: "Upcoming Soon", events: upcoming },
-      { key: "LATER", title: "Later", events: later },
-      { key: "PAST", title: "Past", events: past },
-    ] as const;
-  }, [visibleEvents]);
-
-  /**
-   * Full grid of Date objects to render in the calendar, covering the
-   * displayed month padded out to whole weeks (Sunday-start) before the
-   * 1st and after the last day, so the grid is always a rectangle of
-   * complete weeks.
-   */
-  const calendarDays = useMemo(() => {
-    const monthStart = new Date(
-      calendarMonth.getFullYear(),
-      calendarMonth.getMonth(),
-      1,
-    );
-    const monthEnd = new Date(
-      calendarMonth.getFullYear(),
-      calendarMonth.getMonth() + 1,
-      0,
-    );
-    const calendarStart = new Date(monthStart);
-    calendarStart.setDate(calendarStart.getDate() - monthStart.getDay());
-    const calendarEnd = new Date(monthEnd);
-    calendarEnd.setDate(calendarEnd.getDate() + (6 - monthEnd.getDay()));
-
-    const days: Date[] = [];
-    const cursor = new Date(calendarStart);
-    while (cursor <= calendarEnd) {
-      days.push(new Date(cursor));
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return days;
-  }, [calendarMonth]);
-
-  /**
-   * The inclusive [start, end] Date range covered by `calendarDays`
-   * (start of first day through end of last day), used as bounds when
-   * expanding recurring events into individual occurrences.
-   */
-  const visibleCalendarRange = useMemo(() => {
-    const start = new Date(calendarDays[0]);
-    start.setHours(0, 0, 0, 0);
-
-    const end = new Date(calendarDays[calendarDays.length - 1]);
-    end.setHours(23, 59, 59, 999);
-
-    return { start, end };
-  }, [calendarDays]);
-
-  /**
-   * All events (including recurring-series occurrences) that fall within
-   * the visible calendar range. Each event is tagged with `sourceEventId`
-   * pointing back to its original stored event before being expanded.
-   */
-  const expandedCalendarEvents = useMemo(() => {
-    const eventsWithSourceId = events.map((event) => ({
-      ...event,
-      sourceEventId: event.id,
-    }));
-
-    return expandRecurringEventsForRange(
-      eventsWithSourceId,
-      visibleCalendarRange.start,
-      visibleCalendarRange.end,
-    );
-  }, [events, visibleCalendarRange]);
-
-  /**
-   * `expandedCalendarEvents` grouped by local day key (`YYYY-MM-DD`),
-   * used to render event counts/badges on each calendar cell and to look
-   * up events for the selected day.
-   */
-  const calendarEventsByDay = useMemo(() => {
-    return expandedCalendarEvents.reduce<Record<string, EventItem[]>>(
-      (acc, event) => {
-        const key = formatDayKey(getLocalDayStart(event.startTime));
-        if (!acc[key]) {
-          acc[key] = [];
-        }
-        acc[key].push(event);
-        return acc;
-      },
-      {},
-    );
-  }, [expandedCalendarEvents]);
-
-  /**
-   * Same grouping as `calendarEventsByDay`, but restricted to events
-   * belonging to the currently selected project filter. Returns an empty
-   * object when the filter is ALL or NO_PROJECT, since this is only used
-   * to render a secondary "N in <project>" count on calendar cells when a
-   * specific project is selected.
-   */
-  const selectedProjectCalendarEventsByDay = useMemo(() => {
-    if (
-      projectFilter === ALL_PROJECTS_FILTER ||
-      projectFilter === NO_PROJECT_FILTER
-    ) {
-      return {} as Record<string, EventItem[]>;
-    }
-    return expandedCalendarEvents.reduce<Record<string, EventItem[]>>(
-      (acc, event) => {
-        if (event.projectId !== projectFilter) return acc;
-        const key = formatDayKey(getLocalDayStart(event.startTime));
-        if (!acc[key]) {
-          acc[key] = [];
-        }
-        acc[key].push(event);
-        return acc;
-      },
-      {},
-    );
-  }, [expandedCalendarEvents, projectFilter]);
-
-  /**
-   * Events to display in the "Events on <selected day>" panel: all events
-   * for `selectedDayKey`, further filtered down to "no project" events
-   * when that filter is active, sorted chronologically.
-   */
-  const selectedDayEvents = useMemo(() => {
-    let eventsForDay = calendarEventsByDay[selectedDayKey] ?? [];
-    if (projectFilter === NO_PROJECT_FILTER) {
-      eventsForDay = eventsForDay.filter(
-        (event) => event.projectId === null || event.projectId === undefined,
-      );
-    }
-    return [...eventsForDay].sort(
-      (a, b) =>
-        getLocalDayStart(a.startTime).getTime() - getLocalDayStart(b.startTime).getTime(),
-    );
-  }, [calendarEventsByDay, selectedDayKey, projectFilter]);
-
-  /** Human-readable full date label (e.g. "Monday, January 5, 2025") for `selectedDayKey`. */
-  const selectedDayLabel = useMemo(() => {
-    const [year, month, day] = selectedDayKey.split("-").map(Number);
-    return new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(
-      new Date(year, month - 1, day),
-    );
-  }, [selectedDayKey]);
-
-  // ---------------------------------------------------------------------
-  // Calendar navigation handlers
-  // ---------------------------------------------------------------------
-
-  /** Moves the calendar view back one month. */
-  function goToPreviousMonth() {
-    setCalendarMonth(
-      (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
-    );
-  }
-
-  /** Moves the calendar view forward one month. */
-  function goToNextMonth() {
-    setCalendarMonth(
-      (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
-    );
-  }
-
-  // ---------------------------------------------------------------------
-  // Data fetching
-  // ---------------------------------------------------------------------
-
-  /**
-   * Fetches the current user's events from `/api/events`, normalizes each
-   * event's recurrence value, and stores the result in state.
-   *
-   * @param showLoading When true (default), toggles the `fetching` flag so
-   *   the UI shows a "Loading events..." message. Pass false for background
-   *   refreshes (e.g. after create/edit) so the list doesn't flash a loader.
-   */
-  async function fetchEvents(showLoading = true) {
+  async function fetchEvents() {
     try {
-      if (showLoading) setFetching(true);
-      setError("");
-
-      const res = await fetch("/api/events");
-      if (!res.ok) {
-        throw new Error("Failed to fetch events");
-      }
-
-      const data = (await res.json()) as EventItem[];
-      setEvents(
-        data.map((event) => ({
-          ...event,
-          recurrence: normalizeRecurrence(event.recurrence),
-        })),
-      );
+      const response = await fetch("/api/events");
+      if (!response.ok) throw new Error();
+      const data = (await response.json()) as EventItem[];
+      setEvents(data.map((event) => ({ ...event, recurrence: normalizeRecurrence(event.recurrence) })));
+      setLoadError("");
     } catch {
-      setError("Could not load events.");
+      setLoadError("Could not load events.");
     } finally {
       setFetching(false);
     }
   }
 
-  /** Fetches the current user's projects from `/api/projects` and stores them in state. */
   async function fetchProjects() {
-    const res = await fetch("/api/projects");
-    if (!res.ok) throw new Error("Failed to fetch projects");
-    const data = (await res.json()) as Project[];
-    setProjects(data);
+    try {
+      const response = await fetch("/api/projects");
+      if (response.ok) setProjects((await response.json()) as EventProject[]);
+    } catch {
+      // The project selects stay empty; events still load.
+    }
   }
 
-  /** On mount: load events and projects in parallel. */
   useEffect(() => {
-    async function loadInitialEvents() {
+    async function loadInitialData() {
       await Promise.all([fetchEvents(), fetchProjects()]);
     }
-
-    void loadInitialEvents();
+    void loadInitialData();
   }, []);
 
-  /**
-   * Deep-link handling: once events have loaded, if the URL specifies
-   * `?event=<id>`, this:
-   *  1. Clears the project filter (so the event is guaranteed visible).
-   *  2. Navigates the calendar to the month/day containing the event.
-   *  3. Opens the event in inline-edit mode.
-   *  4. Scrolls the corresponding list item into view.
-   *
-   * Runs whenever `events`, `fetching`, or `highlightedEventId` change, but
-   * no-ops if there's no id to highlight or events are still loading.
-   */
+  /** `?event=<id>`: clear the filters, show its month and open it. */
+  const openLinkedEvent = useEffectEvent((event: EventItem) => {
+    setProjectFilter(ALL);
+    setSearchQuery("");
+    const day = getLocalDateOnly(event.startTime);
+    setSelectedDayKey(formatTaskDayKey(day));
+    setCalendarMonth(new Date(day.getFullYear(), day.getMonth(), 1));
+    setSheet({ open: true, event });
+  });
+
   useEffect(() => {
-    if (!highlightedEventId || fetching) return;
-    const event = events.find((item) => item.id === highlightedEventId);
+    if (!linkedEventId || fetching) return;
+    const event = events.find((item) => item.id === linkedEventId);
     if (!event) return;
-    const timer = window.setTimeout(() => {
-      setProjectFilter(ALL_PROJECTS_FILTER);
-      setSelectedDayKey(formatDayKey(getLocalDayStart(event.startTime)));
-      const eventDay = getLocalDayStart(event.startTime);
-      setCalendarMonth(
-        new Date(eventDay.getFullYear(), eventDay.getMonth(), 1),
-      );
-      startEditing(event);
-      window.requestAnimationFrame(() => {
-        highlightedEventRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-      });
-    }, 0);
+    const timer = window.setTimeout(() => openLinkedEvent(event), 0);
     return () => window.clearTimeout(timer);
-  }, [events, fetching, highlightedEventId]);
+  }, [events, fetching, linkedEventId]);
 
-  // ---------------------------------------------------------------------
-  // Create / Edit / Delete handlers
-  // ---------------------------------------------------------------------
-
-  /**
-   * Handles submission of the "Create Event" form: validates input,
-   * POSTs to `/api/events`, resets the form on success, and refreshes
-   * the events list in the background.
-   */
-  async function handleCreateEvent(e: FormEvent) {
-    e.preventDefault();
-
-    const createValidationError = validateEventInput({
-      title,
-      startDate,
-      startTime,
-      endDate,
-      endTime,
-    });
-    if (createValidationError) {
-      setError(createValidationError);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError("");
-
-      const res = await fetch("/api/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          description,
-          location,
-          startDate,
-          startTime: startTime || null,
-          endDate: endDate || null,
-          endTime: endTime || null,
-          recurrence,
-          projectId,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Failed to create event");
-      }
-
-      // Reset the create form back to its default empty state.
-      setTitle("");
-      setDescription("");
-      setLocation("");
-      setStartDate("");
-      setStartTime("");
-      setEndDate("");
-      setEndTime("");
-      setRecurrence("NONE");
-      setProjectId("");
-      await fetchEvents(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create event.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  /**
-   * Opens `event` for inline editing: populates the edit form fields from
-   * the event's current values (splitting the ISO start/end datetimes back
-   * into separate date/time inputs) and marks it as the active edit target.
-   */
-  function startEditing(event: EventItem) {
-    setEditingEventId(event.id);
-    setEditTitle(event.title);
-    setEditDescription(event.description ?? "");
-    setEditLocation(event.location ?? "");
-    setEditStartDate(formatDayKey(getLocalDayStart(event.startTime)));
-    setEditStartTime(
-      event.hasStartTime ? eventTimeInputValue(event.startTime) : "",
+  const filtered = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return events.filter(
+      (event) =>
+        (projectFilter === ALL || (projectFilter === NO_PROJECT ? !event.projectId : event.projectId === projectFilter)) &&
+        (!query || [event.title, event.location ?? "", event.description ?? ""].some((text) => text.toLowerCase().includes(query))),
     );
-    if (event.endTime) {
-      setEditEndDate(formatDayKey(getLocalDayStart(event.endTime)));
-      setEditEndTime(event.hasEndTime ? eventTimeInputValue(event.endTime) : "");
-    } else {
-      setEditEndDate("");
-      setEditEndTime("");
+  }, [events, projectFilter, searchQuery]);
+
+  const now = new Date();
+  const todayStart = getLocalDateOnly(now);
+  const todayKey = formatTaskDayKey(todayStart);
+  const tomorrowKey = formatTaskDayKey(addDays(todayStart, 1));
+
+  // Occurrences from today through the agenda window, grouped by day.
+  const agenda = useMemo(() => {
+    const start = getLocalDateOnly(new Date());
+    const end = addDays(start, AGENDA_DAYS);
+    end.setMilliseconds(-1);
+    const occurrences = occurrencesInRange(filtered, start, end).sort(
+      (a, b) =>
+        formatTaskDayKey(a.startTime).localeCompare(formatTaskDayKey(b.startTime)) ||
+        Number(a.hasStartTime) - Number(b.hasStartTime) ||
+        a.startTime.localeCompare(b.startTime),
+    );
+    const days = new Map<string, EventItem[]>();
+    for (const occurrence of occurrences) {
+      const key = formatTaskDayKey(occurrence.startTime);
+      days.set(key, [...(days.get(key) ?? []), occurrence]);
     }
-    setEditRecurrence(normalizeRecurrence(event.recurrence));
-    setEditProjectId(event.projectId ?? "");
-    setError("");
+    return [...days.entries()];
+  }, [filtered]);
+
+  // Stored events that ended before today (repeating ones only once their series has ended).
+  const past = useMemo(() => {
+    const start = getLocalDateOnly(new Date());
+    return filtered
+      .filter((event) => {
+        const last = event.endTime ?? event.startTime;
+        const repeats = normalizeRecurrence(event.recurrence) !== "NONE";
+        if (repeats && !event.endTime) return false;
+        return getLocalDateOnly(last) < start;
+      })
+      .sort((a, b) => b.startTime.localeCompare(a.startTime))
+      .slice(0, PAST_LIMIT);
+  }, [filtered]);
+
+  const weekCount = agenda.filter(([key]) => key < formatTaskDayKey(addDays(todayStart, 7))).reduce((sum, [, items]) => sum + items.length, 0);
+
+  // Month calendar (wide screens).
+  const calendarDays = useMemo(() => {
+    const first = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+    const last = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
+    const start = addDays(first, -first.getDay());
+    const end = addDays(last, 6 - last.getDay());
+    const days: Date[] = [];
+    for (let cursor = start; cursor <= end; cursor = addDays(cursor, 1)) days.push(cursor);
+    return days;
+  }, [calendarMonth]);
+
+  const eventsByDay = useMemo(() => {
+    const rangeEnd = addDays(calendarDays[calendarDays.length - 1], 1);
+    rangeEnd.setMilliseconds(-1);
+    const map = new Map<string, EventItem[]>();
+    for (const occurrence of occurrencesInRange(filtered, calendarDays[0], rangeEnd)) {
+      const key = formatTaskDayKey(occurrence.startTime);
+      map.set(key, [...(map.get(key) ?? []), occurrence]);
+    }
+    return map;
+  }, [filtered, calendarDays]);
+
+  const selectedDayEvents = [...(eventsByDay.get(selectedDayKey) ?? [])].sort(
+    (a, b) => Number(a.hasStartTime) - Number(b.hasStartTime) || a.startTime.localeCompare(b.startTime),
+  );
+
+  function openEvent(occurrence: EventItem) {
+    const source = events.find((event) => event.id === (occurrence.sourceEventId ?? occurrence.id)) ?? occurrence;
+    setSheet({ open: true, event: source });
   }
 
-  /** Closes inline-edit mode and resets all edit-form fields to their defaults. */
-  function cancelEditing() {
-    setEditingEventId(null);
-    setEditTitle("");
-    setEditDescription("");
-    setEditLocation("");
-    setEditStartDate("");
-    setEditStartTime("");
-    setEditEndDate("");
-    setEditEndTime("");
-    setEditRecurrence("NONE");
-    setEditProjectId("");
+  function closeSheet(open: boolean) {
+    setSheet((current) => ({ ...current, open }));
+    if (!open && linkedEventId) router.replace(pathname, { scroll: false });
   }
 
-  /**
-   * Validates the edit form and, if valid, PATCHes the event at `eventId`
-   * with the current edit-form values. On success, replaces the event in
-   * local state with the server's updated copy and exits edit mode.
-   */
-  async function handleSaveEdit(eventId: string) {
-    const editValidationError = validateEventInput({
-      title: editTitle,
-      startDate: editStartDate,
-      startTime: editStartTime,
-      endDate: editEndDate,
-      endTime: editEndTime,
+  function startQuickEntry(formEvent: FormEvent) {
+    formEvent.preventDefault();
+    if (!quickTitle.trim()) return;
+    setSheet({ open: true, event: null, draft: { title: quickTitle.trim(), startDate: selectedDayKey >= todayKey ? selectedDayKey : todayKey } });
+    setQuickTitle("");
+  }
+
+  async function saveEvent(input: EventInput) {
+    const editing = sheet.event;
+    const response = await fetch(editing ? `/api/events/${editing.id}` : "/api/events", {
+      method: editing ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...input,
+        startTime: input.startTime || null,
+        endDate: input.endDate || null,
+        endTime: input.endTime || null,
+      }),
     });
-    if (editValidationError) {
-      setError(editValidationError);
-      return;
-    }
+    if (!response.ok) return errorMessage(response, editing ? "Could not save the event." : "Could not create the event.");
+    notifyWorkspaceChanged();
+    await fetchEvents();
+    toast.success(editing ? "Event saved" : "Event created", { description: input.title });
+    return null;
+  }
 
+  async function deleteEvent(event: EventItem) {
+    setDeleting(true);
     try {
-      setSavingEdit(true);
-      setError("");
-
-      const res = await fetch(`/api/events/${eventId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: editTitle,
-          description: editDescription,
-          location: editLocation,
-          startDate: editStartDate,
-          startTime: editStartTime || null,
-          endDate: editEndDate || null,
-          endTime: editEndTime || null,
-          recurrence: editRecurrence,
-          projectId: editProjectId,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Failed to update event");
-      }
-
-      const updated = (await res.json()) as EventItem;
-      setEvents((prev) =>
-        prev.map((event) => (event.id === eventId ? updated : event)),
-      );
-      cancelEditing();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update event.");
+      const response = await fetch(`/api/events/${event.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(await errorMessage(response, "Could not delete the event."));
+      setEvents((current) => current.filter((item) => item.id !== event.id));
+      notifyWorkspaceChanged();
+      if (sheet.event?.id === event.id) closeSheet(false);
+      toast.success("Moved to Trash", { description: event.title });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete the event.");
     } finally {
-      setSavingEdit(false);
+      setDeleting(false);
+      setConfirmDelete(null);
     }
   }
 
-  /**
-   * Deletes the event at `eventId` via the API (soft-delete / move to
-   * Trash, per the confirm dialog copy). On success, removes it from local
-   * state and, if it was the event currently being edited, exits edit mode.
-   */
-  async function handleDeleteEvent(eventId: string) {
-    try {
-      setDeletingEventId(eventId);
-      setError("");
+  const askDelete = (occurrence: EventItem) =>
+    setConfirmDelete(events.find((event) => event.id === (occurrence.sourceEventId ?? occurrence.id)) ?? occurrence);
 
-      const res = await fetch(`/api/events/${eventId}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Failed to delete event");
-      }
-
-      setEvents((prev) => prev.filter((event) => event.id !== eventId));
-      if (editingEventId === eventId) {
-        cancelEditing();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not delete event.");
-    } finally {
-      setDeletingEventId(null);
-    }
-  }
-
-  // ---------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------
   return (
-    <>
-      <main className="min-h-screen px-6 py-10">
-        <div className="mx-auto max-w-4xl">
-          {/* Page header with title/description and a link to the full calendar view */}
-          <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="mb-2 text-4xl font-bold">Events</h1>
-              <p className="text-zinc-600 dark:text-zinc-300">
-                Create and manage scheduled events for AI-Multi Task-Management.
-              </p>
-            </div>
-            <Link
-              href="/events/calendar"
-              aria-label="Open full calendar view"
-              className={`${uiPrimaryButtonClass} gap-2 py-2.5`}
-            >
-              {/* Calendar icon */}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="h-4 w-4"
-                aria-hidden="true"
-              >
-                <rect x="3" y="4" width="18" height="18" rx="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-              Full Calendar
-            </Link>
-          </div>
+    <div className="mx-auto grid w-full max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight">Events</h1>
+          <p className="mt-0.5 text-sm text-muted">
+            {fetching ? "Loading..." : `${weekCount} in the next 7 days`}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Link href="/events/calendar" className={cn(uiButtonClass, "px-3 py-1.5")}>
+            <CalendarDays aria-hidden="true" className="h-4 w-4 text-muted" />
+            Calendar
+          </Link>
+          <button
+            type="button"
+            onClick={() => setSheet({ open: true, event: null, draft: { startDate: selectedDayKey >= todayKey ? selectedDayKey : todayKey } })}
+            className={cn(uiPrimaryButtonClass, "px-3 py-1.5")}
+          >
+            <Plus aria-hidden="true" className="h-4 w-4" />
+            New event
+          </button>
+        </div>
+      </header>
 
-          {/* ------------------------------------------------------------
-              Create Event form
-          ------------------------------------------------------------- */}
-          <section className="mb-10 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
-            <h2 className="mb-4 text-2xl font-semibold">Create Event</h2>
+      <form
+        onSubmit={startQuickEntry}
+        className="flex items-center gap-2.5 rounded-xl border border-line bg-surface px-3 py-2 transition-colors focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft"
+      >
+        <Plus aria-hidden="true" className="h-4 w-4 shrink-0 text-accent" />
+        <label htmlFor="event-quick-title" className="sr-only">New event title</label>
+        <input
+          id="event-quick-title"
+          value={quickTitle}
+          onChange={(event) => setQuickTitle(event.target.value)}
+          placeholder="Name an event and press Enter to pick the time"
+          maxLength={200}
+          autoComplete="off"
+          className="min-w-0 flex-1 bg-transparent py-1 text-sm text-ink outline-none placeholder:text-muted"
+        />
+        <kbd className="hidden rounded border border-line px-1.5 font-sans text-[10px] text-muted sm:inline">Enter</kbd>
+      </form>
 
-            <form onSubmit={handleCreateEvent} className="space-y-4">
-              <input
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Event title"
-                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
-              />
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Description (optional)"
-                rows={4}
-                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
-              />
-              <input
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Location (optional)"
-                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
-              />
-              {/* Start date/time row */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-1">
-                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                    Beginning date
-                  </span>
-                  <input
-                    type="date"
-                    required
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
-                  />
-                </label>
-                <label className="space-y-1">
-                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                    Beginning time
-                  </span>
-                  <input
-                    type="time"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
-                  />
-                </label>
-              </div>
-              {/* End date/time row */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-1">
-                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                    End date
-                  </span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
-                  />
-                </label>
-                <label className="space-y-1">
-                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                    End time
-                  </span>
-                  <input
-                    type="time"
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
-                  />
-                </label>
-              </div>
-              {/* Project association */}
-              <select
-                value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
-                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
-              >
-                <option value="">No project</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-              {/* Recurrence pattern */}
-              <select
-                value={recurrence}
-                onChange={(e) => setRecurrence(e.target.value as Recurrence)}
-                className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-3 outline-none focus:border-black"
-              >
-                <option value="NONE">Does not repeat</option>
-                <option value="DAILY">Daily</option>
-                <option value="WEEKLY">Weekly</option>
-                <option value="BIWEEKLY">Every 2 weeks</option>
-                <option value="MONTHLY">Monthly</option>
-              </select>
-              <button
-                type="submit"
-                disabled={loading}
-                className="rounded-xl px-5 py-3 bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-50"
-              >
-                {loading ? "Creating..." : "Create Event"}
-              </button>
-            </form>
+      <div className="flex flex-wrap items-center gap-2" role="search" aria-label="Filter events">
+        <label className="relative flex min-w-48 flex-1 items-center">
+          <span className="sr-only">Search events</span>
+          <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 h-4 w-4 text-muted" />
+          <input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search events" className={cn(controlClass, "w-full pl-8")} />
+        </label>
+        <select aria-label="Project" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} className={controlClass}>
+          <option value={ALL}>All projects</option>
+          <option value={NO_PROJECT}>No project</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>{project.name}</option>
+          ))}
+        </select>
+      </div>
 
-            {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-          </section>
+      {loadError ? (
+        <p role="alert" className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
+          {loadError}{" "}
+          <button type="button" onClick={() => void fetchEvents()} className="font-semibold underline">Try again</button>
+        </p>
+      ) : null}
 
-          {/* ------------------------------------------------------------
-              Calendar: month grid + selected-day event list
-          ------------------------------------------------------------- */}
-          <section className="mb-10 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-2xl font-semibold">Calendar</h2>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={goToPreviousMonth}
-                  className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm"
-                >
-                  Previous
-                </button>
-                <p className="min-w-40 text-center text-sm font-medium">
-                  {new Intl.DateTimeFormat("en-US", {
-                    month: "long",
-                    year: "numeric",
-                  }).format(calendarMonth)}
-                </p>
-                <button
-                  onClick={goToNextMonth}
-                  className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-
-            {/* Weekday header row (Sun–Sat) */}
-            <div className="mb-3 grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                <span key={day}>{day}</span>
+      <div className="grid items-start gap-4 lg:grid-cols-[1fr_20rem]">
+        <div className="grid gap-4">
+          {fetching ? (
+            <div className="grid gap-2" aria-busy="true" aria-label="Loading events">
+              {Array.from({ length: 4 }, (_, index) => (
+                <div key={index} className="h-12 animate-pulse rounded-xl border border-line bg-surface" />
               ))}
             </div>
-
-            {/* Month grid: one button per day, showing an event-count badge */}
-            <div className="grid grid-cols-7 gap-2">
-              {calendarDays.map((day) => {
-                const dayKey = formatDayKey(day);
-                const totalEventCount =
-                  calendarEventsByDay[dayKey]?.length ?? 0;
-                const selectedProjectCount =
-                  selectedProjectCalendarEventsByDay[dayKey]?.length ?? 0;
-                const noProjectCount = (
-                  calendarEventsByDay[dayKey] ?? []
-                ).filter(
-                  (event) =>
-                    event.projectId === null || event.projectId === undefined,
-                ).length;
-                // When filtering to "No project", show only that count;
-                // otherwise show the total count for the day regardless of
-                // which specific project filter (if any) is active.
-                const eventCount =
-                  projectFilter === NO_PROJECT_FILTER
-                    ? noProjectCount
-                    : totalEventCount;
-                const isCurrentMonth =
-                  day.getMonth() === calendarMonth.getMonth();
-                const isSelected = dayKey === selectedDayKey;
-                const isToday = dayKey === formatDayKey(new Date());
-
-                return (
-                  <button
-                    key={dayKey}
-                    onClick={() => setSelectedDayKey(dayKey)}
-                    className={`min-h-20 rounded-xl border p-2 text-left transition ${
-                      isSelected
-                        ? "border-black bg-zinc-100 dark:bg-zinc-800"
-                        : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
-                    } ${!isCurrentMonth ? "opacity-50" : ""}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`text-sm ${isToday ? "font-bold text-blue-700" : ""}`}
-                      >
-                        {day.getDate()}
-                      </span>
-                      {eventCount > 0 && (
-                        <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink">
-                          {eventCount}
-                        </span>
-                      )}
-                    </div>
-                    {eventCount > 0 && (
-                      <div className="mt-2 space-y-1">
-                        <p className="text-xs text-zinc-600 dark:text-zinc-300">
-                          {eventCount === 1
-                            ? "1 event"
-                            : `${eventCount} events`}
-                        </p>
-                        {/* Secondary count of events in the actively-filtered project */}
-                        {selectedProject && selectedProjectCount > 0 && (
-                          <p
-                            className="text-xs"
-                            style={{
-                              color: selectedProject.color ?? undefined,
-                            }}
-                          >
-                            {selectedProjectCount} in {selectedProject.name}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+          ) : agenda.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-line bg-surface px-6 py-10 text-center">
+              <h2 className="text-base font-semibold">{events.length === 0 ? "No events yet." : "Nothing coming up."}</h2>
+              <p className="mx-auto mt-1 max-w-md text-sm text-muted">
+                {events.length === 0
+                  ? "Add classes, meetings and deadlines; repeating ones show every time they happen."
+                  : searchQuery || projectFilter !== ALL
+                    ? "Nothing in the next 60 days matches these filters."
+                    : "Nothing is scheduled in the next 60 days."}
+              </p>
+              {events.length === 0 ? (
+                <label htmlFor="event-quick-title" className={cn(uiButtonClass, "mt-4 cursor-pointer px-3 py-1.5")}>
+                  Add your first event
+                </label>
+              ) : null}
             </div>
-
-            {/* Detail panel: events on the currently selected calendar day */}
-            <div className="mt-6 rounded-xl border border-zinc-200 dark:border-zinc-700 p-4">
-              <h3 className="mb-3 text-lg font-semibold">
-                Events on {selectedDayLabel}
-              </h3>
-              {selectedDayEvents.length === 0 ? (
-                <p className="text-sm text-zinc-600 dark:text-zinc-300">
-                  No events for this day.
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {selectedDayEvents.map((event) => (
-                    <li
+          ) : (
+            agenda.map(([key, items]) => (
+              <section key={key} aria-labelledby={`day-${key}`} className="rounded-xl border border-line bg-surface">
+                <h2 id={`day-${key}`} className="flex items-center gap-2 px-3 pb-1 pt-3 text-sm font-semibold sm:px-4">
+                  <span className={key === todayKey ? "text-accent" : undefined}>{dayLabel(key, todayKey, tomorrowKey)}</span>
+                  <span className="text-xs font-normal text-muted">{items.length}</span>
+                </h2>
+                <ul>
+                  {items.map((event) => (
+                    <EventRow
                       key={event.id}
-                      className={`rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 ${
-                        // Dim events that don't match a specific active project filter
-                        // (they're still shown because they fall on the selected day).
-                        projectFilter !== ALL_PROJECTS_FILTER &&
-                        projectFilter !== NO_PROJECT_FILTER &&
-                        event.projectId !== projectFilter
-                          ? "opacity-55"
-                          : ""
-                      }`}
-                      style={
-                        selectedProject &&
-                        event.projectId === selectedProject.id
-                          ? {
-                              // Highlight events belonging to the selected project
-                              // with a colored left border.
-                              borderLeftWidth: 4,
-                              borderLeftColor:
-                                selectedProject.color ?? "#18181b",
-                            }
-                          : undefined
-                      }
-                    >
-                      <p className="font-medium">{event.title}</p>
-                      <p className="text-sm text-zinc-600 dark:text-zinc-300">
-                        {event.hasStartTime
-                          ? formatEventTime(event.startTime)
-                          : "Time not specified"}
-                        {event.endTime && event.hasEndTime
-                          ? ` - ${formatEventTime(event.endTime)}`
-                          : ""}
-                      </p>
-                      {event.location && (
-                        <p className="text-sm text-zinc-600 dark:text-zinc-300">
-                          {event.location}
-                        </p>
-                      )}
-                    </li>
+                      event={event}
+                      highlighted={(event.sourceEventId ?? event.id) === linkedEventId}
+                      onOpen={openEvent}
+                      onDelete={askDelete}
+                    />
                   ))}
                 </ul>
-              )}
-            </div>
-          </section>
+              </section>
+            ))
+          )}
 
-          {/* ------------------------------------------------------------
-              Your Events: full chronological, sectioned, filterable list
-          ------------------------------------------------------------- */}
-          <section>
-            <h2 className="mb-4 text-2xl font-semibold">Your Events</h2>
-            {/* Project filter dropdown, shared by both the calendar and this list */}
-            <div className="mb-4">
-              <select
-                value={projectFilter}
-                onChange={(e) => setProjectFilter(e.target.value)}
-                className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 outline-none focus:border-black dark:border-zinc-700 sm:max-w-xs"
-              >
-                <option value={ALL_PROJECTS_FILTER}>All projects</option>
-                <option value={NO_PROJECT_FILTER}>No project</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {fetching ? (
-              <p className="text-zinc-600 dark:text-zinc-300">
-                Loading events...
-              </p>
-            ) : visibleEvents.length === 0 ? (
-              <p className="text-zinc-600 dark:text-zinc-300">No events yet.</p>
-            ) : (
-              <div className="space-y-6">
-                {/* One block per section: Today / Upcoming Soon / Later / Past */}
-                {eventSections.map((section) => (
-                  <div key={section.key}>
-                    <h3 className="mb-3 text-lg font-semibold text-gray-800">
-                      {section.title}
-                    </h3>
-                    {section.events.length === 0 ? (
-                      <p className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 px-4 py-3 text-sm text-gray-500">
-                        No events in this section.
-                      </p>
-                    ) : (
-                      <div className="space-y-4">
-                        {section.events.map((event) => {
-                          const isEditing = editingEventId === event.id;
-                          const isDeleting = deletingEventId === event.id;
-                          const now = new Date();
-                          const today = isEventToday(event, now);
-                          // "Starts soon" = starts strictly in the future but within the next 48 hours.
-                          const startsAt = eventWallTime(event.startTime).getTime();
-                          const startsSoon =
-                            startsAt > now.getTime() &&
-                            startsAt <= now.getTime() + 48 * 60 * 60 * 1000;
-                          const badgeText = today
-                            ? "Today"
-                            : startsSoon
-                              ? "Soon"
-                              : null;
-                          const badgeStyles = today
-                            ? "text-emerald-700"
-                            : "text-blue-700";
-                          const cardStyles = today
-                            ? "border-emerald-200 bg-emerald-50"
-                            : startsSoon
-                              ? "border-blue-200 bg-blue-50"
-                              : "border-zinc-200 dark:border-zinc-800";
-
-                          return (
-                            <article
-                              key={event.id}
-                              // Attach the scroll-into-view ref only to the
-                              // event matching the ?event= deep link.
-                              ref={
-                                highlightedEventId === event.id
-                                  ? highlightedEventRef
-                                  : null
-                              }
-                              className={`rounded-2xl border p-5 shadow-sm ${cardStyles} ${highlightedEventId === event.id ? "ring-4 ring-blue-300 dark:ring-blue-800" : ""}`}
-                            >
-                              {isEditing ? (
-                                // ---------------- Inline edit form ----------------
-                                <div className="space-y-3">
-                                  <input
-                                    value={editTitle}
-                                    onChange={(e) =>
-                                      setEditTitle(e.target.value)
-                                    }
-                                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
-                                  />
-                                  <textarea
-                                    value={editDescription}
-                                    onChange={(e) =>
-                                      setEditDescription(e.target.value)
-                                    }
-                                    rows={3}
-                                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
-                                  />
-                                  <input
-                                    value={editLocation}
-                                    onChange={(e) =>
-                                      setEditLocation(e.target.value)
-                                    }
-                                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
-                                  />
-                                  <div className="grid gap-3 sm:grid-cols-2">
-                                    <label className="space-y-1">
-                                      <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
-                                        Beginning date
-                                      </span>
-                                      <input
-                                        type="date"
-                                        required
-                                        value={editStartDate}
-                                        onChange={(e) =>
-                                          setEditStartDate(e.target.value)
-                                        }
-                                        className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
-                                      />
-                                    </label>
-                                    <label className="space-y-1">
-                                      <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
-                                        Beginning time
-                                      </span>
-                                      <input
-                                        type="time"
-                                        value={editStartTime}
-                                        onChange={(e) =>
-                                          setEditStartTime(e.target.value)
-                                        }
-                                        className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
-                                      />
-                                    </label>
-                                  </div>
-                                  <div className="grid gap-3 sm:grid-cols-2">
-                                    <label className="space-y-1">
-                                      <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
-                                        End date
-                                      </span>
-                                      <input
-                                        type="date"
-                                        value={editEndDate}
-                                        onChange={(e) =>
-                                          setEditEndDate(e.target.value)
-                                        }
-                                        className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
-                                      />
-                                    </label>
-                                    <label className="space-y-1">
-                                      <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
-                                        End time
-                                      </span>
-                                      <input
-                                        type="time"
-                                        value={editEndTime}
-                                        onChange={(e) =>
-                                          setEditEndTime(e.target.value)
-                                        }
-                                        className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
-                                      />
-                                    </label>
-                                  </div>
-                                  <select
-                                    value={editProjectId}
-                                    onChange={(e) =>
-                                      setEditProjectId(e.target.value)
-                                    }
-                                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
-                                  >
-                                    <option value="">No project</option>
-                                    {projects.map((project) => (
-                                      <option
-                                        key={project.id}
-                                        value={project.id}
-                                      >
-                                        {project.name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <select
-                                    value={editRecurrence}
-                                    onChange={(e) =>
-                                      setEditRecurrence(
-                                        e.target.value as Recurrence,
-                                      )
-                                    }
-                                    className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 outline-none focus:border-black"
-                                  >
-                                    <option value="NONE">
-                                      Does not repeat
-                                    </option>
-                                    <option value="DAILY">Daily</option>
-                                    <option value="WEEKLY">Weekly</option>
-                                    <option value="BIWEEKLY">
-                                      Every 2 weeks
-                                    </option>
-                                    <option value="MONTHLY">Monthly</option>
-                                  </select>
-                                  <div className="flex flex-wrap gap-2">
-                                    <button
-                                      onClick={() =>
-                                        void handleSaveEdit(event.id)
-                                      }
-                                      disabled={savingEdit}
-                                      className="rounded-xl px-4 py-2 bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-50"
-                                    >
-                                      {savingEdit ? "Saving..." : "Save"}
-                                    </button>
-                                    <button
-                                      onClick={cancelEditing}
-                                      className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                // ---------------- Read-only event card ----------------
-                                <>
-                                  <div className="flex items-start justify-between gap-3">
-                                    <h3 className="text-xl font-semibold">
-                                      {event.title}
-                                    </h3>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      {event.recurrence !== "NONE" && (
-                                        <span className="rounded-full border border-violet-500 px-2.5 py-1 text-xs font-medium text-violet-700">
-                                          Repeats{" "}
-                                          {formatRecurrenceLabel(
-                                            event.recurrence,
-                                          )}
-                                        </span>
-                                      )}
-                                      {badgeText && (
-                                        <span
-                                          className={`rounded-full border border-current px-2.5 py-1 text-xs font-medium ${badgeStyles}`}
-                                        >
-                                          {badgeText}
-                                        </span>
-                                      )}
-                                      {event.project && (
-                                        <span
-                                          className="rounded-full border px-2.5 py-1 text-xs font-medium text-zinc-700"
-                                          style={{
-                                            borderColor:
-                                              event.project.color ?? undefined,
-                                          }}
-                                        >
-                                          {event.project.name}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {event.description ? (
-                                    <p className="mt-2 text-gray-700">
-                                      {event.description}
-                                    </p>
-                                  ) : (
-                                    <p className="mt-2 text-gray-500">
-                                      No description.
-                                    </p>
-                                  )}
-                                  {event.location ? (
-                                    <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-                                      Location: {event.location}
-                                    </p>
-                                  ) : (
-                                    <p className="mt-2 text-sm text-gray-500">
-                                      No location set.
-                                    </p>
-                                  )}
-                                  <p className="mt-2 text-sm text-gray-700">
-                                    Start: {formatEventDateTime(event.startTime)}
-                                  </p>
-                                  <p className="mt-1 text-sm text-gray-700">
-                                    End:{" "}
-                                    {event.endTime
-                                      ? formatEventDateTime(event.endTime)
-                                      : "Not specified"}
-                                  </p>
-                                  <p className="mt-1 text-sm text-gray-700">
-                                    Repeats:{" "}
-                                    {formatRecurrenceLabel(event.recurrence)}
-                                  </p>
-                                  <div className="mt-4 flex gap-2">
-                                    <button
-                                      onClick={() => startEditing(event)}
-                                      className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2"
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        // Prevent the click from bubbling to any
-                                        // ancestor click handlers on the card.
-                                        e.stopPropagation();
-                                        setConfirmDeleteId(event.id);
-                                      }}
-                                      disabled={isDeleting}
-                                      className="rounded-xl bg-red-600 px-4 py-2 text-white disabled:opacity-50"
-                                    >
-                                      {isDeleting ? "Deleting..." : "Delete"}
-                                    </button>
-                                  </div>
-                                </>
-                              )}
-                            </article>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+          {!fetching && past.length ? (
+            <section aria-labelledby="past-events" className="rounded-xl border border-line bg-surface">
+              <h2 id="past-events" className="px-3 py-2 sm:px-4">
+                <button
+                  type="button"
+                  aria-expanded={showPast}
+                  onClick={() => setShowPast((value) => !value)}
+                  className="flex w-full items-center justify-between text-sm font-semibold text-muted hover:text-ink"
+                >
+                  <span>{showPast ? "Hide past events" : `Show past events (${past.length})`}</span>
+                  <ChevronRight aria-hidden="true" className={cn("h-4 w-4 transition-transform", showPast && "rotate-90")} />
+                </button>
+              </h2>
+              {showPast ? (
+                <ul>
+                  {past.map((event) => (
+                    <EventRow key={event.id} event={event} showDate highlighted={event.id === linkedEventId} onOpen={openEvent} onDelete={askDelete} />
+                  ))}
+                </ul>
+              ) : null}
+            </section>
+          ) : null}
         </div>
-      </main>
-      {/* Confirmation modal shown before permanently triggering a delete request */}
+
+        <aside aria-label="Month calendar" className="hidden rounded-xl border border-line bg-surface p-3 lg:block">
+          <div className="flex items-center justify-between">
+            <button type="button" onClick={() => setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))} aria-label="Previous month" className="grid h-7 w-7 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink">
+              <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <h2 className="text-sm font-semibold">
+              {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(calendarMonth)}
+            </h2>
+            <button type="button" onClick={() => setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() + 1, 1))} aria-label="Next month" className="grid h-7 w-7 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink">
+              <ChevronRight aria-hidden="true" className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-2 grid grid-cols-7 text-center text-[10.5px] font-semibold uppercase text-muted" aria-hidden="true">
+            {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
+              <span key={index} className="py-1">{day}</span>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-0.5">
+            {calendarDays.map((day) => {
+              const key = formatTaskDayKey(day);
+              const count = eventsByDay.get(key)?.length ?? 0;
+              const inMonth = day.getMonth() === calendarMonth.getMonth();
+              const selected = key === selectedDayKey;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSelectedDayKey(key)}
+                  aria-pressed={selected}
+                  aria-label={`${new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(day)}${count ? `, ${count} event${count === 1 ? "" : "s"}` : ""}`}
+                  className={cn(
+                    "relative grid h-9 place-items-center rounded-lg text-[13px] tabular-nums transition-colors",
+                    selected ? "bg-accent font-semibold text-accent-ink" : "hover:bg-surface-hover",
+                    !selected && key === todayKey && "font-bold text-accent",
+                    !selected && !inMonth && "text-muted/60",
+                  )}
+                >
+                  {day.getDate()}
+                  {count ? (
+                    <span aria-hidden="true" className={cn("absolute bottom-1 h-1 w-1 rounded-full", selected ? "bg-accent-ink" : "bg-accent")} />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 border-t border-line pt-3">
+            <h3 className="text-xs font-semibold text-muted">{dayLabel(selectedDayKey, todayKey, tomorrowKey)}</h3>
+            {selectedDayEvents.length ? (
+              <ul className="mt-1.5 grid gap-1">
+                {selectedDayEvents.map((event) => (
+                  <li key={event.id}>
+                    <button type="button" onClick={() => openEvent(event)} className="flex w-full items-start gap-2 rounded-lg px-1.5 py-1 text-left hover:bg-surface-hover">
+                      <span aria-hidden="true" className="mt-1 h-2 w-2 shrink-0 rounded-[3px]" style={{ backgroundColor: event.project ? projectColor(event.project) : "var(--accent)" }} />
+                      <span className="min-w-0">
+                        <span className="block truncate text-[13px] font-medium">{event.title}</span>
+                        <span className="block text-xs text-muted">{timeRange(event)}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1.5 text-xs text-muted">Nothing scheduled.</p>
+            )}
+            <button
+              type="button"
+              onClick={() => setSheet({ open: true, event: null, draft: { startDate: selectedDayKey } })}
+              className="mt-2 text-xs font-semibold text-accent hover:underline"
+            >
+              Add an event on this day
+            </button>
+          </div>
+        </aside>
+      </div>
+
+      <EventSheet
+        open={sheet.open}
+        onOpenChange={closeSheet}
+        event={sheet.event}
+        draft={sheet.draft}
+        projects={projects}
+        onSubmit={saveEvent}
+        onDelete={setConfirmDelete}
+      />
+
       <ConfirmDialog
-        open={Boolean(confirmDeleteId)}
-        title="Confirm delete"
-        message="This will move the item to Trash."
-        loading={Boolean(deletingEventId)}
-        onCancel={() => setConfirmDeleteId(null)}
+        open={Boolean(confirmDelete)}
+        title="Delete this event?"
+        message={
+          confirmDelete
+            ? `“${confirmDelete.title}”${normalizeRecurrence(confirmDelete.recurrence) !== "NONE" ? " and all its repeats" : ""} move to Trash, where you can restore it.`
+            : ""
+        }
+        loading={deleting}
+        onCancel={() => setConfirmDelete(null)}
         onConfirm={() => {
-          if (confirmDeleteId) void handleDeleteEvent(confirmDeleteId);
-          setConfirmDeleteId(null);
+          if (confirmDelete) void deleteEvent(confirmDelete);
         }}
       />
-    </>
+    </div>
   );
 }
