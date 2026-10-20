@@ -89,9 +89,7 @@ desktop browser and a phone-sized one.
 Every CI run records a video, a trace and screenshots of each Playwright test
 and keeps the HTML report as a run artifact for 14 days; the run summary links
 to it. Unzip it and open `playwright-report/index.html`, or open a `trace.zip`
-at https://trace.playwright.dev. To also publish the latest report from `main`
-on GitHub Pages, enable Pages with "GitHub Actions" as the source and set the
-repository variable `PUBLISH_PLAYWRIGHT_REPORT` to `true`.
+at https://trace.playwright.dev.
 
 `.github/workflows/preview-smoke.yml` runs the Playwright tests tagged
 `@smoke` (`tests/e2e/smoke.spec.ts`) against each Vercel preview once it is
