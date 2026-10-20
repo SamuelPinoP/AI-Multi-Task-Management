@@ -5,6 +5,25 @@ export function uniqueName(prefix: string) {
   return `${prefix} ${randomUUID().slice(0, 8)}`;
 }
 
+/** Starts a guest workspace (local server only: guest login is off in production). */
+export async function continueAsGuest(page: Page) {
+  await page.goto("/login");
+  await page.getByRole("button", { name: /continue as guest/i }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+}
+
+/**
+ * Follows a navigation link by its exact name: from the sidebar on wide
+ * screens, or from the bottom tabs or the menu sheet on a phone.
+ */
+export async function openSection(page: Page, name: string) {
+  const link = page.getByRole("link", { name, exact: true });
+  if (!(await link.first().isVisible())) {
+    await page.getByRole("button", { name: "Open navigation" }).click();
+  }
+  await link.first().click();
+}
+
 /** Signs up a throwaway account on the local server and logs it in. */
 export async function signUpAndLogIn(page: Page, label = "E2E user") {
   const id = randomUUID().slice(0, 8);

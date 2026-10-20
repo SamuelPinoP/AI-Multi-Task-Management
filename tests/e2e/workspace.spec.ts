@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import path from "node:path";
-import { signUpAndLogIn, uniqueName } from "./helpers";
+import { continueAsGuest, openSection, signUpAndLogIn, uniqueName } from "./helpers";
 
 const videoFixturePath = path.join(
   process.cwd(),
@@ -9,18 +9,12 @@ const videoFixturePath = path.join(
   "tiny-video.mp4",
 );
 
-async function continueAsGuest(page: Page) {
-  await page.goto("/login");
-  await page.getByRole("button", { name: /continue as guest/i }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-}
-
 test("guest can create and search a note", async ({ page }) => {
   const noteTitle = uniqueName("E2E note");
   const noteBody = "Created by Playwright to prove the notes flow works.";
 
   await continueAsGuest(page);
-  await page.getByRole("link", { name: "Notes" }).click();
+  await openSection(page, "Notes");
 
   await expect(
     page.getByRole("heading", { name: "Create a Note" }),
@@ -43,7 +37,7 @@ test("member can create a project and upload a local video attachment", async ({
 
   // Guests can't upload chat attachments, so this test uses a fresh account.
   await signUpAndLogIn(page);
-  await page.getByRole("link", { name: "Projects" }).click();
+  await openSection(page, "Projects");
 
   await expect(
     page.getByRole("heading", { name: "Create a project" }),
