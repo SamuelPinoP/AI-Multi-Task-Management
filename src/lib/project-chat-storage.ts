@@ -108,6 +108,16 @@ function parseProvider(value: string | undefined, variable: string): StorageProv
   throw new ProjectChatStorageConfigError(`Invalid ${variable}. Use "local", "vercel-blob", or "aws-s3".`);
 }
 
+/**
+ * The S3-compatible bucket (Cloudflare R2 in production), or null where it
+ * isn't configured (local development and previews). Database backups use it.
+ */
+export function projectChatS3Target() {
+  if (!process.env.AWS_S3_BUCKET_NAME?.trim() || !process.env.AWS_REGION?.trim()) return null;
+  const { bucket, client } = s3Config();
+  return { bucket, client };
+}
+
 export function configuredUploadProviders(env: Record<string, string | undefined> = process.env) {
   const legacy = parseProvider(env.PROJECT_CHAT_STORAGE_PROVIDER, "PROJECT_CHAT_STORAGE_PROVIDER");
   const configuredDefault = parseProvider(env.PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER, "PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER");

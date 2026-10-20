@@ -51,3 +51,6 @@ public/uploads/
 # Local generated output (PDFs, screenshots)
 /output/
 /tmp/
+
+# Local database backups (see scripts/restore-database-backup.ts)
+/backups/
