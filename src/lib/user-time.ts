@@ -20,9 +20,9 @@ export function isValidTimeZone(value: unknown): value is string {
   }
 }
 
-/** The current time as a Date whose local fields show the wall clock in `timeZone`. */
-export function wallClockNow(timeZone: string | null | undefined, now = new Date()) {
-  if (!isValidTimeZone(timeZone)) return now;
+/** An instant (now by default) as a Date whose local fields show the wall clock in `timeZone`. */
+export function toWallClock(timeZone: string | null | undefined, instant = new Date()) {
+  if (!isValidTimeZone(timeZone)) return instant;
 
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -33,7 +33,7 @@ export function wallClockNow(timeZone: string | null | undefined, now = new Date
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-  }).formatToParts(now);
+  }).formatToParts(instant);
   const field = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
 
   return new Date(
@@ -43,6 +43,6 @@ export function wallClockNow(timeZone: string | null | undefined, now = new Date
     field("hour"),
     field("minute"),
     field("second"),
-    now.getMilliseconds(),
+    instant.getMilliseconds(),
   );
 }
