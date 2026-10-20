@@ -39,19 +39,15 @@ test("member can create a project and upload a local video attachment", async ({
   await signUpAndLogIn(page);
   await openSection(page, "Projects");
 
-  await expect(
-    page.getByRole("heading", { name: "Create a project" }),
-  ).toBeVisible();
-  await expect(
-    page.getByText(/no pending project invitations/i),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "No projects match this view yet." }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No projects yet." })).toBeVisible();
+  // A new account has no invitations, so that section stays hidden.
+  await expect(page.getByText(/invited to/i)).toHaveCount(0);
 
-  await page.getByPlaceholder(/capstone demo/i).fill(projectName);
-  await page
-    .getByPlaceholder("What is this project trying to accomplish?")
+  await page.getByRole("button", { name: "Create your first project" }).click();
+  const sheet = page.getByRole("dialog", { name: "New project" });
+  await sheet.getByLabel("Name").fill(projectName);
+  await sheet
+    .getByLabel("Description")
     .fill("Exercise the browser project flow without touching cloud storage.");
 
   const createProjectResponsePromise = page.waitForResponse(

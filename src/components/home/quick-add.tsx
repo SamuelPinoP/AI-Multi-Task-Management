@@ -8,40 +8,62 @@ import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 export const QUICK_ADD_INPUT_ID = "quick-add-input";
 
-/** One-line task capture (Home, Tasks): type a title and press Enter. */
-export function QuickAdd({ onAdded, placeholder = "Add a task and press Enter" }: { onAdded?: () => void; placeholder?: string } = {}) {
+type QuickAddProps = {
+  /** Called after the item is created, for pages that hold their own list. */
+  onAdded?: () => void;
+  placeholder?: string;
+  /** The input's accessible name. */
+  label?: string;
+  /** Where to POST; the typed text is sent as `field`. */
+  endpoint?: string;
+  field?: string;
+  successMessage?: string;
+  /** Where the toast's Edit action goes for the new item. */
+  editHref?: (id: string) => string;
+};
+
+/** One-line capture (Home, Tasks, Projects): type and press Enter. Creates a task by default. */
+export function QuickAdd({
+  onAdded,
+  placeholder = "Add a task and press Enter",
+  label = "Add a task",
+  endpoint = "/api/tasks",
+  field = "title",
+  successMessage = "Task added",
+  editHref = (id) => `/tasks?task=${id}`,
+}: QuickAddProps = {}) {
   const router = useRouter();
-  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const trimmed = title.trim();
+    const trimmed = text.trim();
     if (!trimmed || saving) return;
 
     setSaving(true);
     try {
-      const response = await fetch("/api/tasks", {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: trimmed }),
+        body: JSON.stringify({ [field]: trimmed }),
       });
       const body = (await response.json().catch(() => null)) as { id?: string; error?: string } | null;
       if (!response.ok || !body?.id) {
-        toast.error(body?.error ?? "Could not add the task. Try again.");
+        toast.error(body?.error ?? "Could not add it. Try again.");
         return;
       }
-      const taskId = body.id;
-      setTitle("");
+      const id = body.id;
+      setText("");
       notifyWorkspaceChanged();
       onAdded?.();
       router.refresh();
-      toast.success("Task added", {
+      toast.success(successMessage, {
         description: trimmed,
-        action: { label: "Edit", onClick: () => router.push(`/tasks?task=${taskId}`) },
+        action: { label: "Edit", onClick: () => router.push(editHref(id)) },
       });
     } catch {
-      toast.error("Could not add the task. Check your connection and try again.");
+      toast.error("Could not add it. Check your connection and try again.");
     } finally {
       setSaving(false);
     }
@@ -54,12 +76,12 @@ export function QuickAdd({ onAdded, placeholder = "Add a task and press Enter" }
     >
       <Plus aria-hidden="true" className="h-4 w-4 shrink-0 text-accent" />
       <label htmlFor={QUICK_ADD_INPUT_ID} className="sr-only">
-        Add a task
+        {label}
       </label>
       <input
         id={QUICK_ADD_INPUT_ID}
-        value={title}
-        onChange={(event) => setTitle(event.target.value)}
+        value={text}
+        onChange={(event) => setText(event.target.value)}
         placeholder={placeholder}
         maxLength={200}
         autoComplete="off"
