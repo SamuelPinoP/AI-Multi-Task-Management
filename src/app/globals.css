@@ -1,27 +1,164 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Design tokens (DES-04). One teal accent, a green-tinted neutral scale and
+ * semantic colors for priority and status. Components use the semantic names
+ * (bg-surface, text-muted, border-line, bg-accent, text-danger, ...).
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --font-system-sans: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-system-mono: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  color-scheme: light;
+
+  --canvas: #f6f8f7;
+  --surface: #ffffff;
+  --sunken: #edf1f0;
+  --surface-hover: #e4ebe9;
+  --ink: #101a19;
+  --muted: #5d6b67;
+  --line: #dee5e2;
+
+  --accent: #0a6f68;
+  --accent-hover: #085c56;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcefeb;
+
+  /* Priority high, overdue, at risk, destructive actions. */
+  --danger: #b3361f;
+  --danger-soft: #f7e0d9;
+  /* Priority medium, due soon. */
+  --warning: #a85a06;
+  --warning-soft: #f8e7cf;
+  /* Stale, needs attention. */
+  --caution: #7d6400;
+  --caution-soft: #f2ebc9;
+  /* Done, on track. */
+  --success: #26733f;
+  --success-soft: #d9eddf;
+
+  /* Project colors. */
+  --project-1: #0f9488;
+  --project-2: #d97706;
+  --project-3: #e11d48;
+  --project-4: #64748b;
+
+  --font-system-sans: Inter, "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-system-mono: SFMono-Regular, "Cascadia Code", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --canvas: #0e1413;
+  --surface: #172120;
+  --sunken: #121a19;
+  --surface-hover: #1f2b29;
+  --ink: #e3ebe9;
+  --muted: #8fa09b;
+  --line: #25302e;
+
+  --accent: #3fc2b4;
+  --accent-hover: #5fd3c6;
+  --accent-ink: #06201d;
+  --accent-soft: #143532;
+
+  --danger: #f08b75;
+  --danger-soft: #3b1f19;
+  --warning: #f0ab5b;
+  --warning-soft: #3a2a15;
+  --caution: #e2c65f;
+  --caution-soft: #332e14;
+  --success: #74cf90;
+  --success-soft: #163020;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-surface-hover: var(--surface-hover);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-caution: var(--caution);
+  --color-caution-soft: var(--caution-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-project-1: var(--project-1);
+  --color-project-2: var(--project-2);
+  --color-project-3: var(--project-3);
+  --color-project-4: var(--project-4);
   --font-sans: var(--font-system-sans);
   --font-mono: var(--font-system-mono);
 }
 
-.dark {
-  --background: #09090b;
-  --foreground: #f4f4f5;
+/*
+ * The pages still use Tailwind's zinc classes; this replaces zinc with the
+ * same green-tinted neutrals as the tokens above, so every screen follows the
+ * new palette in light and dark mode. Contrast matches the default zinc scale.
+ * Corner radius scale: rounded-lg (8px), rounded-xl (12px), rounded-2xl (16px).
+ */
+@theme {
+  --color-zinc-50: #f6f8f7;
+  --color-zinc-100: #edf1f0;
+  --color-zinc-200: #dee5e2;
+  --color-zinc-300: #c7d1ce;
+  --color-zinc-400: #95a39f;
+  --color-zinc-500: #66746f;
+  --color-zinc-600: #4e5c58;
+  --color-zinc-700: #3a4643;
+  --color-zinc-800: #25302e;
+  --color-zinc-900: #172120;
+  --color-zinc-950: #0e1413;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--canvas);
+  color: var(--ink);
   font-family: var(--font-system-sans);
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+:focus-visible {
+  outline-color: var(--accent);
+}
+
+/* Motion for dialogs, sheets and menus (components/ui). */
+@keyframes ui-fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes ui-pop-in {
+  from { opacity: 0; scale: 0.97; }
+}
+
+@keyframes ui-slide-in-right {
+  from { translate: 100% 0; }
+}
+
+@keyframes ui-slide-in-left {
+  from { translate: -100% 0; }
+}
+
+@keyframes ui-slide-in-bottom {
+  from { translate: 0 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
 }

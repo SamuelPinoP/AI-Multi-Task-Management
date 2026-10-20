@@ -353,7 +353,7 @@ export default function ProjectsPage() {
         </header>
 
         {/* "Create a project" form */}
-        <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60">
+        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60">
           <div className="mb-5">
             <h2 className="text-2xl font-semibold">Create a project</h2>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -410,7 +410,7 @@ export default function ProjectsPage() {
             <button
               type="submit"
               disabled={loading}
-              className="rounded-xl bg-black px-5 py-3 text-white transition hover:opacity-90 disabled:opacity-50 dark:bg-white dark:text-black"
+              className="rounded-xl px-5 py-3 bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-50"
             >
               {loading ? "Creating..." : "Create project"}
             </button>
@@ -423,7 +423,7 @@ export default function ProjectsPage() {
         </section>
 
         {/* Pending invitations list */}
-        <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60">
+        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-2xl font-semibold">My invitations</h2>
@@ -467,7 +467,7 @@ export default function ProjectsPage() {
                         onClick={() =>
                           void respondToInvitation(invitation.id, "ACCEPT")
                         }
-                        className="rounded-lg bg-black px-4 py-2 text-sm text-white dark:bg-white dark:text-black"
+                        className="rounded-lg px-4 py-2 text-sm bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover"
                       >
                         Accept
                       </button>
@@ -514,7 +514,7 @@ export default function ProjectsPage() {
               Loading projects...
             </p>
           ) : filteredProjects.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-zinc-300 bg-white/70 p-8 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
+            <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-8 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
               <h3 className="text-lg font-semibold">
                 No projects match this view yet.
               </h3>
@@ -536,7 +536,7 @@ export default function ProjectsPage() {
                 return (
                   <article
                     key={project.id}
-                    className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60"
+                    className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60"
                   >
                     {isEditing ? (
                       // --- Inline edit form for this project ---
@@ -578,7 +578,7 @@ export default function ProjectsPage() {
                             type="button"
                             onClick={() => void handleUpdateProject(project.id)}
                             disabled={savingEdit}
-                            className="rounded-lg bg-black px-4 py-2 text-sm text-white dark:bg-white dark:text-black"
+                            className="rounded-lg px-4 py-2 text-sm bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover"
                           >
                             {savingEdit ? "Saving..." : "Save"}
                           </button>

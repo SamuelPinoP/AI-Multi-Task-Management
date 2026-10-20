@@ -286,7 +286,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
         )}
       </div>
       <div
-        className={`${isFullScreen ? "h-[calc(100vh-7rem)] p-3 sm:p-4" : "p-4 sm:p-5"} overflow-hidden rounded-[1.75rem] border border-zinc-200/80 bg-white/95 shadow-sm shadow-zinc-200/70 ring-1 ring-white/70 dark:border-zinc-800 dark:bg-zinc-900/80 dark:shadow-none dark:ring-zinc-800/40`}
+        className={`${isFullScreen ? "h-[calc(100vh-7rem)] p-3 sm:p-4" : "p-4 sm:p-5"} overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/95 shadow-sm shadow-zinc-200/70 ring-1 ring-white/70 dark:border-zinc-800 dark:bg-zinc-900/80 dark:shadow-none dark:ring-zinc-800/40`}
       >
         {!activePage ? (
           <div className="rounded-2xl border border-dashed border-zinc-300 p-10 text-center dark:border-zinc-700">
@@ -342,7 +342,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                       : 0.08,
                 );
               }}
-              className={`${isFullScreen ? "mt-3 h-[calc(100%-4.25rem)]" : "mt-6"} relative rounded-[1.35rem]`}
+              className={`${isFullScreen ? "mt-3 h-[calc(100%-4.25rem)]" : "mt-6"} relative rounded-2xl`}
             >
               <ZoomControls
                 zoom={zoom}
@@ -351,7 +351,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                 onReset={resetZoom}
               />
               <div
-                className={`${isFullScreen ? "h-full" : "max-h-[72vh] sm:max-h-[70vh]"} overscroll-contain overflow-auto rounded-[1.35rem] bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_32%),linear-gradient(rgba(148,163,184,0.10)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.10)_1px,transparent_1px)] bg-[length:auto,32px_32px,32px_32px] p-3 pr-14 dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_34%),linear-gradient(rgba(71,85,105,0.22)_1px,transparent_1px),linear-gradient(90deg,rgba(71,85,105,0.22)_1px,transparent_1px)] sm:p-6 sm:pr-20`}
+                className={`${isFullScreen ? "h-full" : "max-h-[72vh] sm:max-h-[70vh]"} overscroll-contain overflow-auto rounded-2xl bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_32%),linear-gradient(rgba(148,163,184,0.10)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.10)_1px,transparent_1px)] bg-[length:auto,32px_32px,32px_32px] p-3 pr-14 dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_34%),linear-gradient(rgba(71,85,105,0.22)_1px,transparent_1px),linear-gradient(90deg,rgba(71,85,105,0.22)_1px,transparent_1px)] sm:p-6 sm:pr-20`}
               >
                 {tree.length === 0 ? (
                   <p className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/70 p-10 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950/40">
@@ -445,7 +445,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
 
 function TreeViewWorkInProgressBanner() {
   return (
-    <div className="relative isolate overflow-hidden rounded-[1.75rem] border border-blue-200/70 bg-gradient-to-br from-blue-50/90 via-white/85 to-emerald-50/80 p-4 shadow-sm shadow-blue-200/40 ring-1 ring-white/80 backdrop-blur dark:border-blue-900/50 dark:from-blue-950/35 dark:via-zinc-900/85 dark:to-emerald-950/25 dark:shadow-none dark:ring-white/10 sm:p-5">
+    <div className="relative isolate overflow-hidden rounded-2xl border border-blue-200/70 bg-gradient-to-br from-blue-50/90 via-white/85 to-emerald-50/80 p-4 shadow-sm shadow-blue-200/40 ring-1 ring-white/80 backdrop-blur dark:border-blue-900/50 dark:from-blue-950/35 dark:via-zinc-900/85 dark:to-emerald-950/25 dark:shadow-none dark:ring-white/10 sm:p-5">
       <div
         aria-hidden="true"
         className="absolute -right-10 -top-12 h-28 w-28 rounded-full bg-blue-400/15 blur-3xl dark:bg-blue-500/20"
@@ -505,7 +505,7 @@ function TreePageSwitcher({
   }
 
   return (
-    <div className="rounded-[1.5rem] border border-zinc-200/80 bg-white/85 p-2.5 shadow-sm shadow-zinc-200/60 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/75 dark:shadow-none sm:p-3">
+    <div className="rounded-2xl border border-zinc-200/80 bg-white/85 p-2.5 shadow-sm shadow-zinc-200/60 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/75 dark:shadow-none sm:p-3">
       <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <button
           onClick={() => void onCreate()}
@@ -651,10 +651,10 @@ function TreeNodeRow({
           width: `clamp(220px, calc(100vw - 3rem), ${sizeDraft.width}px)`,
           minHeight: sizeDraft.height,
         }}
-        className={`group relative flex flex-col overflow-visible rounded-[1.35rem] border p-3 shadow-lg ring-1 transition-[border,box-shadow,transform] duration-200 sm:p-4 ${cardTone}`}
+        className={`group relative flex flex-col overflow-visible rounded-2xl border p-3 shadow-lg ring-1 transition-[border,box-shadow,transform] duration-200 sm:p-4 ${cardTone}`}
       >
         <span
-          className={`absolute inset-x-0 top-0 h-1.5 rounded-t-[1.35rem] ${accentTone}`}
+          className={`absolute inset-x-0 top-0 h-1.5 rounded-t-2xl ${accentTone}`}
           aria-hidden="true"
         />
         <button
@@ -964,7 +964,7 @@ function CreateNodePopover({
         <button
           type="button"
           onClick={() => void submit()}
-          className="rounded-lg bg-zinc-950 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+          className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-accent-ink shadow-sm transition-colors hover:bg-accent-hover"
         >
           Create
         </button>
@@ -1070,7 +1070,7 @@ function NewTreePageDialog({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-zinc-950/45 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-[1.75rem] border border-zinc-200 bg-white p-5 shadow-2xl shadow-zinc-950/20 ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/50">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl shadow-zinc-950/20 ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/50">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
           Tree View
         </p>
@@ -1109,7 +1109,7 @@ function NewTreePageDialog({
             type="button"
             onClick={onCreate}
             disabled={!canCreate}
-            className="rounded-xl bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+            className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accent-ink shadow-sm transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "Creating…" : "Create"}
           </button>
@@ -1132,7 +1132,7 @@ function DeleteTreePageDialog({
 }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-zinc-950/45 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-[1.5rem] border border-zinc-200 bg-white p-5 shadow-2xl shadow-zinc-950/20 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/50">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl shadow-zinc-950/20 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/50">
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-xl text-red-600 dark:bg-red-950/40 dark:text-red-300">
           ×
         </div>
@@ -1177,7 +1177,7 @@ function DeleteNodeDialog({
 }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-zinc-950/40 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-[1.5rem] border border-zinc-200 bg-white p-5 shadow-2xl shadow-zinc-950/20 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/50">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl shadow-zinc-950/20 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/50">
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-xl text-red-600 dark:bg-red-950/40 dark:text-red-300">
           −
         </div>

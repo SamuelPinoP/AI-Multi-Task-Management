@@ -136,7 +136,7 @@ export function ProjectCalendar({ projectColor, events }: ProjectCalendarProps) 
                 <button key={dayKey} onClick={() => setSelectedDayKey(dayKey)} className={`min-h-24 rounded-xl border p-3 text-left transition ${isSelected ? "border-black bg-zinc-100 dark:bg-zinc-800" : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-700"} ${!isCurrentMonth ? "opacity-45" : ""}`}>
                   <div className="flex items-start justify-between gap-2">
                     <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm ${isToday ? "bg-blue-600 font-semibold text-white" : ""}`}>{day.getDate()}</span>
-                    {eventCount > 0 && <span className="rounded-full bg-black px-2 py-0.5 text-xs text-white">{eventCount}</span>}
+                    {eventCount > 0 && <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink">{eventCount}</span>}
                   </div>
                   {eventCount > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">

@@ -777,7 +777,7 @@ export default function TasksPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="rounded-xl bg-black px-5 py-3 text-white transition hover:opacity-90 disabled:opacity-50"
+                className="rounded-xl px-5 py-3 bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-50"
               >
                 {loading ? "Creating..." : "Create Task"}
               </button>
@@ -848,7 +848,7 @@ export default function TasksPage() {
             ) : visibleTasks.length === 0 ? (
               // Empty state: distinguishes "no tasks at all" from
               // "tasks exist but filters hide them".
-              <div className="rounded-3xl border border-dashed border-zinc-300 bg-white/70 p-8 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
+              <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-8 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
                 <h3 className="text-lg font-semibold">
                   {tasks.length === 0
                     ? "No tasks yet."
