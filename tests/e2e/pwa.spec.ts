@@ -40,8 +40,9 @@ test("the manifest, icons and service worker load signed out", { tag: "@smoke" }
 
 test("pages link the manifest and the iPhone icon", { tag: "@smoke" }, async ({ page }) => {
   await page.goto("/login");
-  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/manifest.webmanifest");
-  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/icons/apple-touch-icon.png");
+  // Vercel previews render the manifest link twice (both with crossorigin="use-credentials"); either works.
+  await expect(page.locator('link[rel="manifest"]').first()).toHaveAttribute("href", "/manifest.webmanifest");
+  await expect(page.locator('link[rel="apple-touch-icon"]').first()).toHaveAttribute("href", "/icons/apple-touch-icon.png");
 });
 
 test.describe("offline reading", () => {
