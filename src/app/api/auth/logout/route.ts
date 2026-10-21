@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE_NAME } from "@/lib/auth";
+import { hashSecureToken, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 function getLogoutRedirect(request: NextRequest) {
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
   if (token) {
-    await prisma.session.deleteMany({ where: { token } });
+    await prisma.session.deleteMany({ where: { token: hashSecureToken(token) } });
   }
 
   const response = NextResponse.redirect(getLogoutRedirect(request), 303);

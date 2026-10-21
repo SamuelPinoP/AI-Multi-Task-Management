@@ -41,6 +41,7 @@ model User {
 
 model Session {
   id        String   @id @default(cuid())
+  /// SHA-256 of the session token (hex). The token itself is only in the browser cookie.
   token     String   @unique
   userId    String
   expiresAt DateTime
@@ -127,6 +128,8 @@ model Event {
   updatedAt    DateTime   @updatedAt
   deletedAt    DateTime?
   recurrence   Recurrence @default(NONE)
+  /// The last day a repeat can start on (empty: keeps repeating). endTime is the first occurrence's end.
+  repeatUntil  DateTime?  @db.Date
 
   userId    String
   projectId String?
@@ -211,6 +214,22 @@ model ProjectChatAttachmentUpload {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([projectId, userId])
+  @@index([expiresAt])
+}
+
+
+/// Request counters for rate limiting (src/lib/rate-limit.ts). The key is a
+/// rule name plus a SHA-256 fingerprint of the caller (IP, email or user id),
+/// so no addresses are stored in readable form.
+model RateLimit {
+  key           String   @id
+  /// Fixed window number for the rule: floor(time in ms / window length).
+  window        Int
+  count         Int
+  previousCount Int      @default(0)
+  /// Set by the database; once past, the counter no longer matters.
+  expiresAt     DateTime @db.Timestamptz(3)
+
   @@index([expiresAt])
 }
 

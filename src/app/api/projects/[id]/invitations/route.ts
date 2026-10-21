@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeAuthEmail, requireApiUser } from "@/lib/auth";
+import { consumeRateLimit, rateLimitedResponse } from "@/lib/rate-limit";
+import { RATE_LIMITS } from "@/lib/rate-limit-core";
 import {
   checkProjectInvitation,
   createPendingInvitation,
@@ -37,6 +39,8 @@ export async function POST(req: Request, context: RouteContext) {
   try {
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    const inviteLimit = await consumeRateLimit(RATE_LIMITS.invitationsUser, user.id);
+    if (!inviteLimit.allowed) return rateLimitedResponse("invitations", inviteLimit);
 
     const { id: projectId } = await context.params;
     const body = await req.json().catch(() => ({}));
