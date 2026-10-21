@@ -8,6 +8,7 @@ import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
 import { ProjectTeamSection } from "@/components/project-team-section";
 import { ProjectAssignedTasksSection } from "@/components/project-assigned-tasks-section";
 import { ProjectChatPanel } from "@/components/project-chat-panel";
+import { ProjectInsights } from "@/components/projects/project-insights";
 import { eventWallTime, formatEventDateTime } from "@/lib/event-time";
 import {
   getProjectAccessForUser,
@@ -16,8 +17,10 @@ import {
 import { OWNER_INVITATION_SELECT } from "@/lib/project-invitations";
 import { markProjectOpened } from "@/lib/recent-shortcuts";
 import { describeRepeat, firstOccurrenceEnd } from "@/lib/recurrence";
+import { projectInsights } from "@/lib/project-insights";
 import { isOverdueTask } from "@/lib/task-date-buckets";
-import { getUserNow } from "@/lib/user-time-server";
+import { toWallClock } from "@/lib/user-time";
+import { getUserTimeZone } from "@/lib/user-time-server";
 
 type ProjectDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -48,6 +51,9 @@ export default async function ProjectDetailPage({
           priority: true,
           dueDate: true,
           recurrence: true,
+          createdAt: true,
+          updatedAt: true,
+          completedAt: true,
           assignee: { select: { id: true, name: true, role: true } },
         },
       },
@@ -107,23 +113,25 @@ export default async function ProjectDetailPage({
   const isOwner = access?.accessLevel === "OWNER";
   const canEditProjectContent = access?.accessLevel === "OWNER" || access?.accessLevel === "EDITOR";
   const roleLabel = access?.accessLevel === "VIEWER" ? "Viewer (read-only)" : isOwner ? "Owner" : "Editor";
-  const now = await getUserNow();
-  const totalNotes = project.notes.length;
-  const totalTasks = project.tasks.length;
-  const completedTasks = project.tasks.filter(
-    (task) => task.status === "DONE",
-  ).length;
-  const activeTasks = project.tasks.filter(
-    (task) => task.status !== "DONE",
-  ).length;
-  const overdueTasks = project.tasks.filter(
-    (task) => task.status !== "DONE" && isOverdueTask(task.dueDate, now),
-  ).length;
+  const timeZone = await getUserTimeZone();
+  const wall = (instant: Date) => toWallClock(timeZone, instant);
+  const now = wall(new Date());
   const upcomingEvents = project.events.filter(
     (event) => eventWallTime(event.startTime) >= now,
   ).length;
-  const completionPercentage =
-    totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const insights = projectInsights(
+    project.tasks.map((task) => ({
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      dueDate: task.dueDate,
+      createdAt: wall(task.createdAt),
+      updatedAt: wall(task.updatedAt),
+      completedAt: task.completedAt ? wall(task.completedAt) : null,
+    })),
+    { updatedAt: wall(project.updatedAt) },
+    now,
+  );
 
   const workload = new Map<
     string,
@@ -229,48 +237,10 @@ export default async function ProjectDetailPage({
           </div>
         </section>
 
-        <section className="mt-8">
-          <h2 className="mb-4 text-2xl font-semibold">
-            Project Progress Summary
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <article className={uiCardClass.replace("p-6", "p-4")}>
-              <p className="text-sm text-zinc-500">Total Notes</p>
-              <p className="mt-2 text-2xl font-semibold">{totalNotes}</p>
-            </article>
-            <article className={uiCardClass.replace("p-6", "p-4")}>
-              <p className="text-sm text-zinc-500">Total Tasks</p>
-              <p className="mt-2 text-2xl font-semibold">{totalTasks}</p>
-            </article>
-            <article className={uiCardClass.replace("p-6", "p-4")}>
-              <p className="text-sm text-zinc-500">Completed Tasks</p>
-              <p className="mt-2 text-2xl font-semibold">{completedTasks}</p>
-            </article>
-            <article className={uiCardClass.replace("p-6", "p-4")}>
-              <p className="text-sm text-zinc-500">Active Tasks</p>
-              <p className="mt-2 text-2xl font-semibold">{activeTasks}</p>
-            </article>
-            <article className={uiCardClass.replace("p-6", "p-4")}>
-              <p className="text-sm text-zinc-500">Overdue Tasks</p>
-              <p className="mt-2 text-2xl font-semibold">{overdueTasks}</p>
-            </article>
-            <article className={uiCardClass.replace("p-6", "p-4")}>
-              <p className="text-sm text-zinc-500">Upcoming Events</p>
-              <p className="mt-2 text-2xl font-semibold">{upcomingEvents}</p>
-            </article>
-            <article className="rounded-2xl border border-zinc-200 p-4 shadow-sm dark:border-zinc-800 sm:col-span-2 lg:col-span-2">
-              <p className="text-sm text-zinc-500">Task Completion</p>
-              <p className="mt-2 text-2xl font-semibold">
-                {totalTasks === 0 ? "0%" : `${completionPercentage}%`}
-              </p>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                {totalTasks === 0
-                  ? "No tasks yet"
-                  : `${completedTasks} of ${totalTasks} tasks complete`}
-              </p>
-            </article>
-          </div>
-        </section>
+        <ProjectInsights
+          insights={insights}
+          counts={{ notes: project.notes.length, upcomingEvents }}
+        />
 
         {canEditProjectContent ? (
           <ProjectQuickActions projectId={project.id} />
@@ -324,10 +294,17 @@ export default async function ProjectDetailPage({
 
         <ProjectAssignedTasksSection
           projectId={project.id}
-          tasks={project.tasks.map((task) => ({
-            ...task,
-            dueDate: task.dueDate ? task.dueDate.toISOString() : null,
-          }))}
+          tasks={project.tasks.map(
+            ({ createdAt, updatedAt, completedAt, ...task }) => {
+              void createdAt;
+              void updatedAt;
+              void completedAt;
+              return {
+                ...task,
+                dueDate: task.dueDate ? task.dueDate.toISOString() : null,
+              };
+            },
+          )}
           members={project.members.map((member) => ({
             id: member.id,
             name: member.name,
