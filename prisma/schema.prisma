@@ -400,6 +400,8 @@ enum ActivityAction {
   COMPLETED_TASK
   CREATED_EVENT
   CREATED_PROJECT
+  /// A message in a project's chat.
+  COMMENTED
   DELETED_ITEM
   RESTORED_ITEM
 }

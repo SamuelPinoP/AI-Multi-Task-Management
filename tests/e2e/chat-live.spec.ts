@@ -1,4 +1,6 @@
+import "dotenv/config";
 import { expect, test } from "@playwright/test";
+import { Pool } from "pg";
 import { signUpAndLogIn, uniqueName } from "./helpers";
 
 test("a teammate's message appears in an open chat without reloading", async ({ page, browser, baseURL }) => {
@@ -39,6 +41,18 @@ test("a teammate's message appears in an open chat without reloading", async ({ 
   };
   expect(again.changed).toBe(false);
   expect(again.comments).toBeUndefined();
+
+  // The activity feed records it as a chat message, not as creating the project.
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const actions = await pool.query<{ action: string }>(
+      `SELECT action FROM "Activity" WHERE "projectId" = $1 AND message LIKE 'Added a discussion comment%'`,
+      [project.id],
+    );
+    expect(actions.rows.map((row) => row.action)).toEqual(["COMMENTED"]);
+  } finally {
+    await pool.end();
+  }
 
   await teammateContext.close();
 });
