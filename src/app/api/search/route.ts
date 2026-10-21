@@ -22,6 +22,8 @@ export async function GET(req: Request) {
     }
 
     const whereContains = { contains: query, mode: "insensitive" as const };
+    // Your own items plus anything in a project you can open, as /api/tasks does.
+    const visible = { OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }] };
 
     const [projects, notes, tasks, events] = await Promise.all([
       prisma.project.findMany({
@@ -37,9 +39,8 @@ export async function GET(req: Request) {
       }),
       prisma.note.findMany({
         where: {
-          userId: user.id,
           deletedAt: null,
-          OR: [{ title: whereContains }, { content: whereContains }],
+          AND: [visible, { OR: [{ title: whereContains }, { content: whereContains }] }],
         },
         select: {
           id: true,
@@ -52,9 +53,8 @@ export async function GET(req: Request) {
       }),
       prisma.task.findMany({
         where: {
-          userId: user.id,
           deletedAt: null,
-          OR: [{ title: whereContains }, { description: whereContains }],
+          AND: [visible, { OR: [{ title: whereContains }, { description: whereContains }] }],
         },
         select: {
           id: true,
@@ -68,9 +68,8 @@ export async function GET(req: Request) {
       }),
       prisma.event.findMany({
         where: {
-          userId: user.id,
           deletedAt: null,
-          OR: [{ title: whereContains }, { description: whereContains }, { location: whereContains }],
+          AND: [visible, { OR: [{ title: whereContains }, { description: whereContains }, { location: whereContains }] }],
         },
         select: {
           id: true,

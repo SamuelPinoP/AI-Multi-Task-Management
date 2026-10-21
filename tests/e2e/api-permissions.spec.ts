@@ -26,6 +26,7 @@ let projectName = "";
 let ownerCommentId = "";
 let attachmentId = "";
 let projectTaskId = "";
+let projectTaskTitle = "";
 let editorMemberId = "";
 let viewerMemberId = "";
 let ownerPersonalNoteId = "";
@@ -106,9 +107,10 @@ test.beforeAll(async ({ browser }, testInfo) => {
   ownerCommentId = comment.id;
   attachmentId = comment.attachments[0].id;
 
+  projectTaskTitle = uniqueName("Owner project task");
   const task = await json<{ id: string }>(
     await api.owner.post("/api/tasks", {
-      data: { title: "Owner project task", projectId },
+      data: { title: projectTaskTitle, projectId },
     }),
   );
   projectTaskId = task.id;
@@ -150,6 +152,14 @@ test("members can open the project; outsiders can't see it exists", async () => 
     );
     expect
       .soft(results.projects.some((project) => project.id === projectId), `search as ${role}`)
+      .toBe(role !== "outsider");
+
+    // The owner's task in the shared project shows up in every member's search.
+    const taskResults = await json<{ tasks: { id: string }[] }>(
+      await api[role].get(`/api/search?q=${encodeURIComponent(projectTaskTitle)}`),
+    );
+    expect
+      .soft(taskResults.tasks.some((task) => task.id === projectTaskId), `task search as ${role}`)
       .toBe(role !== "outsider");
   }
 });
