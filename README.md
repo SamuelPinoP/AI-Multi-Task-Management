@@ -15,6 +15,7 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 - Project-specific Kanban boards for organizing tasks by status with read-only Viewer access and Owner/Editor task creation and movement
 - Project collaboration with invitations and role-based Owner, Editor, and Viewer access enforced server-side
 - Project chat with file attachments using local, Vercel Blob, or private AWS S3 storage
+- A sidebar where each project opens to its Overview, Board and Chat, and marks chats with new messages
 
 ## Project chat attachment storage
 
@@ -187,3 +188,5 @@ The app includes a dedicated `/board` productivity area linked from the main nav
 - **Kanban View** for organizing personal and project tasks by status across the workspace.
 - **Tree View** for user-specific editable hierarchy pages, such as Warrior, Study Plan, or Career Plan, with root nodes, child nodes, sibling nodes, renaming, deletion, simple reordering, and parent changes.
 - A disabled **Mindnote View** entry point so the board structure can be extended later without changing the primary navigation.
+
+Plans for drag and drop in the Tree View, a 3D Mind View and more sidebar tools are in [docs/views-roadmap.md](docs/views-roadmap.md).
