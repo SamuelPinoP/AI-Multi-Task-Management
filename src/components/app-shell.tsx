@@ -83,12 +83,18 @@ function initial(user: NonNullable<ShellUser>) {
   return firstName(user).charAt(0).toUpperCase();
 }
 
-/** A visual count; the link's aria-label says it in words. */
+/**
+ * A visual count; the link's aria-label says it in words. The space keeps the
+ * visible text "Tasks 2", not "Tasks2", so the label stays part of the name.
+ */
 function Count({ value }: { value: number }) {
   return (
-    <span aria-hidden="true" className="ml-auto text-[11px] tabular-nums text-muted">
-      {value}
-    </span>
+    <>
+      {" "}
+      <span aria-hidden="true" className="ml-auto text-[11px] tabular-nums text-muted">
+        {value}
+      </span>
+    </>
   );
 }
 

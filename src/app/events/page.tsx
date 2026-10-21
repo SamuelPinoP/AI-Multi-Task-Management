@@ -94,14 +94,21 @@ function EventRow({
         {timeRange(event)}
       </span>
       <span aria-hidden="true" className="h-8 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: color }} />
-      <button type="button" onClick={() => onOpen(event)} aria-label={event.title} className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-sm font-medium hover:text-accent">{event.title}</span>
+      {/* The title is the button's whole label; its ::after covers the details line too, so both open the event. */}
+      <div className="relative min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={() => onOpen(event)}
+          className="block w-full text-left after:absolute after:inset-0 after:rounded-md hover:text-accent focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent"
+        >
+          <span className="block truncate text-sm font-medium">{event.title}</span>
+        </button>
         {event.location || event.project ? (
           <span className="block truncate text-xs text-muted">
             {[event.location, event.project?.name].filter(Boolean).join(" · ")}
           </span>
         ) : null}
-      </button>
+      </div>
       {repeats ? (
         <span title={describeRepeat(event.recurrence, event.repeatUntil)} className="shrink-0 text-muted">
           <Repeat aria-hidden="true" className="h-3.5 w-3.5" />

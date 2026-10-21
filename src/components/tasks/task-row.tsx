@@ -67,20 +67,25 @@ export function TaskRow({
         <Check aria-hidden="true" className={cn("h-3 w-3", done ? "opacity-100" : "text-accent opacity-0 group-hover:opacity-100")} />
       </button>
 
-      <button
-        type="button"
-        onClick={() => onOpen(task)}
-        aria-label={task.title}
-        aria-describedby={task.description ? `task-${task.id}-description` : undefined}
-        className="min-w-0 flex-1 text-left"
-      >
-        <span className={cn("block truncate text-sm", done ? "text-muted line-through" : "hover:text-accent")}>{task.title}</span>
+      {/* The title is the button's whole label; its ::after covers the description too, so both open the task. */}
+      <div className="relative min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={() => onOpen(task)}
+          aria-describedby={task.description ? `task-${task.id}-description` : undefined}
+          className={cn(
+            "block w-full text-left after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent",
+            !done && "hover:text-accent",
+          )}
+        >
+          <span className={cn("block truncate text-sm", done && "text-muted line-through")}>{task.title}</span>
+        </button>
         {task.description ? (
           <span id={`task-${task.id}-description`} className="hidden truncate text-xs text-muted sm:block">
             {task.description}
           </span>
         ) : null}
-      </button>
+      </div>
 
       {blockers.length ? <BlockedBadge titles={blockers.map((blocker) => blocker.title)} /> : null}
       {progress.total ? <ProgressRing done={progress.done} total={progress.total} /> : null}
