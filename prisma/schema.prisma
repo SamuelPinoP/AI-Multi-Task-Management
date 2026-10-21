@@ -4,7 +4,8 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -254,7 +255,9 @@ model ProjectInvitation {
   inviterUser User    @relation("ProjectInvitationInviter", fields: [inviterUserId], references: [id], onDelete: Cascade)
   invitedUser User?   @relation("ProjectInvitationInvitee", fields: [invitedUserId], references: [id], onDelete: SetNull)
 
-  @@unique([projectId, invitedEmail, status])
+  // One pending invitation per email and project. Accepted and declined ones
+  // stay as history, so a removed member can be invited again (#128).
+  @@unique([projectId, invitedEmail], where: raw("status = 'PENDING'"))
   @@index([projectId])
   @@index([inviterUserId])
   @@index([invitedUserId])
