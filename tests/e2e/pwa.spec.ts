@@ -1,11 +1,22 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { signUpAndLogIn, uniqueName } from "./helpers";
 
 // SMART-10: the installable app and offline reading.
 
+/**
+ * Fetches a file signed out and checks it wasn't swapped for the login page.
+ * Redirects are followed: on Vercel previews the protection bypass answers
+ * the first request with a redirect that sets its cookie.
+ */
+async function getSignedOut(request: APIRequestContext, path: string) {
+  const response = await request.get(path);
+  expect.soft(new URL(response.url()).pathname, path).toBe(path);
+  expect.soft(response.status(), path).toBe(200);
+  return response;
+}
+
 test("the manifest, icons and service worker load signed out", { tag: "@smoke" }, async ({ request }) => {
-  const manifestResponse = await request.get("/manifest.webmanifest", { maxRedirects: 0 });
-  expect(manifestResponse.status()).toBe(200);
+  const manifestResponse = await getSignedOut(request, "/manifest.webmanifest");
   const manifest = (await manifestResponse.json()) as {
     name: string;
     display: string;
@@ -18,13 +29,11 @@ test("the manifest, icons and service worker load signed out", { tag: "@smoke" }
   expect(manifest.icons.some((icon) => icon.purpose === "maskable")).toBe(true);
 
   for (const src of [...manifest.icons.map((icon) => icon.src), "/icons/apple-touch-icon.png"]) {
-    const icon = await request.get(src, { maxRedirects: 0 });
-    expect.soft(icon.status(), src).toBe(200);
+    const icon = await getSignedOut(request, src);
     expect.soft(icon.headers()["content-type"], src).toBe("image/png");
   }
 
-  const worker = await request.get("/sw.js", { maxRedirects: 0 });
-  expect(worker.status()).toBe(200);
+  const worker = await getSignedOut(request, "/sw.js");
   expect(worker.headers()["content-type"]).toContain("javascript");
   expect(worker.headers()["cache-control"]).toContain("no-cache");
 });
