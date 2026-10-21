@@ -16,6 +16,7 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 - Project collaboration with invitations and role-based Owner, Editor, and Viewer access enforced server-side
 - Project chat with file attachments using local, Vercel Blob, or private AWS S3 storage
 - A sidebar where each project opens to its Overview, Board and Chat, and marks chats with new messages
+- An installable app (phones and desktops) that keeps the pages you've opened readable offline
 
 ## Project chat attachment storage
 
@@ -149,6 +150,20 @@ hour and 60 upload requests per user per 10 minutes. Forms show "Too many …
 Try again in N minutes"; API routes answer 429 with a `Retry-After` header.
 The client IP is the first `x-forwarded-for` entry, which Vercel overwrites;
 requests without one (local development, CI) skip the per-network limits.
+
+## Installable app and offline reading
+
+`src/app/manifest.ts` makes the site installable: Chrome and Edge offer
+"Install app" in the account menu, and iPhones use Share → Add to Home Screen.
+The service worker, `public/sw.js`, is plain JavaScript, so Turbopack and
+webpack builds ship the same file. `src/components/pwa.tsx` registers it in
+production builds only. It keeps a copy of each page you open and of the data
+those pages load (tasks, notes, events, projects, goals), and offline it
+serves those copies with an "offline" notice. Saving, signing in, uploads and
+attachment downloads always go to the network. Saved copies are deleted when
+you log out or open a signed-out page. Icons are drawn by
+`node scripts/generate-app-icons.mjs`. Playwright blocks the service worker
+except in `tests/e2e/pwa.spec.ts`, which runs against a production build.
 
 ## Database backups
 
