@@ -54,6 +54,33 @@ test("Sidebar collapses and stays collapsed after a reload", async ({ page, isMo
   await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
 });
 
+test("A sidebar project opens to its pages and stays open after a reload", async ({ page, isMobile }) => {
+  test.skip(isMobile, "The sidebar is a menu sheet on phones.");
+  const name = uniqueName("Sidebar project");
+  await continueAsGuest(page);
+  await openSection(page, "Projects");
+  await page.getByLabel("Add a project").fill(name);
+  await page.getByLabel("Add a project").press("Enter");
+
+  const sidebar = page.getByRole("navigation", { name: "Workspace" });
+  const toggle = sidebar.getByRole("button", { name: `${name} pages` });
+  const pages = sidebar.getByRole("group", { name: `${name} pages` });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await pages.getByRole("link", { name: "Chat" }).click();
+  await expect(page).toHaveURL(/\/projects\/[^/]+\/chat$/);
+  await expect(pages.getByRole("link", { name: "Chat" })).toHaveAttribute("aria-current", "page");
+
+  await page.reload();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  // A closed project stands in for the page you're on.
+  await expect(sidebar.getByRole("link", { name, exact: true })).toHaveAttribute("aria-current", "page");
+});
+
 test("Phone tabs and the menu reach every section", async ({ page, isMobile }) => {
   test.skip(!isMobile, "Bottom tabs only show on phones.");
   await continueAsGuest(page);
