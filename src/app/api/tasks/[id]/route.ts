@@ -4,6 +4,7 @@ import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
+import { nextCompletedAt } from "@/lib/task-completion";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import { taskInclude } from "@/lib/task-include";
 
@@ -126,7 +127,7 @@ export async function PATCH(req: Request, context: RouteContext) {
         status: body.status,
         priority: body.priority,
         dueDate,
-        completedAt: body.status === TaskStatus.DONE ? new Date() : null,
+        completedAt: nextCompletedAt(existingTask.status, body.status),
         recurrence: body.recurrence,
         projectId,
         assigneeId,

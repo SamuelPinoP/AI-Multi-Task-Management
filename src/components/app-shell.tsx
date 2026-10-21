@@ -4,12 +4,15 @@ import {
   Bell,
   CalendarClock,
   CalendarDays,
+  ChevronRight,
   FolderKanban,
   House,
   Keyboard,
+  LayoutDashboard,
   LogOut,
   Map as MapIcon,
   Menu,
+  MessagesSquare,
   Moon,
   NotebookPen,
   PanelLeftClose,
@@ -25,9 +28,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { CommandPalette } from "@/components/command-palette";
 import { NewTaskDialog } from "@/components/new-task-dialog";
+import { ProjectSheet, type ProjectInput } from "@/components/projects/project-sheet";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ThemeToggle, useTheme } from "@/components/theme-provider";
 import {
@@ -39,13 +43,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { toast } from "@/components/ui/toaster";
 import { isNavItemActive, pageTitleFor, type NavMatch } from "@/lib/app-nav";
 import { cn } from "@/lib/cn";
 import { isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
+import { isChatUnread, markChatSeen, useChatSeen, type ChatSeen } from "@/lib/project-chat-seen";
 import { paletteColor, projectColor } from "@/lib/project-color";
-import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/sidebar-state";
-import { WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
-import type { WorkspaceNav } from "@/lib/workspace-nav";
+import {
+  SIDEBAR_COLLAPSED_COOKIE,
+  SIDEBAR_PROJECTS_COOKIE,
+  serializeSidebarProjects,
+  type SidebarProjectsOpen,
+} from "@/lib/sidebar-state";
+import { notifyWorkspaceChanged, WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
+import type { WorkspaceNav, WorkspaceNavProject } from "@/lib/workspace-nav";
 
 type ShellUser = {
   id: string;
@@ -123,21 +134,146 @@ function GroupLabel({ children, collapsed }: { children: React.ReactNode; collap
   );
 }
 
+/** A project in the sidebar: its link, plus Overview, Board and Chat when opened. */
+function SidebarProject({
+  project,
+  pathname,
+  open,
+  chatUnread,
+  onToggle,
+  onNavigate,
+}: {
+  project: WorkspaceNavProject;
+  pathname: string;
+  open: boolean;
+  chatUnread: boolean;
+  onToggle: () => void;
+  onNavigate?: () => void;
+}) {
+  const href = `/projects/${project.id}`;
+  const active = pathname === href || pathname.startsWith(`${href}/`);
+  // The sidebar renders twice (the rail and the phone sheet), so ids come from useId.
+  const pagesId = useId();
+  const pages: Array<{ href: string; label: string; icon: LucideIcon; unread?: boolean }> = [
+    { href, label: "Overview", icon: LayoutDashboard },
+    { href: `${href}/board`, label: "Board", icon: SquareKanban },
+    { href: `${href}/chat`, label: "Chat", icon: MessagesSquare, unread: chatUnread },
+  ];
+  // Closed, the project row stands in for its pages, so it carries their highlight and the chat dot.
+  const linkLabel = [
+    project.name,
+    project.openTasks ? `${project.openTasks} open tasks` : "",
+    chatUnread && !open ? "new chat messages" : "",
+  ].filter(Boolean).join(", ");
+
+  return (
+    <div>
+      <div
+        className={cn(
+          "group flex items-center rounded-lg transition-colors hover:bg-surface-hover",
+          active && !open && "bg-surface shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
+        )}
+      >
+        <Link
+          href={href}
+          onClick={onNavigate}
+          aria-current={active && !open ? "page" : undefined}
+          aria-label={linkLabel === project.name ? undefined : linkLabel}
+          className={cn("flex min-w-0 flex-1 items-center gap-2.5 py-1.5 pl-2.5 text-sm", active && "font-semibold")}
+        >
+          <span
+            aria-hidden="true"
+            className="mx-1 h-2 w-2 shrink-0 rounded-[3px]"
+            style={{ backgroundColor: projectColor(project) }}
+          />
+          <span className="truncate">{project.name}</span>
+          {chatUnread && !open ? (
+            <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+          ) : null}
+          {project.openTasks ? <Count value={project.openTasks} /> : null}
+        </Link>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls={pagesId}
+          aria-label={`${project.name} pages`}
+          title={open ? "Hide pages" : "Show pages"}
+          className="mx-1 grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted opacity-70 transition hover:bg-line/60 hover:text-ink hover:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <ChevronRight
+            aria-hidden="true"
+            className={cn("h-3.5 w-3.5 transition-transform duration-200 motion-reduce:transition-none", open && "rotate-90")}
+          />
+        </button>
+      </div>
+
+      {/* Opens by growing the grid row; inert keeps the links of a closed project out of the tab order. */}
+      <div
+        id={pagesId}
+        inert={!open}
+        className={cn(
+          "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+        )}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div role="group" aria-label={`${project.name} pages`} className="ml-[1.125rem] flex flex-col gap-px border-l border-line py-1 pl-2">
+            {pages.map((page) => {
+              const pageActive = pathname === page.href;
+              const Icon = page.icon;
+              return (
+                <Link
+                  key={page.href}
+                  href={page.href}
+                  onClick={onNavigate}
+                  aria-current={pageActive ? "page" : undefined}
+                  aria-label={page.unread ? `${page.label}, new messages` : undefined}
+                  className={cn(
+                    "flex items-center gap-2 rounded-md px-2 py-1 text-[13px] text-muted transition-colors hover:bg-surface-hover hover:text-ink",
+                    pageActive && "bg-surface font-medium text-ink shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
+                  )}
+                >
+                  <Icon aria-hidden="true" className={cn("h-3.5 w-3.5 shrink-0", pageActive && "text-accent")} />
+                  <span className="truncate">{page.label}</span>
+                  {page.unread ? (
+                    <span aria-hidden="true" className="ml-auto rounded-full bg-accent-soft px-1.5 py-px text-[10px] font-semibold text-accent">
+                      New
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Sidebar({
   user,
   nav,
   pathname,
   collapsed,
+  projectsOpen,
+  chatSeen,
   onToggleCollapsed,
+  onToggleProject,
   onNewTask,
+  onNewProject,
   onNavigate,
 }: {
   user: NonNullable<ShellUser>;
   nav: WorkspaceNav;
   pathname: string;
   collapsed: boolean;
+  projectsOpen: SidebarProjectsOpen;
+  chatSeen: ChatSeen;
   onToggleCollapsed?: () => void;
+  onToggleProject: (projectId: string, open: boolean) => void;
   onNewTask: () => void;
+  onNewProject: () => void;
   onNavigate?: () => void;
 }) {
   const mainItems: NavItem[] = [
@@ -161,7 +297,7 @@ function Sidebar({
   const linkProps = { pathname, collapsed, onNavigate };
 
   return (
-    <nav aria-label="Workspace" className="flex h-full flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2.5 py-3">
+    <nav aria-label="Workspace" className="flex h-full flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2.5 py-3 [scrollbar-width:thin]">
       <div className={cn("flex items-center gap-2.5 px-1.5 pb-3", collapsed && "justify-center px-0")}>
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-[11px] font-extrabold text-accent-ink" aria-hidden="true">
           AM
@@ -201,10 +337,10 @@ function Sidebar({
 
       <GroupLabel collapsed={collapsed}>
         <Link href="/projects" onClick={onNavigate} className="hover:text-ink">Projects</Link>
-        <Link href="/projects" onClick={onNavigate} className="rounded p-0.5 hover:bg-surface-hover hover:text-ink" title="Create a project">
+        <button type="button" onClick={onNewProject} className="rounded p-0.5 hover:bg-surface-hover hover:text-ink" title="Create a project">
           <Plus aria-hidden="true" className="h-3.5 w-3.5" />
           <span className="sr-only">Create a project</span>
-        </Link>
+        </button>
       </GroupLabel>
       {collapsed ? (
         <SidebarLink item={{ href: "/projects", label: "Projects", icon: FolderKanban }} {...linkProps} />
@@ -213,26 +349,19 @@ function Sidebar({
           {nav.projects.map((project) => {
             const href = `/projects/${project.id}`;
             const active = pathname === href || pathname.startsWith(`${href}/`);
+            // Until the user opens or closes it, a project is open while one of its pages is showing.
+            const open = projectsOpen[project.id] ?? active;
+            const onChat = pathname === `${href}/chat`;
             return (
-              <Link
+              <SidebarProject
                 key={project.id}
-                href={href}
-                onClick={onNavigate}
-                aria-current={active ? "page" : undefined}
-                aria-label={project.openTasks ? `${project.name}, ${project.openTasks} open tasks` : undefined}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors hover:bg-surface-hover",
-                  active && "bg-surface font-semibold shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className="mx-1 h-2 w-2 shrink-0 rounded-[3px]"
-                  style={{ backgroundColor: projectColor(project) }}
-                />
-                <span className="truncate">{project.name}</span>
-                {project.openTasks ? <Count value={project.openTasks} /> : null}
-              </Link>
+                project={project}
+                pathname={pathname}
+                open={open}
+                chatUnread={!onChat && isChatUnread(project.lastChatAt, chatSeen[project.id])}
+                onToggle={() => onToggleProject(project.id, !open)}
+                onNavigate={onNavigate}
+              />
             );
           })}
           {nav.activeProjectCount > nav.projects.length ? (
@@ -242,9 +371,9 @@ function Sidebar({
           ) : null}
         </>
       ) : (
-        <Link href="/projects" onClick={onNavigate} className="rounded-lg px-2.5 py-1.5 text-xs text-muted hover:bg-surface-hover hover:text-ink">
+        <button type="button" onClick={onNewProject} className="rounded-lg px-2.5 py-1.5 text-left text-xs text-muted hover:bg-surface-hover hover:text-ink">
           No projects yet. Create one
-        </Link>
+        </button>
       )}
 
       <GroupLabel collapsed={collapsed}>Tools</GroupLabel>
@@ -462,11 +591,13 @@ export function AppShell({
   currentUser,
   initialNav,
   initialSidebarCollapsed,
+  initialProjectsOpen,
 }: {
   children: React.ReactNode;
   currentUser: ShellUser;
   initialNav: WorkspaceNav | null;
   initialSidebarCollapsed: boolean;
+  initialProjectsOpen: SidebarProjectsOpen;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -476,9 +607,12 @@ export function AppShell({
 
   const [nav, setNav] = useState(initialNav);
   const [collapsed, setCollapsed] = useState(initialSidebarCollapsed);
+  const [projectsOpen, setProjectsOpen] = useState(initialProjectsOpen);
+  const chatSeen = useChatSeen();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useEffect(() => {
@@ -506,6 +640,14 @@ export function AppShell({
       window.removeEventListener(WORKSPACE_CHANGED_EVENT, refresh);
     };
   }, [pathname, showWorkspaceShell]);
+
+  // An open chat counts as seen, and so do messages that arrive while it stays open.
+  const chatProjectId = pathname.match(/^\/projects\/([^/]+)\/chat$/)?.[1];
+  useEffect(() => {
+    if (!chatProjectId) return;
+    markChatSeen(chatProjectId);
+    return () => markChatSeen(chatProjectId);
+  }, [chatProjectId]);
 
   // Keyboard shortcuts (DES-06): Ctrl/Cmd+K, /, N, ? and "g then a letter"; see @/lib/shortcuts.
   useEffect(() => {
@@ -556,6 +698,13 @@ export function AppShell({
     });
   }
 
+  function toggleProject(projectId: string, open: boolean) {
+    const next = { ...projectsOpen, [projectId]: open };
+    const value = serializeSidebarProjects(next, nav?.projects.map((project) => project.id) ?? []);
+    document.cookie = `${SIDEBAR_PROJECTS_COOKIE}=${value}; path=/; max-age=31536000; samesite=lax`;
+    setProjectsOpen(next);
+  }
+
   if (!showWorkspaceShell || !currentUser || !nav) {
     return (
       <div className="flex min-h-screen flex-col overflow-x-hidden bg-canvas text-ink">
@@ -575,6 +724,30 @@ export function AppShell({
     setMenuOpen(false);
     setNewTaskOpen(true);
   };
+
+  const openNewProject = () => {
+    setMenuOpen(false);
+    setNewProjectOpen(true);
+  };
+
+  // The sidebar's "+" creates a project from any page, then opens it.
+  async function createProject(input: ProjectInput) {
+    try {
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: input.name, description: input.description, color: input.color }),
+      });
+      const body = (await response.json().catch(() => null)) as { id?: string; error?: string } | null;
+      if (!response.ok || !body?.id) return body?.error ?? "Could not create the project.";
+      notifyWorkspaceChanged();
+      toast.success("Project created", { description: input.name });
+      router.push(`/projects/${body.id}`);
+      return null;
+    } catch {
+      return "Could not create the project. Check your connection and try again.";
+    }
+  }
 
   return (
     <div className="flex h-dvh min-h-0 overflow-hidden bg-canvas text-ink">
@@ -596,8 +769,12 @@ export function AppShell({
           nav={nav}
           pathname={pathname}
           collapsed={collapsed}
+          projectsOpen={projectsOpen}
+          chatSeen={chatSeen}
           onToggleCollapsed={toggleCollapsed}
+          onToggleProject={toggleProject}
           onNewTask={openNewTask}
+          onNewProject={openNewProject}
         />
       </aside>
 
@@ -610,7 +787,11 @@ export function AppShell({
             nav={nav}
             pathname={pathname}
             collapsed={false}
+            projectsOpen={projectsOpen}
+            chatSeen={chatSeen}
+            onToggleProject={toggleProject}
             onNewTask={openNewTask}
+            onNewProject={openNewProject}
             onNavigate={() => setMenuOpen(false)}
           />
         </SheetContent>
@@ -639,6 +820,7 @@ export function AppShell({
         onShowShortcuts={() => setShortcutsOpen(true)}
       />
       <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} projects={nav.projects} />
+      <ProjectSheet open={newProjectOpen} onOpenChange={setNewProjectOpen} onSubmit={createProject} />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );

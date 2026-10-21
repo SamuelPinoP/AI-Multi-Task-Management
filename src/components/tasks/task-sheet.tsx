@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { uiButtonClass, uiDangerButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatTaskDueDateInput } from "@/lib/task-date-buckets";
+import { loadProjectMembers } from "./load-members";
 import { TaskRelationsPanel, type TaskRelations } from "./task-relations-panel";
 import {
   priorityLabels,
@@ -45,19 +46,6 @@ function inputFromTask(task: Task): TaskInput {
   };
 }
 
-/** Members of a project, for the assignee select; cached per project for the session. */
-const memberCache = new Map<string, Member[]>();
-
-async function loadMembers(projectId: string) {
-  const cached = memberCache.get(projectId);
-  if (cached) return cached;
-  const response = await fetch(`/api/projects/${projectId}`);
-  if (!response.ok) return [];
-  const project = (await response.json()) as { members?: Member[] };
-  const members = project.members ?? [];
-  memberCache.set(projectId, members);
-  return members;
-}
 
 /**
  * The full create and edit form for a task, in a side sheet. The list page
@@ -99,7 +87,7 @@ export function TaskSheet({
   useEffect(() => {
     if (!open || !input.projectId) return;
     let cancelled = false;
-    void loadMembers(input.projectId).then((list) => {
+    void loadProjectMembers(input.projectId).then((list) => {
       if (!cancelled) setMembers(list);
     });
     return () => {
