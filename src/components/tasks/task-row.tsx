@@ -12,6 +12,8 @@ import {
 import { cn } from "@/lib/cn";
 import { daysFrom, dueLabel } from "@/lib/home-summary";
 import { paletteColor, projectColor } from "@/lib/project-color";
+import { openBlockers, subtaskProgress } from "@/lib/task-relations";
+import { BlockedBadge, ProgressRing } from "./task-badges";
 import { recurrenceLabels, type Task } from "./types";
 
 const priorityShort = { HIGH: "High", MEDIUM: "Med", LOW: "Low" } as const;
@@ -38,6 +40,8 @@ export function TaskRow({
 }) {
   const done = task.status === "DONE";
   const late = !done && Boolean(task.dueDate) && daysFrom(task.dueDate as string, now) < 0;
+  const progress = subtaskProgress(task.subtasks);
+  const blockers = done ? [] : openBlockers(task.blockedBy);
 
   return (
     <li
@@ -78,6 +82,8 @@ export function TaskRow({
         ) : null}
       </button>
 
+      {blockers.length ? <BlockedBadge titles={blockers.map((blocker) => blocker.title)} /> : null}
+      {progress.total ? <ProgressRing done={progress.done} total={progress.total} /> : null}
       {task.recurrence !== "NONE" ? (
         <span title={recurrenceLabels[task.recurrence]} className="hidden shrink-0 text-muted sm:inline">
           <Repeat aria-hidden="true" className="h-3.5 w-3.5" />

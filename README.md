@@ -15,6 +15,7 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 - Project-specific Kanban boards for organizing tasks by status with read-only Viewer access and Owner/Editor task creation and movement
 - Project collaboration with invitations and role-based Owner, Editor, and Viewer access enforced server-side
 - Project chat with file attachments using local, Vercel Blob, or private AWS S3 storage
+- A sidebar where each project opens to its Overview, Board and Chat, and marks chats with new messages
 
 ## Project chat attachment storage
 
@@ -74,7 +75,15 @@ the real upload UI without using Vercel Blob or AWS S3. Set `E2E_PORT` to use a
 different local port. If you already have a server running, set
 `PLAYWRIGHT_BASE_URL` to test that server instead. To test the production
 build, run `npm run build` and then `npm run test:e2e` with
-`E2E_SERVER_MODE=start`.
+`E2E_SERVER_MODE=start`. Running `npx playwright test` directly starts the
+server from `playwright.config.ts` instead: a dev server by default, or with
+`E2E_SERVER_MODE=start` a fresh `next build --webpack` followed by
+`next start`. Prefer the production build locally when a machine is slow to
+hydrate pages in dev, because tests that type or click right after a page loads
+can otherwise act before React is ready. Both of the config's servers use
+webpack, so they also work in a git worktree whose `node_modules` is a link to
+another checkout, which Turbopack refuses to compile; CI builds with Turbopack,
+like Vercel.
 
 ### Continuous integration
 
@@ -187,3 +196,5 @@ The app includes a dedicated `/board` productivity area linked from the main nav
 - **Kanban View** for organizing personal and project tasks by status across the workspace.
 - **Tree View** for user-specific editable hierarchy pages, such as Warrior, Study Plan, or Career Plan, with root nodes, child nodes, sibling nodes, renaming, deletion, simple reordering, and parent changes.
 - A disabled **Mindnote View** entry point so the board structure can be extended later without changing the primary navigation.
+
+Plans for drag and drop in the Tree View, a 3D Mind View and more sidebar tools are in [docs/views-roadmap.md](docs/views-roadmap.md).

@@ -304,6 +304,49 @@ test("editors change project tasks, viewers only read them", async () => {
   }
 });
 
+test("subtasks and dependencies follow the same rules as editing tasks", async () => {
+  const other = await json<{ id: string }>(await api.owner.post("/api/tasks", { data: { title: "Other project task", projectId } }));
+  await expectStatuses(
+    "POST subtask",
+    (client) => client.post("/api/tasks", { data: { title: "Subtask", parentId: projectTaskId } }),
+    { owner: 201, editor: 201, viewer: 403, outsider: 400 },
+  );
+  await expectStatuses(
+    "POST dependency",
+    (client) => client.post(`/api/tasks/${other.id}/dependencies`, { data: { blockedById: projectTaskId } }),
+    { owner: 201, editor: 201, viewer: 403, outsider: 404 },
+  );
+  await expectStatuses(
+    "DELETE dependency",
+    (client) => client.delete(`/api/tasks/${other.id}/dependencies/${projectTaskId}`),
+    { viewer: 403, outsider: 404, editor: 200 },
+  );
+  // An outsider's own task can't wait on a project task they can't see.
+  const outsiderTask = await json<{ id: string }>(await api.outsider.post("/api/tasks", { data: { title: "Outsider task" } }));
+  await expectStatuses(
+    "POST dependency on an unseen task",
+    (client) => client.post(`/api/tasks/${outsiderTask.id}/dependencies`, { data: { blockedById: projectTaskId } }),
+    { outsider: 400 },
+  );
+});
+
+test("goals are personal; linking a task needs edit rights on it", async () => {
+  const goal = await json<{ id: string }>(await api.owner.post("/api/goals", { data: { title: "Owner goal", targetWeek: "2026-W43" } }));
+  await expectStatuses(
+    "PATCH someone else's goal",
+    (client) => client.patch(`/api/goals/${goal.id}`, { data: { status: "COMPLETED" } }),
+    { owner: 200, editor: 404, viewer: 404, outsider: 404 },
+  );
+  await expectStatuses(
+    "link a project task to your own goal",
+    async (client) => {
+      const own = await json<{ id: string }>(await client.post("/api/goals", { data: { title: "My goal", targetWeek: "2026-W43" } }));
+      return client.post(`/api/goals/${own.id}/tasks`, { data: { taskId: projectTaskId } });
+    },
+    { owner: 200, editor: 200, viewer: 403, outsider: 404 },
+  );
+});
+
 test("note links follow note access; attaching an event needs edit rights", async () => {
   const projectNote = await json<{ id: string }>(
     await api.owner.post("/api/notes", { data: { title: "Project note", content: "See [[Other]]", projectId } }),

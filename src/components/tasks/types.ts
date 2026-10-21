@@ -23,7 +23,13 @@ export type Task = {
   project: Project | null;
   assigneeId?: string | null;
   assignee: Member | null;
+  /** SMART-02: the parent task, the subtasks, and the tasks this one waits on. */
+  parentId?: string | null;
+  subtasks?: RelatedTask[];
+  blockedBy?: Array<{ blockedBy: RelatedTask }>;
 };
+
+export type RelatedTask = { id: string; title: string; status: TaskStatus };
 
 /** The fields the create and edit forms send to the API. */
 export type TaskInput = {
