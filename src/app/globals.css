@@ -41,6 +41,10 @@
   --project-3: #e11d48;
   --project-4: #64748b;
 
+  /* Chart series (burn-up): checked for color-blind separation on the surface. */
+  --chart-done: #0f8f84;
+  --chart-scope: #c2570c;
+
   --font-system-sans: Inter, "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-system-mono: SFMono-Regular, "Cascadia Code", Consolas, "Liberation Mono", Menlo, monospace;
 }
@@ -69,6 +73,9 @@
   --caution-soft: #332e14;
   --success: #74cf90;
   --success-soft: #163020;
+
+  --chart-done: #1fa596;
+  --chart-scope: #d95926;
 }
 
 @theme inline {
@@ -97,6 +104,8 @@
   --color-project-2: var(--project-2);
   --color-project-3: var(--project-3);
   --color-project-4: var(--project-4);
+  --color-chart-done: var(--chart-done);
+  --color-chart-scope: var(--chart-scope);
   --font-sans: var(--font-system-sans);
   --font-mono: var(--font-system-mono);
 }
