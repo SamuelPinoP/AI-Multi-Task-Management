@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { uiButtonClass, uiDangerButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatTaskDueDateInput } from "@/lib/task-date-buckets";
+import { TaskRelationsPanel, type TaskRelations } from "./task-relations-panel";
 import {
   priorityLabels,
   recurrenceLabels,
@@ -69,6 +70,7 @@ export function TaskSheet({
   projects,
   onSubmit,
   onDelete,
+  relations,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -77,6 +79,8 @@ export function TaskSheet({
   projects: Project[];
   onSubmit: (input: TaskInput) => Promise<string | null>;
   onDelete?: (task: Task) => void;
+  /** Subtasks and dependencies of the task being edited (SMART-02). */
+  relations?: TaskRelations;
 }) {
   const [input, setInput] = useState<TaskInput>(emptyInput);
   const [members, setMembers] = useState<Member[]>([]);
@@ -175,6 +179,9 @@ export function TaskSheet({
               <select
                 value={input.projectId}
                 onChange={(event) => setInput((current) => ({ ...current, projectId: event.target.value, assigneeId: "" }))}
+                // A subtask stays in its parent's project.
+                disabled={Boolean(task?.parentId)}
+                title={task?.parentId ? "A subtask stays in its parent's project" : undefined}
                 className={fieldClass}
               >
                 <option value="">No project</option>
@@ -213,6 +220,7 @@ export function TaskSheet({
             ) : null}
           </div>
         </form>
+        {task && relations ? <TaskRelationsPanel key={task.id} task={task} relations={relations} /> : null}
       </SheetContent>
     </Sheet>
   );

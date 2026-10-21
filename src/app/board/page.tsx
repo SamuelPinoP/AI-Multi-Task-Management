@@ -3,6 +3,7 @@ import { TreeBoard } from "@/components/tree-board";
 import { requirePageUser } from "@/lib/auth";
 import { projectAccessWhere } from "@/lib/project-access";
 import { prisma } from "@/lib/prisma";
+import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
 
 type BoardPageProps = { searchParams: Promise<{ view?: string }> };
 
@@ -20,15 +21,10 @@ export default async function BoardPage({ searchParams }: BoardPageProps) {
 
   const [tasks, projects, treePages] = await Promise.all([
     prisma.task.findMany({
-      where: {
-        deletedAt: null,
-        OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }],
-      },
+      // Subtasks show as a progress ring on their parent's card (SMART-02).
+      where: { AND: [visibleTaskWhere(user.id), { OR: [{ parentId: null }, { parent: { deletedAt: { not: null } } }] }] },
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-      include: {
-        project: { select: { id: true, name: true, color: true } },
-        assignee: { select: { id: true, name: true, email: true, role: true } },
-      },
+      include: taskInclude(user.id),
     }),
     prisma.project.findMany({
       where: projectAccessWhere(user.id),

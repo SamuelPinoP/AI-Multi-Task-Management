@@ -8,6 +8,8 @@
  * - Tasks grouped into Overdue, Today, Upcoming, No due date and Done.
  * - Complete a task in place; open it to edit in a side sheet.
  * - `?task=<id>` opens that task (links from search, Home and the Planner).
+ * - Subtasks live inside their parent's sheet; the row shows a progress ring,
+ *   and "Blocked" while the task waits on open tasks (SMART-02).
  */
 
 import { Plus, Search, SquareKanban } from "lucide-react";
@@ -17,6 +19,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { QuickAdd } from "@/components/home/quick-add";
 import { TaskRow } from "@/components/tasks/task-row";
+import type { TaskRelations } from "@/components/tasks/task-relations-panel";
 import { TaskSheet } from "@/components/tasks/task-sheet";
 import type { Priority, Project, Task, TaskInput, TaskStatus } from "@/components/tasks/types";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
@@ -24,6 +27,7 @@ import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import { daysFrom } from "@/lib/home-summary";
 import { compareTaskDueDates, formatTaskDueDateInput } from "@/lib/task-date-buckets";
+import { topLevelTasks } from "@/lib/task-relations";
 import { notifyWorkspaceChanged, TASK_CREATED_EVENT } from "@/lib/workspace-events";
 
 type StatusFilter = "ALL" | "OPEN" | "DONE";
@@ -163,7 +167,8 @@ export default function TasksPage() {
 
   const visibleTasks = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    const filtered = tasks.filter(
+    // Subtasks show inside their parent, except when searching.
+    const filtered = (query ? tasks : topLevelTasks(tasks)).filter(
       (task) =>
         (!query || task.title.toLowerCase().includes(query) || (task.description ?? "").toLowerCase().includes(query)) &&
         (statusFilter === "ALL" || (statusFilter === "DONE") === (task.status === "DONE")) &&
@@ -188,6 +193,45 @@ export default function TasksPage() {
   const openCount = tasks.filter((task) => task.status !== "DONE").length;
   const doneCount = tasks.length - openCount;
   const filtersActive = Boolean(searchQuery.trim()) || statusFilter !== "ALL" || priorityFilter !== "ALL" || Boolean(projectFilter);
+
+  // The sheet follows the latest copy of its task, so subtasks and blockers update in place.
+  const sheetTask = sheet.task ? (tasks.find((task) => task.id === sheet.task?.id) ?? sheet.task) : null;
+
+  async function request(url: string, init: RequestInit, fallback: string) {
+    try {
+      const response = await fetch(url, { headers: { "Content-Type": "application/json" }, ...init });
+      if (!response.ok) return errorMessage(response, fallback);
+      notifyWorkspaceChanged();
+      await fetchTasks(false);
+      return null;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function relationsFor(task: Task): TaskRelations {
+    const blockerIds = new Set((task.blockedBy ?? []).map((item) => item.blockedBy.id));
+    const subtasks = tasks.filter((item) => item.parentId === task.id);
+    const parent = task.parentId ? tasks.find((item) => item.id === task.parentId) : undefined;
+    return {
+      parent: parent ? { id: parent.id, title: parent.title, status: parent.status } : null,
+      subtasks,
+      blockers: (task.blockedBy ?? []).map((item) => item.blockedBy),
+      candidates: tasks.filter(
+        (item) => item.id !== task.id && item.status !== "DONE" && !blockerIds.has(item.id) && item.parentId !== task.id,
+      ),
+      onAddSubtask: (title) =>
+        request("/api/tasks", { method: "POST", body: JSON.stringify({ title, parentId: task.id }) }, "Could not add the subtask."),
+      onToggleSubtask: (subtask) => void toggleTask(subtask),
+      onOpenTask: (id) => {
+        const next = tasks.find((item) => item.id === id);
+        if (next) setSheet({ open: true, task: next });
+      },
+      onAddBlocker: (id) =>
+        request(`/api/tasks/${task.id}/dependencies`, { method: "POST", body: JSON.stringify({ blockedById: id }) }, "Could not add it."),
+      onRemoveBlocker: (id) => request(`/api/tasks/${task.id}/dependencies/${id}`, { method: "DELETE" }, "Could not remove it."),
+    };
+  }
 
   function closeSheet(open: boolean) {
     setSheet((current) => ({ ...current, open }));
@@ -219,8 +263,9 @@ export default function TasksPage() {
         body: JSON.stringify(taskBody(inputFromTask(task, { status }))),
       });
       if (!response.ok) throw new Error(await errorMessage(response, "Could not update the task."));
-      const updated = (await response.json()) as Task;
-      setTasks((current) => current.map((item) => (item.id === task.id ? updated : item)));
+      await response.json();
+      // Refetch: the parent's progress ring and other tasks' "Blocked" badges may change too.
+      await fetchTasks(false);
       notifyWorkspaceChanged();
       if (status === "DONE") toast.success("Task completed", { description: task.title });
     } catch (error) {
@@ -389,10 +434,11 @@ export default function TasksPage() {
       <TaskSheet
         open={sheet.open}
         onOpenChange={closeSheet}
-        task={sheet.task}
+        task={sheetTask}
         projects={projects}
         onSubmit={saveTask}
         onDelete={setConfirmDelete}
+        relations={sheetTask ? relationsFor(sheetTask) : undefined}
       />
 
       <ConfirmDialog

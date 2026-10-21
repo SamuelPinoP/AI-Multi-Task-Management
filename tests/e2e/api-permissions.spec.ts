@@ -304,6 +304,32 @@ test("editors change project tasks, viewers only read them", async () => {
   }
 });
 
+test("subtasks and dependencies follow the same rules as editing tasks", async () => {
+  const other = await json<{ id: string }>(await api.owner.post("/api/tasks", { data: { title: "Other project task", projectId } }));
+  await expectStatuses(
+    "POST subtask",
+    (client) => client.post("/api/tasks", { data: { title: "Subtask", parentId: projectTaskId } }),
+    { owner: 201, editor: 201, viewer: 403, outsider: 400 },
+  );
+  await expectStatuses(
+    "POST dependency",
+    (client) => client.post(`/api/tasks/${other.id}/dependencies`, { data: { blockedById: projectTaskId } }),
+    { owner: 201, editor: 201, viewer: 403, outsider: 404 },
+  );
+  await expectStatuses(
+    "DELETE dependency",
+    (client) => client.delete(`/api/tasks/${other.id}/dependencies/${projectTaskId}`),
+    { viewer: 403, outsider: 404, editor: 200 },
+  );
+  // An outsider's own task can't wait on a project task they can't see.
+  const outsiderTask = await json<{ id: string }>(await api.outsider.post("/api/tasks", { data: { title: "Outsider task" } }));
+  await expectStatuses(
+    "POST dependency on an unseen task",
+    (client) => client.post(`/api/tasks/${outsiderTask.id}/dependencies`, { data: { blockedById: projectTaskId } }),
+    { outsider: 400 },
+  );
+});
+
 test("personal notes stay private, even to teammates", async () => {
   await expectStatuses(
     "PATCH personal note",

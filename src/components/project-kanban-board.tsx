@@ -4,6 +4,8 @@ import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { formatTaskDueDate, getLocalDateOnly } from "@/lib/task-date-buckets";
 import { useMemo, useState } from "react";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
+import { BlockedBadge, ProgressRing } from "@/components/tasks/task-badges";
+import { openBlockers, subtaskProgress } from "@/lib/task-relations";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
@@ -25,6 +27,8 @@ type Task = {
   assigneeId?: string | null;
   assignee: Member | null;
   project?: ProjectOption | null;
+  subtasks?: Array<{ id: string; title: string; status: TaskStatus }>;
+  blockedBy?: Array<{ blockedBy: { id: string; title: string; status: TaskStatus } }>;
 };
 
 type ProjectKanbanBoardProps = {
@@ -194,7 +198,9 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
 
               {columnTasks.length === 0 ? <p className="rounded-xl border border-dashed border-zinc-300 px-3 py-8 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">No tasks in {column.title.toLowerCase()} yet.</p> : <div className="space-y-3">{columnTasks.map((task) => {
                 const dueIndicator = getDueIndicator(task);
-                return <article key={task.id} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"><div className="flex items-start justify-between gap-3"><h3 className="font-semibold">{task.title}</h3><span className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700">{formatEnum(task.status)}</span></div>{task.description && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">{task.description}</p>}<div className="mt-3 flex flex-wrap gap-2"><span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300">Priority: {formatEnum(task.priority)}</span>{task.dueDate && <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium dark:border-zinc-700">Due: {formatTaskDueDate(task.dueDate)}</span>}{task.assignee && <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium dark:border-zinc-700">Assigned: {task.assignee.name}</span>}{dueIndicator && <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${dueIndicator.className}`}>{dueIndicator.label}</span>}</div>{canEdit && <div className="mt-4 flex flex-wrap gap-2">{STATUS_COLUMNS.filter((option) => option.status !== task.status).map((option) => <button key={option.status} type="button" disabled={updatingTaskId === task.id} onClick={() => void moveTask(task, option.status)} className={`${uiButtonClass} rounded-lg px-2.5 py-1.5 text-xs`}>Move to {option.title}</button>)}</div>}</article>;
+                const progress = subtaskProgress(task.subtasks);
+                const blockers = task.status === "DONE" ? [] : openBlockers(task.blockedBy);
+                return <article key={task.id} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"><div className="flex items-start justify-between gap-3"><h3 className="font-semibold">{task.title}</h3><span className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700">{formatEnum(task.status)}</span></div>{task.description && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">{task.description}</p>}<div className="mt-3 flex flex-wrap gap-2"><span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300">Priority: {formatEnum(task.priority)}</span>{task.dueDate && <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium dark:border-zinc-700">Due: {formatTaskDueDate(task.dueDate)}</span>}{task.assignee && <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium dark:border-zinc-700">Assigned: {task.assignee.name}</span>}{dueIndicator && <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${dueIndicator.className}`}>{dueIndicator.label}</span>}{blockers.length > 0 && <BlockedBadge titles={blockers.map((blocker) => blocker.title)} className="rounded-full px-2.5 py-1 text-xs" />}{progress.total > 0 && <ProgressRing done={progress.done} total={progress.total} className="text-xs" />}</div>{canEdit && <div className="mt-4 flex flex-wrap gap-2">{STATUS_COLUMNS.filter((option) => option.status !== task.status).map((option) => <button key={option.status} type="button" disabled={updatingTaskId === task.id} onClick={() => void moveTask(task, option.status)} className={`${uiButtonClass} rounded-lg px-2.5 py-1.5 text-xs`}>Move to {option.title}</button>)}</div>}</article>;
               })}</div>}
             </section>
           );
