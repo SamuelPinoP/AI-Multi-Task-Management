@@ -7,6 +7,8 @@ import {
   isGuestLoginEnabled,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { clientIpFrom, RATE_LIMITS } from "@/lib/rate-limit-core";
 
 function redirectTo(request: Request, path: string, status = 303) {
   return NextResponse.redirect(new URL(path, request.url), status);
@@ -20,6 +22,14 @@ export async function POST(request: Request) {
     return redirectTo(
       request,
       `/login?error=guest-disabled&next=${encodeURIComponent(nextPath)}`,
+    );
+  }
+
+  const limit = await consumeRateLimit(RATE_LIMITS.guestIp, clientIpFrom(request.headers));
+  if (!limit.allowed) {
+    return redirectTo(
+      request,
+      `/login?error=rate-limited&retry=${limit.retryAfterSeconds}&next=${encodeURIComponent(nextPath)}`,
     );
   }
 

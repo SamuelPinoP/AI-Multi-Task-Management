@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentUser, hashPassword, isPublicSignupEnabled, normalizeAuthEmail } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { clientIpFrom, RATE_LIMITS, tooManyAttemptsMessage } from "@/lib/rate-limit-core";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 
 async function signupAction(formData: FormData) {
@@ -18,6 +21,9 @@ async function signupAction(formData: FormData) {
   if (password !== confirmPassword) redirect(`/signup?error=mismatch&email=${encodeURIComponent(email)}`);
   if (password.length < 8) redirect(`/signup?error=password&email=${encodeURIComponent(email)}`);
 
+  const limit = await consumeRateLimit(RATE_LIMITS.signupIp, clientIpFrom(await headers()));
+  if (!limit.allowed) redirect(`/signup?error=rate-limited&retry=${limit.retryAfterSeconds}`);
+
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (existing) redirect("/signup?error=exists");
 
@@ -32,7 +38,8 @@ async function signupAction(formData: FormData) {
   redirect("/login?error=created");
 }
 
-function getErrorMessage(error: string | undefined) {
+function getErrorMessage(error: string | undefined, retry?: string) {
+  if (error === "rate-limited") return tooManyAttemptsMessage("sign-ups from this network", Number(retry) || 60);
   if (error === "missing") return "Name, email, and password are required.";
   if (error === "password") return "Password must be at least 8 characters.";
   if (error === "mismatch") return "Password and confirm password must match.";
@@ -41,13 +48,13 @@ function getErrorMessage(error: string | undefined) {
   return null;
 }
 
-export default async function SignupPage({ searchParams }: { searchParams: Promise<{ error?: string; email?: string }> }) {
+export default async function SignupPage({ searchParams }: { searchParams: Promise<{ error?: string; email?: string; retry?: string }> }) {
   const currentUser = await getCurrentUser();
   if (currentUser) redirect("/");
 
-  const { error, email } = await searchParams;
+  const { error, email, retry } = await searchParams;
   const invitedEmail = email ? normalizeAuthEmail(email) : "";
-  const errorMessage = getErrorMessage(error);
+  const errorMessage = getErrorMessage(error, retry);
   const signupEnabled = isPublicSignupEnabled();
 
   return (

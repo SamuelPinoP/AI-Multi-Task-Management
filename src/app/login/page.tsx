@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { tooManyAttemptsMessage } from "@/lib/rate-limit-core";
 import { redirect } from "next/navigation";
 import {
   getCurrentUser,
@@ -8,7 +9,8 @@ import {
 } from "@/lib/auth";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 
-function getErrorMessage(error: string | undefined, signupEnabled: boolean) {
+function getErrorMessage(error: string | undefined, signupEnabled: boolean, retry: string | undefined) {
+  if (error === "rate-limited") return tooManyAttemptsMessage("sign-in attempts", Number(retry) || 60);
   if (error === "missing") return "Enter your email and password.";
   if (error === "created") return "Account created. Please sign in.";
   if (error === "logged-out") return "You have been logged out.";
@@ -25,16 +27,16 @@ function getErrorMessage(error: string | undefined, signupEnabled: boolean) {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; next?: string }>;
+  searchParams: Promise<{ error?: string; next?: string; retry?: string }>;
 }) {
   const currentUser = await getCurrentUser();
   if (currentUser) redirect("/");
 
-  const { error, next } = await searchParams;
+  const { error, next, retry } = await searchParams;
   const nextPath = getSafeRedirectPath(next);
   const guestLoginEnabled = isGuestLoginEnabled();
   const signupEnabled = isPublicSignupEnabled();
-  const errorMessage = getErrorMessage(error, signupEnabled);
+  const errorMessage = getErrorMessage(error, signupEnabled, retry);
   const isSuccessMessage = error === "created" || error === "logged-out" || error === "reset";
 
   return (
