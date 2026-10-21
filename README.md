@@ -77,10 +77,13 @@ different local port. If you already have a server running, set
 build, run `npm run build` and then `npm run test:e2e` with
 `E2E_SERVER_MODE=start`. Running `npx playwright test` directly starts the
 server from `playwright.config.ts` instead: a dev server by default, or with
-`E2E_SERVER_MODE=start` a fresh `next build` followed by `next start`. Prefer
-the production build locally when a machine is slow to hydrate pages in dev,
-because tests that type or click right after a page loads can otherwise act
-before React is ready.
+`E2E_SERVER_MODE=start` a fresh `next build --webpack` followed by
+`next start`. Prefer the production build locally when a machine is slow to
+hydrate pages in dev, because tests that type or click right after a page loads
+can otherwise act before React is ready. Both of the config's servers use
+webpack, so they also work in a git worktree whose `node_modules` is a link to
+another checkout, which Turbopack refuses to compile; CI builds with Turbopack,
+like Vercel.
 
 ### Continuous integration
 
