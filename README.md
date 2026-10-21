@@ -74,7 +74,12 @@ the real upload UI without using Vercel Blob or AWS S3. Set `E2E_PORT` to use a
 different local port. If you already have a server running, set
 `PLAYWRIGHT_BASE_URL` to test that server instead. To test the production
 build, run `npm run build` and then `npm run test:e2e` with
-`E2E_SERVER_MODE=start`.
+`E2E_SERVER_MODE=start`. Running `npx playwright test` directly starts the
+server from `playwright.config.ts` instead: a dev server by default, or with
+`E2E_SERVER_MODE=start` a fresh `next build` followed by `next start`. Prefer
+the production build locally when a machine is slow to hydrate pages in dev,
+because tests that type or click right after a page loads can otherwise act
+before React is ready.
 
 ### Continuous integration
 
