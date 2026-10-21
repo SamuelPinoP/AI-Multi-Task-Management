@@ -82,17 +82,20 @@ model Note {
 }
 
 model Task {
-  id          String     @id @default(cuid())
+  id          String      @id @default(cuid())
   title       String
   description String?
-  status      TaskStatus @default(TODO)
-  priority    Priority   @default(MEDIUM)
+  status      TaskStatus  @default(TODO)
+  priority    Priority    @default(MEDIUM)
   dueDate     DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
   completedAt DateTime?
   deletedAt   DateTime?
-  recurrence  Recurrence @default(NONE)
+  recurrence  Recurrence  @default(NONE)
+  /// The weekly goal this task moves forward (SMART-04).
+  goalId      String?
+  goal        WeeklyGoal? @relation(fields: [goalId], references: [id], onDelete: SetNull)
 
   userId     String
   projectId  String?
@@ -106,6 +109,7 @@ model WeeklyGoal {
   id          String     @id @default(cuid())
   title       String
   description String?
+  /// ISO week, e.g. "2026-W43" (src/lib/weekly-review.ts).
   targetWeek  String
   status      GoalStatus @default(ACTIVE)
   createdAt   DateTime   @default(now())
@@ -113,6 +117,9 @@ model WeeklyGoal {
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks  Task[]
+
+  @@index([userId, targetWeek])
 }
 
 model Event {
@@ -216,7 +223,6 @@ model ProjectChatAttachmentUpload {
   @@index([projectId, userId])
   @@index([expiresAt])
 }
-
 
 /// Request counters for rate limiting (src/lib/rate-limit.ts). The key is a
 /// rule name plus a SHA-256 fingerprint of the caller (IP, email or user id),
