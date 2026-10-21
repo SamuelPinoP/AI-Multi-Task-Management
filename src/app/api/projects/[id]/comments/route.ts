@@ -271,7 +271,7 @@ export async function POST(req: Request, context: RouteContext) {
     await createActivity({
       userId: user.id,
       projectId: project.id,
-      action: "CREATED_PROJECT",
+      action: "COMMENTED",
       entityType: "PROJECT",
       entityId: project.id,
       message: `Added a discussion comment in project \"${project.name}\".`,

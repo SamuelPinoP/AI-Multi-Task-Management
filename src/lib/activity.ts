@@ -6,6 +6,7 @@ export type ActivityAction =
   | "COMPLETED_TASK"
   | "CREATED_EVENT"
   | "CREATED_PROJECT"
+  | "COMMENTED"
   | "DELETED_ITEM"
   | "RESTORED_ITEM";
 
