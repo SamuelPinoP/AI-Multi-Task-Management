@@ -11,15 +11,18 @@
  * - `/notes?openNote=<id>&focus=title|content` opens a note directly.
  */
 
-import { Maximize2, Minimize2, Search, Trash2 } from "lucide-react";
+import { ListPlus, Maximize2, Minimize2, Search, Trash2 } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { QUICK_ADD_INPUT_ID, QuickAdd } from "@/components/home/quick-add";
+import { NoteLinksPanel } from "@/components/notes/note-links-panel";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import { relativeTime } from "@/lib/home-summary";
+import { taskFromSelection } from "@/lib/note-links";
 import { projectColor } from "@/lib/project-color";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
@@ -60,6 +63,8 @@ const controlClass =
   "min-w-0 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/25";
 
 export default function NotesPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [notes, setNotes] = useState<Note[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [fetching, setFetching] = useState(true);
@@ -79,6 +84,20 @@ export default function NotesPage() {
   const [expanded, setExpanded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Note | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // In-app links (a task's note, meeting notes) change ?openNote= without reloading
+  // the page, and window.location can still show the old URL on the first render.
+  const linkedNoteId = searchParams.get("openNote");
+  const [seenLinkedNoteId, setSeenLinkedNoteId] = useState(() => getInitialOpenNoteId());
+  if (linkedNoteId !== seenLinkedNoteId) {
+    setSeenLinkedNoteId(linkedNoteId);
+    if (linkedNoteId && linkedNoteId !== editingNoteId) {
+      setEditingNoteId(linkedNoteId);
+      setFocusTarget(searchParams.get("focus") === "title" ? "title" : "content");
+    }
+  }
+  // SMART-05: the text selected in the editor, and a counter that refreshes the links panel.
+  const [selection, setSelection] = useState("");
+  const [linksVersion, setLinksVersion] = useState(0);
 
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -292,6 +311,63 @@ export default function NotesPage() {
   }
 
   const activeNote = editingNoteId ? notes.find((note) => note.id === editingNoteId) ?? null : null;
+  const selectedTask = taskFromSelection(selection);
+
+  /** "Turn selection into task": the selected text becomes a task that points back to this note. */
+  async function turnSelectionIntoTask() {
+    if (!editingNoteId || !selectedTask.title) return;
+    try {
+      const response = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...selectedTask, noteId: editingNoteId }),
+      });
+      const body = (await response.json().catch(() => null)) as { id?: string; error?: string } | null;
+      if (!response.ok || !body?.id) throw new Error(body?.error ?? "Could not create the task.");
+      const taskId = body.id;
+      setLinksVersion((value) => value + 1);
+      notifyWorkspaceChanged();
+      toast.success("Task created", {
+        description: selectedTask.title,
+        action: { label: "View", onClick: () => router.push(`/tasks?task=${taskId}`) },
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create the task.");
+    }
+  }
+
+  /** Opens another note from a [[link]] or a backlink, saving this one first. */
+  async function openNoteById(id: string) {
+    flushAutosave();
+    let note = notes.find((item) => item.id === id);
+    if (!note) {
+      const response = await fetch("/api/notes");
+      if (!response.ok) return;
+      const fresh = (await response.json()) as Note[];
+      setNotes(fresh);
+      note = fresh.find((item) => item.id === id);
+    }
+    if (note) openNote(note, "content");
+  }
+
+  /** Creates the note a [[link]] names, in this note's project, and opens it. */
+  async function createLinkedNote(title: string) {
+    flushAutosave();
+    try {
+      const response = await fetch("/api/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, content: "", projectId: editProjectId || null }),
+      });
+      if (!response.ok) throw new Error();
+      const note = (await response.json()) as Note;
+      setNotes((current) => [note, ...current]);
+      notifyWorkspaceChanged();
+      openNote(note, "content");
+    } catch {
+      toast.error("Could not create the note.");
+    }
+  }
   const realNow = new Date();
 
   return (
@@ -459,6 +535,7 @@ export default function NotesPage() {
             ref={contentTextareaRef}
             value={editContent}
             onChange={(event) => setEditContent(event.target.value)}
+            onSelect={(event) => setSelection(event.currentTarget.value.slice(event.currentTarget.selectionStart, event.currentTarget.selectionEnd))}
             onBlur={flushAutosave}
             placeholder="Start writing..."
             className="min-h-64 w-full flex-1 resize-none bg-transparent text-base leading-7 text-ink outline-none placeholder:text-muted/70"
@@ -473,8 +550,28 @@ export default function NotesPage() {
                 ))}
               </select>
             </label>
+            <button
+              type="button"
+              // Keep the textarea's selection when the button is pressed.
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => void turnSelectionIntoTask()}
+              disabled={!selectedTask.title}
+              title={selectedTask.title ? undefined : "Select text in the note first"}
+              className={cn(uiButtonClass, "px-2.5 py-1 text-xs")}
+            >
+              <ListPlus aria-hidden="true" className="h-3.5 w-3.5" />
+              Turn selection into task
+            </button>
             {activeNote ? <span className="ml-auto">Last updated {new Date(activeNote.updatedAt).toLocaleString()}</span> : null}
           </div>
+          {activeNote ? (
+            <NoteLinksPanel
+              noteId={activeNote.id}
+              version={`${activeNote.updatedAt}:${linksVersion}`}
+              onOpenNote={(id) => void openNoteById(id)}
+              onCreateNote={(title) => void createLinkedNote(title)}
+            />
+          ) : null}
         </SheetContent>
       </Sheet>
 

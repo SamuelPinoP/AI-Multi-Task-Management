@@ -5,6 +5,7 @@ import { parseEventTimes, parseRepeatUntil } from "@/lib/event-time";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
+import { visibleNoteWhere } from "@/lib/note-access";
 
 function parseProjectId(input: unknown): string | null {
   if (input === null || input === undefined) return null;
@@ -17,7 +18,7 @@ export async function GET() { /* unchanged */
   try {
     const authUser = await requireApiUser();
     if (!authUser) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-    const events = await prisma.event.findMany({ where: { deletedAt: null, OR: [{ userId: authUser.id }, { project: projectAccessWhere(authUser.id) }] }, orderBy: [{ startTime: "asc" }, { createdAt: "desc" }], include: { project: { select: { id: true, name: true, color: true } } } });
+    const events = await prisma.event.findMany({ where: { deletedAt: null, OR: [{ userId: authUser.id }, { project: projectAccessWhere(authUser.id) }] }, orderBy: [{ startTime: "asc" }, { createdAt: "desc" }], include: { project: { select: { id: true, name: true, color: true } }, notes: { where: visibleNoteWhere(authUser.id), orderBy: { createdAt: "asc" }, select: { id: true, title: true } } } });
     return NextResponse.json(events.map((event) => ({ ...event, recurrence: normalizeRecurrence(event.recurrence) })));
   } catch (error) {
     console.error("GET /api/events error:", error);

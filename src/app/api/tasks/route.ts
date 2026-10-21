@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
+import { visibleNoteWhere } from "@/lib/note-access";
 
 
 function isValidStatus(value: unknown): value is TaskStatus {
@@ -50,8 +51,9 @@ export async function POST(req: Request) {
     const body = await req.json();
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const descriptionInput = typeof body.description === "string" ? body.description.trim() : "";
-    const projectId = parseId(body.projectId);
+    let projectId = parseId(body.projectId);
     const assigneeId = parseId(body.assigneeId);
+    const noteId = parseId(body.noteId);
 
     if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
     if (body.status && !isValidStatus(body.status)) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
@@ -67,6 +69,13 @@ export async function POST(req: Request) {
 
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+
+    // A task made from a note (SMART-05) goes in the note's project.
+    if (noteId) {
+      const note = await prisma.note.findFirst({ where: { id: noteId, ...visibleNoteWhere(user.id) }, select: { projectId: true } });
+      if (!note) return NextResponse.json({ error: "Invalid note" }, { status: 400 });
+      projectId = note.projectId;
+    }
 
     if (projectId) {
       const access = await getProjectAccess(projectId, user.id);
@@ -93,6 +102,7 @@ export async function POST(req: Request) {
         userId: user.id,
         projectId,
         assigneeId,
+        noteId,
       },
       include: {
         project: { select: { id: true, name: true, color: true } },
