@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
+import { consumeRateLimit, rateLimitedResponse } from "@/lib/rate-limit";
+import { RATE_LIMITS } from "@/lib/rate-limit-core";
 import { getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import {
   createProjectChatAttachmentUploadPlan,
@@ -83,6 +85,8 @@ export async function POST(req: Request, context: RouteContext) {
     const access = await getProjectAccess(projectId, user.id);
     if (!access) return NextResponse.json({ error: "Project not found" }, { status: 404 });
     if (!canEditProjectContent(access)) return NextResponse.json(unauthorizedProjectResponse("upload attachments"), { status: 403 });
+    const uploadLimit = await consumeRateLimit(RATE_LIMITS.uploadPlansUser, user.id);
+    if (!uploadLimit.allowed) return rateLimitedResponse("upload requests", uploadLimit);
 
     const quotaConfig = projectChatQuotaConfig();
     assertProjectChatGuestUploadsAllowed(user, quotaConfig);

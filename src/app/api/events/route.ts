@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
-import { parseEventTimes } from "@/lib/event-time";
+import { parseEventTimes, parseRepeatUntil } from "@/lib/event-time";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
@@ -37,6 +37,9 @@ export async function POST(req: Request) {
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     if (body.recurrence && !isValidRecurrence(body.recurrence)) return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
+    const recurrence = normalizeRecurrence(body.recurrence);
+    const repeatUntil = parseRepeatUntil(body, recurrence !== "NONE");
+    if (repeatUntil.error !== undefined) return NextResponse.json({ error: repeatUntil.error }, { status: 400 });
 
     const description = typeof body.description === "string" ? body.description.trim() : "";
     const location = typeof body.location === "string" ? body.location.trim() : "";
@@ -54,7 +57,8 @@ export async function POST(req: Request) {
         description: description || null,
         location: location || null,
         ...times.value,
-        recurrence: normalizeRecurrence(body.recurrence),
+        recurrence,
+        repeatUntil: repeatUntil.value,
         user: { connect: { id: user.id } },
         project: projectId ? { connect: { id: projectId } } : undefined,
       },

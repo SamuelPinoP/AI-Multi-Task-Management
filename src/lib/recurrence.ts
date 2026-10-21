@@ -25,26 +25,86 @@ export function formatRecurrenceLabel(value: unknown) {
   return recurrence.toLowerCase();
 }
 
+/** "Repeats weekly", or "Repeats weekly until Dec 31, 2026". */
+export function describeRepeat(recurrence: unknown, repeatUntil?: string | Date | null) {
+  const label = `Repeats ${formatRecurrenceLabel(recurrence)}`;
+  if (!repeatUntil) return label;
+  const until = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(repeatUntil));
+  return `${label} until ${until}`;
+}
+
 export type RecurringEventBase = {
   id: string;
   startTime: string;
+  /** The end of the first occurrence; every repeat lasts as long. */
   endTime: string | null;
   hasStartTime?: boolean;
   hasEndTime?: boolean;
   recurrence?: RecurrenceValue | null;
+  /** The last day a repeat can start on (a stored wall-clock date). Empty: it keeps repeating. */
+  repeatUntil?: string | Date | null;
 };
 
-function isSameOrBefore(a: Date, b: Date) {
-  return a.getTime() <= b.getTime();
+/** The fields that set how long each occurrence lasts (stored values, as strings or Dates). */
+type OccurrenceTimes = {
+  startTime: string | Date;
+  endTime: string | Date | null;
+  recurrence?: RecurrenceValue | null;
+  repeatUntil?: string | Date | null;
+};
+
+const DAY_MS = 86_400_000;
+const STEP_DAYS = { DAILY: 1, WEEKLY: 7, BIWEEKLY: 14 } as const;
+const MAX_OCCURRENCES = 1000;
+
+/** `YYYY-MM-DD` of a stored wall-clock value. */
+function storedDayKey(value: string | Date) {
+  return new Date(value).toISOString().slice(0, 10);
 }
 
-function addByRecurrence(date: Date, recurrence: RecurrenceValue) {
-  const next = new Date(date);
-  if (recurrence === "DAILY") next.setUTCDate(next.getUTCDate() + 1);
-  if (recurrence === "WEEKLY") next.setUTCDate(next.getUTCDate() + 7);
-  if (recurrence === "BIWEEKLY") next.setUTCDate(next.getUTCDate() + 14);
-  if (recurrence === "MONTHLY") next.setUTCMonth(next.getUTCMonth() + 1);
-  return next;
+/**
+ * Before "Repeat until" existed, a repeating event's end date was also the end
+ * of its series. The migration that added `repeatUntil` copied those end dates
+ * into it, so such an event ends on its `repeatUntil` day, later than it starts.
+ * Each of its repeats ends at the end time on its own day.
+ */
+function endsWithItsSeries(event: OccurrenceTimes) {
+  if (normalizeRecurrence(event.recurrence) === "NONE" || !event.endTime || !event.repeatUntil) return false;
+  const endDay = storedDayKey(event.endTime);
+  return endDay === storedDayKey(event.repeatUntil) && endDay > storedDayKey(event.startTime);
+}
+
+/** How long each occurrence of an event lasts, in milliseconds. */
+export function occurrenceDurationMs(event: OccurrenceTimes) {
+  if (!event.endTime) return 0;
+  const duration = new Date(event.endTime).getTime() - new Date(event.startTime).getTime();
+  // Same clock time as the stored end, on the day each repeat starts (or the next day, if it ends before it starts).
+  return endsWithItsSeries(event) ? duration % DAY_MS : duration;
+}
+
+/** The end of an event's first occurrence (what an edit form shows as its end). */
+export function firstOccurrenceEnd(event: OccurrenceTimes) {
+  if (!event.endTime) return null;
+  return new Date(new Date(event.startTime).getTime() + occurrenceDurationMs(event)).toISOString();
+}
+
+/** The `n`th repeat after `base`. Monthly repeats stay on the same day, or the month's last day when it is shorter. */
+function nthOccurrence(base: Date, recurrence: Exclude<RecurrenceValue, "NONE">, n: number) {
+  if (recurrence !== "MONTHLY") return new Date(base.getTime() + n * STEP_DAYS[recurrence] * DAY_MS);
+  const year = base.getUTCFullYear();
+  const month = base.getUTCMonth() + n;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(
+    Date.UTC(year, month, Math.min(base.getUTCDate(), lastDay), base.getUTCHours(), base.getUTCMinutes(), base.getUTCSeconds(), base.getUTCMilliseconds()),
+  );
+}
+
+/** The first `n` whose occurrence could fall on or after `rangeStart`. */
+function firstIndexInRange(base: Date, recurrence: Exclude<RecurrenceValue, "NONE">, rangeStart: Date) {
+  if (rangeStart <= base) return 0;
+  if (recurrence !== "MONTHLY") return Math.floor((rangeStart.getTime() - base.getTime()) / (STEP_DAYS[recurrence] * DAY_MS));
+  const months = (rangeStart.getUTCFullYear() - base.getUTCFullYear()) * 12 + rangeStart.getUTCMonth() - base.getUTCMonth();
+  return Math.max(0, months - 1);
 }
 
 /**
@@ -52,6 +112,9 @@ function addByRecurrence(date: Date, recurrence: RecurrenceValue) {
  * `localRangeEnd`. The bounds are local dates (like a calendar's first and last
  * cell); event times are stored as wall-clock values (see `@/lib/event-time`),
  * so the bounds are converted to that form before comparing.
+ *
+ * Each occurrence lasts as long as the first one (`startTime` to `endTime`).
+ * A series stops after its `repeatUntil` day, or keeps going when it has none.
  */
 export function expandRecurringEventsForRange<T extends RecurringEventBase>(
   events: T[],
@@ -70,29 +133,21 @@ export function expandRecurringEventsForRange<T extends RecurringEventBase>(
     }
 
     const baseStart = new Date(event.startTime);
-    const hasEndBoundary = Boolean(event.endTime);
-    const baseEnd = hasEndBoundary ? new Date(event.endTime as string) : null;
-    const durationMs = baseEnd ? baseEnd.getTime() - baseStart.getTime() : 0;
-    let occurrenceStart = new Date(baseStart);
+    const seriesEnd = event.repeatUntil ? new Date(`${storedDayKey(event.repeatUntil)}T23:59:59.999Z`) : null;
+    const lastStart = seriesEnd && seriesEnd < rangeEnd ? seriesEnd : rangeEnd;
+    const durationMs = occurrenceDurationMs(event);
     const expanded: T[] = [];
 
-    let safetyCounter = 0;
-
-    while (isSameOrBefore(occurrenceStart, rangeEnd) && (!baseEnd || isSameOrBefore(occurrenceStart, baseEnd))) {
-      safetyCounter += 1;
-      if (safetyCounter > 1000) break;
-
-      if (occurrenceStart >= rangeStart) {
-        const occurrenceEnd = new Date(occurrenceStart.getTime() + durationMs);
-        expanded.push({
-          ...event,
-          id: `${event.id}-${occurrenceStart.toISOString()}`,
-          startTime: occurrenceStart.toISOString(),
-          endTime: event.hasEndTime ? occurrenceEnd.toISOString() : null,
-        });
-      }
-
-      occurrenceStart = addByRecurrence(occurrenceStart, recurrence);
+    for (let n = firstIndexInRange(baseStart, recurrence, rangeStart); expanded.length < MAX_OCCURRENCES; n += 1) {
+      const occurrenceStart = nthOccurrence(baseStart, recurrence, n);
+      if (occurrenceStart > lastStart) break;
+      if (occurrenceStart < rangeStart) continue;
+      expanded.push({
+        ...event,
+        id: `${event.id}-${occurrenceStart.toISOString()}`,
+        startTime: occurrenceStart.toISOString(),
+        endTime: event.hasEndTime && event.endTime ? new Date(occurrenceStart.getTime() + durationMs).toISOString() : null,
+      });
     }
 
     return expanded;

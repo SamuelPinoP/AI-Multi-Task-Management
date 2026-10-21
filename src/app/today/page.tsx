@@ -30,6 +30,7 @@ export default async function TodayPage() {
         startTime: event.startTime.toISOString(),
         endTime: event.endTime?.toISOString() ?? null,
         recurrence: normalizeRecurrence(event.recurrence),
+        repeatUntil: event.repeatUntil?.toISOString() ?? null,
       }))}
     />
   );

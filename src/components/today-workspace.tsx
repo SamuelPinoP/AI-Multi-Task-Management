@@ -35,6 +35,7 @@ type EventItem = {
   startTime: string;
   endTime: string | null;
   recurrence?: Recurrence | null;
+  repeatUntil?: string | null;
   projectId?: string | null;
   project?: Project | null;
 };

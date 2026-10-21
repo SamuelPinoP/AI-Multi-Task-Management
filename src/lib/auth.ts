@@ -93,13 +93,16 @@ export function getSessionCookieOptions(expiresAt: Date): SessionCookieOptions {
   };
 }
 
+// The database stores only a SHA-256 fingerprint of each session token; the
+// token itself lives in the browser cookie. A copy of the database therefore
+// can't be used to log in as anyone.
 export async function createSessionRecord(userId: string) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = getSessionExpiresAt();
 
   await prisma.session.create({
     data: {
-      token,
+      token: hashSecureToken(token),
       userId,
       expiresAt,
     },
@@ -144,7 +147,7 @@ export async function clearSession() {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (token) {
-    await prisma.session.deleteMany({ where: { token } });
+    await prisma.session.deleteMany({ where: { token: hashSecureToken(token) } });
   }
   cookieStore.delete(SESSION_COOKIE_NAME);
 }
@@ -154,15 +157,16 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
 
+  const tokenHash = hashSecureToken(token);
   const session = await prisma.session.findUnique({
-    where: { token },
+    where: { token: tokenHash },
     include: { user: { select: { id: true, name: true, email: true, isGuest: true } } },
   });
 
   if (!session) return null;
 
   if (session.expiresAt <= new Date()) {
-    await prisma.session.deleteMany({ where: { token } });
+    await prisma.session.deleteMany({ where: { token: tokenHash } });
     return null;
   }
 

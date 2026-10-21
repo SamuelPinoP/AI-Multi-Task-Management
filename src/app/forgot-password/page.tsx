@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createSecureToken, getCurrentUser, hashSecureToken, normalizeAuthEmail } from "@/lib/auth";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { clientIpFrom, RATE_LIMITS, tooManyAttemptsMessage } from "@/lib/rate-limit-core";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 
 const GENERIC_MESSAGE = "If an account exists, a reset link was sent.";
@@ -12,6 +15,10 @@ async function forgotPasswordAction(formData: FormData) {
   "use server";
 
   const email = normalizeAuthEmail(String(formData.get("email") || ""));
+  const ipLimit = await consumeRateLimit(RATE_LIMITS.resetRequestIp, clientIpFrom(await headers()));
+  const limit = ipLimit.allowed && email ? await consumeRateLimit(RATE_LIMITS.resetRequestAccount, email) : ipLimit;
+  if (!limit.allowed) redirect(`/forgot-password?error=rate-limited&retry=${limit.retryAfterSeconds}`);
+
   if (email) {
     const user = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true, isGuest: true } });
     if (user && !user.isGuest) {
@@ -31,10 +38,10 @@ async function forgotPasswordAction(formData: FormData) {
   redirect("/forgot-password?sent=1");
 }
 
-export default async function ForgotPasswordPage({ searchParams }: { searchParams: Promise<{ sent?: string }> }) {
+export default async function ForgotPasswordPage({ searchParams }: { searchParams: Promise<{ sent?: string; error?: string; retry?: string }> }) {
   const currentUser = await getCurrentUser();
   if (currentUser) redirect("/");
-  const { sent } = await searchParams;
+  const { sent, error, retry } = await searchParams;
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 items-center px-4 py-12">
@@ -42,6 +49,7 @@ export default async function ForgotPasswordPage({ searchParams }: { searchParam
         <h1 className="text-2xl font-semibold">Reset your password</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Enter your account email and we will send a reset link if the account exists.</p>
         {sent ? <p className="mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900">{GENERIC_MESSAGE}</p> : null}
+        {error === "rate-limited" ? <p role="alert" className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900">{tooManyAttemptsMessage("reset requests", Number(retry) || 60)}</p> : null}
         <form action={forgotPasswordAction} className="mt-6 space-y-4">
           <div>
             <label htmlFor="email" className="text-sm font-medium">Email</label>

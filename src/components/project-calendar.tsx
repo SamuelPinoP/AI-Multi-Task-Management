@@ -15,6 +15,7 @@ type ProjectCalendarEvent = {
   hasStartTime: boolean;
   hasEndTime: boolean;
   recurrence?: Recurrence | null;
+  repeatUntil?: string | null;
 };
 
 type ProjectCalendarProps = {

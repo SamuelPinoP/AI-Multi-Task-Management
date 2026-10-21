@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentUser, hashPassword, hashSecureToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { clientIpFrom, RATE_LIMITS, tooManyAttemptsMessage } from "@/lib/rate-limit-core";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 
 async function resetPasswordAction(formData: FormData) {
@@ -15,6 +18,9 @@ async function resetPasswordAction(formData: FormData) {
   if (!token || !password || !confirmPassword) redirect(`/reset-password?token=${tokenParam}&error=missing`);
   if (password !== confirmPassword) redirect(`/reset-password?token=${tokenParam}&error=mismatch`);
   if (password.length < 8) redirect(`/reset-password?token=${tokenParam}&error=password`);
+
+  const limit = await consumeRateLimit(RATE_LIMITS.resetSubmitIp, clientIpFrom(await headers()));
+  if (!limit.allowed) redirect(`/reset-password?token=${tokenParam}&error=rate-limited&retry=${limit.retryAfterSeconds}`);
 
   const tokenHash = hashSecureToken(token);
   const resetToken = await prisma.passwordResetToken.findUnique({
@@ -36,7 +42,8 @@ async function resetPasswordAction(formData: FormData) {
   redirect("/login?error=reset");
 }
 
-function getErrorMessage(error: string | undefined) {
+function getErrorMessage(error: string | undefined, retry?: string) {
+  if (error === "rate-limited") return tooManyAttemptsMessage("password reset attempts", Number(retry) || 60);
   if (error === "missing") return "New password and confirmation are required.";
   if (error === "mismatch") return "New password and confirm password must match.";
   if (error === "password") return "Password must be at least 8 characters.";
@@ -44,11 +51,11 @@ function getErrorMessage(error: string | undefined) {
   return null;
 }
 
-export default async function ResetPasswordPage({ searchParams }: { searchParams: Promise<{ token?: string; error?: string }> }) {
+export default async function ResetPasswordPage({ searchParams }: { searchParams: Promise<{ token?: string; error?: string; retry?: string }> }) {
   const currentUser = await getCurrentUser();
   if (currentUser) redirect("/");
-  const { token = "", error } = await searchParams;
-  const errorMessage = getErrorMessage(error || (!token ? "invalid" : undefined));
+  const { token = "", error, retry } = await searchParams;
+  const errorMessage = getErrorMessage(error || (!token ? "invalid" : undefined), retry);
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 items-center px-4 py-12">

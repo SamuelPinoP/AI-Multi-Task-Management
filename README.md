@@ -120,6 +120,46 @@ end-of-life date, and a short checklist (usage and billing dashboards). It
 closes the previous month's issue. Run it any time from the Actions tab
 ("Run workflow").
 
+Every 30 minutes, `.github/workflows/uptime.yml` checks production the way a
+visitor would (`scripts/uptime-check.mjs`: the login page, the signed-out
+redirect, and the API). If it still fails after about two minutes of retries,
+it opens a "Production is down" issue assigned to the repository owner, and
+closes it with a note once the site answers again. The checks don't touch the
+database, so they don't use Neon's free compute hours.
+
+## Rate limits
+
+`src/lib/rate-limit.ts` keeps request counters in the `RateLimit` table (a
+sliding window per rule, keyed by a SHA-256 fingerprint of the IP address,
+email or user, so none are stored in readable form). Limits, in
+`src/lib/rate-limit-core.ts`: 30 login attempts per network and 5 failed
+logins per account per 15 minutes (a successful login clears the account
+count), 5 sign-ups and 5 password reset requests per network per hour, 3 reset
+requests per account per hour, 10 reset submissions per network per 15
+minutes, 10 guest workspaces per network per hour, 30 invitations per user per
+hour and 60 upload requests per user per 10 minutes. Forms show "Too many …
+Try again in N minutes"; API routes answer 429 with a `Retry-After` header.
+The client IP is the first `x-forwarded-for` entry, which Vercel overwrites;
+requests without one (local development, CI) skip the per-network limits.
+
+## Database backups
+
+Every day at about 07:00 UTC, Vercel Cron calls `/api/cron/backup`
+(`vercel.json`). It exports every table to one gzipped JSON file in the private
+R2 bucket under `backups/database/` and keeps the newest 30. Login sessions,
+password reset tokens and pending upload slots are left out; they're
+short-lived and useless after a restore. A second call within 20 hours does
+nothing, so the route is safe to leave public; set `CRON_SECRET` in Vercel to
+require it anyway. Locally the backups go to `./backups/` (ignored by git).
+
+To restore: create an empty database (for example a new Neon branch), run
+`npx prisma migrate deploy` against it, then
+`RESTORE_DATABASE_URL="<target>" npm run restore:database -- <backup.json.gz>`.
+Add `DOTENV_CONFIG_PATH=.env.r2` and `--from-r2 latest` to fetch the newest
+backup straight from R2. The script refuses targets that already have data
+and checks that the target has the backup's migrations. It restores in one
+transaction, so a failure leaves the target empty.
+
 ## Tech Stack
 
 - Frontend: Next.js App Router, React, TypeScript, Tailwind CSS
