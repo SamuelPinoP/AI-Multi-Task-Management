@@ -92,14 +92,17 @@ export function parseEventTimes(
   const startDate = parseDateInput(input.startDate);
   if (!startDate) return { error: "Invalid start date" };
 
-  const endDate = isBlank(input.endDate) ? null : parseDateInput(input.endDate);
-  if (!isBlank(input.endDate) && !endDate) return { error: "Invalid end date" };
+  const typedEndDate = isBlank(input.endDate) ? null : parseDateInput(input.endDate);
+  if (!isBlank(input.endDate) && !typedEndDate) return { error: "Invalid end date" };
 
   const startTime = isBlank(input.startTime) ? null : parseTimeInput(input.startTime);
   if (!isBlank(input.startTime) && !startTime) return { error: "Invalid start time" };
 
   const endTime = isBlank(input.endTime) ? null : parseTimeInput(input.endTime);
   if (!isBlank(input.endTime) && !endTime) return { error: "Invalid end time" };
+
+  // An end time without an end date ends on the start date ("9:00 to 9:15").
+  const endDate = typedEndDate ?? (endTime ? startDate : null);
 
   if (endDate && compareDates(endDate, startDate) < 0) {
     return { error: "End date cannot be before start date" };
@@ -121,6 +124,23 @@ export function parseEventTimes(
       hasEndTime: Boolean(endTime),
     },
   };
+}
+
+/**
+ * Validates a repeating event's "Repeat until" date: the last day a repeat can
+ * start on, stored as that date's midnight. Blank, or an event that doesn't
+ * repeat, gives null (it keeps repeating, or has no repeats).
+ */
+export function parseRepeatUntil(
+  input: { startDate: unknown; repeatUntil: unknown },
+  repeats: boolean,
+): { value: Date | null; error?: undefined } | { error: string; value?: undefined } {
+  if (!repeats || isBlank(input.repeatUntil)) return { value: null };
+  const until = parseDateInput(input.repeatUntil);
+  if (!until) return { error: "Invalid repeat-until date" };
+  const startDate = parseDateInput(input.startDate);
+  if (startDate && compareDates(until, startDate) < 0) return { error: "Repeat until cannot be before the start date" };
+  return { value: toStoredDate(until, null) };
 }
 
 /**

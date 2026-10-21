@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { uiButtonClass, uiDangerButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { eventTimeInputValue } from "@/lib/event-time";
-import { normalizeRecurrence } from "@/lib/recurrence";
+import { firstOccurrenceEnd, normalizeRecurrence } from "@/lib/recurrence";
 import { formatTaskDayKey } from "@/lib/task-date-buckets";
 
 export type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
@@ -26,6 +26,8 @@ export type EventItem = {
   createdAt: string;
   updatedAt: string;
   recurrence?: Recurrence | null;
+  /** The last day a repeat can start on; null keeps repeating. */
+  repeatUntil?: string | null;
   projectId?: string | null;
   project?: EventProject | null;
 };
@@ -39,6 +41,7 @@ export type EventInput = {
   endDate: string;
   endTime: string;
   recurrence: Recurrence;
+  repeatUntil: string;
   projectId: string;
 };
 
@@ -54,26 +57,36 @@ const fieldClass =
   "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25";
 
 /** Returns an error message, or "" when the dates and times make sense. */
-export function validateEventInput(input: Pick<EventInput, "title" | "startDate" | "startTime" | "endDate" | "endTime">) {
+export function validateEventInput(
+  input: Pick<EventInput, "title" | "startDate" | "startTime" | "endDate" | "endTime"> & Partial<Pick<EventInput, "recurrence" | "repeatUntil">>,
+) {
   if (!input.title.trim()) return "Give the event a title.";
   if (!input.startDate) return "Pick a start date.";
   if (input.endDate && input.endDate < input.startDate) return "The end date can't be before the start date.";
-  if (input.endDate && input.endDate === input.startDate && input.startTime && input.endTime && input.endTime <= input.startTime) {
+  // An end time without an end date ends on the start date.
+  const endDate = input.endDate || (input.endTime ? input.startDate : "");
+  if (endDate === input.startDate && input.startTime && input.endTime && input.endTime <= input.startTime) {
     return "The end time must be after the start time on the same day.";
+  }
+  if (input.recurrence && input.recurrence !== "NONE" && input.repeatUntil && input.repeatUntil < input.startDate) {
+    return "Repeat until can't be before the start date.";
   }
   return "";
 }
 
 function inputFromEvent(event: EventItem): EventInput {
+  // For a repeating event, the end of its first occurrence (see firstOccurrenceEnd).
+  const end = firstOccurrenceEnd(event);
   return {
     title: event.title,
     description: event.description ?? "",
     location: event.location ?? "",
     startDate: formatTaskDayKey(event.startTime),
     startTime: event.hasStartTime ? eventTimeInputValue(event.startTime) : "",
-    endDate: event.endTime ? formatTaskDayKey(event.endTime) : "",
-    endTime: event.endTime && event.hasEndTime ? eventTimeInputValue(event.endTime) : "",
+    endDate: end ? formatTaskDayKey(end) : "",
+    endTime: end && event.hasEndTime ? eventTimeInputValue(end) : "",
     recurrence: normalizeRecurrence(event.recurrence),
+    repeatUntil: event.repeatUntil ? formatTaskDayKey(event.repeatUntil) : "",
     projectId: event.projectId ?? "",
   };
 }
@@ -108,6 +121,7 @@ export function EventSheet({
     endDate: "",
     endTime: "",
     recurrence: "NONE",
+    repeatUntil: "",
     projectId: "",
   };
   const [input, setInput] = useState<EventInput>(blank);
@@ -182,7 +196,7 @@ export function EventSheet({
             <textarea value={input.description} onChange={(e) => set("description", e.target.value)} rows={3} placeholder="Optional" className={fieldClass} />
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1.5 text-sm font-medium">
+            <label className="grid content-start gap-1.5 text-sm font-medium">
               Repeats
               <select value={input.recurrence} onChange={(e) => set("recurrence", e.target.value as Recurrence)} className={fieldClass}>
                 {(Object.keys(recurrenceLabels) as Recurrence[]).map((value) => (
@@ -190,7 +204,22 @@ export function EventSheet({
                 ))}
               </select>
             </label>
-            <label className="grid gap-1.5 text-sm font-medium">
+            {input.recurrence !== "NONE" ? (
+              <div className="grid content-start gap-1.5">
+                <label htmlFor="event-repeat-until" className="text-sm font-medium">Repeat until</label>
+                <input
+                  id="event-repeat-until"
+                  type="date"
+                  value={input.repeatUntil}
+                  min={input.startDate || undefined}
+                  onChange={(e) => set("repeatUntil", e.target.value)}
+                  aria-describedby="event-repeat-until-hint"
+                  className={fieldClass}
+                />
+                <p id="event-repeat-until-hint" className="text-xs text-muted">Leave empty to keep repeating.</p>
+              </div>
+            ) : null}
+            <label className="grid content-start gap-1.5 text-sm font-medium">
               Project
               <select value={input.projectId} onChange={(e) => set("projectId", e.target.value)} className={fieldClass}>
                 <option value="">No project</option>

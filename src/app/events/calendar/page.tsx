@@ -23,6 +23,7 @@ import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
+  describeRepeat,
   expandRecurringEventsForRange,
   formatRecurrenceLabel,
   normalizeRecurrence,
@@ -51,6 +52,8 @@ type EventItem = {
   hasStartTime: boolean;
   hasEndTime: boolean;
   recurrence?: Recurrence | null;
+  /** The last day a repeat can start on; null keeps repeating. */
+  repeatUntil?: string | null;
   projectId?: string | null;
   project?: Project | null;
 };
@@ -793,7 +796,9 @@ export default function EventsCalendarPage() {
                       </p>
                     )}
                     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                      Repeats: {formatRecurrenceLabel(event.recurrence)}
+                      {normalizeRecurrence(event.recurrence) === "NONE"
+                        ? `Repeats: ${formatRecurrenceLabel(event.recurrence)}`
+                        : describeRepeat(event.recurrence, event.repeatUntil)}
                     </p>
                     {event.description && (
                       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">

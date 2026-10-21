@@ -128,6 +128,8 @@ model Event {
   updatedAt    DateTime   @updatedAt
   deletedAt    DateTime?
   recurrence   Recurrence @default(NONE)
+  /// The last day a repeat can start on (empty: keeps repeating). endTime is the first occurrence's end.
+  repeatUntil  DateTime?  @db.Date
 
   userId    String
   projectId String?

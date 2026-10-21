@@ -6,6 +6,7 @@ import {
   formatEventDateTime,
   formatEventTime,
   parseEventTimes,
+  parseRepeatUntil,
   toEventStorageTime,
 } from "./event-time";
 import { expandRecurringEventsForRange } from "./recurrence";
@@ -125,4 +126,34 @@ test("rejects invalid dates and times with the existing messages", () => {
     error({ startDate: "2026-10-20", startTime: "10:00", endDate: "2026-10-20", endTime: "09:00" }),
     "End time must be after start time when dates are the same",
   );
+  assert.equal(
+    error({ startDate: "2026-10-20", startTime: "10:00", endDate: "", endTime: "09:00" }),
+    "End time must be after start time when dates are the same",
+  );
+});
+
+inEachTimeZone("an end time without an end date ends on the start date", () => {
+  const times = parsed({ startDate: "2026-10-20", startTime: "09:00", endDate: "", endTime: "09:15" });
+
+  assert.equal(times.endTime?.toISOString(), "2026-10-20T09:15:00.000Z");
+  assert.equal(times.hasEndTime, true);
+});
+
+inEachTimeZone("stores the repeat-until date as that day", () => {
+  assert.equal(
+    parseRepeatUntil({ startDate: "2026-10-20", repeatUntil: "2026-12-31" }, true).value?.toISOString(),
+    "2026-12-31T00:00:00.000Z",
+  );
+});
+
+test("repeat-until is empty unless the event repeats, and never before the start", () => {
+  assert.deepEqual(parseRepeatUntil({ startDate: "2026-10-20", repeatUntil: "" }, true), { value: null });
+  assert.deepEqual(parseRepeatUntil({ startDate: "2026-10-20", repeatUntil: null }, true), { value: null });
+  assert.deepEqual(parseRepeatUntil({ startDate: "2026-10-20", repeatUntil: "2026-12-31" }, false), { value: null });
+  assert.equal(parseRepeatUntil({ startDate: "2026-10-20", repeatUntil: "12/31/2026" }, true).error, "Invalid repeat-until date");
+  assert.equal(
+    parseRepeatUntil({ startDate: "2026-10-20", repeatUntil: "2026-10-19" }, true).error,
+    "Repeat until cannot be before the start date",
+  );
+  assert.equal(parseRepeatUntil({ startDate: "2026-10-20", repeatUntil: "2026-10-20" }, true).error, undefined);
 });
