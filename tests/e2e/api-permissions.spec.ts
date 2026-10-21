@@ -243,6 +243,12 @@ test("only the owner manages members", async () => {
 });
 
 test("editors post in the chat, viewers read it, outsiders get nothing", async () => {
+  await expectStatuses("GET comments", (client) => client.get(`/api/projects/${projectId}/comments`), {
+    owner: 200,
+    editor: 200,
+    viewer: 200,
+    outsider: 404,
+  });
   await expectStatuses(
     "POST comment",
     (client) => client.post(`/api/projects/${projectId}/comments`, { data: { message: "Hello team" } }),
