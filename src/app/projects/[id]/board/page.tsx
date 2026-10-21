@@ -3,6 +3,7 @@ import { ProjectKanbanBoard } from "@/components/project-kanban-board";
 import { requirePageUser } from "@/lib/auth";
 import { getProjectAccessForUser, projectAccessWhereForProject } from "@/lib/project-access";
 import { prisma } from "@/lib/prisma";
+import { taskInclude } from "@/lib/task-include";
 import { notFound } from "next/navigation";
 
 type ProjectBoardPageProps = {
@@ -24,20 +25,10 @@ export default async function ProjectBoardPage({ params }: ProjectBoardPageProps
         select: { id: true, name: true, email: true, role: true, userId: true },
       },
       tasks: {
-        where: { deletedAt: null },
+        // Subtasks show as a progress ring on their parent's card (SMART-02).
+        where: { deletedAt: null, OR: [{ parentId: null }, { parent: { deletedAt: { not: null } } }] },
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          status: true,
-          priority: true,
-          dueDate: true,
-          recurrence: true,
-          projectId: true,
-          assigneeId: true,
-          assignee: { select: { id: true, name: true, email: true, role: true } },
-        },
+        include: taskInclude(user.id),
       },
     },
   });
