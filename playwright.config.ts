@@ -6,7 +6,9 @@ const baseURL =
 const isCI = Boolean(process.env.CI);
 // "start" builds the app and serves the production build. A dev server takes
 // about a second to hydrate each page, so tests that type or click right after
-// load can act on the server-rendered HTML.
+// load can act on the server-rendered HTML. Both modes use webpack, because
+// Turbopack won't compile a worktree whose node_modules is a junction to
+// another checkout; CI's `npm run build` still uses Turbopack, like Vercel.
 const serveProductionBuild = process.env.E2E_SERVER_MODE === "start";
 const nextCli = "node node_modules/next/dist/bin/next";
 const serverArgs = `--hostname localhost --port ${e2ePort}`;
@@ -42,7 +44,7 @@ export default defineConfig({
     ? undefined
     : {
         command: serveProductionBuild
-          ? `${nextCli} build && ${nextCli} start ${serverArgs}`
+          ? `${nextCli} build --webpack && ${nextCli} start ${serverArgs}`
           : `${nextCli} dev --webpack ${serverArgs}`,
         env: {
           EMAIL_PROVIDER: "disabled",
