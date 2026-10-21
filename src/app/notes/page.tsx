@@ -373,16 +373,21 @@ export default function NotesPage() {
             const body = (note.content ?? "").trim();
             return (
               <li key={note.id} id={`note-${note.id}`}>
-                <button
-                  type="button"
-                  onClick={() => openNote(note, "content")}
-                  aria-label={title || body.slice(0, 60) || "Untitled note"}
+                <div
                   className={cn(
-                    "flex h-full w-full flex-col rounded-xl border bg-surface p-4 text-left transition-colors hover:border-zinc-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent dark:hover:border-zinc-700",
+                    "relative flex h-full w-full flex-col rounded-xl border bg-surface p-4 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700",
                     editingNoteId === note.id ? "border-accent" : "border-line",
                   )}
                 >
-                  <span className={cn("line-clamp-2 text-[15px] font-semibold", !title && "text-muted")}>{title || "Untitled note"}</span>
+                  {/* The title is the button's whole label; its ::after covers the card, so the whole card opens the note. */}
+                  <button
+                    type="button"
+                    onClick={() => openNote(note, "content")}
+                    className="text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent"
+                  >
+                    <span className={cn("line-clamp-2 text-[15px] font-semibold", !title && "text-muted")}>{title || "Untitled note"}</span>
+                    {!title && body ? <span className="sr-only">: {body.slice(0, 60)}</span> : null}
+                  </button>
                   {body ? <span className="mt-1.5 line-clamp-4 whitespace-pre-line text-sm text-muted">{body}</span> : null}
                   <span className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-3 text-xs text-muted">
                     {note.project ? (
@@ -393,7 +398,7 @@ export default function NotesPage() {
                     ) : null}
                     <span>Edited {relativeTime(new Date(note.updatedAt), realNow) === "now" ? "just now" : `${relativeTime(new Date(note.updatedAt), realNow)} ago`}</span>
                   </span>
-                </button>
+                </div>
               </li>
             );
           })}

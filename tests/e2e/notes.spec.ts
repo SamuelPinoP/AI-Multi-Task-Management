@@ -23,7 +23,8 @@ test("notes: a link opens the editor; project changes save; delete moves to Tras
   await expect(page).toHaveURL(/\/notes$/);
 
   await page.reload();
-  const card = page.getByRole("button", { name: title });
+  // The card is the list item; its title button covers the whole card.
+  const card = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: title }) });
   await expect(card).toContainText("Opened from a link.");
   await expect(card).not.toContainText(project.name);
 

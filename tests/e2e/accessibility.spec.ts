@@ -24,7 +24,7 @@ async function seedWorkspace(page: Page) {
   const post = async (url: string, data: Record<string, unknown>) => (await page.request.post(url, { data })).json();
   const project = (await post("/api/projects", { name: uniqueName("A11y project"), color: "#0f9488" })) as { id: string };
   await post("/api/tasks", { title: "Overdue task", priority: "HIGH", dueDate: dateInputValue(-2), projectId: project.id });
-  await post("/api/tasks", { title: "Task for today", dueDate: dateInputValue(0) });
+  await post("/api/tasks", { title: "Task for today", description: "Shown under the title", dueDate: dateInputValue(0) });
   await post("/api/tasks", { title: "Finished task", status: "DONE" });
   await post("/api/events", {
     title: "Stand-up",

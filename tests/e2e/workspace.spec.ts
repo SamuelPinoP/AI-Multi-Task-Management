@@ -28,14 +28,14 @@ test("guest can create and search a note", async ({ page }) => {
   await editor.getByRole("button", { name: "Done" }).click();
   await expect(editor).toBeHidden();
 
-  const card = page.getByRole("button", { name: noteTitle });
+  const card = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: noteTitle }) });
   await expect(card).toContainText(noteBody);
   await page.getByLabel("Search notes").fill(noteTitle);
   await expect(card).toBeVisible();
 
   // The text survives a reload.
   await page.reload();
-  await expect(page.getByRole("button", { name: noteTitle })).toContainText(noteBody);
+  await expect(card).toContainText(noteBody);
 });
 
 test("member can create a project and upload a local video attachment", async ({
