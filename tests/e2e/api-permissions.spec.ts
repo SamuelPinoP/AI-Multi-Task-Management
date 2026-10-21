@@ -330,6 +330,23 @@ test("subtasks and dependencies follow the same rules as editing tasks", async (
   );
 });
 
+test("goals are personal; linking a task needs edit rights on it", async () => {
+  const goal = await json<{ id: string }>(await api.owner.post("/api/goals", { data: { title: "Owner goal", targetWeek: "2026-W43" } }));
+  await expectStatuses(
+    "PATCH someone else's goal",
+    (client) => client.patch(`/api/goals/${goal.id}`, { data: { status: "COMPLETED" } }),
+    { owner: 200, editor: 404, viewer: 404, outsider: 404 },
+  );
+  await expectStatuses(
+    "link a project task to your own goal",
+    async (client) => {
+      const own = await json<{ id: string }>(await client.post("/api/goals", { data: { title: "My goal", targetWeek: "2026-W43" } }));
+      return client.post(`/api/goals/${own.id}/tasks`, { data: { taskId: projectTaskId } });
+    },
+    { owner: 200, editor: 200, viewer: 403, outsider: 404 },
+  );
+});
+
 test("personal notes stay private, even to teammates", async () => {
   await expectStatuses(
     "PATCH personal note",

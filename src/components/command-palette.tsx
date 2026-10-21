@@ -9,6 +9,7 @@ import {
   Keyboard,
   Map as MapIcon,
   Moon,
+  Target,
   NotebookPen,
   Plus,
   Sparkles,
@@ -53,6 +54,7 @@ const pages: Array<{ href: string; label: string; icon: LucideIcon; keywords?: s
   { href: "/board", label: "Boards", icon: SquareKanban, keywords: "kanban tree task board" },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/planner", label: "Planner", icon: Sparkles, keywords: "smart plan" },
+  { href: "/goals", label: "Goals", icon: Target, keywords: "weekly review week" },
   { href: "/roadmap", label: "Roadmap", icon: MapIcon },
   { href: "/trash", label: "Trash", icon: Trash2, keywords: "deleted restore" },
 ];

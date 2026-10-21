@@ -57,7 +57,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
 
     const found: string[] = [];
-    for (const path of ["/", "/today", "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/planner", "/roadmap", "/trash"]) {
+    for (const path of ["/", "/today", "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/planner", "/goals", "/roadmap", "/trash"]) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
       found.push(...(await violations(page, path)));

@@ -23,6 +23,7 @@ import {
   SquareCheckBig,
   SquareKanban,
   Sun,
+  Target,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
@@ -289,6 +290,7 @@ function Sidebar({
   ];
   const toolItems: NavItem[] = [
     { href: "/planner", label: "Planner", icon: Sparkles },
+    { href: "/goals", label: "Goals", icon: Target },
     { href: "/roadmap", label: "Roadmap", icon: MapIcon },
     { href: "/trash", label: "Trash", icon: Trash2 },
   ];
