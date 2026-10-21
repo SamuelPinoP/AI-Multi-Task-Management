@@ -126,6 +126,21 @@ it opens a "Production is down" issue assigned to the repository owner, and
 closes it with a note once the site answers again. The checks don't touch the
 database, so they don't use Neon's free compute hours.
 
+## Rate limits
+
+`src/lib/rate-limit.ts` keeps request counters in the `RateLimit` table (a
+sliding window per rule, keyed by a SHA-256 fingerprint of the IP address,
+email or user, so none are stored in readable form). Limits, in
+`src/lib/rate-limit-core.ts`: 30 login attempts per network and 5 failed
+logins per account per 15 minutes (a successful login clears the account
+count), 5 sign-ups and 5 password reset requests per network per hour, 3 reset
+requests per account per hour, 10 reset submissions per network per 15
+minutes, 10 guest workspaces per network per hour, 30 invitations per user per
+hour and 60 upload requests per user per 10 minutes. Forms show "Too many …
+Try again in N minutes"; API routes answer 429 with a `Retry-After` header.
+The client IP is the first `x-forwarded-for` entry, which Vercel overwrites;
+requests without one (local development, CI) skip the per-network limits.
+
 ## Database backups
 
 Every day at about 07:00 UTC, Vercel Cron calls `/api/cron/backup`

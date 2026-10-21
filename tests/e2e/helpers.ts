@@ -49,5 +49,5 @@ export async function signUpAndLogIn(page: Page, label = "E2E user") {
   await page.getByRole("button", { name: "Log in" }).click();
   await expectHome(page);
 
-  return { name, email };
+  return { name, email, password };
 }

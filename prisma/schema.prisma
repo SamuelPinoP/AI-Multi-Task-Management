@@ -216,6 +216,22 @@ model ProjectChatAttachmentUpload {
   @@index([expiresAt])
 }
 
+
+/// Request counters for rate limiting (src/lib/rate-limit.ts). The key is a
+/// rule name plus a SHA-256 fingerprint of the caller (IP, email or user id),
+/// so no addresses are stored in readable form.
+model RateLimit {
+  key           String   @id
+  /// Fixed window number for the rule: floor(time in ms / window length).
+  window        Int
+  count         Int
+  previousCount Int      @default(0)
+  /// Set by the database; once past, the counter no longer matters.
+  expiresAt     DateTime @db.Timestamptz(3)
+
+  @@index([expiresAt])
+}
+
 enum ProjectChatStorageProvider {
   LOCAL
   VERCEL_BLOB
