@@ -93,7 +93,12 @@ export async function generateSmartPlanner(userId: string, now = new Date(), rea
   const [tasks, events, projects, notes, comments] = await Promise.all([
     prisma.task.findMany({
       where: { deletedAt: null, status: { not: TaskStatus.DONE }, OR: [{ userId }, { project: accessibleProjectWhere }] },
-      include: { project: { select: { id: true, name: true, color: true } } },
+      include: {
+        project: { select: { id: true, name: true, color: true } },
+        // SMART-02: open blockers, and how many open tasks wait on this one.
+        blockedBy: { where: { blockedBy: { deletedAt: null, status: { not: TaskStatus.DONE } } }, select: { blockedBy: { select: { title: true } } } },
+        _count: { select: { blocking: { where: { task: { deletedAt: null, status: { not: TaskStatus.DONE } } } } } },
+      },
       orderBy: [{ dueDate: "asc" }, { priority: "desc" }, { updatedAt: "desc" }],
       take: 80,
     }),
@@ -128,25 +133,38 @@ export async function generateSmartPlanner(userId: string, now = new Date(), rea
   const upcoming: PlannerSuggestion[] = [];
   const suggestedFocus: PlannerSuggestion[] = [];
   const projectFollowUp: PlannerSuggestion[] = [];
+  // SMART-02: tasks that unblock others go first; blocked tasks go last and skip Suggested Focus.
+  const rank = new Map<string, number>();
+  const byRank = (a: PlannerSuggestion, b: PlannerSuggestion) => (rank.get(a.id) ?? 1) - (rank.get(b.id) ?? 1);
 
   for (const task of tasks) {
     const diff = task.dueDate ? dayDiff(task.dueDate, now) : null;
+    const waitingOn = task.blockedBy.map((dependency) => dependency.blockedBy.title);
+    const unblocks = waitingOn.length ? 0 : task._count.blocking;
+    const timing = diff === null ? `Active ${task.priority.toLowerCase()} priority task${task.project ? ` in ${task.project.name}` : ""}.` : diff < 0 ? `Overdue by ${Math.abs(diff)} day${Math.abs(diff) === 1 ? "" : "s"}.` : diff === 0 ? "Due today; schedule it before flexible work." : `Due in ${diff} day${diff === 1 ? "" : "s"}.`;
     const suggestion: PlannerSuggestion = {
       id: `task-${task.id}`,
       title: task.title,
-      reason: diff === null ? `Active ${task.priority.toLowerCase()} priority task${task.project ? ` in ${task.project.name}` : ""}.` : diff < 0 ? `Overdue by ${Math.abs(diff)} day${Math.abs(diff) === 1 ? "" : "s"}.` : diff === 0 ? "Due today; schedule it before flexible work." : `Due in ${diff} day${diff === 1 ? "" : "s"}.`,
-      priority: priorityFromTask(task.priority, diff !== null && diff < 0),
+      reason: waitingOn.length
+        ? `Waiting on “${waitingOn[0]}”${waitingOn.length > 1 ? ` and ${waitingOn.length - 1} more` : ""}. ${timing}`
+        : unblocks
+          ? `Unblocks ${unblocks} task${unblocks === 1 ? "" : "s"}. ${timing}`
+          : timing,
+      priority: unblocks ? "HIGH" : priorityFromTask(task.priority, diff !== null && diff < 0),
       kind: "TASK",
       related: { type: "TASK", id: task.id, label: task.project ? `${task.project.name} task` : "Task" },
       actionHref: taskHref(task.id),
       projectId: task.project?.id ?? null,
       canCreateTask: false,
     };
+    rank.set(suggestion.id, waitingOn.length ? 2 : unblocks ? 0 : 1);
     if (diff !== null && diff < 0) urgent.push(suggestion);
     else if (diff === 0) dueToday.push(suggestion);
     else if (diff !== null && diff <= 7) upcoming.push(suggestion);
-    suggestedFocus.push(suggestion);
+    if (!waitingOn.length) suggestedFocus.push(suggestion);
   }
+  urgent.sort(byRank);
+  dueToday.sort(byRank);
 
   const eventOccurrences = expandRecurringEventsForRange(events.map((event) => ({ ...event, startTime: event.startTime.toISOString(), endTime: event.endTime?.toISOString() ?? null, recurrence: normalizeRecurrence(event.recurrence ?? Recurrence.NONE) })), todayStart, soonEnd);
   for (const event of eventOccurrences.slice(0, 10)) {
@@ -179,8 +197,8 @@ export async function generateSmartPlanner(userId: string, now = new Date(), rea
     sections: [
       { key: "urgent", title: "Urgent", description: "Overdue and highest-risk work to clear first.", suggestions: limit(urgent, 6) },
       { key: "dueToday", title: "Due Today", description: "Commitments that should be scheduled into today.", suggestions: limit(dueToday, 6) },
-      { key: "upcoming", title: "Upcoming", description: "Near-term tasks and events to prepare for.", suggestions: limit(upcoming, 8) },
-      { key: "suggestedFocus", title: "Suggested Focus", description: "The best deterministic focus list based on due dates, priority, notes, and status.", suggestions: limit(suggestedFocus.sort((a, b) => ["HIGH", "MEDIUM", "LOW"].indexOf(a.priority) - ["HIGH", "MEDIUM", "LOW"].indexOf(b.priority)), 8) },
+      { key: "upcoming", title: "Upcoming", description: "Near-term tasks and events to prepare for.", suggestions: limit(upcoming.sort(byRank), 8) },
+      { key: "suggestedFocus", title: "Suggested Focus", description: "The best deterministic focus list based on due dates, priority, notes, status, and what unblocks other work.", suggestions: limit(suggestedFocus.sort((a, b) => ["HIGH", "MEDIUM", "LOW"].indexOf(a.priority) - ["HIGH", "MEDIUM", "LOW"].indexOf(b.priority) || byRank(a, b)), 8) },
       { key: "projectFollowUp", title: "Project Follow-Up", description: "Shared project work, comments, stale projects, and workload signals.", suggestions: limit(projectFollowUp, 8) },
     ],
   };

@@ -6,6 +6,7 @@ import { createActivity } from "@/lib/activity";
 import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
 import { nextCompletedAt } from "@/lib/task-completion";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
+import { taskInclude } from "@/lib/task-include";
 
 
 type RouteContext = {
@@ -73,8 +74,15 @@ export async function PATCH(req: Request, context: RouteContext) {
     }
 
     const description = typeof body.description === "string" ? body.description.trim() : "";
-    const projectId = parseId(body.projectId);
+    let projectId = parseId(body.projectId);
     let assigneeId = parseId(body.assigneeId);
+
+    // A subtask always stays in its parent's project (SMART-02).
+    const subtask = await prisma.task.findFirst({
+      where: { id, parentId: { not: null } },
+      select: { parent: { select: { projectId: true } } },
+    });
+    if (subtask?.parent) projectId = subtask.parent.projectId;
 
     if (projectId) {
       const access = await getProjectAccess(projectId, user.id);
@@ -130,16 +138,14 @@ export async function PATCH(req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
+    // Moving a task to another project moves its subtasks too; their assignees belonged to the old one.
+    if (existingTask.projectId !== projectId) {
+      await prisma.task.updateMany({ where: { parentId: id }, data: { projectId, assigneeId: null } });
+    }
+
     const task = await prisma.task.findUnique({
       where: { id },
-      include: {
-        project: {
-          select: { id: true, name: true, color: true },
-        },
-        assignee: {
-          select: { id: true, name: true, email: true, role: true },
-        },
-      },
+      include: taskInclude(user.id),
     });
     if (task && existingTask.status !== TaskStatus.DONE && task.status === TaskStatus.DONE) {
       void createActivity({
