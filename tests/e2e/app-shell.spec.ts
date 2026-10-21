@@ -81,6 +81,23 @@ test("A sidebar project opens to its pages and stays open after a reload", async
   await expect(sidebar.getByRole("link", { name, exact: true })).toHaveAttribute("aria-current", "page");
 });
 
+test("The sidebar + creates a project and opens it", async ({ page, isMobile }) => {
+  test.skip(isMobile, "The sidebar is a menu sheet on phones.");
+  const name = uniqueName("Sidebar new project");
+  await continueAsGuest(page);
+
+  const sidebar = page.getByRole("navigation", { name: "Workspace" });
+  await sidebar.getByRole("button", { name: "Create a project" }).click();
+  const sheet = page.getByRole("dialog", { name: "New project" });
+  await sheet.getByLabel("Name").fill(name);
+  await sheet.getByRole("button", { name: "Create project" }).click();
+  await expect(sheet).toBeHidden();
+
+  await expect(page).toHaveURL(/\/projects\/[^/]+$/);
+  const pages = sidebar.getByRole("group", { name: `${name} pages` });
+  await expect(pages.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
+});
+
 test("Phone tabs and the menu reach every section", async ({ page, isMobile }) => {
   test.skip(!isMobile, "Bottom tabs only show on phones.");
   await continueAsGuest(page);

@@ -31,6 +31,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { CommandPalette } from "@/components/command-palette";
 import { NewTaskDialog } from "@/components/new-task-dialog";
+import { ProjectSheet, type ProjectInput } from "@/components/projects/project-sheet";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ThemeToggle, useTheme } from "@/components/theme-provider";
 import {
@@ -42,6 +43,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { toast } from "@/components/ui/toaster";
 import { isNavItemActive, pageTitleFor, type NavMatch } from "@/lib/app-nav";
 import { cn } from "@/lib/cn";
 import { isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
@@ -53,7 +55,7 @@ import {
   serializeSidebarProjects,
   type SidebarProjectsOpen,
 } from "@/lib/sidebar-state";
-import { WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
 import type { WorkspaceNav, WorkspaceNavProject } from "@/lib/workspace-nav";
 
 type ShellUser = {
@@ -259,6 +261,7 @@ function Sidebar({
   onToggleCollapsed,
   onToggleProject,
   onNewTask,
+  onNewProject,
   onNavigate,
 }: {
   user: NonNullable<ShellUser>;
@@ -270,6 +273,7 @@ function Sidebar({
   onToggleCollapsed?: () => void;
   onToggleProject: (projectId: string, open: boolean) => void;
   onNewTask: () => void;
+  onNewProject: () => void;
   onNavigate?: () => void;
 }) {
   const mainItems: NavItem[] = [
@@ -333,10 +337,10 @@ function Sidebar({
 
       <GroupLabel collapsed={collapsed}>
         <Link href="/projects" onClick={onNavigate} className="hover:text-ink">Projects</Link>
-        <Link href="/projects" onClick={onNavigate} className="rounded p-0.5 hover:bg-surface-hover hover:text-ink" title="Create a project">
+        <button type="button" onClick={onNewProject} className="rounded p-0.5 hover:bg-surface-hover hover:text-ink" title="Create a project">
           <Plus aria-hidden="true" className="h-3.5 w-3.5" />
           <span className="sr-only">Create a project</span>
-        </Link>
+        </button>
       </GroupLabel>
       {collapsed ? (
         <SidebarLink item={{ href: "/projects", label: "Projects", icon: FolderKanban }} {...linkProps} />
@@ -367,9 +371,9 @@ function Sidebar({
           ) : null}
         </>
       ) : (
-        <Link href="/projects" onClick={onNavigate} className="rounded-lg px-2.5 py-1.5 text-xs text-muted hover:bg-surface-hover hover:text-ink">
+        <button type="button" onClick={onNewProject} className="rounded-lg px-2.5 py-1.5 text-left text-xs text-muted hover:bg-surface-hover hover:text-ink">
           No projects yet. Create one
-        </Link>
+        </button>
       )}
 
       <GroupLabel collapsed={collapsed}>Tools</GroupLabel>
@@ -608,6 +612,7 @@ export function AppShell({
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useEffect(() => {
@@ -720,6 +725,30 @@ export function AppShell({
     setNewTaskOpen(true);
   };
 
+  const openNewProject = () => {
+    setMenuOpen(false);
+    setNewProjectOpen(true);
+  };
+
+  // The sidebar's "+" creates a project from any page, then opens it.
+  async function createProject(input: ProjectInput) {
+    try {
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: input.name, description: input.description, color: input.color }),
+      });
+      const body = (await response.json().catch(() => null)) as { id?: string; error?: string } | null;
+      if (!response.ok || !body?.id) return body?.error ?? "Could not create the project.";
+      notifyWorkspaceChanged();
+      toast.success("Project created", { description: input.name });
+      router.push(`/projects/${body.id}`);
+      return null;
+    } catch {
+      return "Could not create the project. Check your connection and try again.";
+    }
+  }
+
   return (
     <div className="flex h-dvh min-h-0 overflow-hidden bg-canvas text-ink">
       <a
@@ -745,6 +774,7 @@ export function AppShell({
           onToggleCollapsed={toggleCollapsed}
           onToggleProject={toggleProject}
           onNewTask={openNewTask}
+          onNewProject={openNewProject}
         />
       </aside>
 
@@ -761,6 +791,7 @@ export function AppShell({
             chatSeen={chatSeen}
             onToggleProject={toggleProject}
             onNewTask={openNewTask}
+            onNewProject={openNewProject}
             onNavigate={() => setMenuOpen(false)}
           />
         </SheetContent>
@@ -789,6 +820,7 @@ export function AppShell({
         onShowShortcuts={() => setShortcutsOpen(true)}
       />
       <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} projects={nav.projects} />
+      <ProjectSheet open={newProjectOpen} onOpenChange={setNewProjectOpen} onSubmit={createProject} />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );
