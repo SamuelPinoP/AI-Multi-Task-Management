@@ -102,7 +102,8 @@ test("member can create a project and upload a local video attachment", async ({
     ],
   });
 
-  await page.getByRole("link", { name: /^Chat$/ }).click();
+  // The sidebar lists this project's Chat too, so use the page's own link.
+  await page.locator("#main-content").getByRole("link", { name: /^Chat$/ }).click();
   await expect(page.getByRole("heading", { name: projectName })).toBeVisible();
 
   await page.locator('input[type="file"]').setInputFiles(videoFixturePath);
