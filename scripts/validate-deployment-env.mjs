@@ -119,6 +119,11 @@ if (emailProvider !== undefined && !ALLOWED_EMAIL_PROVIDERS.has(emailProvider)) 
   }
 }
 
+const cronSecret = cleanEnvValue("CRON_SECRET");
+if (cronSecret !== undefined && cronSecret.length > 0 && cronSecret.length < 16) {
+  errors.push("CRON_SECRET is too short. Use at least 16 random characters, or remove it.");
+}
+
 // Password reset and invitation emails build their links from APP_BASE_URL.
 const appBaseUrl = cleanEnvValue("APP_BASE_URL");
 if (isVercelProduction && !appBaseUrl) {
