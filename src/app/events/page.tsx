@@ -32,7 +32,7 @@ import { cn } from "@/lib/cn";
 import { formatEventTime } from "@/lib/event-time";
 import { projectColor } from "@/lib/project-color";
 import { occurrencesInRange } from "@/lib/event-occurrences";
-import { normalizeRecurrence } from "@/lib/recurrence";
+import { describeRepeat, normalizeRecurrence } from "@/lib/recurrence";
 import { formatTaskDayKey, getLocalDateOnly } from "@/lib/task-date-buckets";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
@@ -103,9 +103,9 @@ function EventRow({
         ) : null}
       </button>
       {repeats ? (
-        <span title="Repeats" className="shrink-0 text-muted">
+        <span title={describeRepeat(event.recurrence, event.repeatUntil)} className="shrink-0 text-muted">
           <Repeat aria-hidden="true" className="h-3.5 w-3.5" />
-          <span className="sr-only">Repeats</span>
+          <span className="sr-only">{describeRepeat(event.recurrence, event.repeatUntil)}</span>
         </span>
       ) : null}
       <DropdownMenu>
@@ -240,10 +240,10 @@ export default function EventsPage() {
     const start = getLocalDateOnly(new Date());
     return filtered
       .filter((event) => {
-        const last = event.endTime ?? event.startTime;
-        const repeats = normalizeRecurrence(event.recurrence) !== "NONE";
-        if (repeats && !event.endTime) return false;
-        return getLocalDateOnly(last) < start;
+        if (normalizeRecurrence(event.recurrence) !== "NONE") {
+          return event.repeatUntil ? getLocalDateOnly(event.repeatUntil) < start : false;
+        }
+        return getLocalDateOnly(event.endTime ?? event.startTime) < start;
       })
       .sort((a, b) => b.startTime.localeCompare(a.startTime))
       .slice(0, PAST_LIMIT);
@@ -304,6 +304,7 @@ export default function EventsPage() {
         startTime: input.startTime || null,
         endDate: input.endDate || null,
         endTime: input.endTime || null,
+        repeatUntil: input.repeatUntil || null,
       }),
     });
     if (!response.ok) return errorMessage(response, editing ? "Could not save the event." : "Could not create the event.");

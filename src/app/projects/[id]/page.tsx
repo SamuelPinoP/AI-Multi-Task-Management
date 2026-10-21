@@ -15,6 +15,7 @@ import {
 } from "@/lib/project-access";
 import { OWNER_INVITATION_SELECT } from "@/lib/project-invitations";
 import { markProjectOpened } from "@/lib/recent-shortcuts";
+import { describeRepeat, firstOccurrenceEnd } from "@/lib/recurrence";
 import { isOverdueTask } from "@/lib/task-date-buckets";
 import { getUserNow } from "@/lib/user-time-server";
 
@@ -80,6 +81,7 @@ export default async function ProjectDetailPage({
           hasStartTime: true,
           hasEndTime: true,
           recurrence: true,
+          repeatUntil: true,
         },
       },
       invitations: {
@@ -360,6 +362,7 @@ export default async function ProjectDetailPage({
               ...event,
               startTime: event.startTime.toISOString(),
               endTime: event.endTime ? event.endTime.toISOString() : null,
+              repeatUntil: event.repeatUntil?.toISOString() ?? null,
             }))}
           />
         </section>
@@ -387,11 +390,11 @@ export default async function ProjectDetailPage({
                   <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
                     {formatEventDateTime(event.startTime)}
                     {event.endTime
-                      ? ` → ${formatEventDateTime(event.endTime)}`
+                      ? ` → ${formatEventDateTime(firstOccurrenceEnd(event) ?? event.endTime)}`
                       : ""}
                   </p>
                   <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                    Recurrence: {event.recurrence}
+                    {event.recurrence === "NONE" ? "Does not repeat" : describeRepeat(event.recurrence, event.repeatUntil)}
                   </p>
                 </article>
               ))}

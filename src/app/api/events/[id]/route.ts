@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
-import { parseEventTimes } from "@/lib/event-time";
+import { parseEventTimes, parseRepeatUntil } from "@/lib/event-time";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 import { canEditProjectContent, getProjectAccess, projectAccessWhere, unauthorizedProjectResponse } from "@/lib/project-access";
@@ -23,6 +23,11 @@ export async function PATCH(req: Request, context: RouteContext) {
     const times = parseEventTimes(body);
     if (times.error !== undefined) return NextResponse.json({ error: times.error }, { status: 400 });
     if (!isValidRecurrence(body.recurrence)) return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
+    const recurrence = normalizeRecurrence(body.recurrence);
+    const repeatUntil = parseRepeatUntil(body, recurrence !== "NONE");
+    if (repeatUntil.error !== undefined) return NextResponse.json({ error: repeatUntil.error }, { status: 400 });
+    // A request without the field leaves the date as it is (unless the event stops repeating).
+    const repeatUntilChange = recurrence === "NONE" || body.repeatUntil !== undefined ? { repeatUntil: repeatUntil.value } : {};
 
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
@@ -54,7 +59,8 @@ export async function PATCH(req: Request, context: RouteContext) {
         description: description || null,
         location: location || null,
         ...times.value,
-        recurrence: normalizeRecurrence(body.recurrence),
+        recurrence,
+        ...repeatUntilChange,
         project: projectId ? { connect: { id: projectId } } : { disconnect: true },
       },
       include: { project: { select: { id: true, name: true, color: true } } },
