@@ -1,5 +1,7 @@
 "use client";
 
+import { FileText, NotebookPen } from "lucide-react";
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { uiButtonClass, uiDangerButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -30,6 +32,8 @@ export type EventItem = {
   repeatUntil?: string | null;
   projectId?: string | null;
   project?: EventProject | null;
+  /** Notes written for this event (SMART-05). */
+  notes?: Array<{ id: string; title: string }>;
 };
 
 export type EventInput = {
@@ -103,9 +107,12 @@ export function EventSheet({
   projects,
   onSubmit,
   onDelete,
+  onWriteNotes,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Starts meeting notes for the event (SMART-05). */
+  onWriteNotes?: (event: EventItem) => void;
   event?: EventItem | null;
   draft?: Partial<EventInput>;
   projects: EventProject[];
@@ -244,6 +251,31 @@ export function EventSheet({
             ) : null}
           </div>
         </form>
+        {event && onWriteNotes ? (
+          <section aria-labelledby="event-notes-heading" className="mt-6 grid gap-2 border-t border-line pt-5">
+            <h3 id="event-notes-heading" className="text-sm font-semibold">
+              Meeting notes
+            </h3>
+            {event.notes?.length ? (
+              <ul className="grid gap-1">
+                {event.notes.map((note) => (
+                  <li key={note.id}>
+                    <Link href={`/notes?openNote=${note.id}&focus=content`} className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline">
+                      <FileText aria-hidden="true" className="h-4 w-4" />
+                      {note.title || "Untitled note"}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted">Write notes for this event; anything you select in them can become a task.</p>
+            )}
+            <button type="button" onClick={() => onWriteNotes(event)} className={`${uiButtonClass} w-fit px-3 py-1.5`}>
+              <NotebookPen aria-hidden="true" className="h-4 w-4" />
+              Write meeting notes
+            </button>
+          </section>
+        ) : null}
       </SheetContent>
     </Sheet>
   );

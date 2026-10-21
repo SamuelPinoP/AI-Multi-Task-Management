@@ -1,5 +1,7 @@
 "use client";
 
+import { FileText } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { uiButtonClass, uiDangerButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -117,6 +119,12 @@ export function TaskSheet({
         <SheetHeader>
           <SheetTitle>{task ? "Edit task" : "New task"}</SheetTitle>
           <SheetDescription>{task ? "Change any detail, then save." : "Add the details now or later."}</SheetDescription>
+          {task?.noteId ? (
+            <Link href={`/notes?openNote=${task.noteId}&focus=content`} className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+              <FileText aria-hidden="true" className="h-4 w-4" />
+              Open the note this task came from
+            </Link>
+          ) : null}
         </SheetHeader>
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <label className="grid gap-1.5 text-sm font-medium">

@@ -82,7 +82,8 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     const updated = await prisma.note.updateMany({
       where: { id, deletedAt: null },
-      data: { title, content: contentInput || null, projectId },
+      // A note's event must be in its project, so moving the note clears it (SMART-05).
+      data: { title, content: contentInput || null, projectId, ...(existingNote.projectId !== projectId ? { eventId: null } : {}) },
     });
 
     if (updated.count === 0)

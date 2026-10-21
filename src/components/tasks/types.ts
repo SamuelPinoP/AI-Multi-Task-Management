@@ -17,6 +17,8 @@ export type Task = {
   createdAt: string;
   updatedAt: string;
   recurrence: Recurrence;
+  /** The note this task was made from (SMART-05). */
+  noteId?: string | null;
   projectId: string | null;
   project: Project | null;
   assigneeId?: string | null;

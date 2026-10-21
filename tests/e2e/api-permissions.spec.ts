@@ -347,6 +347,35 @@ test("goals are personal; linking a task needs edit rights on it", async () => {
   );
 });
 
+test("note links follow note access; attaching an event needs edit rights", async () => {
+  const projectNote = await json<{ id: string }>(
+    await api.owner.post("/api/notes", { data: { title: "Project note", content: "See [[Other]]", projectId } }),
+  );
+  await expectStatuses("GET project note links", (client) => client.get(`/api/notes/${projectNote.id}/links`), {
+    owner: 200,
+    editor: 200,
+    viewer: 200,
+    outsider: 404,
+  });
+  await expectStatuses("GET personal note links", (client) => client.get(`/api/notes/${ownerPersonalNoteId}/links`), {
+    owner: 200,
+    editor: 404,
+    viewer: 404,
+    outsider: 404,
+  });
+  await expectStatuses("PUT note event", (client) => client.put(`/api/notes/${projectNote.id}/event`, { data: { eventId: null } }), {
+    owner: 200,
+    editor: 200,
+    viewer: 403,
+    outsider: 404,
+  });
+  await expectStatuses(
+    "POST task from someone else's personal note",
+    (client) => client.post("/api/tasks", { data: { title: "From a note", noteId: ownerPersonalNoteId } }),
+    { editor: 400, viewer: 400, outsider: 400 },
+  );
+});
+
 test("personal notes stay private, even to teammates", async () => {
   await expectStatuses(
     "PATCH personal note",

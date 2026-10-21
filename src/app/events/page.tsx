@@ -294,6 +294,29 @@ export default function EventsPage() {
     setQuickTitle("");
   }
 
+  /** Creates notes for the event, in its project, and opens them (SMART-05). */
+  async function writeMeetingNotes(event: EventItem) {
+    const eventId = event.sourceEventId ?? event.id;
+    try {
+      const created = await fetch("/api/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: `Notes: ${event.title}`, content: "", projectId: event.projectId ?? null }),
+      });
+      const note = (await created.json().catch(() => null)) as { id?: string } | null;
+      if (!created.ok || !note?.id) throw new Error();
+      const linked = await fetch(`/api/notes/${note.id}/event`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId }),
+      });
+      if (!linked.ok) throw new Error();
+      router.push(`/notes?openNote=${note.id}&focus=content`);
+    } catch {
+      toast.error("Could not start the notes.");
+    }
+  }
+
   async function saveEvent(input: EventInput) {
     const editing = sheet.event;
     const response = await fetch(editing ? `/api/events/${editing.id}` : "/api/events", {
@@ -552,6 +575,7 @@ export default function EventsPage() {
         projects={projects}
         onSubmit={saveEvent}
         onDelete={setConfirmDelete}
+        onWriteNotes={(event) => void writeMeetingNotes(event)}
       />
 
       <ConfirmDialog

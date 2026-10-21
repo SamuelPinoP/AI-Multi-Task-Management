@@ -6,6 +6,7 @@ import { createActivity } from "@/lib/activity";
 import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
+import { visibleNoteWhere } from "@/lib/note-access";
 
 
 function isValidStatus(value: unknown): value is TaskStatus {
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
     let projectId = parseId(body.projectId);
     const assigneeId = parseId(body.assigneeId);
     const parentId = parseId(body.parentId);
+    const noteId = parseId(body.noteId);
 
     if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
     if (body.status && !isValidStatus(body.status)) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
@@ -76,6 +78,14 @@ export async function POST(req: Request) {
       if (!parent) return NextResponse.json({ error: "Invalid parent task" }, { status: 400 });
       if (parent.parentId) return NextResponse.json({ error: "Subtasks can't have their own subtasks" }, { status: 400 });
       projectId = parent.projectId;
+    }
+
+    // A task made from a note (SMART-05) goes in the note's project.
+    if (noteId) {
+      const note = await prisma.note.findFirst({ where: { id: noteId, ...visibleNoteWhere(user.id) }, select: { projectId: true } });
+      if (!note) return NextResponse.json({ error: "Invalid note" }, { status: 400 });
+      // A subtask keeps its parent's project.
+      if (!parentId) projectId = note.projectId;
     }
 
     if (projectId) {
@@ -104,6 +114,7 @@ export async function POST(req: Request) {
         projectId,
         assigneeId,
         parentId,
+        noteId,
       },
       include: taskInclude(user.id),
     });
