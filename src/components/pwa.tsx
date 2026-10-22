@@ -69,23 +69,31 @@ export function ServiceWorkerRegistration({ signedIn }: { signedIn: boolean }) {
   useEffect(() => {
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
     let cancelled = false;
+    let observer: PerformanceObserver | null = null;
     void (async () => {
       try {
         await navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" });
         const registration = await navigator.serviceWorker.ready;
-        if (cancelled || !signedIn) return;
-        // This page loaded before the worker could see it: hand it the URLs to save.
-        const urls = performance
-          .getEntriesByType("resource")
-          .map((entry) => entry.name)
-          .filter((url) => url.startsWith(location.origin));
-        registration.active?.postMessage({ type: "cache-urls", page: location.href, urls: [location.href, ...urls] });
+        if (cancelled || !signedIn || typeof PerformanceObserver === "undefined") return;
+        // Requests the worker never saw (workerStart 0) happened before it took over: the page
+        // itself and what it loaded. Hand those over to save, including ones still finishing
+        // now, such as the page's first data request.
+        const unseen = (entry: PerformanceEntry) =>
+          (entry as PerformanceResourceTiming).workerStart === 0 && entry.name.startsWith(location.origin);
+        const page = performance.getEntriesByType("navigation").find(unseen)?.name ?? null;
+        const send = (urls: string[]) => {
+          if (urls.length) registration.active?.postMessage({ type: "cache-urls", page, urls });
+        };
+        send(page ? [page] : []);
+        observer = new PerformanceObserver((list) => send(list.getEntries().filter(unseen).map((entry) => entry.name)));
+        observer.observe({ type: "resource", buffered: true });
       } catch {
         // Unsupported or blocked: the app still works online.
       }
     })();
     return () => {
       cancelled = true;
+      observer?.disconnect();
     };
   }, [signedIn]);
 
