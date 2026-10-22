@@ -19,6 +19,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { CalendarSubscribe } from "@/components/calendar-subscribe";
 import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -455,7 +456,10 @@ export default function EventsCalendarPage() {
               details.
             </p>
           </div>
-          <BackLink href="/events">Back to Events</BackLink>
+          <div className="flex flex-wrap items-center gap-2">
+            <CalendarSubscribe />
+            <BackLink href="/events">Back to Events</BackLink>
+          </div>
         </div>
 
         {error && <p className="mb-6 text-sm text-red-600">{error}</p>}
