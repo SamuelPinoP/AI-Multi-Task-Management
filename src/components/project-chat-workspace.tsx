@@ -241,6 +241,8 @@ export function ProjectChatWorkspace({
         const fresh = data.comments;
         if (!data.changed || !fresh) return;
         setComments((prev) => [...fresh, ...prev.filter((comment) => comment.id.startsWith("pending-"))]);
+        // The reader is looking at the chat, so what just arrived counts as read (SIDE-03).
+        void fetch(`/api/projects/${projectId}/chat-read`, { method: "POST" }).catch(() => undefined);
       } catch {
         // Offline or a hiccup: try again on the next tick.
       }

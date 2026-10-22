@@ -110,12 +110,28 @@ test("a reply is unread for the owner until they open the project chat", async (
   await expect(chatRow(owner)).not.toHaveAccessibleName(/unread/);
 });
 
+test("a message that arrives while the chat is open counts as read", async () => {
+  test.setTimeout(60_000);
+  await teammate.goto(`/chats?project=${projectId}`);
+  const conversation = teammate.getByRole("region", { name: "Conversation" });
+  await expect(conversation.getByRole("heading", { name: projectName })).toBeVisible();
+
+  const message = uniqueName("Arrives while open");
+  await postMessage(owner, message);
+  // The open chat picks it up on its next refresh (every few seconds while visible).
+  await expect(conversation.getByText(message)).toBeVisible({ timeout: 20_000 });
+
+  await teammate.goto("/chats");
+  await expect(chatRow(teammate)).toBeVisible();
+  await expect(chatRow(teammate)).not.toHaveAccessibleName(/unread/);
+});
+
 test("Mark all read clears every chat", async () => {
   await postMessage(owner, "One more thing: the footer links.");
 
   await teammate.goto("/chats");
-  // The owner's "Great, see you then." from the test before is unread too.
-  await expect(chatRow(teammate)).toHaveAccessibleName(/2 unread messages$/);
+  // The teammate read everything before this in the test above.
+  await expect(chatRow(teammate)).toHaveAccessibleName(/1 unread message$/);
   await teammate.getByRole("button", { name: "Mark all read" }).click();
   await expect(teammate.getByText("All chats marked as read")).toBeVisible();
   await expect(chatRow(teammate)).not.toHaveAccessibleName(/unread/);
