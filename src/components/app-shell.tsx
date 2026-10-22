@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Bell,
   CalendarClock,
   CalendarDays,
   ChevronRight,
@@ -33,6 +32,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { CommandPalette } from "@/components/command-palette";
 import { NewTaskDialog } from "@/components/new-task-dialog";
+import { NotificationsMenu } from "@/components/notifications-menu";
 import { ProjectSheet, type ProjectInput } from "@/components/projects/project-sheet";
 import { clearOfflineData, OfflineBanner, promptInstall, useInstallPrompt } from "@/components/pwa";
 import { EmailVerificationBanner } from "@/components/email-verification";
@@ -515,35 +515,6 @@ function UserMenu({ user, onShowShortcuts }: { user: NonNullable<ShellUser>; onS
   );
 }
 
-function NotificationsMenu({ pendingInvitations }: { pendingInvitations: number }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        aria-label={pendingInvitations ? `Notifications, ${pendingInvitations} new` : "Notifications"}
-        className="relative grid h-8 w-8 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        <Bell aria-hidden="true" className="h-4 w-4" />
-        {pendingInvitations ? (
-          <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border-2 border-surface bg-project-3" />
-        ) : null}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72">
-        <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-        {pendingInvitations ? (
-          <DropdownMenuItem asChild>
-            <Link href="/projects">
-              <FolderKanban />
-              {pendingInvitations} project invitation{pendingInvitations === 1 ? "" : "s"} waiting for you
-            </Link>
-          </DropdownMenuItem>
-        ) : (
-          <p className="px-2.5 pb-3 pt-1 text-sm text-muted">You&apos;re all caught up.</p>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 function TopBar({
   user,
   nav,
@@ -597,7 +568,7 @@ function TopBar({
       >
         <Search aria-hidden="true" className="h-4 w-4" />
       </button>
-      <NotificationsMenu pendingInvitations={nav.pendingInvitations} />
+      <NotificationsMenu pendingInvitations={nav.pendingInvitations} unreadNotifications={nav.unreadNotifications} />
       <UserMenu user={user} onShowShortcuts={onShowShortcuts} />
     </header>
   );

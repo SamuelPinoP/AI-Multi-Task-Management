@@ -8,6 +8,7 @@ import { nextCompletedAt } from "@/lib/task-completion";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import { taskInclude } from "@/lib/task-include";
 import { runOwnerEmailAutomation } from "@/lib/project-automations";
+import { notifyTaskAssigned } from "@/lib/notifications";
 
 
 type RouteContext = {
@@ -108,7 +109,7 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     const existingTask = await prisma.task.findFirst({
       where: { id, deletedAt: null, OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }] },
-      select: { id: true, status: true, title: true, userId: true, projectId: true },
+      select: { id: true, status: true, title: true, userId: true, projectId: true, assigneeId: true },
     });
 
     if (!existingTask) {
@@ -163,6 +164,9 @@ export async function PATCH(req: Request, context: RouteContext) {
         after(() => runOwnerEmailAutomation({ trigger: "TASK_COMPLETED", task, actorId: user.id, origin }));
       }
     }
+
+    // A new assignee hears about it in their inbox (SMART-08).
+    if (task?.assigneeId && task.assigneeId !== existingTask.assigneeId) after(() => notifyTaskAssigned({ task, actor: user }));
 
     return NextResponse.json(task, { status: 200 });
   } catch (error) {

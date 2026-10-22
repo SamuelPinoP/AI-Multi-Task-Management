@@ -4,6 +4,8 @@ import type { ProjectChatStoredAttachmentReference } from "@/lib/project-chat-st
 
 /** Guests are deleted this long after they started, once nobody can sign in to them any more. */
 export const INACTIVE_GUEST_DAYS = 30;
+/** Inbox notifications (SMART-08) are kept this long, read or not. */
+export const NOTIFICATION_DAYS = 90;
 /** Per run, so one call stays well inside the function's time limit; the rest goes the next day. */
 const GUEST_BATCH_SIZE = 100;
 const UPLOAD_CLEANUP_ROUNDS = 8;
@@ -16,6 +18,7 @@ type CleanupDb = Pick<
   | "session"
   | "passwordResetToken"
   | "emailVerificationToken"
+  | "notification"
   | "user"
   | "projectCommentAttachment"
   | "projectChatAttachmentUpload"
@@ -25,6 +28,7 @@ export type DailyCleanupResult = {
   sessions: number;
   resetTokens: number;
   verificationTokens: number;
+  notifications: number;
   rateLimits: number;
   guests: number;
   /** Guests skipped because a stored file couldn't be deleted; they are retried the next day. */
@@ -35,7 +39,7 @@ export type DailyCleanupResult = {
 /**
  * Deletes what nobody can use any more (#132):
  * - expired sessions, used or expired password reset tokens, expired email confirmation links
- *   and expired rate-limit counters;
+ *   expired rate-limit counters and inbox notifications older than NOTIFICATION_DAYS;
  * - guest workspaces older than INACTIVE_GUEST_DAYS without a valid session (a guest has no
  *   password, so once its session is gone nobody can reach it), with their data and stored files;
  * - direct chat uploads that expired without being attached, with their stored files.
@@ -56,6 +60,9 @@ export async function runDailyCleanup({
     where: { OR: [{ usedAt: { not: null } }, { expiresAt: { lt: now } }] },
   });
   const verificationTokens = await db.emailVerificationToken.deleteMany({ where: { expiresAt: { lt: now } } });
+  const notifications = await db.notification.deleteMany({
+    where: { createdAt: { lt: new Date(now.getTime() - NOTIFICATION_DAYS * 86_400_000) } },
+  });
   // RateLimit.expiresAt is timestamptz; compare in SQL, as src/lib/rate-limit.ts does, so the
   // database's own time zone can't shift the cutoff.
   const rateLimits = await db.$executeRaw`DELETE FROM "RateLimit" WHERE "expiresAt" < now()`;
@@ -72,6 +79,7 @@ export async function runDailyCleanup({
     sessions: sessions.count,
     resetTokens: resetTokens.count,
     verificationTokens: verificationTokens.count,
+    notifications: notifications.count,
     rateLimits,
     guests: guests.deleted,
     guestsSkipped: guests.skipped,

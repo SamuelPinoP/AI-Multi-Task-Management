@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { createActivity } from "@/lib/activity";
 import { getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import { markChatsRead } from "@/lib/project-chat-unread";
+import { notifyMentions } from "@/lib/notifications";
 import {
   confirmProjectChatDirectUploadedAttachment,
   isProjectChatStorageConfigError,
@@ -218,7 +219,7 @@ export async function POST(req: Request, context: RouteContext) {
     const access = await getProjectAccess(projectId, user.id);
     if (!access) return NextResponse.json({ error: "Project not found" }, { status: 404 });
     if (!canEditProjectContent(access)) return NextResponse.json(unauthorizedProjectResponse("post comments or upload attachments"), { status: 403 });
-    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true } });
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true, userId: true } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
     // Prepared uploads were counted when their upload URLs were issued; only
@@ -280,6 +281,8 @@ export async function POST(req: Request, context: RouteContext) {
       entityId: project.id,
       message: `Added a discussion comment in project \"${project.name}\".`,
     });
+    // "@Name" mentions reach the inbox (SMART-08) after the response.
+    if (comment.message) after(() => notifyMentions({ project, author: user, message: comment.message }));
 
     return NextResponse.json(
       {

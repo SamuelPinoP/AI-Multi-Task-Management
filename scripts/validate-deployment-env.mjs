@@ -129,6 +129,15 @@ if (cronSecret !== undefined && cronSecret.length > 0 && cronSecret.length < 16)
   errors.push("CRON_SECRET is too short. Use at least 16 random characters, or remove it.");
 }
 
+// Browser push (SMART-08) needs both halves of the VAPID key pair; with neither, push is simply off.
+const vapidPublicKey = cleanEnvValue("VAPID_PUBLIC_KEY");
+const vapidPrivateKey = cleanEnvValue("VAPID_PRIVATE_KEY");
+if (Boolean(vapidPublicKey) !== Boolean(vapidPrivateKey)) {
+  errors.push("Set both VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY (from `npx web-push generate-vapid-keys`), or neither to leave browser notifications off.");
+} else if (vapidPublicKey && !/^[A-Za-z0-9_-]{80,100}$/.test(vapidPublicKey)) {
+  errors.push("VAPID_PUBLIC_KEY doesn't look like a web-push public key. Copy it again from `npx web-push generate-vapid-keys`.");
+}
+
 // Password reset and invitation emails build their links from APP_BASE_URL.
 const appBaseUrl = cleanEnvValue("APP_BASE_URL");
 if (isVercelProduction && !appBaseUrl) {
