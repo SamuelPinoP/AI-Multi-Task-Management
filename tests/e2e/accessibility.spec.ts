@@ -8,7 +8,15 @@ const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 
 async function violations(page: Page, label: string) {
   // Let open/close animations finish, so colors are measured at full opacity.
-  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined))));
+  // Loading spinners loop forever, so skip animations that never end.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ),
+  );
   const results = await new AxeBuilder({ page }).withTags(wcag).analyze();
   return results.violations.map(
     (violation) => `${label}: ${violation.id} (${violation.nodes.length}) ${violation.help} -> ${violation.nodes[0]?.target.join(" ")}`,
