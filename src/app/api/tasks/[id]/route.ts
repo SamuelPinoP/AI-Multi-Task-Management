@@ -194,6 +194,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
       where: { id, deletedAt: null },
       data: {
         deletedAt: new Date(),
+        deletedById: user.id,
       },
     });
 

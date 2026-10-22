@@ -52,6 +52,8 @@ type AttachmentUploadPlan =
     };
 
 const MAX_FILES_PER_MESSAGE = 5;
+// How often an open, visible chat checks for teammates' messages.
+const CHAT_REFRESH_MS = 7000;
 const STANDARD_FILE_SIZE_LIMIT = 10 * 1024 * 1024;
 const VIDEO_FILE_SIZE_LIMIT = 100 * 1024 * 1024;
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".m4v"]);
@@ -203,10 +205,58 @@ export function ProjectChatWorkspace({
   );
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Whether the reader is at the bottom of the thread; only then do new messages scroll it.
+  const nearBottomRef = useRef(true);
+  const chatVersionRef = useRef<string | null>(null);
+  const busyRef = useRef(false);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ block: "end" });
+    busyRef.current = isSubmitting || mutatingCommentId !== null;
+  }, [isSubmitting, mutatingCommentId]);
+
+  useEffect(() => {
+    const ownMessageSending = comments.at(-1)?.id.startsWith("pending-");
+    if (nearBottomRef.current || ownMessageSending) {
+      messagesEndRef.current?.scrollIntoView({ block: "end" });
+    }
   }, [comments]);
+
+  // Picks up teammates' messages, edits, deletes and pins while the chat is open.
+  useEffect(() => {
+    let stopped = false;
+
+    async function refresh() {
+      if (document.visibilityState !== "visible" || busyRef.current) return;
+      try {
+        const version = chatVersionRef.current;
+        const res = await fetch(
+          `/api/projects/${projectId}/comments${version ? `?version=${encodeURIComponent(version)}` : ""}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok || stopped) return;
+        const data = (await res.json()) as { version: string; changed: boolean; comments?: ProjectComment[] };
+        // Skip the update if a send or edit started meanwhile; the next check catches up.
+        if (busyRef.current) return;
+        chatVersionRef.current = data.version;
+        const fresh = data.comments;
+        if (!data.changed || !fresh) return;
+        setComments((prev) => [...fresh, ...prev.filter((comment) => comment.id.startsWith("pending-"))]);
+      } catch {
+        // Offline or a hiccup: try again on the next tick.
+      }
+    }
+
+    const timer = window.setInterval(() => void refresh(), CHAT_REFRESH_MS);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [projectId]);
 
   function addFiles(fileList: FileList | File[]) {
     const nextFiles = Array.from(fileList).filter((file) => file.size > 0);
@@ -608,7 +658,13 @@ export function ProjectChatWorkspace({
           </section>
         ) : null}
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-zinc-100/60 px-4 py-4 dark:bg-zinc-950 sm:px-6 lg:px-8">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto bg-zinc-100/60 px-4 py-4 dark:bg-zinc-950 sm:px-6 lg:px-8"
+          onScroll={(event) => {
+            const element = event.currentTarget;
+            nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 120;
+          }}
+        >
           <div className="mx-auto flex max-w-5xl flex-col gap-4">
             {comments.length === 0 ? (
               <div className="rounded-2xl bg-white/80 p-8 text-center shadow-sm ring-1 ring-zinc-200/70 dark:bg-zinc-900/70 dark:ring-zinc-800/70">
