@@ -103,8 +103,11 @@ export function taskSummary(dueToday: number, overdue: number) {
   return overdue ? `${tasks(dueToday)} due today and ${overdue} overdue.` : `${tasks(dueToday)} due today.`;
 }
 
-/** "now", "12m", "3h", "2d", then a short date. Both arguments are real instants. */
-export function relativeTime(instant: Date, realNow: Date) {
+/**
+ * "now", "12m", "3h", "2d", then a short date. Both arguments are real instants.
+ * The date is in `timeZone` when given; the server passes the user's, since its own is UTC.
+ */
+export function relativeTime(instant: Date, realNow: Date, timeZone?: string | null) {
   const minutes = Math.floor((realNow.getTime() - instant.getTime()) / 60_000);
   if (minutes < 1) return "now";
   if (minutes < 60) return `${minutes}m`;
@@ -112,7 +115,7 @@ export function relativeTime(instant: Date, realNow: Date) {
   if (hours < 24) return `${hours}h`;
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d`;
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(instant);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: timeZone ?? undefined }).format(instant);
 }
 
 /** SVG paths for a sparkline: the line and the area under it. */

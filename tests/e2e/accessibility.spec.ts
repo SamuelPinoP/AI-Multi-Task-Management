@@ -50,7 +50,10 @@ async function seedWorkspace(page: Page) {
   await post(`/api/projects/${project.id}/automations`, { trigger: "TASK_COMPLETED", action: "EMAIL_OWNER" });
   await page.request.put(`/api/projects/${project.id}/github`, { data: { repo: "ai-multi-demo/roadmap" } });
   const share = (await post(`/api/projects/${project.id}/share`, {})) as { path: string };
-  return { projectId: project.id, sharePath: share.path };
+  // A tree page with a child, so the tree view shows a filled root card and a plain one.
+  const tree = (await post("/api/tree-pages", { title: "A11y tree" })) as { id: string; nodes: { id: string }[] };
+  await post(`/api/tree-pages/${tree.id}/nodes`, { title: "Child idea", parentId: tree.nodes[0].id, color: "amber" });
+  return { projectId: project.id, sharePath: share.path, treePath: `/tree/${tree.id}` };
 }
 
 test("public pages have no WCAG A/AA violations", async ({ page }) => {
@@ -67,11 +70,11 @@ for (const theme of ["light", "dark"] as const) {
   test(`every signed-in page has no WCAG A/AA violations (${theme})`, async ({ page }) => {
     test.setTimeout(120_000);
     await continueAsGuest(page);
-    const { projectId, sharePath } = await seedWorkspace(page);
+    const { projectId, sharePath, treePath } = await seedWorkspace(page);
     await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
 
     const found: string[] = [];
-    for (const path of ["/", "/today", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/planner", "/goals", "/roadmap", "/trash", sharePath]) {
+    for (const path of ["/", "/today", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/tree", treePath, "/planner", "/goals", "/roadmap", "/trash", sharePath]) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
       found.push(...(await violations(page, path)));

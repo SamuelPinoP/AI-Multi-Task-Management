@@ -35,6 +35,10 @@ export default defineConfig({
     // answer requests before page.route() mocks see them, so only pwa.spec.ts
     // turns it on.
     serviceWorkers: "block",
+    // The browser follows TZ like the test process does. Chromium on Windows
+    // ignores TZ, so with TZ=UTC a test's new Date() and the page disagree on
+    // the date every evening. user-time-zone.spec.ts still sets its own zone.
+    timezoneId: process.env.TZ || undefined,
     extraHTTPHeaders: vercelBypassSecret
       ? {
           "x-vercel-protection-bypass": vercelBypassSecret,
@@ -78,7 +82,7 @@ export default defineConfig({
       // The browser flows again on a phone-sized screen.
       name: "mobile",
       use: { ...devices["Pixel 7"] },
-      testMatch: /(workspace|app-shell|home|tasks|quick-add|projects|notes|events|accessibility|project-insights|subtasks|goals|linked-notes|project-templates|project-share)\.spec\.ts/,
+      testMatch: /(workspace|app-shell|home|tasks|quick-add|projects|notes|events|accessibility|project-insights|subtasks|goals|linked-notes|project-templates|project-share|tree)\.spec\.ts/,
     },
   ],
 });

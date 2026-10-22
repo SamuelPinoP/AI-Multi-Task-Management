@@ -4,7 +4,7 @@ export type NavMatch = {
   href: string;
   /** Only the exact path counts (for example /events, but not /events/calendar). */
   exact?: boolean;
-  /** Extra paths that count as this item (for example /tasks/board for Boards). */
+  /** Extra paths that count as this item (for example /tasks/board and /tree for Boards). */
   match?: string[];
 };
 
@@ -25,6 +25,7 @@ const pageTitles: Array<[prefix: string, title: string]> = [
   ["/events", "Events"],
   ["/notes", "Notes"],
   ["/board", "Boards"],
+  ["/tree", "Tree view"],
   ["/projects", "Projects"],
   ["/planner", "Planner"],
   ["/goals", "Goals"],
