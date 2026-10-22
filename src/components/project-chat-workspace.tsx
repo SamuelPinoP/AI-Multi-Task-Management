@@ -797,7 +797,7 @@ export function ProjectChatWorkspace({
                               type="button"
                               onClick={() => setDeleteTargetId(comment.id)}
                               disabled={isMutating}
-                              className="inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium text-red-500 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-50 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+                              className="inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/40 dark:hover:text-red-300"
                               aria-label="Delete message"
                             >
                               <svg
