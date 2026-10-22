@@ -1,9 +1,23 @@
 "use client";
 
+import {
+  type Announcements,
+  closestCenter,
+  type CollisionDetection,
+  DndContext,
+  type DragMoveEvent,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  pointerWithin,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import { X } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import { toast } from "@/components/ui/toaster";
 import { DeleteNodeDialog, DeleteTreePageDialog, NewTreePageDialog } from "./tree-dialogs";
 import {
   buildTree,
@@ -16,10 +30,28 @@ import {
   treePageHref,
   treePageIdFromPath,
 } from "./tree-layout";
-import { TreeNodeRow } from "./tree-node-card";
+import { applyMove, type DropTarget, dropZoneFor, moveFor, type TreeMove } from "./tree-move";
+import { DragPreview, TreeNodeRow } from "./tree-node-card";
 import { TreePageSwitcher } from "./tree-page-switcher";
 import { ZoomControls } from "./tree-zoom-controls";
 import type { CreateIntent, DeleteIntent, TreeNode, TreeNodeColor, TreePage } from "./types";
+
+// The card under the pointer; with the keyboard there's no pointer, so the nearest card.
+const collisionDetection: CollisionDetection = (args) =>
+  args.pointerCoordinates ? pointerWithin(args) : closestCenter(args);
+
+const screenReaderInstructions = {
+  draggable:
+    "To move a node, press Space or Enter on its handle, then use the arrow keys to move it over another node. Drop it with Space or Enter: near that node's left or right edge to place it beside it, in the middle to make it a child. Press Escape to cancel.",
+};
+
+/** Where the drag is now: the pointer, or the dragged handle's center when using the keyboard. */
+function dragX(event: DragMoveEvent) {
+  const start = event.activatorEvent;
+  if (start instanceof MouseEvent) return start.clientX + event.delta.x;
+  const rect = event.active.rect.current.translated;
+  return rect ? rect.left + rect.width / 2 : 0;
+}
 
 export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
   const pathname = usePathname();
@@ -144,6 +176,75 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
       ),
     );
   }
+  // Drag and drop (TREE-02): the tree moves at once, and goes back with a message if the server refuses.
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const dropTargetRef = useRef<DropTarget | null>(null);
+  const sensors = useSensors(
+    // A short travel before a drag starts, so a click on the handle stays a click.
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor),
+  );
+  const titleOf = (id: string | number) => activePage?.nodes.find((node) => node.id === String(id))?.title ?? "node";
+  const announcements: Announcements = {
+    onDragStart: ({ active }) => `Picked up ${titleOf(active.id)}.`,
+    onDragOver: ({ active, over }) =>
+      over ? `${titleOf(active.id)} is over ${titleOf(over.id)}.` : `${titleOf(active.id)} is not over a node.`,
+    onDragEnd: ({ active, over }) =>
+      over ? `${titleOf(active.id)} was dropped on ${titleOf(over.id)}.` : `${titleOf(active.id)} was dropped.`,
+    onDragCancel: ({ active }) => `Moving ${titleOf(active.id)} was cancelled.`,
+  };
+
+  function showDropTarget(next: DropTarget | null) {
+    const current = dropTargetRef.current;
+    if (current?.nodeId === next?.nodeId && current?.zone === next?.zone) return;
+    dropTargetRef.current = next;
+    setDropTarget(next);
+  }
+  function updateDropTarget(event: DragMoveEvent) {
+    const { active, over } = event;
+    if (!activePage || !over) return showDropTarget(null);
+    const target = activePage.nodes.find((node) => node.id === String(over.id));
+    if (!target) return showDropTarget(null);
+    // The root has no siblings, so it only takes children.
+    const zone = target.parentId === null ? "child" : dropZoneFor(dragX(event), over.rect);
+    const allowed = moveFor(activePage.nodes, String(active.id), target.id, zone) !== null;
+    showDropTarget(allowed ? { nodeId: target.id, zone } : null);
+  }
+  function endDrag() {
+    setDraggingId(null);
+    showDropTarget(null);
+  }
+  async function dropNode(nodeId: string) {
+    const target = dropTargetRef.current;
+    endDrag();
+    if (!activePage || !target) return;
+    const move = moveFor(activePage.nodes, nodeId, target.nodeId, target.zone);
+    if (move) await moveNode(activePage.id, move);
+  }
+  async function moveNode(pageId: string, move: TreeMove) {
+    const before = pages.find((page) => page.id === pageId)?.nodes ?? [];
+    const setNodes = (update: (nodes: TreeNode[]) => TreeNode[]) =>
+      setPages((current) => current.map((page) => (page.id === pageId ? { ...page, nodes: update(page.nodes) } : page)));
+    setNodes((nodes) => applyMove(nodes, move));
+    try {
+      const res = await fetch(`/api/tree-pages/${pageId}/nodes/${move.nodeId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parentId: move.parentId, sortOrder: move.index }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "The node couldn't be moved.");
+      // The server answers with the new siblings in their saved order.
+      const saved = data as TreeNode[];
+      setNodes((nodes) => nodes.map((node) => saved.find((item) => item.id === node.id) ?? node));
+    } catch (err) {
+      setNodes(() => before);
+      toast.error(err instanceof Error ? err.message : "The node couldn't be moved.");
+    }
+  }
+  const draggingNode = activePage?.nodes.find((node) => node.id === draggingId) ?? null;
+
   function updateZoom(delta: number) {
     setZoom((current) => clampZoom(Number((current + delta).toFixed(2)), zoomLimits));
   }
@@ -270,30 +371,58 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                     This page is preparing its root node.
                   </p>
                 ) : (
-                  <div
-                    className="inline-flex min-w-[max(100%,56rem)] origin-top justify-center pb-12 transition-transform sm:min-w-full"
-                    style={{
-                      transform: `scale(${zoom})`,
-                      transformOrigin: "top center",
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={collisionDetection}
+                    // Scroll only near the very edge: the cards are large, and the default
+                    // (a fifth of the view) scrolled them away from under the pointer.
+                    autoScroll={{ threshold: { x: 0.1, y: 0.1 }, acceleration: 6 }}
+                    accessibility={{ announcements, screenReaderInstructions }}
+                    onDragStart={(event) => {
+                      setCreateIntent(null);
+                      setDraggingId(String(event.active.id));
                     }}
+                    onDragMove={updateDropTarget}
+                    onDragOver={updateDropTarget}
+                    onDragEnd={(event) => void dropNode(String(event.active.id))}
+                    onDragCancel={endDrag}
                   >
-                    <div className="flex min-w-max items-start justify-center gap-5 sm:gap-8">
-                      {tree.map((node) => (
-                        <TreeNodeRow
-                          key={node.id}
-                          node={node}
-                          createIntent={createIntent}
-                          onCreateIntent={setCreateIntent}
-                          onCreateNode={addNode}
-                          onRename={(item, title) => patchNode(item.id, { title })}
-                          onColorChange={(item, color) => patchNodeColor(item.id, color)}
-                          onDescriptionChange={(item, description) => patchNode(item.id, { description })}
-                          onResize={(item, width, height) => patchNode(item.id, { width, height })}
-                          onDelete={requestDeleteNode}
-                        />
-                      ))}
+                    <div
+                      className="inline-flex min-w-[max(100%,56rem)] origin-top justify-center pb-12 transition-transform sm:min-w-full"
+                      style={{
+                        transform: `scale(${zoom})`,
+                        transformOrigin: "top center",
+                      }}
+                    >
+                      <div className="flex min-w-max items-start justify-center gap-5 sm:gap-8">
+                        {tree.map((node) => (
+                          <TreeNodeRow
+                            key={node.id}
+                            node={node}
+                            draggingId={draggingId}
+                            dropTarget={dropTarget}
+                            createIntent={createIntent}
+                            onCreateIntent={setCreateIntent}
+                            onCreateNode={addNode}
+                            onRename={(item, title) => patchNode(item.id, { title })}
+                            onColorChange={(item, color) => patchNodeColor(item.id, color)}
+                            onDescriptionChange={(item, description) => patchNode(item.id, { description })}
+                            onResize={(item, width, height) => patchNode(item.id, { width, height })}
+                            onDelete={requestDeleteNode}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                    {/* Outside the zoomed tree, so the preview keeps its size under the pointer. */}
+                    <DragOverlay dropAnimation={null}>
+                      {draggingNode ? (
+                        <DragPreview
+                          node={draggingNode}
+                          carried={activePage ? subtreeIds(activePage.nodes, draggingNode.id).size - 1 : 0}
+                        />
+                      ) : null}
+                    </DragOverlay>
+                  </DndContext>
                 )}
               </div>
             </div>

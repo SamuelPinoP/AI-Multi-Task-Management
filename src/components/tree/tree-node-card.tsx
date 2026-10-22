@@ -1,7 +1,10 @@
 "use client";
 
+import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { GripVertical } from "lucide-react";
 import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { asTreeNodeColor, COLOR_LABELS, COLOR_TONES, TREE_NODE_COLORS } from "./tree-colors";
+import type { DropTarget } from "./tree-move";
 import type { CreateIntent, NestedNode, TreeNode, TreeNodeColor } from "./types";
 
 const MIN_WIDTH = 180;
@@ -19,6 +22,8 @@ function clampSize(width: number, height: number) {
 /** One node's card, then its children in a row below it, joined by connector lines. */
 export function TreeNodeRow({
   node,
+  draggingId,
+  dropTarget,
   createIntent,
   onCreateIntent,
   onCreateNode,
@@ -29,6 +34,8 @@ export function TreeNodeRow({
   onDelete,
 }: {
   node: NestedNode;
+  draggingId: string | null;
+  dropTarget: DropTarget | null;
   createIntent: CreateIntent | null;
   onCreateIntent: (intent: CreateIntent | null) => void;
   onCreateNode: (intent: CreateIntent, title: string) => Promise<void>;
@@ -48,6 +55,14 @@ export function TreeNodeRow({
     height: node.height || 160,
   });
   const isRoot = node.parentId === null;
+  // The handle drags the node with its subtree; the whole card is a place to drop (TREE-02).
+  // The API never moves the root, so it has no handle.
+  const { attributes: handleAttributes, listeners: handleListeners, setNodeRef: setHandleRef } = useDraggable({
+    id: node.id,
+    disabled: isRoot,
+  });
+  const { setNodeRef: setDropRef } = useDroppable({ id: node.id });
+  const dropZone = dropTarget?.nodeId === node.id ? dropTarget.zone : null;
   async function save() {
     const title = draft.trim();
     setEditing(false);
@@ -88,21 +103,49 @@ export function TreeNodeRow({
   const tone = COLOR_TONES[nodeColor];
   // Root cards are filled with the node color and carry white text; the others are surfaces with a colored edge.
   const cardTone = isRoot
-    ? `${tone.fill} border-transparent text-white ring-black/5 dark:ring-white/10`
-    : `bg-surface text-ink ring-transparent dark:shadow-none ${tone.border}`;
+    ? `${tone.fill} border-transparent text-white`
+    : `bg-surface text-ink dark:shadow-none ${tone.border}`;
+  const ringTone =
+    dropZone === "child"
+      ? "ring-2 ring-accent ring-offset-2 ring-offset-canvas"
+      : isRoot
+        ? "ring-1 ring-black/5 dark:ring-white/10"
+        : "ring-1 ring-transparent";
   const activeCreate = createIntent?.anchorNodeId === node.id ? createIntent : null;
 
   return (
-    <div className="relative flex shrink-0 flex-col items-center">
+    <div
+      className={`relative flex shrink-0 flex-col items-center transition-opacity ${draggingId === node.id ? "opacity-40" : ""}`}
+    >
       <article
+        ref={setDropRef}
         style={{
           width: `clamp(220px, calc(100vw - 3rem), ${sizeDraft.width}px)`,
           minHeight: sizeDraft.height,
         }}
-        className={`group relative flex flex-col overflow-visible rounded-2xl border p-3 shadow-lg shadow-zinc-900/5 ring-1 transition-[border,box-shadow,transform] duration-200 sm:p-4 ${cardTone}`}
+        className={`group relative flex flex-col overflow-visible rounded-2xl border p-3 shadow-lg shadow-zinc-900/5 transition-[border,box-shadow,transform] duration-200 sm:p-4 ${cardTone} ${ringTone}`}
       >
         {isRoot ? null : (
           <span className={`absolute inset-x-0 top-0 h-1.5 rounded-t-2xl ${tone.fill}`} aria-hidden="true" />
+        )}
+        {dropZone === "before" || dropZone === "after" ? (
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-y-2 w-1 rounded-full bg-accent ring-4 ring-accent/20 ${dropZone === "before" ? "-left-3" : "-right-3"}`}
+          />
+        ) : null}
+        {isRoot ? null : (
+          <button
+            ref={setHandleRef}
+            type="button"
+            {...handleAttributes}
+            {...handleListeners}
+            aria-label={`Move ${node.title}`}
+            title="Drag to move this node and everything under it"
+            className="absolute left-2 top-2 z-10 flex h-7 w-7 cursor-grab touch-none items-center justify-center rounded-xl text-muted transition hover:bg-surface-hover hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent/40 active:cursor-grabbing"
+          >
+            <GripVertical aria-hidden="true" className="h-4 w-4" />
+          </button>
         )}
         <button
           type="button"
@@ -113,7 +156,7 @@ export function TreeNodeRow({
         >
           ×
         </button>
-        <div className="flex items-start justify-between gap-3 pr-6">
+        <div className={`flex items-start justify-between gap-3 pr-6 ${isRoot ? "" : "pl-6"}`}>
           <div className="min-w-0 flex-1 text-center">
             {editing ? (
               <input
@@ -269,6 +312,8 @@ export function TreeNodeRow({
               <span className={`absolute -top-6 left-1/2 h-6 w-px -translate-x-1/2 ${connectorClass}`} aria-hidden="true" />
               <TreeNodeRow
                 node={child}
+                draggingId={draggingId}
+                dropTarget={dropTarget}
                 createIntent={createIntent}
                 onCreateIntent={onCreateIntent}
                 onCreateNode={onCreateNode}
@@ -282,6 +327,22 @@ export function TreeNodeRow({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** What follows the pointer while dragging: the node's title and how many nodes come along. */
+export function DragPreview({ node, carried }: { node: TreeNode; carried: number }) {
+  const tone = COLOR_TONES[asTreeNodeColor(node.color)];
+  return (
+    <div className="flex w-max max-w-64 cursor-grabbing items-center gap-2 rounded-2xl border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink shadow-2xl shadow-zinc-950/20">
+      <span aria-hidden="true" className={`h-3 w-3 shrink-0 rounded-full ${tone.fill}`} />
+      <span className="truncate">{node.title}</span>
+      {carried > 0 ? (
+        <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-xs text-accent">
+          +{carried} {carried === 1 ? "node" : "nodes"}
+        </span>
+      ) : null}
     </div>
   );
 }
