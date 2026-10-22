@@ -89,7 +89,10 @@ hydrate pages in dev, because tests that type or click right after a page loads
 can otherwise act before React is ready. Both of the config's servers use
 webpack, so they also work in a git worktree whose `node_modules` is a link to
 another checkout, which Turbopack refuses to compile; CI builds with Turbopack,
-like Vercel.
+like Vercel. When `TZ` is set, as in CI's `TZ=UTC`, the browser runs in that
+time zone too, so dates a test computes match the page's dates. (Git Bash
+passes `TZ=UTC` through but drops values with a slash, such as
+`America/New_York`.)
 
 ### Continuous integration
 
