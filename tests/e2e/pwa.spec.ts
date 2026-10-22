@@ -60,35 +60,48 @@ test.describe("offline reading", () => {
     });
   }
 
+  /** Whether a page (or API answer) at `path` is saved in the given cache. */
+  async function isSaved(page: Page, cacheName: string, path: string) {
+    return page.evaluate(
+      async ({ cacheName, path }) => Boolean(await caches.match(new URL(path, location.href).href, { cacheName })),
+      { cacheName, path },
+    );
+  }
+
   test("opened pages stay readable offline, and logging out deletes them", async ({ page, context }) => {
     await signUpAndLogIn(page, "Offline");
     const title = uniqueName("Read me offline");
     expect((await page.request.post("/api/tasks", { data: { title } })).status()).toBe(201);
 
+    // The worker installed itself on the sign-up page. Start over as someone who comes back
+    // with a session but no worker yet: the first page loads before the worker takes over,
+    // then hands it the URLs to save.
+    await page.evaluate(async () => {
+      for (const registration of await navigator.serviceWorker.getRegistrations()) await registration.unregister();
+      for (const name of await caches.keys()) await caches.delete(name);
+    });
     await page.goto("/tasks");
     await expect(page.getByText(title)).toBeVisible();
-    // The first page loads before the worker takes over; it saves the page and its data afterwards.
-    await expect
-      .poll(() =>
-        page.evaluate(async () => {
-          const pageSaved = await caches.match(location.href, { cacheName: "ai-multi-user-pages" });
-          const tasksSaved = await caches.match(new URL("/api/tasks", location.href).href, { cacheName: "ai-multi-user-api" });
-          return Boolean(pageSaved && tasksSaved);
-        }),
-      )
-      .toBe(true);
+    await expect.poll(async () => (await isSaved(page, "ai-multi-user-pages", "/tasks")) && isSaved(page, "ai-multi-user-api", "/api/tasks")).toBe(true);
+
+    // Pages opened once the worker is in charge are saved as they load. Home lists the task too.
+    await page.goto("/");
+    await expectHome(page);
+    await expect.poll(() => isSaved(page, "ai-multi-user-pages", "/")).toBe(true);
 
     await context.setOffline(true);
-    await page.reload();
+    await page.goto("/tasks");
     await expect(page.getByText(title)).toBeVisible();
     await expect(page.getByRole("status").filter({ hasText: "You're offline" })).toBeVisible();
 
     // In-app links work offline too: the app falls back to a full page load, which the worker answers.
-    // Home was saved right after signing in.
     await openSection(page, "Home");
     await expectHome(page);
-    // The sidebar link also shows the task count ("Tasks 1").
-    await page.getByRole("link", { name: /^Tasks\b/ }).first().click();
+    // The sidebar link also shows the task count ("Tasks 1"). Home lists the task as well, so
+    // wait for the Tasks page before looking for it.
+    await page.locator("aside").getByRole("link", { name: /^Tasks\b/ }).click();
+    await expect(page).toHaveURL(/\/tasks$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Tasks" })).toBeVisible();
     await expect(page.getByText(title)).toBeVisible();
 
     // A page never opened on this device gets the offline notice instead of a browser error.
