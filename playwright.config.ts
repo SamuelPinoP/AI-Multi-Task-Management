@@ -28,6 +28,10 @@ export default defineConfig({
     : [["list"], ["html", { open: "never" }]],
   use: {
     baseURL,
+    // The production build registers a service worker (SMART-10). It would
+    // answer requests before page.route() mocks see them, so only pwa.spec.ts
+    // turns it on.
+    serviceWorkers: "block",
     extraHTTPHeaders: vercelBypassSecret
       ? {
           "x-vercel-protection-bypass": vercelBypassSecret,

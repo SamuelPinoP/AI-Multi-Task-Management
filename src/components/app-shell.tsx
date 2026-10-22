@@ -5,6 +5,7 @@ import {
   CalendarClock,
   CalendarDays,
   ChevronRight,
+  Download,
   FolderKanban,
   House,
   Keyboard,
@@ -33,6 +34,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { CommandPalette } from "@/components/command-palette";
 import { NewTaskDialog } from "@/components/new-task-dialog";
 import { ProjectSheet, type ProjectInput } from "@/components/projects/project-sheet";
+import { clearOfflineData, OfflineBanner, promptInstall, useInstallPrompt } from "@/components/pwa";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ThemeToggle, useTheme } from "@/components/theme-provider";
 import {
@@ -446,6 +448,7 @@ function Sidebar({
 function UserMenu({ user, onShowShortcuts }: { user: NonNullable<ShellUser>; onShowShortcuts: () => void }) {
   const { theme, setTheme } = useTheme();
   const logoutForm = useRef<HTMLFormElement>(null);
+  const installPrompt = useInstallPrompt();
 
   return (
     <>
@@ -488,8 +491,19 @@ function UserMenu({ user, onShowShortcuts }: { user: NonNullable<ShellUser>; onS
             Keyboard shortcuts
             <span className="ml-auto text-xs text-muted">?</span>
           </DropdownMenuItem>
+          {installPrompt ? (
+            <DropdownMenuItem onSelect={() => void promptInstall(installPrompt)}>
+              <Download />
+              Install app
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => logoutForm.current?.requestSubmit()}>
+          <DropdownMenuItem
+            onSelect={() => {
+              // Saved offline copies go before the session does.
+              void clearOfflineData().finally(() => logoutForm.current?.requestSubmit());
+            }}
+          >
             <LogOut />
             Log out
           </DropdownMenuItem>
@@ -749,6 +763,7 @@ export function AppShell({
           </span>
           <ThemeToggle />
         </header>
+        <OfflineBanner />
         {children}
       </div>
     );
@@ -838,6 +853,7 @@ export function AppShell({
           onOpenSearch={() => setSearchOpen(true)}
           onShowShortcuts={() => setShortcutsOpen(true)}
         />
+        <OfflineBanner />
         <main id="main-content" className="min-h-0 flex-1 overflow-y-auto pb-24 lg:pb-0">
           {children}
         </main>

@@ -7,6 +7,18 @@ const nextConfig: NextConfig = {
   experimental: {
     proxyClientMaxBodySize: "110mb",
   },
+  async headers() {
+    return [
+      {
+        // Browsers check for a new service worker on every visit; never serve a stale one.
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self'" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

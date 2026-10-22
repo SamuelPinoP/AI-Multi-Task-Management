@@ -17,5 +17,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|uploads).*)"],
+  // The installable app's files must load signed out too: browsers fetch the
+  // manifest, icons and service worker without following a login redirect.
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|uploads|sw.js|manifest.webmanifest|icons/).*)"],
 };
