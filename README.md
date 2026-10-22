@@ -6,7 +6,7 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 
 ## Key Features
 
-- Secure authentication with signup, login, logout, sessions, and password reset
+- Secure authentication with signup, email confirmation, login, logout, sessions, and password reset
 - Notes, tasks, events, projects, calendars, a rule-based Smart Daily Planner, and trash recovery
 - Project-specific Kanban boards for organizing tasks by status with read-only Viewer access and Owner/Editor task creation and movement
 - Project collaboration with invitations and role-based Owner, Editor, and Viewer access enforced server-side
