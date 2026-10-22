@@ -13,6 +13,7 @@
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
     "validate:deploy-env": "node scripts/validate-deployment-env.mjs",
+    "test:unit:zones": "node scripts/test-unit-time-zones.mjs",
     "test:storage": "node --conditions react-server --import tsx --test src/lib/project-chat-*.test.ts",
     "verify:storage": "node --conditions react-server --import tsx scripts/verify-s3-storage.ts",
     "restore:database": "node --conditions react-server --import tsx scripts/restore-database-backup.ts",

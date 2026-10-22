@@ -59,9 +59,15 @@ back, checks CORS for `APP_BASE_URL`, and deletes both. Point
 ```bash
 npm run typecheck
 npm run lint
+npm run test:unit
+npm run test:unit:zones
 npm run test:storage
 npm run test:e2e
 ```
+
+`npm run test:unit:zones` runs the unit tests again with the process in
+Pago Pago (UTC-11), New York, Kolkata (UTC+5:30) and Kiritimati (UTC+14), so
+date code that only works in UTC fails here too. CI runs both.
 
 `npm run test:storage` runs Node tests for project-chat attachment validation,
 provider selection, S3 upload planning, provider-aware downloads/deletes, and
@@ -83,7 +89,10 @@ hydrate pages in dev, because tests that type or click right after a page loads
 can otherwise act before React is ready. Both of the config's servers use
 webpack, so they also work in a git worktree whose `node_modules` is a link to
 another checkout, which Turbopack refuses to compile; CI builds with Turbopack,
-like Vercel.
+like Vercel. When `TZ` is set, as in CI's `TZ=UTC`, the browser runs in that
+time zone too, so dates a test computes match the page's dates. (Git Bash
+passes `TZ=UTC` through but drops values with a slash, such as
+`America/New_York`.)
 
 ### Continuous integration
 
