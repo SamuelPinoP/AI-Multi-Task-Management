@@ -35,6 +35,10 @@ export default defineConfig({
     // answer requests before page.route() mocks see them, so only pwa.spec.ts
     // turns it on.
     serviceWorkers: "block",
+    // The browser follows TZ like the test process does. Chromium on Windows
+    // ignores TZ, so with TZ=UTC a test's new Date() and the page disagree on
+    // the date every evening. user-time-zone.spec.ts still sets its own zone.
+    timezoneId: process.env.TZ || undefined,
     extraHTTPHeaders: vercelBypassSecret
       ? {
           "x-vercel-protection-bypass": vercelBypassSecret,
