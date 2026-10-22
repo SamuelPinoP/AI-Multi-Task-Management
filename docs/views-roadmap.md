@@ -55,7 +55,7 @@ What exists: `src/components/tree-board.tsx` (1,244 lines) draws an org-chart st
 
 - Done: a "Move to…" button on every card except the root opens a dialog with two lists, "Put it under" (every node outside its own subtree, indented by level) and "Position" (first, or after each other child). It makes the same moves as dragging, so moving never needs a drag (WCAG 2.5.7). The helpers are `moveParentOptions`, `movePositions` and `currentIndex` in `tree-move.ts`.
 - Still to do: tree roles (`tree`, `treeitem`) and arrow keys between nodes; Enter edits, Tab adds a child, Shift+Enter adds a sibling, Alt+arrow keys move the node.
-- Still to do: Ctrl+Z undoes the last move.
+- Done: after a move, a toast offers Undo, and Ctrl+Z (Cmd+Z) undoes the last move unless the focus is in a text field.
 
 ### TREE-04 A better canvas (M, migration)
 
