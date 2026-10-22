@@ -477,6 +477,31 @@ test("whoever can edit the project can restore a teammate's deleted task", async
   expect(tasks.some((task) => task.id === taskId)).toBe(true);
 });
 
+test("only the owner shares the project or links GitHub; the token never reaches members", async () => {
+  const share = `/api/projects/${projectId}/share`;
+  const github = `/api/projects/${projectId}/github`;
+  await expectStatuses("POST share link", (client) => client.post(share), { editor: 403, viewer: 403, outsider: 404 });
+  const { path } = await json<{ path: string }>(await api.owner.post(share));
+  expect(path).toMatch(/^\/share\/[A-Za-z0-9_-]{32}$/);
+  const token = path.split("/").pop()!;
+  for (const role of ["owner", "editor", "viewer"] as const) {
+    const detail = await (await api[role].get(`/api/projects/${projectId}`)).text();
+    const list = await (await api[role].get("/api/projects")).text();
+    expect.soft(detail.includes(token), `project detail as ${role}`).toBe(false);
+    expect.soft(list.includes(token), `project list as ${role}`).toBe(false);
+  }
+  await expectStatuses("DELETE share link", (client) => client.delete(share), { editor: 403, viewer: 403, outsider: 404, owner: 200 });
+
+  await expectStatuses("PUT GitHub repository", (client) => client.put(github, { data: { repo: "ai-multi-demo/roadmap" } }), {
+    editor: 403,
+    viewer: 403,
+    outsider: 404,
+    owner: 200,
+  });
+  await expectStatuses("GET GitHub panel", (client) => client.get(github), { owner: 200, editor: 200, viewer: 200, outsider: 404 });
+  await expectStatuses("DELETE GitHub repository", (client) => client.delete(github), { editor: 403, viewer: 403, outsider: 404, owner: 200 });
+});
+
 test("signed-out requests are rejected", async ({ baseURL }) => {
   const anonymous = await playwrightRequest.newContext({ baseURL });
   const calls: [string, () => Promise<APIResponse>][] = [
@@ -489,6 +514,8 @@ test("signed-out requests are rejected", async ({ baseURL }) => {
     ["GET invitations", () => anonymous.get(`/api/projects/${projectId}/invitations`)],
     ["POST member", () => anonymous.post(`/api/projects/${projectId}/members`, { data: { name: "x", role: "VIEWER" } })],
     ["GET automations", () => anonymous.get(`/api/projects/${projectId}/automations`)],
+    ["POST share link", () => anonymous.post(`/api/projects/${projectId}/share`)],
+    ["PUT GitHub repository", () => anonymous.put(`/api/projects/${projectId}/github`, { data: { repo: "a/b" } })],
     ["POST automation", () => anonymous.post(`/api/projects/${projectId}/automations`, { data: { trigger: "TASK_CREATED", action: "EMAIL_OWNER" } })],
     ["GET tasks", () => anonymous.get("/api/tasks")],
     ["PATCH task", () => anonymous.patch(`/api/tasks/${projectTaskId}`, { data: { title: "x" } })],

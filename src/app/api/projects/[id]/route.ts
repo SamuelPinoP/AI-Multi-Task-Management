@@ -29,6 +29,8 @@ export async function GET(_req: Request, context: RouteContext) {
 
     const project = await prisma.project.findFirst({
       where: projectAccessWhereForProject(id, user.id),
+      // Members see everything but the share token (SMART-12).
+      omit: { shareToken: true },
       include: {
         notes: {
           where: { deletedAt: null },
@@ -118,7 +120,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     const updated = await prisma.project.updateMany({ where: { id, userId: user.id }, data });
     if (updated.count === 0) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-    const project = await prisma.project.findUnique({ where: { id } });
+    const project = await prisma.project.findUnique({ where: { id }, omit: { shareToken: true } });
     return NextResponse.json(project);
   } catch (error) {
     console.error("PATCH /api/projects/[id] error:", error);

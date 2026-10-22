@@ -199,6 +199,11 @@ model Project {
   status      ProjectStatus @default(ACTIVE)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  /// "owner/name" of a public GitHub repository shown on the project (SMART-12).
+  githubRepo  String?
+  /// The read-only share link's token (/share/<token>); null when sharing is off (SMART-12).
+  shareToken  String?       @unique
+  sharedAt    DateTime?
 
   userId            String
   user              User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
