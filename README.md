@@ -2,10 +2,6 @@
 
 Live Demo: https://ai-multi-task-management-vercel.vercel.app
 
-## Demo Video
-Watch the demo:
-https://studio.youtube.com/channel/UCsAQln_0zQCjK95fsJ_kUUA/videos/upload?filter=%5B%5D&sort=%7B%22columnType%22%3A%22date%22%2C%22sortOrder%22%3A%22DESCENDING%22%7D
-
 AI Multi is a full-stack productivity and collaboration platform built with Next.js, TypeScript, Prisma, PostgreSQL, and Vercel. It supports authentication, notes, tasks, events, projects, Kanban project boards, project chat, file uploads, invitations, password reset, search, trash, planning views, recurrence, guest mode, and dark mode.
 
 ## Key Features
@@ -183,6 +179,22 @@ Add `DOTENV_CONFIG_PATH=.env.r2` and `--from-r2 latest` to fetch the newest
 backup straight from R2. The script refuses targets that already have data
 and checks that the target has the backup's migrations. It restores in one
 transaction, so a failure leaves the target empty.
+
+## Daily cleanup
+
+Every day at about 09:00 UTC, after the backup, Vercel Cron calls
+`/api/cron/cleanup` (`src/lib/daily-cleanup.ts`). It deletes:
+
+- expired login sessions, used or expired password reset tokens and expired
+  rate-limit counters;
+- guest workspaces that started more than 30 days ago and have no valid
+  session (guests have no password, so nobody can open them again), with
+  their tasks, notes, events, projects and stored chat files. A guest that is
+  in a real user's project, or whose project has a real member, is left alone;
+- chat uploads that expired without being attached, with their stored files.
+
+It answers with the counts. A repeat call finds nothing new, so the route is
+safe to leave public; with `CRON_SECRET` set it is required, as for backups.
 
 ## Tech Stack
 
