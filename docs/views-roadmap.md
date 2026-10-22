@@ -35,11 +35,11 @@ Each project in the sidebar opens to Overview, Board and Chat, so the chat is on
 
 What exists: `src/components/tree-board.tsx` (1,244 lines) draws an org-chart style tree of cards with title, description, color and size, add child or sibling, delete, zoom and full screen. Tree pages are private per user. The API already moves nodes: `PATCH /api/tree-pages/[pageId]/nodes/[nodeId]` with `parentId` and `sortOrder` re-parents a node, refuses cycles and re-numbers the siblings in one transaction. Only the UI is missing.
 
-### TREE-01 Prepare (S–M, no migration)
+### TREE-01 Prepare (done)
 
-- Split `tree-board.tsx` into `src/components/tree/` (board, node card, dialogs, layout helpers). Overlaps TOOL-04.
-- Give the tree its own routes, `/tree` and `/tree/[pageId]`, so pages have links and the sidebar can list them (SIDE-05). Keep `/board?view=tree` as a redirect.
-- Move the colors to the design tokens in `globals.css`, like the rest of the redesign.
+- `tree-board.tsx` is split into `src/components/tree/`: the board, node card, dialogs (on the shared `Dialog` and `ConfirmDialog`), page switcher, zoom controls, colors, types and pure layout helpers with unit tests (`tree-layout.test.ts`).
+- The tree has its own routes, `/tree` and `/tree/[pageId]` (`src/lib/tree-pages.ts` loads them). Switching, creating and deleting pages updates the address without a reload. `/board?view=tree` redirects to `/tree`. Someone else's page is not found.
+- Node colors are the `--tree-*` tokens in `globals.css` (white text passes 4.5:1 on each), and the canvas grid is `.tree-canvas`. `tests/e2e/tree.spec.ts` covers the routes, and the axe pass scans `/tree`.
 
 ### TREE-02 Drag to re-parent and reorder (M, no migration)
 

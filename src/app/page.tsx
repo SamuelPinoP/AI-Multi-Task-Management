@@ -305,7 +305,7 @@ export default async function HomePage() {
                       {activity.project ? <span className="text-muted"> · {activity.project.name}</span> : null}
                     </span>
                     <time dateTime={activity.createdAt.toISOString()} className="shrink-0 text-xs text-muted">
-                      {relativeTime(activity.createdAt, realNow)}
+                      {relativeTime(activity.createdAt, realNow, timeZone)}
                     </time>
                   </li>
                 ))}
