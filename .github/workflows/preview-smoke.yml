@@ -11,7 +11,8 @@ jobs:
       github.event.deployment_status.state == 'success' &&
       contains(github.event.deployment.environment, 'Preview')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The browser's system packages come from apt, which has taken over 10 minutes on slow days.
+    timeout-minutes: 20
     env:
       # Preview URLs sit behind Vercel Deployment Protection; this secret lets the tests through.
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
