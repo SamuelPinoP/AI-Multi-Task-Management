@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { continueAsGuest, uniqueName } from "./helpers";
+import path from "node:path";
+import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
 
 // TEST-04 (#140) and DES-06 (#134): every page passes axe's WCAG 2.1 A and AA rules.
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
@@ -88,6 +89,51 @@ for (const theme of ["light", "dark"] as const) {
     await page.keyboard.type("task");
     await expect(page.getByRole("option").first()).toBeVisible();
     found.push(...(await violations(page, "command palette")));
+
+    expect(found).toEqual([]);
+  });
+}
+
+// Attachments need an account (guests can't upload), so the scans above never see them.
+for (const theme of ["light", "dark"] as const) {
+  test(`project chat with attachments has no WCAG A/AA violations (${theme})`, async ({ page }) => {
+    test.setTimeout(120_000);
+    const fixture = (name: string) => path.join(process.cwd(), "tests", "fixtures", name);
+    const chatMessage = uniqueName("A11y attachments");
+    await signUpAndLogIn(page, "A11y uploader");
+    await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
+    const project = (await (await page.request.post("/api/projects", { data: { name: uniqueName("A11y chat project") } })).json()) as { id: string };
+
+    const found: string[] = [];
+    await page.goto(`/projects/${project.id}/chat`);
+    await page.waitForLoadState("networkidle");
+    await page
+      .locator('input[type="file"]')
+      .setInputFiles(["sample-photo.png", "sample-clip.webm", "sample-brief.pdf", "sample-notes.docx", "sample-tasks.csv"].map(fixture));
+    await expect(page.getByRole("list", { name: "Files to send" }).getByRole("listitem")).toHaveCount(5);
+    found.push(...(await violations(page, "chat composer with files")));
+
+    await page.getByPlaceholder(/share an update/i).fill(chatMessage);
+    await page.getByRole("button", { name: /send message/i }).click();
+    const messageCard = page.locator("article").filter({ hasText: chatMessage });
+    await expect(messageCard.getByText("Sending")).toBeHidden();
+    await expect(messageCard.getByText(/^\d+:\d{2}$/)).toBeVisible();
+    await messageCard.getByRole("button", { name: "Open sample-brief.pdf" }).scrollIntoViewIfNeeded();
+    await expect(messageCard.getByText(/PDF document .* 2 pages/)).toBeVisible({ timeout: 30_000 });
+    found.push(...(await violations(page, "chat message with attachments")));
+
+    // The viewer, on a photo and on the PDF (its zoom bar), with the other files as thumbs.
+    await messageCard.getByRole("button", { name: "Open sample-photo.png" }).click();
+    const viewer = page.getByRole("dialog");
+    await expect(viewer).toHaveAccessibleName("sample-photo.png, 1 of 5");
+    found.push(...(await violations(page, "attachment viewer on a photo")));
+    await viewer.getByRole("button", { name: "Show sample-brief.pdf" }).click();
+    await expect(viewer).toHaveAccessibleName("sample-brief.pdf, 3 of 5");
+    await expect(viewer.getByRole("button", { name: "Zoom in" })).toBeVisible();
+    found.push(...(await violations(page, "attachment viewer on a PDF")));
+    await viewer.getByRole("button", { name: "Show sample-tasks.csv" }).click();
+    await expect(viewer.getByRole("table")).toBeVisible();
+    found.push(...(await violations(page, "attachment viewer on a CSV file")));
 
     expect(found).toEqual([]);
   });
