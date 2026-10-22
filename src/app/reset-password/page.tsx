@@ -34,6 +34,8 @@ async function resetPasswordAction(formData: FormData) {
 
   await prisma.$transaction([
     prisma.user.update({ where: { id: resetToken.userId }, data: { passwordHash: hashPassword(password) } }),
+    // The link came to the user's inbox, so it confirms the address as well (#130).
+    prisma.user.updateMany({ where: { id: resetToken.userId, emailVerifiedAt: null }, data: { emailVerifiedAt: new Date() } }),
     prisma.passwordResetToken.update({ where: { id: resetToken.id }, data: { usedAt: new Date() } }),
     prisma.passwordResetToken.deleteMany({ where: { userId: resetToken.userId, id: { not: resetToken.id } } }),
     prisma.session.deleteMany({ where: { userId: resetToken.userId } }),

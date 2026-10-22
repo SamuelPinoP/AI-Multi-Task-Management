@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeAuthEmail, requireApiUser } from "@/lib/auth";
+import { EMAIL_NOT_CONFIRMED_ERROR } from "@/lib/email-verification";
 
 type RouteContext = { params: Promise<{ invitationId: string }> };
 
@@ -15,6 +16,8 @@ export async function PATCH(req: Request, context: RouteContext) {
     if (action !== "ACCEPT" && action !== "DECLINE") {
       return NextResponse.json({ error: "Action must be ACCEPT or DECLINE" }, { status: 400 });
     }
+    // Invitations are matched by email, so answering one needs a confirmed address (#130).
+    if (!user.emailVerifiedAt) return NextResponse.json({ error: EMAIL_NOT_CONFIRMED_ERROR }, { status: 403 });
 
     const invitation = await prisma.projectInvitation.findFirst({
       where: {

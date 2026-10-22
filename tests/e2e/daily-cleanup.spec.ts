@@ -36,6 +36,12 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
        VALUES ($1, $2, $3, ${UTC_NOW} + make_interval(hours => $4), ${used ? UTC_NOW : "NULL"})`,
       [id(name), id(user), id(`${name}-hash`), expiresInHours],
     );
+  const addVerificationToken = (name: string, user: string, expiresInHours: number) =>
+    sql(
+      `INSERT INTO "EmailVerificationToken" (id, "userId", "tokenHash", "expiresAt")
+       VALUES ($1, $2, $3, ${UTC_NOW} + make_interval(hours => $4))`,
+      [id(name), id(user), id(`${name}-hash`), expiresInHours],
+    );
   const addProject = (name: string, owner: string) =>
     sql(`INSERT INTO "Project" (id, name, "userId", "updatedAt") VALUES ($1, $2, $3, ${UTC_NOW})`, [id(name), name, id(owner)]);
 
@@ -80,6 +86,8 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
     await addResetToken("used-token", "member", 1, true);
     await addResetToken("expired-token", "member", -1, false);
     await addResetToken("live-token", "member", 1, false);
+    await addVerificationToken("expired-confirmation", "member", -1);
+    await addVerificationToken("live-confirmation", "member", 1);
     await addProject("member-project", "member");
     await sql(
       `INSERT INTO "ProjectMember" (id, "projectId", "userId", name, role, "updatedAt") VALUES ($1, $2, $3, 'Guest helper', 'EDITOR', ${UTC_NOW})`,
@@ -113,6 +121,7 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
     }
     expect(await exists("PasswordResetToken", "id", id("used-token"))).toBe(false);
     expect(await exists("PasswordResetToken", "id", id("expired-token"))).toBe(false);
+    expect(await exists("EmailVerificationToken", "id", id("expired-confirmation"))).toBe(false);
     expect(await exists("RateLimit", "key", id("rate-expired"))).toBe(false);
 
     // Kept.
@@ -122,6 +131,7 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
     expect(await exists("ProjectMember", "id", id("shared-membership"))).toBe(true);
     expect(await exists("Session", "id", id("member-session"))).toBe(true);
     expect(await exists("PasswordResetToken", "id", id("live-token"))).toBe(true);
+    expect(await exists("EmailVerificationToken", "id", id("live-confirmation"))).toBe(true);
     expect(await exists("RateLimit", "key", id("rate-live"))).toBe(true);
     expect(await exists("ProjectChatAttachmentUpload", "id", id("pending-upload"))).toBe(true);
     expect(existsSync(pendingFile)).toBe(true);

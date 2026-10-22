@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentUser, hashPassword, isPublicSignupEnabled, normalizeAuthEmail } from "@/lib/auth";
+import { sendEmailVerification } from "@/lib/email-verification";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { clientIpFrom, RATE_LIMITS, tooManyAttemptsMessage } from "@/lib/rate-limit-core";
@@ -27,13 +28,16 @@ async function signupAction(formData: FormData) {
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (existing) redirect("/signup?error=exists");
 
-  await prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       name,
       email,
       passwordHash: hashPassword(password),
     },
+    select: { id: true, email: true },
   });
+  // If this email doesn't go through, the banner in the app sends a new one.
+  await sendEmailVerification(user);
 
   redirect("/login?error=created");
 }

@@ -12,12 +12,19 @@ const STORED_FILE_SELECT = { storageProvider: true, storageKey: true, fileType: 
 
 type CleanupDb = Pick<
   PrismaClient,
-  "$executeRaw" | "session" | "passwordResetToken" | "user" | "projectCommentAttachment" | "projectChatAttachmentUpload"
+  | "$executeRaw"
+  | "session"
+  | "passwordResetToken"
+  | "emailVerificationToken"
+  | "user"
+  | "projectCommentAttachment"
+  | "projectChatAttachmentUpload"
 >;
 
 export type DailyCleanupResult = {
   sessions: number;
   resetTokens: number;
+  verificationTokens: number;
   rateLimits: number;
   guests: number;
   /** Guests skipped because a stored file couldn't be deleted; they are retried the next day. */
@@ -27,7 +34,8 @@ export type DailyCleanupResult = {
 
 /**
  * Deletes what nobody can use any more (#132):
- * - expired sessions, used or expired password reset tokens and expired rate-limit counters;
+ * - expired sessions, used or expired password reset tokens, expired email confirmation links
+ *   and expired rate-limit counters;
  * - guest workspaces older than INACTIVE_GUEST_DAYS without a valid session (a guest has no
  *   password, so once its session is gone nobody can reach it), with their data and stored files;
  * - direct chat uploads that expired without being attached, with their stored files.
@@ -47,6 +55,7 @@ export async function runDailyCleanup({
   const resetTokens = await db.passwordResetToken.deleteMany({
     where: { OR: [{ usedAt: { not: null } }, { expiresAt: { lt: now } }] },
   });
+  const verificationTokens = await db.emailVerificationToken.deleteMany({ where: { expiresAt: { lt: now } } });
   // RateLimit.expiresAt is timestamptz; compare in SQL, as src/lib/rate-limit.ts does, so the
   // database's own time zone can't shift the cutoff.
   const rateLimits = await db.$executeRaw`DELETE FROM "RateLimit" WHERE "expiresAt" < now()`;
@@ -62,6 +71,7 @@ export async function runDailyCleanup({
   return {
     sessions: sessions.count,
     resetTokens: resetTokens.count,
+    verificationTokens: verificationTokens.count,
     rateLimits,
     guests: guests.deleted,
     guestsSkipped: guests.skipped,
