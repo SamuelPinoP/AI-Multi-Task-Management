@@ -7,7 +7,10 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE_NAME)?.value);
 
-  if (!hasSession && !publicPaths.has(pathname)) {
+  // Read-only share pages (SMART-12) open without an account; the token is the key.
+  const isSharePage = pathname.startsWith("/share/");
+
+  if (!hasSession && !publicPaths.has(pathname) && !isSharePage) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);

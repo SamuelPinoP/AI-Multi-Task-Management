@@ -20,6 +20,9 @@ const e2eEnv = {
   PROJECT_CHAT_STORAGE_PROVIDER: "",
   PROJECT_CHAT_VIDEO_STORAGE_PROVIDER: "local",
   SIGNUP_ENABLED: "true",
+  // The GitHub stand-in from tests/e2e/github-stub.ts (Playwright's global setup).
+  GITHUB_API_URL: `http://127.0.0.1:${Number(e2ePort) + 1000}`,
+  GITHUB_TOKEN: "",
 };
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

@@ -10,6 +10,8 @@ import { ProjectAssignedTasksSection } from "@/components/project-assigned-tasks
 import { ProjectChatPanel } from "@/components/project-chat-panel";
 import { ProjectInsights } from "@/components/projects/project-insights";
 import { ProjectAutomations } from "@/components/projects/project-automations";
+import { GithubPanel } from "@/components/projects/github-panel";
+import { ProjectShare } from "@/components/projects/project-share";
 import { eventWallTime, formatEventDateTime } from "@/lib/event-time";
 import {
   getProjectAccessForUser,
@@ -17,6 +19,7 @@ import {
 } from "@/lib/project-access";
 import { OWNER_INVITATION_SELECT } from "@/lib/project-invitations";
 import { AUTOMATION_SELECT, automationJson } from "@/lib/project-automations";
+import { sharePath } from "@/lib/project-share";
 import { markProjectOpened } from "@/lib/recent-shortcuts";
 import { describeRepeat, firstOccurrenceEnd } from "@/lib/recurrence";
 import { projectInsights } from "@/lib/project-insights";
@@ -276,6 +279,16 @@ export default async function ProjectDetailPage({
           initialRules={project.automations.map(automationJson)}
           members={project.members.map((member) => ({ id: member.id, name: member.name }))}
         />
+
+        <GithubPanel
+          endpoint={`/api/projects/${project.id}/github`}
+          repo={project.githubRepo}
+          manageProjectId={isOwner ? project.id : undefined}
+        />
+        {/* The share token is the owner's to hand out; other members never receive it. */}
+        {isOwner ? (
+          <ProjectShare projectId={project.id} initialPath={project.shareToken ? sharePath(project.shareToken) : null} />
+        ) : null}
 
         <section className="mt-8">
           <h2 className="mb-4 text-2xl font-semibold">Assigned Notes</h2>

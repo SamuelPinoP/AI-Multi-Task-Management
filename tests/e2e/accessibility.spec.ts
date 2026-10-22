@@ -36,7 +36,12 @@ async function seedWorkspace(page: Page) {
     projectId: project.id,
   });
   await post("/api/notes", { title: "A note", content: "Some text", projectId: project.id });
-  return project.id;
+  // Phase 6 sections on the project page: an automation, a linked repository (the GitHub
+  // stand-in from github-stub.ts) and a share link, whose public page is scanned too.
+  await post(`/api/projects/${project.id}/automations`, { trigger: "TASK_COMPLETED", action: "EMAIL_OWNER" });
+  await page.request.put(`/api/projects/${project.id}/github`, { data: { repo: "ai-multi-demo/roadmap" } });
+  const share = (await post(`/api/projects/${project.id}/share`, {})) as { path: string };
+  return { projectId: project.id, sharePath: share.path };
 }
 
 test("public pages have no WCAG A/AA violations", async ({ page }) => {
@@ -53,11 +58,11 @@ for (const theme of ["light", "dark"] as const) {
   test(`every signed-in page has no WCAG A/AA violations (${theme})`, async ({ page }) => {
     test.setTimeout(120_000);
     await continueAsGuest(page);
-    const projectId = await seedWorkspace(page);
+    const { projectId, sharePath } = await seedWorkspace(page);
     await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
 
     const found: string[] = [];
-    for (const path of ["/", "/today", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/planner", "/goals", "/roadmap", "/trash"]) {
+    for (const path of ["/", "/today", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/planner", "/goals", "/roadmap", "/trash", sharePath]) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
       found.push(...(await violations(page, path)));
@@ -82,6 +87,12 @@ for (const theme of ["light", "dark"] as const) {
     await page.keyboard.press("n");
     await expect(page.getByRole("dialog", { name: "New task" })).toBeVisible();
     found.push(...(await violations(page, "new task dialog")));
+    await page.keyboard.press("Escape");
+
+    await page.goto("/projects");
+    await page.locator("#main-content").getByRole("button", { name: "New project" }).click();
+    await expect(page.getByRole("dialog", { name: "New project" })).toBeVisible();
+    found.push(...(await violations(page, "new project sheet")));
     await page.keyboard.press("Escape");
 
     await page.keyboard.press("Control+K");

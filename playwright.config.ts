@@ -1,6 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const e2ePort = process.env.E2E_PORT || "3100";
+// tests/e2e/github-stub.ts answers for GitHub's API on this port (SMART-12).
+const githubStubUrl = `http://127.0.0.1:${Number(e2ePort) + 1000}`;
 const baseURL =
   process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${e2ePort}`;
 const isCI = Boolean(process.env.CI);
@@ -18,6 +20,7 @@ const vercelBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  globalSetup: "./tests/e2e/github-stub.ts",
   timeout: 60_000,
   // One worker: a cold dev server compiling routes for two workers at once
   // aborts navigations, and the suite is small.
@@ -58,6 +61,8 @@ export default defineConfig({
           PROJECT_CHAT_STORAGE_PROVIDER: "",
           PROJECT_CHAT_VIDEO_STORAGE_PROVIDER: "local",
           SIGNUP_ENABLED: "true",
+          GITHUB_API_URL: githubStubUrl,
+          GITHUB_TOKEN: "",
         },
         reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "true",
         // The production build runs inside this timeout too.
@@ -73,7 +78,7 @@ export default defineConfig({
       // The browser flows again on a phone-sized screen.
       name: "mobile",
       use: { ...devices["Pixel 7"] },
-      testMatch: /(workspace|app-shell|home|tasks|quick-add|projects|notes|events|accessibility|project-insights|subtasks|goals|linked-notes|project-templates)\.spec\.ts/,
+      testMatch: /(workspace|app-shell|home|tasks|quick-add|projects|notes|events|accessibility|project-insights|subtasks|goals|linked-notes|project-templates|project-share)\.spec\.ts/,
     },
   ],
 });

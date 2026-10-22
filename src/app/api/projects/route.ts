@@ -26,6 +26,8 @@ export async function GET(req: Request) {
     const statusFilter = parseProjectStatus(searchParams.get("status"));
 
     const projects = await prisma.project.findMany({
+      // The share token is the owner's to hand out (SMART-12); the share API returns it.
+      omit: { shareToken: true },
       where: {
         AND: [
           projectAccessWhere(user.id),
