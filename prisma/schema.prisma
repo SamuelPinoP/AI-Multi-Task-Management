@@ -22,6 +22,9 @@ model User {
   passwordHash                 String?
   /// When the user proved they own `email`, by a confirmation or password reset link (#130).
   emailVerifiedAt              DateTime?
+  /// The secret in the user's calendar subscription link, /api/calendar/<token>.ics (SMART-09).
+  /// Stored as is so the link can be copied again; "New link" replaces it.
+  calendarFeedToken            String?                       @unique
   sessions                     Session[]
   passwordResetTokens          PasswordResetToken[]
   emailVerificationTokens      EmailVerificationToken[]
