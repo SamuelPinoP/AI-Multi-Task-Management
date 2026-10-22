@@ -2,6 +2,7 @@
 
 import { WifiOff } from "lucide-react";
 import { useEffect, useSyncExternalStore } from "react";
+import { turnOffPush } from "@/lib/push-client";
 
 /**
  * The installable app (SMART-10): registers public/sw.js, offers the browser's
@@ -22,8 +23,9 @@ function setInstallPrompt(event: InstallPromptEvent | null) {
 }
 
 /**
- * Deletes the pages and data saved for offline reading. Call it before signing
- * out. The service worker also drops any save still in flight; deleting here
+ * Deletes the pages and data saved for offline reading, and stops push
+ * notifications to this device (SMART-08), so the next person here gets
+ * neither. Call it before signing out. The service worker also drops any save still in flight; deleting here
  * too covers a page it doesn't control. Gives up after 1.5 seconds, so a
  * stuck storage layer never blocks logging out.
  */
@@ -33,7 +35,10 @@ export async function clearOfflineData() {
     try {
       navigator.serviceWorker?.controller?.postMessage({ type: "clear-user-data" });
       const names = await caches.keys();
-      await Promise.all(names.filter((name) => name.startsWith(USER_CACHE_PREFIX)).map((name) => caches.delete(name)));
+      await Promise.all([
+        ...names.filter((name) => name.startsWith(USER_CACHE_PREFIX)).map((name) => caches.delete(name)),
+        turnOffPush(),
+      ]);
     } catch {
       // Storage blocked (private mode, permissions): nothing was saved either.
     }

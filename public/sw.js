@@ -1,4 +1,5 @@
-// AI Multi service worker (SMART-10): offline reading for the installable app.
+// AI Multi service worker (SMART-10): offline reading for the installable app,
+// and browser push notifications (SMART-08).
 //
 // Plain JavaScript served as /sw.js, so Turbopack (Vercel, CI) and webpack
 // (local worktrees) builds ship the same file. Registered by
@@ -9,6 +10,9 @@
 // - Build assets under /_next/static: cache first (their names change on deploy).
 // - Everything else (sign-in, saving, uploads, downloads, files opened from
 //   /api or /uploads) goes straight to the network.
+//
+// - Push: shows what src/lib/notifications.ts sends ({ title, body, url, tag })
+//   and opens its page when clicked, in an open AI Multi tab if there is one.
 //
 // Saved pages and data live in caches named "ai-multi-user-*". The app asks
 // this worker to delete them when you log out or open a signed-out page
@@ -77,6 +81,45 @@ self.addEventListener("fetch", (event) => {
   } else if (isReadableApi(url)) {
     event.respondWith(networkFirst(event, API_CACHE, MAX_API_RESPONSES, offlineApiResponse));
   }
+});
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    // Not ours, or garbled: show nothing rather than a broken notification.
+    return;
+  }
+  if (typeof data.title !== "string") return;
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: typeof data.body === "string" ? data.body : "",
+      tag: typeof data.tag === "string" ? data.tag : undefined,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: typeof data.url === "string" ? data.url : "/" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  // Only pages of this app; anything else falls back to Home.
+  const target = new URL(event.notification.data?.url || "/", self.location.origin);
+  const href = target.origin === self.location.origin ? target.href : self.location.origin + "/";
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const open = windows.find((client) => new URL(client.url).origin === self.location.origin);
+      if (open) {
+        await open.focus();
+        if ("navigate" in open) await open.navigate(href);
+        return;
+      }
+      await self.clients.openWindow(href);
+    })(),
+  );
 });
 
 self.addEventListener("message", (event) => {

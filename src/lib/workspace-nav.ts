@@ -26,14 +26,16 @@ export type WorkspaceNav = {
   pendingInvitations: number;
   /** How many chats have unread messages, for the sidebar's Chats badge. */
   unreadChats: number;
+  /** Unread notifications in the bell's inbox (SMART-08). */
+  unreadNotifications: number;
 };
 
 /** Counts and project links for the app shell's sidebar, top bar and bottom tabs. */
-export async function getWorkspaceNav(user: { id: string; email: string }): Promise<WorkspaceNav> {
+export async function getWorkspaceNav(user: { id: string; email: string; emailVerifiedAt: Date | null }): Promise<WorkspaceNav> {
   const activeProjectsWhere = { AND: [projectAccessWhere(user.id), { status: "ACTIVE" as const }] };
   const openTaskWhere = { deletedAt: null, status: { not: TaskStatus.DONE } };
 
-  const [projects, activeProjectCount, openTasks, pendingInvitations, chatProjects] = await Promise.all([
+  const [projects, activeProjectCount, openTasks, pendingInvitations, chatProjects, unreadNotifications] = await Promise.all([
     prisma.project.findMany({
       where: activeProjectsWhere,
       select: {
@@ -49,13 +51,17 @@ export async function getWorkspaceNav(user: { id: string; email: string }): Prom
     prisma.task.count({
       where: { ...openTaskWhere, OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }] },
     }),
-    prisma.projectInvitation.count({
-      where: {
-        status: "PENDING",
-        OR: [{ invitedUserId: user.id }, { invitedEmail: normalizeAuthEmail(user.email) }],
-      },
-    }),
+    // Invitations stay hidden until the email is confirmed (#130), so they aren't counted either.
+    user.emailVerifiedAt
+      ? prisma.projectInvitation.count({
+          where: {
+            status: "PENDING",
+            OR: [{ invitedUserId: user.id }, { invitedEmail: normalizeAuthEmail(user.email) }],
+          },
+        })
+      : 0,
     prisma.project.findMany({ where: chatProjectsWhere(user.id), select: { id: true } }),
+    prisma.notification.count({ where: { userId: user.id, readAt: null } }),
   ]);
   const unreadChat = await getChatUnreadCounts(user.id, chatProjects.map((project) => project.id));
 
@@ -69,5 +75,6 @@ export async function getWorkspaceNav(user: { id: string; email: string }): Prom
     openTasks,
     pendingInvitations,
     unreadChats: unreadChat.size,
+    unreadNotifications,
   };
 }

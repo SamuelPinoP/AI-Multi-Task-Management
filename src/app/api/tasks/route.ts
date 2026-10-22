@@ -8,6 +8,7 @@ import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthoriz
 import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
 import { visibleNoteWhere } from "@/lib/note-access";
 import { assigneeForNewTask, runOwnerEmailAutomation } from "@/lib/project-automations";
+import { notifyTaskAssigned } from "@/lib/notifications";
 
 
 function isValidStatus(value: unknown): value is TaskStatus {
@@ -129,6 +130,8 @@ export async function POST(req: Request) {
       after(() => runOwnerEmailAutomation({ trigger: "TASK_CREATED", task, actorId: user.id, origin }));
       if (status === TaskStatus.DONE) after(() => runOwnerEmailAutomation({ trigger: "TASK_COMPLETED", task, actorId: user.id, origin }));
     }
+    // The assignee hears about it in their inbox (SMART-08), even when the project's rule picked them.
+    if (task.assigneeId) after(() => notifyTaskAssigned({ task, actor: user }));
     return NextResponse.json(task, { status: 201 });
   } catch (error) {
     console.error("POST /api/tasks error:", error);

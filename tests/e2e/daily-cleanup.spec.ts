@@ -88,6 +88,12 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
     await addResetToken("live-token", "member", 1, false);
     await addVerificationToken("expired-confirmation", "member", -1);
     await addVerificationToken("live-confirmation", "member", 1);
+    for (const [name, daysOld] of [["old-notification", 91], ["recent-notification", 89]] as const) {
+      await sql(
+        `INSERT INTO "Notification" (id, "userId", type, title, "createdAt") VALUES ($1, $2, 'MENTION', 'Hi', ${UTC_NOW} - make_interval(days => $3))`,
+        [id(name), id("member"), daysOld],
+      );
+    }
     await addProject("member-project", "member");
     await sql(
       `INSERT INTO "ProjectMember" (id, "projectId", "userId", name, role, "updatedAt") VALUES ($1, $2, $3, 'Guest helper', 'EDITOR', ${UTC_NOW})`,
@@ -122,6 +128,7 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
     expect(await exists("PasswordResetToken", "id", id("used-token"))).toBe(false);
     expect(await exists("PasswordResetToken", "id", id("expired-token"))).toBe(false);
     expect(await exists("EmailVerificationToken", "id", id("expired-confirmation"))).toBe(false);
+    expect(await exists("Notification", "id", id("old-notification"))).toBe(false);
     expect(await exists("RateLimit", "key", id("rate-expired"))).toBe(false);
 
     // Kept.
@@ -132,6 +139,7 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
     expect(await exists("Session", "id", id("member-session"))).toBe(true);
     expect(await exists("PasswordResetToken", "id", id("live-token"))).toBe(true);
     expect(await exists("EmailVerificationToken", "id", id("live-confirmation"))).toBe(true);
+    expect(await exists("Notification", "id", id("recent-notification"))).toBe(true);
     expect(await exists("RateLimit", "key", id("rate-live"))).toBe(true);
     expect(await exists("ProjectChatAttachmentUpload", "id", id("pending-upload"))).toBe(true);
     expect(existsSync(pendingFile)).toBe(true);
