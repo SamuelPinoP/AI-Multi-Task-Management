@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
+import { ServiceWorkerRegistration } from "@/components/pwa";
 import { ThemeInitScript, ThemeProvider } from "@/components/theme-provider";
 import { TimeZoneCookie } from "@/components/time-zone-cookie";
 import { Toaster } from "@/components/ui/toaster";
@@ -12,6 +13,17 @@ import { getWorkspaceNav } from "@/lib/workspace-nav";
 export const metadata: Metadata = {
   title: "AI Multi",
   description: "AI productivity app for notes, tasks, and events.",
+  applicationName: "AI Multi",
+  appleWebApp: { capable: true, title: "AI Multi", statusBarStyle: "default" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
+};
+
+// The installed app's title bar follows the canvas color of each theme.
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f6f8f7" },
+    { media: "(prefers-color-scheme: dark)", color: "#0e1413" },
+  ],
 };
 
 export default async function RootLayout({
@@ -32,6 +44,7 @@ export default async function RootLayout({
       <body className="h-full flex flex-col bg-canvas text-ink">
         <ThemeInitScript />
         <TimeZoneCookie />
+        <ServiceWorkerRegistration signedIn={Boolean(currentUser)} />
         <ThemeProvider>
           <AppShell
             currentUser={currentUser}

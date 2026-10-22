@@ -134,7 +134,11 @@ export default function ProjectsPage() {
     const response = await fetch(editing ? `/api/projects/${editing.id}` : "/api/projects", {
       method: editing ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(editing ? input : { name: input.name, description: input.description, color: input.color }),
+      body: JSON.stringify(
+        editing
+          ? { name: input.name, description: input.description, color: input.color, status: input.status }
+          : { name: input.name, description: input.description, color: input.color, templateId: input.templateId },
+      ),
     });
     if (!response.ok) return errorMessage(response, editing ? "Could not save the project." : "Could not create the project.");
     notifyWorkspaceChanged();

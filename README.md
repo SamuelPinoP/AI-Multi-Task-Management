@@ -2,10 +2,6 @@
 
 Live Demo: https://ai-multi-task-management-vercel.vercel.app
 
-## Demo Video
-Watch the demo:
-https://studio.youtube.com/channel/UCsAQln_0zQCjK95fsJ_kUUA/videos/upload?filter=%5B%5D&sort=%7B%22columnType%22%3A%22date%22%2C%22sortOrder%22%3A%22DESCENDING%22%7D
-
 AI Multi is a full-stack productivity and collaboration platform built with Next.js, TypeScript, Prisma, PostgreSQL, and Vercel. It supports authentication, notes, tasks, events, projects, Kanban project boards, project chat, file uploads, invitations, password reset, search, trash, planning views, recurrence, guest mode, and dark mode.
 
 ## Key Features
@@ -17,6 +13,8 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 - Project chat with file attachments using local, Vercel Blob, or private AWS S3 storage
 - A sidebar where each project opens to its Overview, Board and Chat, with unread chat counts
 - A Chats page with every project chat in one place, unread first, synced across devices
+- An installable app (phones and desktops) that keeps the pages you've opened readable offline
+- Project templates (Capstone, Sprint, Job search) and simple automations, such as emailing the owner when a task is done
 
 ## Project chat attachment storage
 
@@ -146,10 +144,41 @@ logins per account per 15 minutes (a successful login clears the account
 count), 5 sign-ups and 5 password reset requests per network per hour, 3 reset
 requests per account per hour, 10 reset submissions per network per 15
 minutes, 10 guest workspaces per network per hour, 30 invitations per user per
-hour and 60 upload requests per user per 10 minutes. Forms show "Too many …
+hour, 60 upload requests per user per 10 minutes and 30 automation emails
+per project per hour (past that, they're skipped). Forms show "Too many …
 Try again in N minutes"; API routes answer 429 with a `Retry-After` header.
 The client IP is the first `x-forwarded-for` entry, which Vercel overwrites;
 requests without one (local development, CI) skip the per-network limits.
+
+## Installable app and offline reading
+
+`src/app/manifest.ts` makes the site installable: Chrome and Edge offer
+"Install app" in the account menu, and iPhones use Share → Add to Home Screen.
+The service worker, `public/sw.js`, is plain JavaScript, so Turbopack and
+webpack builds ship the same file. `src/components/pwa.tsx` registers it in
+production builds only. It keeps a copy of each page you open and of the data
+those pages load (tasks, notes, events, projects, goals), and offline it
+serves those copies with an "offline" notice. Saving, signing in, uploads and
+attachment downloads always go to the network. Saved copies are deleted when
+you log out or open a signed-out page. Icons are drawn by
+`node scripts/generate-app-icons.mjs`. Playwright blocks the service worker
+except in `tests/e2e/pwa.spec.ts`, which runs against a production build.
+
+## Project templates and automations
+
+The New project sheet can start from a template in
+`src/lib/project-templates.ts`: Capstone, Sprint or Job search. Each one adds
+starter tasks (some with subtasks, some repeating weekly), its first tasks on
+the board, and recurring check-ins on the calendar. Dates count from the day
+the project is created, in the creator's time zone.
+
+Owners add automations on the project page (`ProjectAutomation`, one rule of
+each kind per project; the list is in `src/lib/project-automations-core.ts`):
+email the owner when a task moves to Done, email the owner when a task is
+added, or assign new unassigned tasks to a member. Subtasks don't trigger
+rules, and owners aren't emailed about their own changes. Emails go out after
+the response (`after()` in `src/lib/project-automations.ts`) through the
+configured email provider.
 
 ## Database backups
 

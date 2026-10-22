@@ -1,12 +1,13 @@
 import { Priority, Recurrence, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
 import { nextCompletedAt } from "@/lib/task-completion";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import { taskInclude } from "@/lib/task-include";
+import { runOwnerEmailAutomation } from "@/lib/project-automations";
 
 
 type RouteContext = {
@@ -156,6 +157,11 @@ export async function PATCH(req: Request, context: RouteContext) {
         entityId: task.id,
         projectId: task.projectId,
       });
+      // The project's "email the owner when done" rule (SMART-11); subtasks don't trigger rules.
+      if (task.projectId && !task.parentId) {
+        const origin = new URL(req.url).origin;
+        after(() => runOwnerEmailAutomation({ trigger: "TASK_COMPLETED", task, actorId: user.id, origin }));
+      }
     }
 
     return NextResponse.json(task, { status: 200 });
