@@ -256,7 +256,7 @@ function MediaTile({
   single: boolean;
   onOpen: () => void;
 }) {
-  const ref = useRef<HTMLButtonElement | null>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
   const near = useNearViewport(ref);
   const [duration, setDuration] = useState("");
   const [failed, setFailed] = useState(false);
@@ -265,14 +265,9 @@ function MediaTile({
   const fit = single ? "object-contain" : "object-cover";
 
   return (
-    <button
+    <div
       ref={ref}
-      type="button"
-      onClick={onOpen}
-      disabled={pending}
-      aria-label={`${isVideo ? "Play" : "Open"} ${attachment.originalName}`}
-      title={attachment.originalName}
-      className={`group relative overflow-hidden bg-zinc-900 text-left outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-sky-400 disabled:cursor-progress ${COL_SPAN_CLASS[layout.colSpan]} ${
+      className={`group relative overflow-hidden bg-zinc-900 ${COL_SPAN_CLASS[layout.colSpan]} ${
         single && !isVideo ? "aspect-[16/10]" : ASPECT_CLASS[layout.aspect]
       }`}
     >
@@ -299,7 +294,7 @@ function MediaTile({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={src}
-              alt={attachment.originalName}
+              alt=""
               decoding="async"
               onError={() => setFailed(true)}
               className={`absolute inset-0 h-full w-full ${fit} transition duration-300 group-hover:scale-[1.03]`}
@@ -333,7 +328,17 @@ function MediaTile({
         <span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/10" />
       )}
       {pending ? <UploadOverlay progress={attachment.progress} /> : null}
-    </button>
+      {/* Laid over the tile, so the name, duration and progress shown on it
+          aren't part of the button and can't contradict its label (WCAG 2.5.3). */}
+      <button
+        type="button"
+        onClick={onOpen}
+        disabled={pending}
+        aria-label={`${isVideo ? "Play" : "Open"} ${attachment.originalName}`}
+        title={attachment.originalName}
+        className="absolute inset-0 outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-sky-400 disabled:cursor-progress"
+      />
+    </div>
   );
 }
 
@@ -344,42 +349,43 @@ function DocumentCard({ item, onOpen }: { item: GalleryItem; onOpen: () => void 
 
   return (
     <div className="group relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-zinc-300 dark:bg-zinc-900 dark:ring-zinc-800 dark:hover:ring-zinc-700">
-      <button
-        type="button"
-        onClick={onOpen}
-        disabled={pending}
-        aria-label={`Open ${attachment.originalName}`}
-        className="block w-full text-left outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-sky-400 disabled:cursor-progress"
-      >
-        {hasThumbnail ? (
-          <span className="relative block aspect-[16/9] overflow-hidden bg-zinc-100 dark:bg-zinc-800/70">
-            {kind === "pdf" ? (
-              <PdfThumbnail src={item.src} kind={kind} fileName={attachment.originalName} onPages={setPages} />
-            ) : (
-              <DocxThumbnail src={item.previewUrl} title={attachment.originalName} />
-            )}
-            {pending ? <UploadOverlay progress={attachment.progress} /> : null}
-          </span>
-        ) : null}
-        <span className="flex items-center gap-3 p-3 pr-14">
-          <span className="relative">
-            <FileBadge kind={kind} fileName={attachment.originalName} />
-            {pending && !hasThumbnail ? (
-              <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/70 text-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-200">
-                <Spinner className="h-5 w-5" />
-              </span>
-            ) : null}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{attachment.originalName}</span>
-            <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
-              {attachmentTypeLabel(kind, attachment.originalName)} · {formatFileSize(attachment.fileSize)}
-              {pages ? ` · ${pages} page${pages === 1 ? "" : "s"}` : ""}
-              {pending && attachment.progress !== undefined ? ` · ${Math.round(attachment.progress * 100)}%` : ""}
+      {hasThumbnail ? (
+        <div className="relative aspect-[16/9] overflow-hidden bg-zinc-100 dark:bg-zinc-800/70">
+          {kind === "pdf" ? (
+            <PdfThumbnail src={item.src} kind={kind} fileName={attachment.originalName} onPages={setPages} />
+          ) : (
+            <DocxThumbnail src={item.previewUrl} title={attachment.originalName} />
+          )}
+          {pending ? <UploadOverlay progress={attachment.progress} /> : null}
+        </div>
+      ) : null}
+      <div className="flex items-center gap-3 p-3 pr-14">
+        <span className="relative">
+          <FileBadge kind={kind} fileName={attachment.originalName} />
+          {pending && !hasThumbnail ? (
+            <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/70 text-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-200">
+              <Spinner className="h-5 w-5" />
             </span>
-          </span>
+          ) : null}
         </span>
-      </button>
+        <div className="min-w-0">
+          {/* The file name is the button's whole text; its ::after covers the card, so the whole card opens the viewer. */}
+          <button
+            type="button"
+            onClick={onOpen}
+            disabled={pending}
+            aria-label={`Open ${attachment.originalName}`}
+            className="block w-full truncate text-left text-sm font-semibold text-zinc-900 outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-4 focus-visible:after:ring-inset focus-visible:after:ring-sky-400 disabled:cursor-progress dark:text-zinc-100"
+          >
+            {attachment.originalName}
+          </button>
+          <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+            {attachmentTypeLabel(kind, attachment.originalName)} · {formatFileSize(attachment.fileSize)}
+            {pages ? ` · ${pages} page${pages === 1 ? "" : "s"}` : ""}
+            {pending && attachment.progress !== undefined ? ` · ${Math.round(attachment.progress * 100)}%` : ""}
+          </p>
+        </div>
+      </div>
       {!pending ? (
         <a
           href={item.downloadUrl}
@@ -663,22 +669,20 @@ export function AttachmentViewer({
 
 function ViewerThumb({ item, active, onSelect }: { item: GalleryItem; active: boolean; onSelect: () => void }) {
   const { attachment, kind, src } = item;
+  // Only pictures dim on inactive thumbs: a dimmed file badge loses its contrast.
+  const dim = active ? "" : "opacity-55 transition group-hover:opacity-90";
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-label={`Show ${attachment.originalName}`}
-      aria-current={active ? "true" : undefined}
-      className={`relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-zinc-800 transition ${
-        active ? "ring-2 ring-white" : "opacity-55 ring-1 ring-white/15 hover:opacity-90"
+    <div
+      className={`group relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-zinc-800 ${
+        active ? "ring-2 ring-white" : "ring-1 ring-white/15"
       }`}
     >
       {kind === "image" ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="h-full w-full object-cover" />
+        <img src={src} alt="" className={`h-full w-full object-cover ${dim}`} />
       ) : kind === "video" ? (
         <>
-          <video src={posterSrc(src)} preload="metadata" muted playsInline tabIndex={-1} aria-hidden="true" className="pointer-events-none h-full w-full object-cover" />
+          <video src={posterSrc(src)} preload="metadata" muted playsInline tabIndex={-1} aria-hidden="true" className={`pointer-events-none h-full w-full object-cover ${dim}`} />
           <span className="absolute inset-0 flex items-center justify-center bg-black/25">
             <PlayGlyph className="h-4 w-4" />
           </span>
@@ -688,7 +692,15 @@ function ViewerThumb({ item, active, onSelect }: { item: GalleryItem; active: bo
           <FileBadge kind={kind} fileName={attachment.originalName} size="sm" />
         </span>
       )}
-    </button>
+      {/* Laid over the thumb, so the badge's text isn't part of the button (WCAG 2.5.3). */}
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-label={`Show ${attachment.originalName}`}
+        aria-current={active ? "true" : undefined}
+        className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400"
+      />
+    </div>
   );
 }
 
@@ -863,7 +875,14 @@ function ViewerPdf({ src, title }: { src: string; title: string }) {
 
   return (
     <div className="relative h-full w-full">
-      <div ref={containerRef} className="h-full w-full overflow-auto">
+      {/* Focusable, so keyboard users can scroll the pages (canvases can't take focus). */}
+      <div
+        ref={containerRef}
+        tabIndex={0}
+        role="region"
+        aria-label={`Pages of ${title}`}
+        className="h-full w-full overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70"
+      >
         {doc && fitWidth > 0 ? (
           <div className="flex min-w-fit flex-col items-center gap-4 p-4">
             {Array.from({ length: doc.numPages }, (_, pageIndex) => (
@@ -890,7 +909,7 @@ function ViewerPdf({ src, title }: { src: string; title: string }) {
             type="button"
             onClick={() => setZoom(1)}
             className="min-w-14 rounded-full px-2 py-1 text-xs font-semibold tabular-nums hover:bg-white/10"
-            aria-label="Fit page"
+            aria-label={`Fit page, zoom ${Math.round(zoom * 100)}%`}
           >
             {Math.round(zoom * 100)}%
           </button>
@@ -1030,7 +1049,14 @@ function ViewerText({ item }: { item: GalleryItem }) {
 
   return (
     <div className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-      <div className="min-h-0 flex-1 overflow-auto">{body}</div>
+      <div
+        tabIndex={0}
+        role="region"
+        aria-label={`Contents of ${item.attachment.originalName}`}
+        className="min-h-0 flex-1 overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400"
+      >
+        {body}
+      </div>
       {content.truncated ? (
         <p className="border-t border-zinc-200 bg-zinc-50 px-4 py-2 text-xs text-zinc-600">Showing the first 512 KB. Download the file to see all of it.</p>
       ) : null}
