@@ -41,15 +41,15 @@ What exists: `src/components/tree-board.tsx` (1,244 lines) draws an org-chart st
 - The tree has its own routes, `/tree` and `/tree/[pageId]` (`src/lib/tree-pages.ts` loads them). Switching, creating and deleting pages updates the address without a reload. `/board?view=tree` redirects to `/tree`. Someone else's page is not found.
 - Node colors are the `--tree-*` tokens in `globals.css` (white text passes 4.5:1 on each), and the canvas grid is `.tree-canvas`. `tests/e2e/tree.spec.ts` covers the routes, and the axe pass scans `/tree`.
 
-### TREE-02 Drag to re-parent and reorder (M, no migration)
+### TREE-02 Drag to re-parent and reorder (done)
 
-- Use `@dnd-kit/core` (MIT). It handles mouse, touch and keyboard dragging and announces moves to screen readers.
-- Drop zones on each card: the left edge means "before", the right edge "after", the middle means "make it a child". Show a line or a glow for the zone under the pointer.
-- Drag the whole subtree, with a preview card that shows how many children come along (`DragOverlay`).
-- Refuse drops on the node's own descendants on the client too, mirroring `wouldCreateCycle` on the server.
-- Update the tree at once and roll back with a toast if the request fails.
-- Scroll the canvas near its edges while dragging, and account for the zoom level (a dnd-kit modifier).
-- Pure helpers with unit tests: `dropZoneFor(pointer, rect)`, `isDescendant(nodes, id, targetId)`, `applyMove(nodes, move)`.
+- `@dnd-kit/core` (MIT). Each card except the root has a grip handle; mouse, touch and keyboard (Space, arrow keys, Space) all drag, and screen readers hear the node titles.
+- Drop zones: the left quarter of a card means "before", the right quarter "after" (a line beside the card), the middle "make it a child" (a ring around it). A drop on the root always makes a child.
+- The whole subtree moves; the preview shows the title and how many nodes come along, and the subtree fades in place.
+- Drops on the node's own subtree are refused on the client too, so nothing is sent.
+- The tree changes at once and rolls back with a toast if the server refuses.
+- The canvas scrolls near its edges (dnd-kit's auto-scroll). Zoom needs no modifier: the preview is drawn outside the scaled tree, and drop areas are measured on screen.
+- Pure helpers with unit tests in `src/components/tree/tree-move.ts`: `dropZoneFor`, `isDescendant`, `moveFor`, `applyMove`.
 
 ### TREE-03 Keyboard and accessibility (S–M)
 

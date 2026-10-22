@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { continueAsGuest } from "./helpers";
 
 // TREE-01: each tree page has its own link, /tree/<id>.
@@ -30,7 +30,7 @@ test("tree pages have their own links that survive switching, Back and reload", 
   await main.getByRole("button", { name: "Add child" }).click();
   await main.getByRole("textbox", { name: "Create child: title" }).fill("First step");
   await main.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(main.getByRole("button", { name: "First step" })).toBeVisible();
+  await expect(main.getByRole("button", { name: "First step", exact: true })).toBeVisible();
 
   await pages.getByRole("button", { name: "New Tree Page" }).click();
   await createTreePage(page, "Ideas");
@@ -38,12 +38,12 @@ test("tree pages have their own links that survive switching, Back and reload", 
   const ideasUrl = page.url();
   expect(ideasUrl).not.toBe(roadmapUrl);
   await expect(pages.getByRole("link", { name: "Ideas" })).toHaveAttribute("aria-current", "page");
-  await expect(main.getByRole("button", { name: "First step" })).toHaveCount(0);
+  await expect(main.getByRole("button", { name: "First step", exact: true })).toHaveCount(0);
 
   // Switching pages changes the address without a reload, and Back returns to the last page.
   await pages.getByRole("link", { name: "Roadmap" }).click();
   await expect(page).toHaveURL(roadmapUrl);
-  await expect(main.getByRole("button", { name: "First step" })).toBeVisible();
+  await expect(main.getByRole("button", { name: "First step", exact: true })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(ideasUrl);
   await expect(pages.getByRole("link", { name: "Ideas" })).toHaveAttribute("aria-current", "page");
@@ -51,7 +51,7 @@ test("tree pages have their own links that survive switching, Back and reload", 
   // Opening the link directly shows that page and its nodes.
   await page.goto(roadmapUrl);
   await expect(pages.getByRole("link", { name: "Roadmap" })).toHaveAttribute("aria-current", "page");
-  await expect(main.getByRole("button", { name: "First step" })).toBeVisible();
+  await expect(main.getByRole("button", { name: "First step", exact: true })).toBeVisible();
 
   // Deleting the open page moves to the next one in place of the deleted link.
   await main.getByRole("button", { name: "Delete tree page" }).click();
@@ -71,4 +71,74 @@ test("someone else's tree page is not found", async ({ page, browser }) => {
   await expect(other.getByText("This page could not be found.")).toBeVisible();
   await expect(other.getByText("Private plans")).toHaveCount(0);
   await otherContext.close();
+});
+
+// TREE-02: drag a node by its handle. The left or right quarter of a card places it beside
+// that card; the middle makes it a child.
+async function dragOnto(page: Page, handle: Locator, target: Locator, fractionX: number) {
+  await target.scrollIntoViewIfNeeded();
+  const from = (await handle.boundingBox())!;
+  const to = (await target.boundingBox())!;
+  const x = to.x + to.width * fractionX;
+  const y = to.y + to.height / 2;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  // Past the 6px a drag needs to start, then across in steps so each move is seen.
+  await page.mouse.move(from.x + from.width / 2 + 12, from.y + from.height / 2 + 12, { steps: 3 });
+  await page.mouse.move(x, y, { steps: 15 });
+  await page.mouse.move(x + 1, y, { steps: 2 });
+  await page.mouse.up();
+}
+
+test("dragging a node moves it with everything under it, and the move is saved", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Both cards must be on screen side by side; the desktop run covers dragging.");
+  await continueAsGuest(page);
+  const post = async (url: string, data: Record<string, unknown>) => (await page.request.post(url, { data })).json();
+  const tree = (await post("/api/tree-pages", { title: "Drag test" })) as { id: string; nodes: { id: string }[] };
+  const rootId = tree.nodes[0].id;
+  const alpha = (await post(`/api/tree-pages/${tree.id}/nodes`, { title: "Alpha", parentId: rootId })) as { id: string };
+  const beta = (await post(`/api/tree-pages/${tree.id}/nodes`, { title: "Beta", parentId: rootId })) as { id: string };
+  await post(`/api/tree-pages/${tree.id}/nodes`, { title: "Beta child", parentId: beta.id });
+
+  const saved = async () => {
+    const pages = (await (await page.request.get("/api/tree-pages")).json()) as {
+      id: string;
+      nodes: { id: string; title: string; parentId: string | null; sortOrder: number }[];
+    }[];
+    const nodes = pages.find((item) => item.id === tree.id)!.nodes;
+    const byTitle = (title: string) => nodes.find((node) => node.title === title)!;
+    return {
+      parentOf: (title: string) => byTitle(title).parentId,
+      rootOrder: nodes.filter((node) => node.parentId === rootId).sort((a, b) => a.sortOrder - b.sortOrder).map((node) => node.title).join(", "),
+    };
+  };
+
+  await page.goto(`/tree/${tree.id}`);
+  const main = page.locator("#main-content");
+  const card = (title: string) => main.locator("article").filter({ has: page.getByRole("button", { name: title, exact: true }) });
+  const handle = (title: string) => main.getByRole("button", { name: `Move ${title}`, exact: true });
+  await expect(card("Alpha")).toBeVisible();
+  await expect(main.getByRole("button", { name: "Move Drag test" })).toHaveCount(0);
+
+  // Beta, with its child, into the middle of Alpha.
+  await dragOnto(page, handle("Beta"), card("Alpha"), 0.5);
+  await expect.poll(async () => (await saved()).parentOf("Beta")).toBe(alpha.id);
+  expect((await saved()).parentOf("Beta child")).toBe(beta.id);
+
+  // A node can't go inside its own subtree: nothing is sent and nothing changes.
+  await dragOnto(page, handle("Alpha"), card("Beta"), 0.5);
+  await expect(card("Beta")).toBeVisible();
+  expect((await saved()).parentOf("Alpha")).toBe(rootId);
+  expect((await saved()).parentOf("Beta")).toBe(alpha.id);
+
+  // Beta onto Alpha's left edge: back under the root, just before Alpha.
+  await dragOnto(page, handle("Beta"), card("Alpha"), 0.1);
+  await expect.poll(async () => (await saved()).rootOrder).toBe("Beta, Alpha");
+
+  // The new order survives a reload.
+  await page.reload();
+  await expect(card("Beta")).toBeVisible();
+  const betaBox = (await card("Beta").boundingBox())!;
+  const alphaBox = (await card("Alpha").boundingBox())!;
+  expect(betaBox.x).toBeLessThan(alphaBox.x);
 });
