@@ -332,7 +332,7 @@ function Sidebar({
     { href: "/events", label: "Events", icon: CalendarClock, exact: true },
     { href: "/events/calendar", label: "Calendar", icon: CalendarDays },
     { href: "/notes", label: "Notes", icon: NotebookPen },
-    { href: "/board", label: "Boards", icon: SquareKanban, match: ["/tasks/board"] },
+    { href: "/board", label: "Boards", icon: SquareKanban, match: ["/tasks/board", "/tree"] },
   ];
   const toolItems: NavItem[] = [
     { href: "/planner", label: "Planner", icon: Sparkles },

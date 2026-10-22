@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import path from "node:path";
 import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
 
 // TEST-04 (#140) and DES-06 (#134): every page passes axe's WCAG 2.1 A and AA rules.
@@ -7,7 +8,15 @@ const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 
 async function violations(page: Page, label: string) {
   // Let open/close animations finish, so colors are measured at full opacity.
-  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined))));
+  // Loading spinners loop forever, so skip animations that never end.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ),
+  );
   const results = await new AxeBuilder({ page }).withTags(wcag).analyze();
   return results.violations.map(
     (violation) => `${label}: ${violation.id} (${violation.nodes.length}) ${violation.help} -> ${violation.nodes[0]?.target.join(" ")}`,
@@ -41,7 +50,10 @@ async function seedWorkspace(page: Page) {
   await post(`/api/projects/${project.id}/automations`, { trigger: "TASK_COMPLETED", action: "EMAIL_OWNER" });
   await page.request.put(`/api/projects/${project.id}/github`, { data: { repo: "ai-multi-demo/roadmap" } });
   const share = (await post(`/api/projects/${project.id}/share`, {})) as { path: string };
-  return { projectId: project.id, sharePath: share.path };
+  // A tree page with a child, so the tree view shows a filled root card and a plain one.
+  const tree = (await post("/api/tree-pages", { title: "A11y tree" })) as { id: string; nodes: { id: string }[] };
+  await post(`/api/tree-pages/${tree.id}/nodes`, { title: "Child idea", parentId: tree.nodes[0].id, color: "amber" });
+  return { projectId: project.id, sharePath: share.path, treePath: `/tree/${tree.id}` };
 }
 
 test("public pages have no WCAG A/AA violations", async ({ page }) => {
@@ -58,11 +70,11 @@ for (const theme of ["light", "dark"] as const) {
   test(`every signed-in page has no WCAG A/AA violations (${theme})`, async ({ page }) => {
     test.setTimeout(120_000);
     await continueAsGuest(page);
-    const { projectId, sharePath } = await seedWorkspace(page);
+    const { projectId, sharePath, treePath } = await seedWorkspace(page);
     await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
 
     const found: string[] = [];
-    for (const path of ["/", "/today", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/planner", "/goals", "/roadmap", "/trash", sharePath]) {
+    for (const path of ["/", "/today", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/tree", treePath, "/planner", "/goals", "/roadmap", "/trash", sharePath]) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
       found.push(...(await violations(page, path)));
@@ -138,3 +150,48 @@ test("unread chat badges have no WCAG A/AA violations", async ({ page, browser, 
 
   expect(found).toEqual([]);
 });
+
+// Attachments need an account (guests can't upload), so the scans above never see them.
+for (const theme of ["light", "dark"] as const) {
+  test(`project chat with attachments has no WCAG A/AA violations (${theme})`, async ({ page }) => {
+    test.setTimeout(120_000);
+    const fixture = (name: string) => path.join(process.cwd(), "tests", "fixtures", name);
+    const chatMessage = uniqueName("A11y attachments");
+    await signUpAndLogIn(page, "A11y uploader");
+    await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
+    const project = (await (await page.request.post("/api/projects", { data: { name: uniqueName("A11y chat project") } })).json()) as { id: string };
+
+    const found: string[] = [];
+    await page.goto(`/projects/${project.id}/chat`);
+    await page.waitForLoadState("networkidle");
+    await page
+      .locator('input[type="file"]')
+      .setInputFiles(["sample-photo.png", "sample-clip.webm", "sample-brief.pdf", "sample-notes.docx", "sample-tasks.csv"].map(fixture));
+    await expect(page.getByRole("list", { name: "Files to send" }).getByRole("listitem")).toHaveCount(5);
+    found.push(...(await violations(page, "chat composer with files")));
+
+    await page.getByPlaceholder(/share an update/i).fill(chatMessage);
+    await page.getByRole("button", { name: /send message/i }).click();
+    const messageCard = page.locator("article").filter({ hasText: chatMessage });
+    await expect(messageCard.getByText("Sending")).toBeHidden();
+    await expect(messageCard.getByText(/^\d+:\d{2}$/)).toBeVisible();
+    await messageCard.getByRole("button", { name: "Open sample-brief.pdf" }).scrollIntoViewIfNeeded();
+    await expect(messageCard.getByText(/PDF document .* 2 pages/)).toBeVisible({ timeout: 30_000 });
+    found.push(...(await violations(page, "chat message with attachments")));
+
+    // The viewer, on a photo and on the PDF (its zoom bar), with the other files as thumbs.
+    await messageCard.getByRole("button", { name: "Open sample-photo.png" }).click();
+    const viewer = page.getByRole("dialog");
+    await expect(viewer).toHaveAccessibleName("sample-photo.png, 1 of 5");
+    found.push(...(await violations(page, "attachment viewer on a photo")));
+    await viewer.getByRole("button", { name: "Show sample-brief.pdf" }).click();
+    await expect(viewer).toHaveAccessibleName("sample-brief.pdf, 3 of 5");
+    await expect(viewer.getByRole("button", { name: "Zoom in" })).toBeVisible();
+    found.push(...(await violations(page, "attachment viewer on a PDF")));
+    await viewer.getByRole("button", { name: "Show sample-tasks.csv" }).click();
+    await expect(viewer.getByRole("table")).toBeVisible();
+    found.push(...(await violations(page, "attachment viewer on a CSV file")));
+
+    expect(found).toEqual([]);
+  });
+}
