@@ -759,7 +759,7 @@ export function AppShell({
       const response = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: input.name, description: input.description, color: input.color }),
+        body: JSON.stringify({ name: input.name, description: input.description, color: input.color, templateId: input.templateId }),
       });
       const body = (await response.json().catch(() => null)) as { id?: string; error?: string } | null;
       if (!response.ok || !body?.id) return body?.error ?? "Could not create the project.";

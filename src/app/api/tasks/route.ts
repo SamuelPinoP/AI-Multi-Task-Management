@@ -1,12 +1,13 @@
 import { Priority, Recurrence, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
 import { visibleNoteWhere } from "@/lib/note-access";
+import { assigneeForNewTask, runOwnerEmailAutomation } from "@/lib/project-automations";
 
 
 function isValidStatus(value: unknown): value is TaskStatus {
@@ -101,6 +102,7 @@ export async function POST(req: Request) {
     }
 
     const status = isValidStatus(body.status) ? body.status : TaskStatus.TODO;
+    const isSubtask = Boolean(parentId);
     const task = await prisma.task.create({
       data: {
         title,
@@ -112,7 +114,8 @@ export async function POST(req: Request) {
         recurrence: isValidRecurrence(body.recurrence) ? body.recurrence : Recurrence.NONE,
         userId: user.id,
         projectId,
-        assigneeId,
+        // The project's "assign new tasks" rule (SMART-11) fills an empty assignee.
+        assigneeId: await assigneeForNewTask(projectId, { assigneeId, isSubtask }),
         parentId,
         noteId,
       },
@@ -120,6 +123,12 @@ export async function POST(req: Request) {
     });
 
     void createActivity({ userId: user.id, action: status === TaskStatus.DONE ? "COMPLETED_TASK" : "CREATED_TASK", message: `${status === TaskStatus.DONE ? "Completed task" : "Created task"}: “${task.title}”`, entityType: "TASK", entityId: task.id, projectId: task.projectId });
+    // Email rules (SMART-11) run after the response. Subtasks are checklist items; they don't trigger rules.
+    if (task.projectId && !isSubtask) {
+      const origin = new URL(req.url).origin;
+      after(() => runOwnerEmailAutomation({ trigger: "TASK_CREATED", task, actorId: user.id, origin }));
+      if (status === TaskStatus.DONE) after(() => runOwnerEmailAutomation({ trigger: "TASK_COMPLETED", task, actorId: user.id, origin }));
+    }
     return NextResponse.json(task, { status: 201 });
   } catch (error) {
     console.error("POST /api/tasks error:", error);

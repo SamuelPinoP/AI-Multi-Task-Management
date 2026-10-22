@@ -200,6 +200,7 @@ model Project {
   comments          ProjectComment[]
   attachmentUploads ProjectChatAttachmentUpload[]
   recentShortcuts   RecentShortcut[]
+  automations       ProjectAutomation[]
 }
 
 model ProjectComment {
@@ -291,10 +292,11 @@ model ProjectMember {
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
 
-  project Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
-  tasks   Task[]
-  notes   ProjectMemberNote[]
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tasks       Task[]
+  notes       ProjectMemberNote[]
+  automations ProjectAutomation[]
 
   @@unique([projectId, userId])
   @@index([projectId])
@@ -323,6 +325,36 @@ model ProjectInvitation {
   @@index([inviterUserId])
   @@index([invitedUserId])
   @@index([invitedEmail])
+}
+
+/// A simple rule: "when <trigger> in this project, <action>" (SMART-11).
+/// The allowed pairs are in src/lib/project-automations-core.ts; one rule of each kind per project.
+model ProjectAutomation {
+  id        String            @id @default(cuid())
+  projectId String
+  trigger   AutomationTrigger
+  action    AutomationAction
+  /// ASSIGN_MEMBER only: who gets new tasks. Removing the member removes the rule.
+  memberId  String?
+  enabled   Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  member  ProjectMember? @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, trigger, action])
+  @@index([memberId])
+}
+
+enum AutomationTrigger {
+  TASK_CREATED
+  TASK_COMPLETED
+}
+
+enum AutomationAction {
+  EMAIL_OWNER
+  ASSIGN_MEMBER
 }
 
 model ProjectMemberNote {

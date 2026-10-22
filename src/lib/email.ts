@@ -32,6 +32,16 @@ type PasswordResetEmailParams = {
   resetUrl: string;
 };
 
+type TaskAutomationEmailParams = {
+  to: string;
+  trigger: "TASK_CREATED" | "TASK_COMPLETED";
+  taskTitle: string;
+  projectId: string;
+  projectName: string;
+  actorName: string;
+  fallbackOrigin?: string;
+};
+
 function cleanEnvValue(name: string) {
   const value = process.env[name];
   return typeof value === "string" ? value.trim() : undefined;
@@ -229,5 +239,47 @@ export async function sendPasswordResetEmail({ to, resetUrl }: PasswordResetEmai
     successMessage: "If an account exists, a reset link was sent.",
     failureMessage: "If an account exists, a reset link was sent.",
     disabledMessage: "If an account exists, a reset link was sent.",
+  });
+}
+
+/** A project automation's "email the owner" message (SMART-11). */
+export async function sendTaskAutomationEmail({
+  to,
+  trigger,
+  taskTitle,
+  projectId,
+  projectName,
+  actorName,
+  fallbackOrigin,
+}: TaskAutomationEmailParams): Promise<EmailDeliveryResult> {
+  const projectUrl = `${getAppBaseUrl(fallbackOrigin)}/projects/${encodeURIComponent(projectId)}`;
+  const happened = trigger === "TASK_COMPLETED" ? "marked a task as done" : "added a task";
+  const subject = trigger === "TASK_COMPLETED" ? `Done in ${projectName}: ${taskTitle}` : `New task in ${projectName}: ${taskTitle}`;
+  const text = [
+    `${actorName} ${happened} in ${projectName}:`,
+    "",
+    taskTitle,
+    "",
+    `Open the project: ${projectUrl}`,
+    "",
+    "You get this because an automation on the project is on. The project owner can turn it off on the project page.",
+  ].join("\n");
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #18181b;">
+      <p>${escapeHtml(actorName)} ${happened} in <strong>${escapeHtml(projectName)}</strong>:</p>
+      <p style="font-size: 16px; font-weight: bold; margin: 0 0 16px;">${escapeHtml(taskTitle)}</p>
+      <p><a href="${escapeHtml(projectUrl)}" style="display: inline-block; padding: 10px 14px; border-radius: 8px; background: #0a6f68; color: #ffffff; text-decoration: none;">Open the project</a></p>
+      <p style="font-size: 13px; color: #52525b;">You get this because an automation on the project is on. The project owner can turn it off on the project page.</p>
+    </div>
+  `;
+
+  return sendEmail({
+    to,
+    subject: `${APP_NAME}: ${subject}`,
+    text,
+    html,
+    successMessage: "Automation email sent.",
+    failureMessage: "Automation email could not be sent.",
+    disabledMessage: "Email sending is not configured.",
   });
 }

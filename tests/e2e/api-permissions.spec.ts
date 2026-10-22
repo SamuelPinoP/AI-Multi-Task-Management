@@ -392,6 +392,43 @@ test("personal notes stay private, even to teammates", async () => {
   });
 });
 
+test("only the owner changes automations; every member sees them", async () => {
+  const rule = { trigger: "TASK_COMPLETED", action: "EMAIL_OWNER" };
+  const rules = `/api/projects/${projectId}/automations`;
+  await expectStatuses("POST automation", (client) => client.post(rules, { data: rule }), {
+    editor: 403,
+    viewer: 403,
+    outsider: 404,
+  });
+  const created = await json<{ id: string }>(await api.owner.post(rules, { data: rule }));
+  await expectStatuses("POST the same automation again", (client) => client.post(rules, { data: rule }), { owner: 409 });
+  await expectStatuses("GET automations", (client) => client.get(rules), { owner: 200, editor: 200, viewer: 200, outsider: 404 });
+  await expectStatuses(
+    "PATCH automation",
+    (client) => client.patch(`${rules}/${created.id}`, { data: { enabled: false } }),
+    { editor: 403, viewer: 403, outsider: 404, owner: 200 },
+  );
+
+  // An "assign to" rule only takes this project's members.
+  const otherProject = await json<{ id: string }>(await api.outsider.post("/api/projects", { data: { name: uniqueName("Other") } }));
+  const stranger = await json<{ id: string }>(
+    await api.outsider.post(`/api/projects/${otherProject.id}/members`, { data: { name: "Stranger", role: "EDITOR" } }),
+  );
+  const assign = (memberId: string) => ({ trigger: "TASK_CREATED", action: "ASSIGN_MEMBER", memberId });
+  await expectStatuses("POST assign rule for another project's member", (client) => client.post(rules, { data: assign(stranger.id) }), {
+    owner: 400,
+  });
+  await expectStatuses("POST assign rule", (client) => client.post(rules, { data: assign(editorMemberId) }), { owner: 201 });
+
+  await expectStatuses("DELETE automation", (client) => client.delete(`${rules}/${created.id}`), {
+    editor: 403,
+    viewer: 403,
+    outsider: 404,
+    owner: 200,
+  });
+  await expectStatuses("DELETE it again", (client) => client.delete(`${rules}/${created.id}`), { owner: 404 });
+});
+
 test("signed-out requests are rejected", async ({ baseURL }) => {
   const anonymous = await playwrightRequest.newContext({ baseURL });
   const calls: [string, () => Promise<APIResponse>][] = [
@@ -403,6 +440,8 @@ test("signed-out requests are rejected", async ({ baseURL }) => {
     ["GET attachment", () => anonymous.get(`/api/projects/${projectId}/attachments/${attachmentId}/download`)],
     ["GET invitations", () => anonymous.get(`/api/projects/${projectId}/invitations`)],
     ["POST member", () => anonymous.post(`/api/projects/${projectId}/members`, { data: { name: "x", role: "VIEWER" } })],
+    ["GET automations", () => anonymous.get(`/api/projects/${projectId}/automations`)],
+    ["POST automation", () => anonymous.post(`/api/projects/${projectId}/automations`, { data: { trigger: "TASK_CREATED", action: "EMAIL_OWNER" } })],
     ["GET tasks", () => anonymous.get("/api/tasks")],
     ["PATCH task", () => anonymous.patch(`/api/tasks/${projectTaskId}`, { data: { title: "x" } })],
     ["GET notes", () => anonymous.get("/api/notes")],

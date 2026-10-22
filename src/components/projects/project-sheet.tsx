@@ -5,10 +5,12 @@ import { useState, type FormEvent } from "react";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
+import { describeTemplateContents, PROJECT_TEMPLATES } from "@/lib/project-templates";
 
 export type ProjectStatus = "ACTIVE" | "COMPLETED" | "ARCHIVED";
 
-export type ProjectInput = { name: string; description: string; color: string; status: ProjectStatus };
+/** `templateId` is "" for a blank project; only new projects use it (SMART-11). */
+export type ProjectInput = { name: string; description: string; color: string; status: ProjectStatus; templateId: string };
 
 export type EditableProject = { id: string; name: string; description: string | null; color: string | null; status: ProjectStatus };
 
@@ -40,7 +42,7 @@ export function ProjectSheet({
   project?: EditableProject | null;
   onSubmit: (input: ProjectInput) => Promise<string | null>;
 }) {
-  const [input, setInput] = useState<ProjectInput>({ name: "", description: "", color: "", status: "ACTIVE" });
+  const [input, setInput] = useState<ProjectInput>({ name: "", description: "", color: "", status: "ACTIVE", templateId: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
@@ -50,8 +52,8 @@ export function ProjectSheet({
     setLoadedFor(formKey);
     setInput(
       project
-        ? { name: project.name, description: project.description ?? "", color: project.color ?? "", status: project.status }
-        : { name: "", description: "", color: "", status: "ACTIVE" },
+        ? { name: project.name, description: project.description ?? "", color: project.color ?? "", status: project.status, templateId: "" }
+        : { name: "", description: "", color: "", status: "ACTIVE", templateId: "" },
     );
     setError(null);
   }
@@ -93,6 +95,39 @@ export function ProjectSheet({
               className={fieldClass}
             />
           </label>
+          {project ? null : (
+            <fieldset className="grid gap-2">
+              <legend className="text-sm font-medium">Start from</legend>
+              <div className="grid gap-2" role="radiogroup" aria-label="Start from">
+                {[{ id: "", name: "Blank project", summary: "No tasks yet; add your own." }, ...PROJECT_TEMPLATES].map((template) => {
+                  const selected = input.templateId === template.id;
+                  const full = PROJECT_TEMPLATES.find((item) => item.id === template.id);
+                  return (
+                    <button
+                      key={template.id || "blank"}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setInput((current) => ({ ...current, templateId: template.id }))}
+                      className={cn(
+                        "grid gap-0.5 rounded-xl border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                        selected ? "border-accent bg-accent-soft" : "border-line hover:bg-surface-hover",
+                      )}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-semibold">
+                        {template.name}
+                        {selected ? <Check aria-hidden="true" className="ml-auto h-4 w-4 text-accent" /> : null}
+                      </span>
+                      <span className="text-xs text-muted">
+                        {template.summary}
+                        {full ? ` ${describeTemplateContents(full)}.` : ""}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          )}
           <label className="grid gap-1.5 text-sm font-medium">
             Description
             <textarea
