@@ -243,10 +243,14 @@ function SidebarProject({
                 >
                   <Icon aria-hidden="true" className={cn("h-3.5 w-3.5 shrink-0", pageActive && "text-accent")} />
                   <span className="truncate">{page.label}</span>
+                  {/* The space keeps the visible text "Chat New", as in Count. */}
                   {page.unread ? (
-                    <span aria-hidden="true" className="ml-auto rounded-full bg-accent-soft px-1.5 py-px text-[10px] font-semibold text-accent">
-                      New
-                    </span>
+                    <>
+                      {" "}
+                      <span aria-hidden="true" className="ml-auto rounded-full bg-accent-soft px-1.5 py-px text-[10px] font-semibold text-accent">
+                        New
+                      </span>
+                    </>
                   ) : null}
                 </Link>
               );
