@@ -50,7 +50,7 @@ import { toast } from "@/components/ui/toaster";
 import { isNavItemActive, pageTitleFor, type NavMatch } from "@/lib/app-nav";
 import { cn } from "@/lib/cn";
 import { isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
-import { isChatUnread, markChatSeen, useChatSeen, type ChatSeen } from "@/lib/project-chat-seen";
+import { formatUnreadCount } from "@/lib/chats";
 import { paletteColor, projectColor } from "@/lib/project-color";
 import {
   SIDEBAR_COLLAPSED_COOKIE,
@@ -72,6 +72,8 @@ type NavItem = NavMatch & {
   label: string;
   icon: LucideIcon;
   count?: number;
+  /** An accent badge, such as chats with new messages; `label` says it in words. */
+  badge?: { value: number; label: string };
 };
 
 const publicPaths = new Set(["/login", "/signup", "/forgot-password", "/reset-password"]);
@@ -100,6 +102,21 @@ function Count({ value }: { value: number }) {
   );
 }
 
+/** An accent count for something new; like Count, the space keeps the label part of the name. */
+function Badge({ value }: { value: number }) {
+  return (
+    <>
+      {" "}
+      <span
+        aria-hidden="true"
+        className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold tabular-nums text-accent-ink"
+      >
+        {formatUnreadCount(value)}
+      </span>
+    </>
+  );
+}
+
 function SidebarLink({
   item,
   pathname,
@@ -119,7 +136,15 @@ function SidebarLink({
       href={item.href}
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
-      aria-label={!collapsed && item.count ? `${item.label}, ${item.count} open` : undefined}
+      aria-label={
+        collapsed
+          ? undefined
+          : item.badge
+            ? `${item.label}, ${item.badge.label}`
+            : item.count
+              ? `${item.label}, ${item.count} open`
+              : undefined
+      }
       title={collapsed ? item.label : undefined}
       className={cn(
         "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-hover",
@@ -129,7 +154,8 @@ function SidebarLink({
     >
       <Icon aria-hidden="true" className={cn("h-4 w-4 shrink-0", active ? "text-accent" : "text-muted")} />
       {collapsed ? <span className="sr-only">{item.label}</span> : <span className="truncate">{item.label}</span>}
-      {!collapsed && item.count ? <Count value={item.count} /> : null}
+      {!collapsed && item.badge ? <Badge value={item.badge.value} /> : null}
+      {!collapsed && !item.badge && item.count ? <Count value={item.count} /> : null}
     </Link>
   );
 }
@@ -155,7 +181,8 @@ function SidebarProject({
   project: WorkspaceNavProject;
   pathname: string;
   open: boolean;
-  chatUnread: boolean;
+  /** Unread messages in this project's chat. */
+  chatUnread: number;
   onToggle: () => void;
   onNavigate?: () => void;
 }) {
@@ -163,7 +190,7 @@ function SidebarProject({
   const active = pathname === href || pathname.startsWith(`${href}/`);
   // The sidebar renders twice (the rail and the phone sheet), so ids come from useId.
   const pagesId = useId();
-  const pages: Array<{ href: string; label: string; icon: LucideIcon; unread?: boolean }> = [
+  const pages: Array<{ href: string; label: string; icon: LucideIcon; unread?: number }> = [
     { href, label: "Overview", icon: LayoutDashboard },
     { href: `${href}/board`, label: "Board", icon: SquareKanban },
     { href: `${href}/chat`, label: "Chat", icon: MessagesSquare, unread: chatUnread },
@@ -172,7 +199,7 @@ function SidebarProject({
   const linkLabel = [
     project.name,
     project.openTasks ? `${project.openTasks} open tasks` : "",
-    chatUnread && !open ? "new chat messages" : "",
+    chatUnread && !open ? `${chatUnread} unread chat message${chatUnread === 1 ? "" : "s"}` : "",
   ].filter(Boolean).join(", ");
 
   return (
@@ -237,7 +264,7 @@ function SidebarProject({
                   href={page.href}
                   onClick={onNavigate}
                   aria-current={pageActive ? "page" : undefined}
-                  aria-label={page.unread ? `${page.label}, new messages` : undefined}
+                  aria-label={page.unread ? `${page.label}, ${page.unread} unread` : undefined}
                   className={cn(
                     "flex items-center gap-2 rounded-md px-2 py-1 text-[13px] text-muted transition-colors hover:bg-surface-hover hover:text-ink",
                     pageActive && "bg-surface font-medium text-ink shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
@@ -246,9 +273,12 @@ function SidebarProject({
                   <Icon aria-hidden="true" className={cn("h-3.5 w-3.5 shrink-0", pageActive && "text-accent")} />
                   <span className="truncate">{page.label}</span>
                   {page.unread ? (
-                    <span aria-hidden="true" className="ml-auto rounded-full bg-accent-soft px-1.5 py-px text-[10px] font-semibold text-accent">
-                      New
-                    </span>
+                    <>
+                      {" "}
+                      <span aria-hidden="true" className="ml-auto rounded-full bg-accent px-1.5 py-px text-[10px] font-bold tabular-nums text-accent-ink">
+                        {formatUnreadCount(page.unread)}
+                      </span>
+                    </>
                   ) : null}
                 </Link>
               );
@@ -266,7 +296,6 @@ function Sidebar({
   pathname,
   collapsed,
   projectsOpen,
-  chatSeen,
   onToggleCollapsed,
   onToggleProject,
   onNewTask,
@@ -278,7 +307,6 @@ function Sidebar({
   pathname: string;
   collapsed: boolean;
   projectsOpen: SidebarProjectsOpen;
-  chatSeen: ChatSeen;
   onToggleCollapsed?: () => void;
   onToggleProject: (projectId: string, open: boolean) => void;
   onNewTask: () => void;
@@ -288,6 +316,14 @@ function Sidebar({
   const mainItems: NavItem[] = [
     { href: "/", label: "Home", icon: House },
     { href: "/today", label: "My day", icon: Sun },
+    {
+      href: "/chats",
+      label: "Chats",
+      icon: MessagesSquare,
+      badge: nav.unreadChats
+        ? { value: nav.unreadChats, label: `${nav.unreadChats} with new messages` }
+        : undefined,
+    },
   ];
   const workItems: NavItem[] = [
     { href: "/tasks", label: "Tasks", icon: SquareCheckBig, exact: true, count: nav.openTasks },
@@ -361,14 +397,13 @@ function Sidebar({
             const active = pathname === href || pathname.startsWith(`${href}/`);
             // Until the user opens or closes it, a project is open while one of its pages is showing.
             const open = projectsOpen[project.id] ?? active;
-            const onChat = pathname === `${href}/chat`;
             return (
               <SidebarProject
                 key={project.id}
                 project={project}
                 pathname={pathname}
                 open={open}
-                chatUnread={!onChat && isChatUnread(project.lastChatAt, chatSeen[project.id])}
+                chatUnread={project.unreadChat}
                 onToggle={() => onToggleProject(project.id, !open)}
                 onNavigate={onNavigate}
               />
@@ -630,7 +665,6 @@ export function AppShell({
   const [nav, setNav] = useState(initialNav);
   const [collapsed, setCollapsed] = useState(initialSidebarCollapsed);
   const [projectsOpen, setProjectsOpen] = useState(initialProjectsOpen);
-  const chatSeen = useChatSeen();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
@@ -662,14 +696,6 @@ export function AppShell({
       window.removeEventListener(WORKSPACE_CHANGED_EVENT, refresh);
     };
   }, [pathname, showWorkspaceShell]);
-
-  // An open chat counts as seen, and so do messages that arrive while it stays open.
-  const chatProjectId = pathname.match(/^\/projects\/([^/]+)\/chat$/)?.[1];
-  useEffect(() => {
-    if (!chatProjectId) return;
-    markChatSeen(chatProjectId);
-    return () => markChatSeen(chatProjectId);
-  }, [chatProjectId]);
 
   // Keyboard shortcuts (DES-06): Ctrl/Cmd+K, /, N, ? and "g then a letter"; see @/lib/shortcuts.
   useEffect(() => {
@@ -793,7 +819,6 @@ export function AppShell({
           pathname={pathname}
           collapsed={collapsed}
           projectsOpen={projectsOpen}
-          chatSeen={chatSeen}
           onToggleCollapsed={toggleCollapsed}
           onToggleProject={toggleProject}
           onNewTask={openNewTask}
@@ -811,7 +836,6 @@ export function AppShell({
             pathname={pathname}
             collapsed={false}
             projectsOpen={projectsOpen}
-            chatSeen={chatSeen}
             onToggleProject={toggleProject}
             onNewTask={openNewTask}
             onNewProject={openNewProject}

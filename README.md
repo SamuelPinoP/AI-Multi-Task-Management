@@ -15,7 +15,8 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 - Project-specific Kanban boards for organizing tasks by status with read-only Viewer access and Owner/Editor task creation and movement
 - Project collaboration with invitations and role-based Owner, Editor, and Viewer access enforced server-side
 - Project chat with file attachments using local, Vercel Blob, or private AWS S3 storage
-- A sidebar where each project opens to its Overview, Board and Chat, and marks chats with new messages
+- A sidebar where each project opens to its Overview, Board and Chat, with unread chat counts
+- A Chats page with every project chat in one place, unread first, synced across devices
 - An installable app (phones and desktops) that keeps the pages you've opened readable offline
 - Project templates (Capstone, Sprint, Job search) and simple automations, such as emailing the owner when a task is done
 

@@ -16,6 +16,7 @@ test("g then a letter goes to a page", () => {
   assert.deepEqual(resolveShortcut("t", true), { type: "go", href: "/tasks" });
   assert.deepEqual(resolveShortcut("H", true), { type: "go", href: "/" });
   assert.deepEqual(resolveShortcut("n", true), { type: "go", href: "/notes" });
+  assert.deepEqual(resolveShortcut("m", true), { type: "go", href: "/chats" });
   assert.equal(resolveShortcut("z", true), null);
 });
 

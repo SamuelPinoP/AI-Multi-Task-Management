@@ -20,6 +20,11 @@ export function projectAccessWhere(userId: string): Prisma.ProjectWhereInput {
   return { OR: [{ userId }, { members: { some: { userId } } }] };
 }
 
+/** Projects where the user can add, edit and delete content: owners and editors. */
+export function projectEditWhere(userId: string): Prisma.ProjectWhereInput {
+  return { OR: [{ userId }, { members: { some: { userId, role: { in: ["OWNER", "EDITOR"] } } } }] };
+}
+
 export function projectAccessWhereForProject(projectId: string, userId: string): Prisma.ProjectWhereInput {
   return { id: projectId, ...projectAccessWhere(userId) };
 }
