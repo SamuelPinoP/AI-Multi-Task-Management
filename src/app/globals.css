@@ -45,6 +45,14 @@
   --chart-done: #0f8f84;
   --chart-scope: #c2570c;
 
+  /* Tree view node colors. A root card puts white text on them, so each passes 4.5:1 in both themes. */
+  --tree-blue: #2563eb;
+  --tree-purple: #7c3aed;
+  --tree-emerald: #047857;
+  --tree-amber: #b45309;
+  --tree-rose: #e11d48;
+  --tree-slate: #475569;
+
   --font-system-sans: Inter, "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-system-mono: SFMono-Regular, "Cascadia Code", Consolas, "Liberation Mono", Menlo, monospace;
 }
@@ -106,6 +114,12 @@
   --color-project-4: var(--project-4);
   --color-chart-done: var(--chart-done);
   --color-chart-scope: var(--chart-scope);
+  --color-tree-blue: var(--tree-blue);
+  --color-tree-purple: var(--tree-purple);
+  --color-tree-emerald: var(--tree-emerald);
+  --color-tree-amber: var(--tree-amber);
+  --color-tree-rose: var(--tree-rose);
+  --color-tree-slate: var(--tree-slate);
   --font-sans: var(--font-system-sans);
   --font-mono: var(--font-system-mono);
 }
@@ -147,6 +161,15 @@ body {
 
 :focus-visible {
   outline-color: var(--accent);
+}
+
+/* The tree view's canvas: a faint accent glow over a grid in the line color. */
+.tree-canvas {
+  background-image:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 8%, transparent), transparent 32%),
+    linear-gradient(color-mix(in srgb, var(--line) 60%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--line) 60%, transparent) 1px, transparent 1px);
+  background-size: auto, 32px 32px, 32px 32px;
 }
 
 /* Motion for dialogs, sheets and menus (components/ui). */
