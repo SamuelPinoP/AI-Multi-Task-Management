@@ -57,7 +57,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
 
     const found: string[] = [];
-    for (const path of ["/", "/today", "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/planner", "/goals", "/roadmap", "/trash"]) {
+    for (const path of ["/", "/today", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/planner", "/goals", "/roadmap", "/trash"]) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
       found.push(...(await violations(page, path)));
@@ -93,14 +93,16 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
-test("the sidebar stays accessible when a teammate's chat message is new", async ({ page, browser, isMobile }) => {
+// Unread badges only show after someone else posts, which the scans above never do.
+test("unread chat badges have no WCAG A/AA violations", async ({ page, browser, isMobile }) => {
   test.skip(isMobile, "The sidebar is a menu sheet on phones.");
   const teammateContext = await browser.newContext();
   const teammatePage = await teammateContext.newPage();
   const teammate = await signUpAndLogIn(teammatePage, "A11y teammate");
   await continueAsGuest(page);
 
-  const project = (await (await page.request.post("/api/projects", { data: { name: uniqueName("A11y shared project") } })).json()) as { id: string };
+  const projectName = uniqueName("A11y shared project");
+  const project = (await (await page.request.post("/api/projects", { data: { name: projectName } })).json()) as { id: string };
   expect((await page.request.post(`/api/projects/${project.id}/invitations`, { data: { email: teammate.email, role: "EDITOR" } })).ok()).toBe(true);
   const invitations = (await (await teammatePage.request.get("/api/project-invitations")).json()) as { id: string; project: { id: string } }[];
   const invitation = invitations.find((item) => item.project.id === project.id);
@@ -109,9 +111,19 @@ test("the sidebar stays accessible when a teammate's chat message is new", async
   expect((await teammatePage.request.post(`/api/projects/${project.id}/comments`, { data: { message: "A new message" } })).ok()).toBe(true);
   await teammateContext.close();
 
-  // The open project's Chat link shows a "New" badge.
+  // The sidebar's Chats link and the open project's Chat link show a count.
+  const found: string[] = [];
   await page.goto(`/projects/${project.id}`);
   await page.waitForLoadState("networkidle");
-  await expect(page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Chat, new messages" })).toBeVisible();
-  expect(await violations(page, "project page with a new chat message")).toEqual([]);
+  const sidebar = page.getByRole("navigation", { name: "Workspace" });
+  await expect(sidebar.getByRole("link", { name: "Chats, 1 with new messages" })).toBeVisible();
+  await expect(sidebar.getByRole("group", { name: `${projectName} pages` }).getByRole("link", { name: "Chat, 1 unread" })).toBeVisible();
+  found.push(...(await violations(page, "project page with an unread message")));
+
+  await page.goto("/chats");
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("list", { name: "Project chats" }).getByRole("link", { name: new RegExp(`^${projectName}.*1 unread message$`) })).toBeVisible();
+  found.push(...(await violations(page, "Chats page with an unread message")));
+
+  expect(found).toEqual([]);
 });

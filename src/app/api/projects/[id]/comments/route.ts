@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { createActivity } from "@/lib/activity";
 import { getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
+import { markChatsRead } from "@/lib/project-chat-unread";
 import {
   confirmProjectChatDirectUploadedAttachment,
   isProjectChatStorageConfigError,
@@ -138,6 +139,53 @@ async function confirmedPreparedAttachments({
   return attachments;
 }
 
+/**
+ * The project chat for any member (viewers included), polled by the open chat.
+ * `version` sums up the thread: count, latest edit and pinned count, so adds,
+ * edits, deletes and pins all change it. When the caller already has the
+ * current version, only that is returned.
+ */
+export async function GET(req: Request, context: RouteContext) {
+  try {
+    const { id: projectId } = await context.params;
+    const user = await requireApiUser();
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    const access = await getProjectAccess(projectId, user.id);
+    if (!access) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+
+    const [summary, pinned] = await Promise.all([
+      prisma.projectComment.aggregate({ where: { projectId }, _count: { _all: true }, _max: { updatedAt: true } }),
+      prisma.projectComment.count({ where: { projectId, pinned: true } }),
+    ]);
+    const version = `${summary._count._all}:${summary._max.updatedAt?.getTime() ?? 0}:${pinned}`;
+    if (new URL(req.url).searchParams.get("version") === version) {
+      return NextResponse.json({ version, changed: false });
+    }
+
+    const comments = await prisma.projectComment.findMany({
+      where: { projectId },
+      orderBy: { createdAt: "asc" },
+      include: { user: { select: { name: true, email: true } }, attachments: { orderBy: { createdAt: "asc" } } },
+    });
+    return NextResponse.json({
+      version,
+      changed: true,
+      comments: comments.map((comment) => ({
+        id: comment.id,
+        message: comment.message,
+        pinned: comment.pinned,
+        createdAt: comment.createdAt.toISOString(),
+        updatedAt: comment.updatedAt.toISOString(),
+        author: { name: comment.user.name, email: comment.user.email },
+        attachments: comment.attachments.map(serializeAttachment),
+      })),
+    });
+  } catch (error) {
+    console.error("GET /api/projects/[id]/comments error:", error);
+    return NextResponse.json({ error: "Failed to load the project chat" }, { status: 500 });
+  }
+}
+
 export async function POST(req: Request, context: RouteContext) {
   try {
     const { id: projectId } = await context.params;
@@ -221,10 +269,13 @@ export async function POST(req: Request, context: RouteContext) {
       preparedAttachments,
     );
 
+    // Posting means the author has read the chat so far.
+    await markChatsRead(user.id, [project.id]);
+
     await createActivity({
       userId: user.id,
       projectId: project.id,
-      action: "CREATED_PROJECT",
+      action: "COMMENTED",
       entityType: "PROJECT",
       entityId: project.id,
       message: `Added a discussion comment in project \"${project.name}\".`,

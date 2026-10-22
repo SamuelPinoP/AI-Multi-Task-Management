@@ -19,6 +19,7 @@ type Expected = Partial<Record<Role, number>>;
 
 const api = {} as Record<Role, APIRequestContext>;
 const emails = {} as Record<Role, string>;
+const names = {} as Record<Role, string>;
 const contexts: BrowserContext[] = [];
 
 let projectId = "";
@@ -59,10 +60,11 @@ test.beforeAll(async ({ browser }, testInfo) => {
     const context = await browser.newContext();
     contexts.push(context);
     const page = await context.newPage();
-    const { email } = await signUpAndLogIn(page, `E2E ${role}`);
+    const { email, name } = await signUpAndLogIn(page, `E2E ${role}`);
     await page.close();
     api[role] = context.request;
     emails[role] = email;
+    names[role] = name;
   }
 
   projectName = uniqueName("E2E permissions project");
@@ -243,6 +245,12 @@ test("only the owner manages members", async () => {
 });
 
 test("editors post in the chat, viewers read it, outsiders get nothing", async () => {
+  await expectStatuses("GET comments", (client) => client.get(`/api/projects/${projectId}/comments`), {
+    owner: 200,
+    editor: 200,
+    viewer: 200,
+    outsider: 404,
+  });
   await expectStatuses(
     "POST comment",
     (client) => client.post(`/api/projects/${projectId}/comments`, { data: { message: "Hello team" } }),
@@ -402,6 +410,36 @@ test("personal notes stay private, even to teammates", async () => {
   });
 });
 
+test("whoever can edit the project can restore a teammate's deleted task", async () => {
+  type TrashList = { tasks: { id: string; deletedByName: string | null; projectName: string | null; ownedByYou: boolean }[] };
+  const trashedTask = async (role: Role) =>
+    (await json<TrashList>(await api[role].get("/api/trash"))).tasks.find((task) => task.id === taskId);
+  const restore = (client: APIRequestContext) => client.patch("/api/trash", { data: { type: "task", id: taskId } });
+
+  const { id: taskId } = await json<{ id: string }>(
+    await api.owner.post("/api/tasks", { data: { title: uniqueName("Task the editor deletes"), projectId } }),
+  );
+  await json(await api.editor.delete(`/api/tasks/${taskId}`));
+
+  // The owner and the editor see it in their trash, with who deleted it; others don't.
+  expect(await trashedTask("owner")).toMatchObject({ deletedByName: names.editor, projectName, ownedByYou: true });
+  expect(await trashedTask("editor")).toMatchObject({ deletedByName: null, projectName, ownedByYou: false });
+  expect(await trashedTask("viewer")).toBeUndefined();
+  expect(await trashedTask("outsider")).toBeUndefined();
+
+  await expectStatuses("restore a teammate's task", restore, { viewer: 404, outsider: 404 });
+  expect((await api.editor.patch("/api/trash", { data: { type: "project", id: taskId } })).status()).toBe(400);
+
+  // Emptying the editor's trash leaves the owner's task alone.
+  await json(await api.editor.delete("/api/trash"));
+  expect(await trashedTask("editor")).toBeTruthy();
+
+  await expectStatuses("restore a teammate's task", restore, { editor: 200 });
+  expect(await trashedTask("owner")).toBeUndefined();
+  const tasks = await json<{ id: string }[]>(await api.owner.get("/api/tasks"));
+  expect(tasks.some((task) => task.id === taskId)).toBe(true);
+});
+
 test("signed-out requests are rejected", async ({ baseURL }) => {
   const anonymous = await playwrightRequest.newContext({ baseURL });
   const calls: [string, () => Promise<APIResponse>][] = [
@@ -419,6 +457,7 @@ test("signed-out requests are rejected", async ({ baseURL }) => {
     ["GET events", () => anonymous.get("/api/events")],
     ["GET search", () => anonymous.get("/api/search?q=x")],
     ["GET trash", () => anonymous.get("/api/trash")],
+    ["PATCH trash", () => anonymous.patch("/api/trash", { data: { type: "task", id: projectTaskId } })],
     ["GET my invitations", () => anonymous.get("/api/project-invitations")],
   ];
 

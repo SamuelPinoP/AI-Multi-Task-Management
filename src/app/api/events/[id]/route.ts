@@ -90,7 +90,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
 
     const deleted = await prisma.event.updateMany({
       where: { id, deletedAt: null },
-      data: { deletedAt: new Date() },
+      data: { deletedAt: new Date(), deletedById: user.id },
     });
     if (deleted.count === 0) return NextResponse.json({ error: "Event not found" }, { status: 404 });
 

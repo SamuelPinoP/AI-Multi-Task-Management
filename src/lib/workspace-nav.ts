@@ -3,20 +3,18 @@ import { TaskStatus } from "@prisma/client";
 import { normalizeAuthEmail } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { projectAccessWhere } from "@/lib/project-access";
+import { chatProjectsWhere, getChatUnreadCounts } from "@/lib/project-chat-unread";
 
 /** How many projects the sidebar lists; the rest are one click away on /projects. */
 export const SIDEBAR_PROJECT_LIMIT = 8;
-
-/** Chat messages older than this never mark a project chat as new in the sidebar. */
-const RECENT_CHAT_DAYS = 14;
 
 export type WorkspaceNavProject = {
   id: string;
   name: string;
   color: string | null;
   openTasks: number;
-  /** When someone else last posted in the project chat (ISO) in the last two weeks, for the sidebar's "new" marker. */
-  lastChatAt: string | null;
+  /** Unread messages in the project chat (SIDE-03). */
+  unreadChat: number;
 };
 
 export type WorkspaceNav = {
@@ -26,15 +24,16 @@ export type WorkspaceNav = {
   /** Open (not done, not trashed) tasks on the Tasks page: the user's own plus shared project tasks. */
   openTasks: number;
   pendingInvitations: number;
+  /** How many chats have unread messages, for the sidebar's Chats badge. */
+  unreadChats: number;
 };
 
 /** Counts and project links for the app shell's sidebar, top bar and bottom tabs. */
 export async function getWorkspaceNav(user: { id: string; email: string }): Promise<WorkspaceNav> {
   const activeProjectsWhere = { AND: [projectAccessWhere(user.id), { status: "ACTIVE" as const }] };
   const openTaskWhere = { deletedAt: null, status: { not: TaskStatus.DONE } };
-  const recentChatSince = new Date(Date.now() - RECENT_CHAT_DAYS * 24 * 60 * 60 * 1000);
 
-  const [projects, activeProjectCount, openTasks, pendingInvitations] = await Promise.all([
+  const [projects, activeProjectCount, openTasks, pendingInvitations, chatProjects] = await Promise.all([
     prisma.project.findMany({
       where: activeProjectsWhere,
       select: {
@@ -42,12 +41,6 @@ export async function getWorkspaceNav(user: { id: string; email: string }): Prom
         name: true,
         color: true,
         _count: { select: { tasks: { where: openTaskWhere } } },
-        comments: {
-          where: { userId: { not: user.id }, createdAt: { gte: recentChatSince } },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: { createdAt: true },
-        },
       },
       orderBy: { updatedAt: "desc" },
       take: SIDEBAR_PROJECT_LIMIT,
@@ -62,16 +55,19 @@ export async function getWorkspaceNav(user: { id: string; email: string }): Prom
         OR: [{ invitedUserId: user.id }, { invitedEmail: normalizeAuthEmail(user.email) }],
       },
     }),
+    prisma.project.findMany({ where: chatProjectsWhere(user.id), select: { id: true } }),
   ]);
+  const unreadChat = await getChatUnreadCounts(user.id, chatProjects.map((project) => project.id));
 
   return {
-    projects: projects.map(({ _count, comments, ...project }) => ({
+    projects: projects.map(({ _count, ...project }) => ({
       ...project,
       openTasks: _count.tasks,
-      lastChatAt: comments[0]?.createdAt.toISOString() ?? null,
+      unreadChat: unreadChat.get(project.id) ?? 0,
     })),
     activeProjectCount,
     openTasks,
     pendingInvitations,
+    unreadChats: unreadChat.size,
   };
 }

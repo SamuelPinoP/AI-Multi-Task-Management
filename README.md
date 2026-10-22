@@ -15,7 +15,8 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 - Project-specific Kanban boards for organizing tasks by status with read-only Viewer access and Owner/Editor task creation and movement
 - Project collaboration with invitations and role-based Owner, Editor, and Viewer access enforced server-side
 - Project chat with file attachments using local, Vercel Blob, or private AWS S3 storage
-- A sidebar where each project opens to its Overview, Board and Chat, and marks chats with new messages
+- A sidebar where each project opens to its Overview, Board and Chat, with unread chat counts
+- A Chats page with every project chat in one place, unread first, synced across devices
 
 ## Project chat attachment storage
 
@@ -167,6 +168,22 @@ Add `DOTENV_CONFIG_PATH=.env.r2` and `--from-r2 latest` to fetch the newest
 backup straight from R2. The script refuses targets that already have data
 and checks that the target has the backup's migrations. It restores in one
 transaction, so a failure leaves the target empty.
+
+## Daily cleanup
+
+Every day at about 09:00 UTC, after the backup, Vercel Cron calls
+`/api/cron/cleanup` (`src/lib/daily-cleanup.ts`). It deletes:
+
+- expired login sessions, used or expired password reset tokens and expired
+  rate-limit counters;
+- guest workspaces that started more than 30 days ago and have no valid
+  session (guests have no password, so nobody can open them again), with
+  their tasks, notes, events, projects and stored chat files. A guest that is
+  in a real user's project, or whose project has a real member, is left alone;
+- chat uploads that expired without being attached, with their stored files.
+
+It answers with the counts. A repeat call finds nothing new, so the route is
+safe to leave public; with `CRON_SECRET` set it is required, as for backups.
 
 ## Tech Stack
 
