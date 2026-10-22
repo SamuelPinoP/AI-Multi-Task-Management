@@ -51,11 +51,11 @@ What exists: `src/components/tree-board.tsx` (1,244 lines) draws an org-chart st
 - The canvas scrolls near its edges (dnd-kit's auto-scroll). Zoom needs no modifier: the preview is drawn outside the scaled tree, and drop areas are measured on screen.
 - Pure helpers with unit tests in `src/components/tree/tree-move.ts`: `dropZoneFor`, `isDescendant`, `moveFor`, `applyMove`.
 
-### TREE-03 Keyboard and accessibility (S–M)
+### TREE-03 Keyboard and accessibility (S–M, part done)
 
-- A "Move to…" menu item on every card that picks the new parent and position. WCAG 2.5.7 requires a way to move things without dragging.
-- Tree roles (`tree`, `treeitem`) and arrow keys between nodes; Enter edits, Tab adds a child, Shift+Enter adds a sibling, Alt+arrow keys move the node.
-- Ctrl+Z undoes the last move.
+- Done: a "Move to…" button on every card except the root opens a dialog with two lists, "Put it under" (every node outside its own subtree, indented by level) and "Position" (first, or after each other child). It makes the same moves as dragging, so moving never needs a drag (WCAG 2.5.7). The helpers are `moveParentOptions`, `movePositions` and `currentIndex` in `tree-move.ts`.
+- Still to do: tree roles (`tree`, `treeitem`) and arrow keys between nodes; Enter edits, Tab adds a child, Shift+Enter adds a sibling, Alt+arrow keys move the node.
+- Still to do: Ctrl+Z undoes the last move.
 
 ### TREE-04 A better canvas (M, migration)
 

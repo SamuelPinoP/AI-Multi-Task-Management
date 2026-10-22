@@ -18,7 +18,7 @@ import { usePathname } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { toast } from "@/components/ui/toaster";
-import { DeleteNodeDialog, DeleteTreePageDialog, NewTreePageDialog } from "./tree-dialogs";
+import { DeleteNodeDialog, DeleteTreePageDialog, MoveNodeDialog, NewTreePageDialog } from "./tree-dialogs";
 import {
   buildTree,
   clampZoom,
@@ -177,6 +177,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
     );
   }
   // Drag and drop (TREE-02): the tree moves at once, and goes back with a message if the server refuses.
+  const [moveIntent, setMoveIntent] = useState<TreeNode | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const dropTargetRef = useRef<DropTarget | null>(null);
@@ -409,6 +410,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                             onDescriptionChange={(item, description) => patchNode(item.id, { description })}
                             onResize={(item, width, height) => patchNode(item.id, { width, height })}
                             onDelete={requestDeleteNode}
+                            onMoveRequest={setMoveIntent}
                           />
                         ))}
                       </div>
@@ -448,6 +450,17 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
           loading={loading}
           onCancel={() => setDeletePageIntent(null)}
           onConfirm={() => void deletePage(deletePageIntent)}
+        />
+      )}
+      {moveIntent && activePage && (
+        <MoveNodeDialog
+          node={moveIntent}
+          nodes={activePage.nodes}
+          onCancel={() => setMoveIntent(null)}
+          onMove={(move) => {
+            setMoveIntent(null);
+            void moveNode(activePage.id, move);
+          }}
         />
       )}
       {deleteIntent && (
