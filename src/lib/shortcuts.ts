@@ -12,6 +12,7 @@ export type ShortcutAction =
 export const goTargets: Record<string, { href: string; label: string }> = {
   h: { href: "/", label: "Home" },
   d: { href: "/today", label: "My day" },
+  m: { href: "/chats", label: "Chats" },
   t: { href: "/tasks", label: "Tasks" },
   e: { href: "/events", label: "Events" },
   c: { href: "/events/calendar", label: "Calendar" },

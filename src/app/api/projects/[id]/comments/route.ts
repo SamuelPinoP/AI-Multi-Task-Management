@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { createActivity } from "@/lib/activity";
 import { getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
+import { markChatsRead } from "@/lib/project-chat-unread";
 import {
   confirmProjectChatDirectUploadedAttachment,
   isProjectChatStorageConfigError,
@@ -267,6 +268,9 @@ export async function POST(req: Request, context: RouteContext) {
       }),
       preparedAttachments,
     );
+
+    // Posting means the author has read the chat so far.
+    await markChatsRead(user.id, [project.id]);
 
     await createActivity({
       userId: user.id,
