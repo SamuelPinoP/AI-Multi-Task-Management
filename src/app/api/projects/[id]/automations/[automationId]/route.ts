@@ -31,9 +31,11 @@ export async function PATCH(req: Request, context: RouteContext) {
       where: { id: check.automationId, projectId: check.projectId },
       data: { enabled: body.enabled },
     });
-    if (updated.count === 0) return NextResponse.json({ error: "Automation not found" }, { status: 404 });
-
-    const rule = await prisma.projectAutomation.findUniqueOrThrow({ where: { id: check.automationId }, select: AUTOMATION_SELECT });
+    // Read back by project too: a delete in between answers 404, not 500.
+    const rule = updated.count
+      ? await prisma.projectAutomation.findFirst({ where: { id: check.automationId, projectId: check.projectId }, select: AUTOMATION_SELECT })
+      : null;
+    if (!rule) return NextResponse.json({ error: "Automation not found" }, { status: 404 });
     return NextResponse.json(automationJson(rule));
   } catch (error) {
     console.error("PATCH /api/projects/[id]/automations/[automationId] error:", error);

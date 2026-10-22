@@ -254,7 +254,9 @@ export async function sendTaskAutomationEmail({
 }: TaskAutomationEmailParams): Promise<EmailDeliveryResult> {
   const projectUrl = `${getAppBaseUrl(fallbackOrigin)}/projects/${encodeURIComponent(projectId)}`;
   const happened = trigger === "TASK_COMPLETED" ? "marked a task as done" : "added a task";
-  const subject = trigger === "TASK_COMPLETED" ? `Done in ${projectName}: ${taskTitle}` : `New task in ${projectName}: ${taskTitle}`;
+  // Names are free text; keep the subject on one line.
+  const oneLine = (value: string) => value.replace(/\s+/g, " ").trim();
+  const subject = `${trigger === "TASK_COMPLETED" ? "Done in" : "New task in"} ${oneLine(projectName)}: ${oneLine(taskTitle)}`;
   const text = [
     `${actorName} ${happened} in ${projectName}:`,
     "",

@@ -9,6 +9,9 @@ import { findProjectTemplate, planTemplate } from "@/lib/project-templates";
 import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
 import { getUserNow } from "@/lib/user-time-server";
 
+// About 20 inserts for the largest template; Prisma's 5-second default is tight on a cold database.
+const TEMPLATE_TRANSACTION = { maxWait: 10_000, timeout: 20_000 };
+
 function parseProjectStatus(value: unknown): ProjectStatus | null {
   if (typeof value !== "string") return null;
   return Object.values(ProjectStatus).includes(value as ProjectStatus) ? (value as ProjectStatus) : null;
@@ -118,7 +121,7 @@ export async function POST(req: Request) {
         });
       }
       return created;
-    });
+    }, TEMPLATE_TRANSACTION);
 
     void createActivity({
       userId: user.id,
