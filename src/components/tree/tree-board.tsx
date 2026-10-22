@@ -45,6 +45,8 @@ const screenReaderInstructions = {
     "To move a node, press Space or Enter on its handle, then use the arrow keys to move it over another node. Drop it with Space or Enter: near that node's left or right edge to place it beside it, in the middle to make it a child. Press Escape to cancel.",
 };
 
+const MOVE_TOAST_ID = "tree-move";
+
 /** Where the drag is now: the pointer, or the dragged handle's center when using the keyboard. */
 function dragX(event: DragMoveEvent) {
   const start = event.activatorEvent;
@@ -251,7 +253,8 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
       setNodes((nodes) => nodes.map((item) => saved.find((savedNode) => savedNode.id === item.id) ?? item));
       if (undoable && node && back) {
         undoRef.current = { pageId, move: back };
-        toast.success(`Moved “${node.title}”.`, { action: { label: "Undo", onClick: undoLastMove } });
+        // One toast for the latest move: a new move replaces it, so no older Undo is left on screen.
+        toast.success(`Moved “${node.title}”.`, { id: MOVE_TOAST_ID, action: { label: "Undo", onClick: undoLastMove } });
       }
     } catch (err) {
       setNodes(() => before);
@@ -261,6 +264,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
   function undoLastMove() {
     const last = undoRef.current;
     undoRef.current = null;
+    toast.dismiss(MOVE_TOAST_ID);
     if (last) void moveNode(last.pageId, last.move, { undoable: false });
   }
   // Ctrl+Z (Cmd+Z) undoes the last move, unless the key is meant for a text field.
