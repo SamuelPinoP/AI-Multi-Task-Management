@@ -35,6 +35,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { NewTaskDialog } from "@/components/new-task-dialog";
 import { ProjectSheet, type ProjectInput } from "@/components/projects/project-sheet";
 import { clearOfflineData, OfflineBanner, promptInstall, useInstallPrompt } from "@/components/pwa";
+import { EmailVerificationBanner } from "@/components/email-verification";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ThemeToggle, useTheme } from "@/components/theme-provider";
 import {
@@ -66,6 +67,7 @@ type ShellUser = {
   name: string | null;
   email: string;
   isGuest: boolean;
+  emailVerifiedAt: Date | null;
 } | null;
 
 type NavItem = NavMatch & {
@@ -76,7 +78,7 @@ type NavItem = NavMatch & {
   badge?: { value: number; label: string };
 };
 
-const publicPaths = new Set(["/login", "/signup", "/forgot-password", "/reset-password"]);
+const publicPaths = new Set(["/login", "/signup", "/forgot-password", "/reset-password", "/verify-email"]);
 
 function firstName(user: NonNullable<ShellUser>) {
   if (user.isGuest) return "Guest";
@@ -659,7 +661,8 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const isLoggedOutLanding = !currentUser && pathname === "/";
-  const isPublicPage = publicPaths.has(pathname) || isLoggedOutLanding;
+  // Share pages (SMART-12) look the same to everyone, signed in or not.
+  const isPublicPage = publicPaths.has(pathname) || isLoggedOutLanding || pathname.startsWith("/share/");
   const showWorkspaceShell = Boolean(currentUser && initialNav && !isPublicPage);
 
   const [nav, setNav] = useState(initialNav);
@@ -854,6 +857,7 @@ export function AppShell({
           onShowShortcuts={() => setShortcutsOpen(true)}
         />
         <OfflineBanner />
+        {currentUser.isGuest || currentUser.emailVerifiedAt ? null : <EmailVerificationBanner email={currentUser.email} />}
         <main id="main-content" className="min-h-0 flex-1 overflow-y-auto pb-24 lg:pb-0">
           {children}
         </main>

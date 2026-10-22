@@ -6,7 +6,7 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 
 ## Key Features
 
-- Secure authentication with signup, login, logout, sessions, and password reset
+- Secure authentication with signup, email confirmation, login, logout, sessions, and password reset
 - Notes, tasks, events, projects, calendars, a rule-based Smart Daily Planner, and trash recovery
 - Project-specific Kanban boards for organizing tasks by status with read-only Viewer access and Owner/Editor task creation and movement
 - Project collaboration with invitations and role-based Owner, Editor, and Viewer access enforced server-side
@@ -15,6 +15,7 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 - A Chats page with every project chat in one place, unread first, synced across devices
 - An installable app (phones and desktops) that keeps the pages you've opened readable offline
 - Project templates (Capstone, Sprint, Job search) and simple automations, such as emailing the owner when a task is done
+- A linked GitHub repository per project, and read-only share links for a project's roadmap
 
 ## Project chat attachment storage
 
@@ -179,6 +180,29 @@ added, or assign new unassigned tasks to a member. Subtasks don't trigger
 rules, and owners aren't emailed about their own changes. Emails go out after
 the response (`after()` in `src/lib/project-automations.ts`) through the
 configured email provider.
+
+## GitHub links and share pages
+
+Owners can link a public GitHub repository on the project page (paste
+`owner/name` or its github.com address). Members then see its latest open
+pull requests and issues. `src/lib/github.ts` reads GitHub's public REST API
+and keeps answers for 10 minutes in the Next.js data cache, because GitHub
+allows 60 requests an hour without a token. Set the optional `GITHUB_TOKEN`
+(read-only access to public repositories is enough) to raise that to 5,000.
+Private repositories are refused even when a token could see them.
+
+The owner can also turn on a read-only share link, `/share/<token>`, for an
+advisor or a recruiter. It shows the project's name, description and
+progress, task titles with their status and due dates, events in the next 60
+days and the linked repository. Notes, chat, files, members, assignees and
+task descriptions stay private. The token is 24 random bytes. "New link"
+replaces it, and "Turn off" ends sharing; either way the old link answers 404.
+Share pages are `noindex` and send no Referer. The project APIs never return
+the token to other members.
+
+In tests, `tests/e2e/github-stub.ts` stands in for GitHub (Playwright's global
+setup, on the E2E port + 1000). `GITHUB_API_URL` points the app at it; it's
+refused in production.
 
 ## Database backups
 

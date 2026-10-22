@@ -32,6 +32,11 @@ type PasswordResetEmailParams = {
   resetUrl: string;
 };
 
+type EmailVerificationEmailParams = {
+  to: string;
+  verifyUrl: string;
+};
+
 type TaskAutomationEmailParams = {
   to: string;
   trigger: "TASK_CREATED" | "TASK_COMPLETED";
@@ -239,6 +244,40 @@ export async function sendPasswordResetEmail({ to, resetUrl }: PasswordResetEmai
     successMessage: "If an account exists, a reset link was sent.",
     failureMessage: "If an account exists, a reset link was sent.",
     disabledMessage: "If an account exists, a reset link was sent.",
+  });
+}
+
+/** "Confirm your email" with a link that proves the user owns the address (#130). */
+export async function sendEmailVerificationEmail({ to, verifyUrl }: EmailVerificationEmailParams): Promise<EmailDeliveryResult> {
+  const safeAppName = escapeHtml(APP_NAME);
+  const safeVerifyUrl = escapeHtml(verifyUrl);
+  const text = [
+    `Confirm your email for ${APP_NAME}`,
+    "",
+    "Open this link to confirm this is your email address. It expires in 24 hours:",
+    verifyUrl,
+    "",
+    "You need a confirmed email to join projects you're invited to.",
+    "If you didn't create an account, you can ignore this email.",
+  ].join("\n");
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #18181b;">
+      <h1 style="font-size: 20px; margin: 0 0 16px;">Confirm your email for ${safeAppName}</h1>
+      <p>Confirm this is your email address. The link expires in 24 hours.</p>
+      <p><a href="${safeVerifyUrl}" style="display: inline-block; padding: 10px 14px; border-radius: 8px; background: #2563eb; color: #ffffff; text-decoration: none;">Confirm email</a></p>
+      <p>You need a confirmed email to join projects you're invited to.</p>
+      <p style="font-size: 13px; color: #52525b;">If you didn't create an account, you can ignore this email.</p>
+    </div>
+  `;
+
+  return sendEmail({
+    to,
+    subject: `${APP_NAME}: confirm your email`,
+    text,
+    html,
+    successMessage: "Confirmation email sent.",
+    failureMessage: "The confirmation email could not be sent. Try again in a few minutes.",
+    disabledMessage: "Email sending is not configured.",
   });
 }
 

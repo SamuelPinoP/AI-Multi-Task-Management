@@ -12,7 +12,7 @@ import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 function getErrorMessage(error: string | undefined, signupEnabled: boolean, retry: string | undefined) {
   if (error === "rate-limited") return tooManyAttemptsMessage("sign-in attempts", Number(retry) || 60);
   if (error === "missing") return "Enter your email and password.";
-  if (error === "created") return "Account created. Please sign in.";
+  if (error === "created") return "Account created. Please sign in. We also emailed you a link to confirm your address.";
   if (error === "logged-out") return "You have been logged out.";
   if (error === "invalid") return "Invalid email or password.";
   if (error === "reset") return "Password reset. Please sign in with your new password.";
