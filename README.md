@@ -59,9 +59,15 @@ back, checks CORS for `APP_BASE_URL`, and deletes both. Point
 ```bash
 npm run typecheck
 npm run lint
+npm run test:unit
+npm run test:unit:zones
 npm run test:storage
 npm run test:e2e
 ```
+
+`npm run test:unit:zones` runs the unit tests again with the process in
+Pago Pago (UTC-11), New York, Kolkata (UTC+5:30) and Kiritimati (UTC+14), so
+date code that only works in UTC fails here too. CI runs both.
 
 `npm run test:storage` runs Node tests for project-chat attachment validation,
 provider selection, S3 upload planning, provider-aware downloads/deletes, and

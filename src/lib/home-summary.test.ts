@@ -96,7 +96,14 @@ test("relative times", () => {
   assert.equal(relativeTime(new Date("2026-10-20T17:08:00.000Z"), real), "12m");
   assert.equal(relativeTime(new Date("2026-10-20T14:20:00.000Z"), real), "3h");
   assert.equal(relativeTime(new Date("2026-10-18T17:20:00.000Z"), real), "2d");
-  assert.match(relativeTime(new Date("2026-10-01T17:20:00.000Z"), real), /^(Sep 30|Oct 1)$/);
+  // Older dates: in the runtime's own zone (UTC-12 to UTC+14), or in the one given.
+  const eveningInUtc = new Date("2026-10-01T17:20:00.000Z");
+  const morningInUtc = new Date("2026-10-01T05:00:00.000Z");
+  assert.match(relativeTime(eveningInUtc, real), /^(Sep 30|Oct 1|Oct 2)$/);
+  assert.equal(relativeTime(eveningInUtc, real, "UTC"), "Oct 1");
+  assert.equal(relativeTime(eveningInUtc, real, "Pacific/Kiritimati"), "Oct 2");
+  assert.equal(relativeTime(morningInUtc, real, "Pacific/Pago_Pago"), "Sep 30");
+  assert.equal(relativeTime(morningInUtc, real, null), relativeTime(morningInUtc, real));
 });
 
 test("sparkline paths scale to the tallest value", () => {

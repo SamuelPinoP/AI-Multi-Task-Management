@@ -50,6 +50,8 @@ jobs:
       - run: npm run lint -- --max-warnings=0
       - run: npm run typecheck
       - run: npm run test:unit
+      - name: Unit tests in other time zones
+        run: npm run test:unit:zones
       - run: npm run test:storage
       - name: Fail if Radix UI is installed twice
         run: node scripts/check-single-radix.mjs
