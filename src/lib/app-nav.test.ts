@@ -19,8 +19,9 @@ test("prefix items match nested paths but not lookalikes", () => {
 });
 
 test("extra paths count as the item", () => {
-  const boards = { href: "/board", match: ["/tasks/board"] };
+  const boards = { href: "/board", match: ["/tasks/board", "/tree"] };
   assert.equal(isNavItemActive("/tasks/board", boards), true);
+  assert.equal(isNavItemActive("/tree/page-1", boards), true);
   assert.equal(isNavItemActive("/tasks", boards), false);
 });
 
@@ -28,6 +29,8 @@ test("page titles prefer the longest matching prefix", () => {
   assert.deepEqual(pageTitleFor("/", []), { title: "Home" });
   assert.deepEqual(pageTitleFor("/tasks", []), { title: "Tasks" });
   assert.deepEqual(pageTitleFor("/tasks/board", []), { title: "Boards" });
+  assert.deepEqual(pageTitleFor("/tree", []), { title: "Tree view" });
+  assert.deepEqual(pageTitleFor("/tree/page-1", []), { title: "Tree view" });
   assert.deepEqual(pageTitleFor("/events/calendar", []), { title: "Calendar" });
   assert.deepEqual(pageTitleFor("/today", []), { title: "My day" });
   assert.deepEqual(pageTitleFor("/chats", []), { title: "Chats" });
