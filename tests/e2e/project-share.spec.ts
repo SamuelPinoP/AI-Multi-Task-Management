@@ -54,11 +54,12 @@ test("an owner links GitHub and shares a read-only roadmap that hides private de
   // A visitor who isn't signed in.
   const visitorContext = await browser.newContext();
   const visitor = await visitorContext.newPage();
-  // The root loading.tsx streams pages, so a missing page still answers HTTP 200 with the
-  // "not found" page (and noindex). Check what the visitor sees, and the API's real status.
+  // The root loading.tsx streams pages: a missing page still answers HTTP 200 with the "not
+  // found" page (and noindex), and while a page streams in, React keeps a hidden copy of it.
+  // So check visible text by role or inside <main>, plus the API's real status.
   const expectGone = async (url: string) => {
     await visitor.goto(url);
-    await expect(visitor.getByText("This page could not be found.")).toBeVisible();
+    await expect(visitor.getByRole("heading", { name: "This page could not be found." })).toBeVisible();
     await expect(visitor.getByText(name)).toHaveCount(0);
     const token = new URL(url, "http://x").pathname.split("/").pop();
     expect((await visitorContext.request.get(`/api/share/${token}/github`)).status()).toBe(404);
@@ -66,7 +67,7 @@ test("an owner links GitHub and shares a read-only roadmap that hides private de
   const response = await visitor.goto(firstUrl);
   expect(response?.status()).toBe(200);
   await expect(visitor.getByRole("heading", { level: 1, name })).toBeVisible();
-  await expect(visitor.getByText("Capstone for the advisor.")).toBeVisible();
+  await expect(visitor.getByRole("main").getByText("Capstone for the advisor.")).toBeVisible();
   const roadmap = visitor.getByRole("region", { name: "Roadmap" });
   await expect(roadmap.getByRole("region", { name: "In progress" })).toContainText("Build the prototype");
   await expect(roadmap.getByRole("region", { name: "In progress" })).toContainText("1 of 1 subtasks done");
