@@ -6,6 +6,8 @@ export async function GET() {
   try {
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    // Someone who signed up with another person's address must not see what that person was invited to (#130).
+    if (!user.emailVerifiedAt) return NextResponse.json([]);
 
     const invitations = await prisma.projectInvitation.findMany({
       where: {

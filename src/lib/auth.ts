@@ -40,6 +40,8 @@ export type AuthUser = {
   name: string | null;
   email: string;
   isGuest: boolean;
+  /** Null until the user confirms their email (#130). */
+  emailVerifiedAt: Date | null;
 };
 
 function normalizeEmail(email: string) {
@@ -160,7 +162,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   const tokenHash = hashSecureToken(token);
   const session = await prisma.session.findUnique({
     where: { token: tokenHash },
-    include: { user: { select: { id: true, name: true, email: true, isGuest: true } } },
+    include: { user: { select: { id: true, name: true, email: true, isGuest: true, emailVerifiedAt: true } } },
   });
 
   if (!session) return null;

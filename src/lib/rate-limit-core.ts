@@ -15,6 +15,8 @@ export const RATE_LIMITS = {
   resetRequestIp: { name: "reset-request-ip", limit: 5, windowMs: 60 * MINUTE },
   resetRequestAccount: { name: "reset-request-account", limit: 3, windowMs: 60 * MINUTE },
   resetSubmitIp: { name: "reset-submit-ip", limit: 10, windowMs: 15 * MINUTE },
+  /** "Send the confirmation link again": each one sends an email. */
+  verifyEmailResendUser: { name: "verify-email-resend-user", limit: 3, windowMs: 60 * MINUTE },
   /** Each guest workspace adds a user row. */
   guestIp: { name: "guest-ip", limit: 10, windowMs: 60 * MINUTE },
   invitationsUser: { name: "invitations-user", limit: 30, windowMs: 60 * MINUTE },
