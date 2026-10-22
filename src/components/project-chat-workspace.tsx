@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, Fragment, useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AttachmentGallery, ComposerAttachmentTray } from "@/components/project-chat-attachments";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
@@ -162,6 +162,7 @@ export function ProjectChatWorkspace({
   currentUser,
   readOnly = false,
   attachmentsDisabledMessage,
+  newSince,
 }: {
   projectId: string;
   initialComments: ProjectComment[];
@@ -169,8 +170,20 @@ export function ProjectChatWorkspace({
   readOnly?: boolean;
   /** Shown instead of accepting files when this user can't upload. */
   attachmentsDisabledMessage?: string;
+  /** When the user last read this chat: a "New messages" line goes above the first later message from someone else. */
+  newSince?: string;
 }) {
   const [comments, setComments] = useState(initialComments);
+  // Fixed when the chat opens, so the line stays put while the user replies.
+  const [firstNewCommentId] = useState(() => {
+    if (!newSince) return null;
+    const since = Date.parse(newSince);
+    return (
+      initialComments.find(
+        (comment) => Date.parse(comment.createdAt) > since && comment.author.email !== currentUser.email,
+      )?.id ?? null
+    );
+  });
   const [message, setMessage] = useState("");
   const [selectedAttachments, setSelectedAttachments] = useState<
     SelectedAttachment[]
@@ -617,9 +630,16 @@ export function ProjectChatWorkspace({
                 const isMutating = mutatingCommentId === comment.id;
 
                 return (
+                  <Fragment key={comment.id}>
+                  {comment.id === firstNewCommentId ? (
+                    <div role="separator" aria-label="New messages" className="flex items-center gap-3 text-xs font-bold text-accent">
+                      <span aria-hidden="true" className="h-px flex-1 bg-accent" />
+                      New messages
+                      <span aria-hidden="true" className="h-px flex-1 bg-accent" />
+                    </div>
+                  ) : null}
                   <article
                     id={`comment-${comment.id}`}
-                    key={comment.id}
                     className={`rounded-2xl bg-white/95 p-4 text-sm shadow-sm shadow-zinc-200/60 ring-1 transition dark:bg-zinc-900/80 dark:shadow-none ${
                       isPending
                         ? "opacity-80 ring-zinc-300 dark:ring-zinc-700"
@@ -798,6 +818,7 @@ export function ProjectChatWorkspace({
                       />
                     ) : null}
                   </article>
+                  </Fragment>
                 );
               })
             )}

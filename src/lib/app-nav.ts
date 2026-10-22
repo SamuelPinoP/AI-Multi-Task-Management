@@ -18,6 +18,7 @@ export function isNavItemActive(pathname: string, item: NavMatch) {
 // Longer prefixes first, so /tasks/board wins over /tasks.
 const pageTitles: Array<[prefix: string, title: string]> = [
   ["/today", "My day"],
+  ["/chats", "Chats"],
   ["/tasks/board", "Boards"],
   ["/tasks", "Tasks"],
   ["/events/calendar", "Calendar"],

@@ -2,7 +2,7 @@
 
 Ideas and an action plan for making the sidebar more useful and for the two big planning views. Sizes: S (a day or less), M (a few days), L (a week or more). "Migration" means a Prisma schema change.
 
-Suggested order: SIDE-02, SIDE-03, TREE-01, TREE-02 with TREE-03, SIDE-05, MIND-01 and MIND-02, MIND-03, then the rest.
+Suggested order: TREE-01, TREE-02 with TREE-03, SIDE-05, MIND-01 and MIND-02, MIND-03, then the rest.
 
 ## Sidebar
 
@@ -12,15 +12,15 @@ Each project in the sidebar opens to Overview, Board and Chat, so the chat is on
 
 - The project name still goes to the overview; the chevron on the right opens or closes the project.
 - A project opens by itself while you're on one of its pages. Once you open or close it, that choice is kept in the `sidebar-projects` cookie, so the server renders it the same way after a reload.
-- Chat shows "New" when someone else posted after you last had that chat open in this browser (`localStorage`, `src/lib/project-chat-seen.ts`). A closed project shows a dot instead. Only messages from the last 14 days count.
+- Chat shows how many messages are unread (SIDE-03, below); a closed project shows a dot instead. For a chat you've never opened, only messages from the last 14 days count.
 - Opening and closing animates the height and respects reduced motion. Closed pages are `inert`, so the keyboard skips them.
 
 ### Ideas, in priority order
 
 | ID | Idea | Size | Notes |
 | --- | --- | --- | --- |
-| SIDE-02 | **Chats hub** at `/chats`: every project chat in one list, newest and unread first, with the last message. A "Chats" sidebar item with the number of chats that have new messages. | S–M | No migration: reuses `lastChatAt` from `getWorkspaceNav`. |
-| SIDE-03 | **Real unread counts on every device**: a `ProjectChatRead (userId, projectId, lastReadAt)` table replaces `localStorage`, so the sidebar shows "3" instead of "New". | S | Migration. Pairs with BUG-13 (chat refreshes while open) and SMART-08 (inbox). |
+| SIDE-02 | **Chats hub** at `/chats`. Done: every project chat in one list, unread first, with the open chat beside it; search, an Unread filter and Mark all read; a "Chats" sidebar item with the number of chats that have new messages, and G then M. | S–M | Built with SIDE-03. |
+| SIDE-03 | **Real unread counts on every device**. Done: the `ProjectChatRead (userId, projectId, lastReadAt)` table replaced `localStorage`; opening or posting in a chat marks it read, and a "New messages" line shows where you left off. | S | Migration `20261021150000_add_project_chat_read`. |
 | SIDE-04 | **Favorites**: pin any project, note, tree page or saved filter to a group at the top of the sidebar; drag to reorder. | M | Migration (`Favorite` table). |
 | SIDE-05 | **Views group**: Kanban, Tree, Mind, Timeline (today's Roadmap) and Calendar as sidebar items instead of tabs inside Boards. Tree pages list under Tree the way projects do. | S | Needs TREE-01 to give the tree its own route. |
 | SIDE-06 | **Saved filters**: "Assigned to me", "High priority this week", "No due date", each with a count. | M | Migration (`SavedView`). |
