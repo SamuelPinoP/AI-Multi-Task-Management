@@ -21,15 +21,24 @@ function setInstallPrompt(event: InstallPromptEvent | null) {
   installListeners.forEach((listener) => listener());
 }
 
-/** Deletes the pages and data saved for offline reading. Call it before signing out. */
+/**
+ * Deletes the pages and data saved for offline reading. Call it before signing
+ * out. The service worker also drops any save still in flight; deleting here
+ * too covers a page it doesn't control. Gives up after 1.5 seconds, so a
+ * stuck storage layer never blocks logging out.
+ */
 export async function clearOfflineData() {
   if (typeof caches === "undefined") return;
-  try {
-    const names = await caches.keys();
-    await Promise.all(names.filter((name) => name.startsWith(USER_CACHE_PREFIX)).map((name) => caches.delete(name)));
-  } catch {
-    // Storage blocked (private mode, permissions): nothing was saved either.
-  }
+  const clear = async () => {
+    try {
+      navigator.serviceWorker?.controller?.postMessage({ type: "clear-user-data" });
+      const names = await caches.keys();
+      await Promise.all(names.filter((name) => name.startsWith(USER_CACHE_PREFIX)).map((name) => caches.delete(name)));
+    } catch {
+      // Storage blocked (private mode, permissions): nothing was saved either.
+    }
+  };
+  await Promise.race([clear(), new Promise((resolve) => setTimeout(resolve, 1500))]);
 }
 
 /**

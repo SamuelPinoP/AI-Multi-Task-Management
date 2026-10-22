@@ -7,11 +7,13 @@
 // - Pages: network first; a copy of each page you open is kept for offline use.
 // - Read-only API data the pages load (tasks, notes, projects...): same.
 // - Build assets under /_next/static: cache first (their names change on deploy).
-// - Everything else (sign-in, saving, uploads, downloads) goes straight to the network.
+// - Everything else (sign-in, saving, uploads, downloads, files opened from
+//   /api or /uploads) goes straight to the network.
 //
-// Saved pages and data live in caches named "ai-multi-user-*". The app deletes
-// them when you log out or open a signed-out page (clearOfflineData in pwa.tsx).
-// Bump VERSION when the build-asset rules change, to drop the old asset cache.
+// Saved pages and data live in caches named "ai-multi-user-*". The app asks
+// this worker to delete them when you log out or open a signed-out page
+// (clearOfflineData in pwa.tsx). Bump VERSION when the build-asset rules
+// change, to drop the old asset cache.
 
 const VERSION = "v1";
 const STATIC_CACHE = `ai-multi-static-${VERSION}`;
@@ -20,6 +22,11 @@ const API_CACHE = "ai-multi-user-api";
 const MAX_PAGES = 60;
 const MAX_API_RESPONSES = 150;
 const MAX_STATIC_FILES = 400;
+const USER_CACHE_PREFIX = "ai-multi-user-";
+
+// Goes up on every "clear-user-data" message. A save that started before a
+// clear is dropped, so a slow response can't put a signed-out user's data back.
+let generation = 0;
 
 // GET endpoints whose answers are worth reading offline. Attachments are left
 // out on purpose: they can be large, and they are fetched from storage.
@@ -62,6 +69,8 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
+    // Files opened in a tab (attachments, uploads) aren't pages.
+    if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/uploads/")) return;
     event.respondWith(networkFirst(event, PAGE_CACHE, MAX_PAGES, offlinePage));
   } else if (isStaticAsset(url)) {
     event.respondWith(cacheFirst(event));
@@ -70,11 +79,17 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
-// The page sends the URLs it loaded before this worker took control (its own
-// address, build assets and API data), so the first page you open is readable
-// offline too.
 self.addEventListener("message", (event) => {
+  if (event.data?.type === "clear-user-data") {
+    generation += 1;
+    event.waitUntil(clearUserCaches());
+    return;
+  }
+  // The page sends the URLs it loaded before this worker took control (its own
+  // address, build assets and API data), so the first page you open is readable
+  // offline too.
   if (event.data?.type !== "cache-urls" || !Array.isArray(event.data.urls)) return;
+  const started = generation;
   event.waitUntil(
     Promise.all(
       event.data.urls.slice(0, 100).map(async (href) => {
@@ -82,12 +97,13 @@ self.addEventListener("message", (event) => {
           const url = new URL(href, self.location.origin);
           if (url.origin !== self.location.origin) return;
           if (isStaticAsset(url)) {
-            const cache = await caches.open(STATIC_CACHE);
-            if (!(await cache.match(url.href))) await saveResponse(STATIC_CACHE, url.href, await fetch(url.href), MAX_STATIC_FILES);
+            if (!(await caches.match(url.href, { cacheName: STATIC_CACHE }))) {
+              await saveResponse(STATIC_CACHE, url.href, await fetch(url.href), MAX_STATIC_FILES, started);
+            }
           } else if (url.href === event.data.page) {
-            await saveResponse(PAGE_CACHE, url.href, await fetch(url.href), MAX_PAGES);
+            await saveResponse(PAGE_CACHE, url.href, await fetch(url.href), MAX_PAGES, started);
           } else if (isReadableApi(url)) {
-            await saveResponse(API_CACHE, url.href, await fetch(url.href), MAX_API_RESPONSES);
+            await saveResponse(API_CACHE, url.href, await fetch(url.href), MAX_API_RESPONSES, started);
           }
         } catch {
           // Offline or gone: nothing to keep.
@@ -98,7 +114,7 @@ self.addEventListener("message", (event) => {
 });
 
 function isStaticAsset(url) {
-  return url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/");
+  return url.pathname.startsWith("/_next/static/");
 }
 
 function isReadableApi(url) {
@@ -110,9 +126,20 @@ function cacheable(response) {
   return response.ok && response.type === "basic" && !response.redirected;
 }
 
-async function saveResponse(cacheName, request, response, maxEntries) {
+async function clearUserCaches() {
+  const names = await caches.keys();
+  await Promise.all(names.filter((name) => name.startsWith(USER_CACHE_PREFIX)).map((name) => caches.delete(name)));
+}
+
+async function saveResponse(cacheName, request, response, maxEntries, started) {
   if (!cacheable(response)) return;
+  // Pages are saved only as HTML: a file opened from elsewhere isn't a page.
+  if (cacheName === PAGE_CACHE && !(response.headers.get("content-type") ?? "").startsWith("text/html")) return;
+  const userData = cacheName !== STATIC_CACHE;
+  if (userData && started !== generation) return;
   const cache = await caches.open(cacheName);
+  // A clear between the check above and open() has bumped the generation by now.
+  if (userData && started !== generation) return;
   await cache.put(request, response);
   // put() moves an updated entry to the end, so the oldest come first.
   const keys = await cache.keys();
@@ -121,25 +148,25 @@ async function saveResponse(cacheName, request, response, maxEntries) {
 
 async function networkFirst(event, cacheName, maxEntries, fallback) {
   const { request } = event;
+  const started = generation;
   try {
     const response = (await event.preloadResponse) || (await fetch(request));
-    if (cacheable(response)) event.waitUntil(saveResponse(cacheName, request, response.clone(), maxEntries));
+    if (cacheable(response)) event.waitUntil(saveResponse(cacheName, request, response.clone(), maxEntries, started));
     return response;
   } catch {
-    const cache = await caches.open(cacheName);
+    // caches.match() with a cacheName doesn't create the cache when it's missing.
     const saved =
-      (await cache.match(request, { ignoreVary: true })) ||
-      (request.mode === "navigate" ? await cache.match(request, { ignoreSearch: true, ignoreVary: true }) : undefined);
+      (await caches.match(request, { cacheName, ignoreVary: true })) ||
+      (request.mode === "navigate" ? await caches.match(request, { cacheName, ignoreSearch: true, ignoreVary: true }) : undefined);
     return saved || fallback();
   }
 }
 
 async function cacheFirst(event) {
-  const cache = await caches.open(STATIC_CACHE);
-  const saved = await cache.match(event.request);
+  const saved = await caches.match(event.request, { cacheName: STATIC_CACHE });
   if (saved) return saved;
   const response = await fetch(event.request);
-  if (cacheable(response)) event.waitUntil(saveResponse(STATIC_CACHE, event.request, response.clone(), MAX_STATIC_FILES));
+  if (cacheable(response)) event.waitUntil(saveResponse(STATIC_CACHE, event.request, response.clone(), MAX_STATIC_FILES, generation));
   return response;
 }
 

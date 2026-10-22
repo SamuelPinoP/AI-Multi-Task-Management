@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { signUpAndLogIn, uniqueName } from "./helpers";
+import { expectHome, openSection, signUpAndLogIn, uniqueName } from "./helpers";
 
 // SMART-10: the installable app and offline reading.
 
@@ -49,8 +49,15 @@ test.describe("offline reading", () => {
   test.use({ serviceWorkers: "allow" });
   test.skip(process.env.E2E_SERVER_MODE !== "start", "The service worker registers in production builds only.");
 
-  async function savedCacheNames(page: Page) {
-    return page.evaluate(async () => (await caches.keys()).filter((name) => name.startsWith("ai-multi-user-")));
+  /** How many pages and API answers are saved for offline reading. Doesn't create caches. */
+  async function savedEntries(page: Page) {
+    return page.evaluate(async () => {
+      let total = 0;
+      for (const name of await caches.keys()) {
+        if (name.startsWith("ai-multi-user-")) total += (await (await caches.open(name)).keys()).length;
+      }
+      return total;
+    });
   }
 
   test("opened pages stay readable offline, and logging out deletes them", async ({ page, context }) => {
@@ -64,9 +71,9 @@ test.describe("offline reading", () => {
     await expect
       .poll(() =>
         page.evaluate(async () => {
-          const pages = await caches.open("ai-multi-user-pages");
-          const api = await caches.open("ai-multi-user-api");
-          return Boolean((await pages.match(location.href)) && (await api.keys()).some((request) => new URL(request.url).pathname === "/api/tasks"));
+          const pageSaved = await caches.match(location.href, { cacheName: "ai-multi-user-pages" });
+          const tasksSaved = await caches.match(new URL("/api/tasks", location.href).href, { cacheName: "ai-multi-user-api" });
+          return Boolean(pageSaved && tasksSaved);
         }),
       )
       .toBe(true);
@@ -76,6 +83,14 @@ test.describe("offline reading", () => {
     await expect(page.getByText(title)).toBeVisible();
     await expect(page.getByRole("status").filter({ hasText: "You're offline" })).toBeVisible();
 
+    // In-app links work offline too: the app falls back to a full page load, which the worker answers.
+    // Home was saved right after signing in.
+    await openSection(page, "Home");
+    await expectHome(page);
+    // The sidebar link also shows the task count ("Tasks 1").
+    await page.getByRole("link", { name: /^Tasks\b/ }).first().click();
+    await expect(page.getByText(title)).toBeVisible();
+
     // A page never opened on this device gets the offline notice instead of a browser error.
     await page.goto("/goals");
     await expect(page.getByRole("heading", { name: "You're offline" })).toBeVisible();
@@ -83,11 +98,11 @@ test.describe("offline reading", () => {
     await context.setOffline(false);
     await page.goto("/tasks");
     await expect(page.getByText(title)).toBeVisible();
-    expect(await savedCacheNames(page)).not.toEqual([]);
+    expect(await savedEntries(page)).toBeGreaterThan(0);
 
     await page.getByRole("button", { name: "Account menu" }).click();
     await page.getByRole("menuitem", { name: "Log out" }).click();
     await expect(page).toHaveURL(/\/login/);
-    expect(await savedCacheNames(page)).toEqual([]);
+    await expect.poll(() => savedEntries(page)).toBe(0);
   });
 });
