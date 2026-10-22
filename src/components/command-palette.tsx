@@ -8,6 +8,7 @@ import {
   House,
   Keyboard,
   Map as MapIcon,
+  MessagesSquare,
   Moon,
   Target,
   NotebookPen,
@@ -47,6 +48,7 @@ const emptyResults: SearchData = { projects: [], notes: [], tasks: [], events: [
 const pages: Array<{ href: string; label: string; icon: LucideIcon; keywords?: string }> = [
   { href: "/", label: "Home", icon: House, keywords: "dashboard" },
   { href: "/today", label: "My day", icon: Sun, keywords: "today focus" },
+  { href: "/chats", label: "Chats", icon: MessagesSquare, keywords: "messages discussion unread" },
   { href: "/tasks", label: "Tasks", icon: SquareCheckBig },
   { href: "/events", label: "Events", icon: CalendarClock },
   { href: "/events/calendar", label: "Calendar", icon: CalendarDays },
