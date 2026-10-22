@@ -82,4 +82,6 @@ jobs:
         with:
           name: lighthouse-report-${{ github.run_number }}
           path: .lighthouseci/
+          # The folder's name starts with a dot, which upload-artifact skips unless told otherwise.
+          include-hidden-files: true
           retention-days: 14
