@@ -15,14 +15,20 @@
  *    /events page with a deep-link query param) or open a task.
  *  - Allow marking a task done directly from the calendar, and deleting an
  *    event (with confirmation) directly from the day-detail panel.
+ *  - "Show tasks" hides or shows due tasks (remembered per browser), and
+ *    "New event" opens the Events page's sheet on the selected day (CAL-01).
  */
 
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarSubscribe } from "@/components/calendar-subscribe";
-import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
-import { useEffect, useMemo, useState } from "react";
+import { EventSheet, eventRequestBody, type EventInput } from "@/components/events/event-sheet";
+import { BackLink, uiButtonClass, uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
+import { toast } from "@/components/ui/toaster";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 import {
   describeRepeat,
   expandRecurringEventsForRange,
@@ -95,6 +101,44 @@ function formatDayKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * The "Show tasks" switch, kept in localStorage so it stays as the user left
+ * it. Tasks show by default; storage can be unavailable (private windows), in
+ * which case the switch still works for the visit.
+ */
+const SHOW_TASKS_KEY = "ai-multi-calendar-show-tasks";
+const showTasksListeners = new Set<() => void>();
+let showTasksFallback = true;
+
+function readShowTasks() {
+  try {
+    const saved = localStorage.getItem(SHOW_TASKS_KEY);
+    return saved === null ? showTasksFallback : saved !== "false";
+  } catch {
+    return showTasksFallback;
+  }
+}
+
+function writeShowTasks(value: boolean) {
+  showTasksFallback = value;
+  try {
+    localStorage.setItem(SHOW_TASKS_KEY, String(value));
+  } catch {
+    // Not saved; the fallback keeps it for this visit.
+  }
+  showTasksListeners.forEach((listener) => listener());
+}
+
+/** Follows the switch here and in other tabs (the storage event). */
+function subscribeShowTasks(listener: () => void) {
+  showTasksListeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    showTasksListeners.delete(listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+
 export default function EventsCalendarPage() {
   // ---------------------------------------------------------------------
   // Core data state
@@ -108,6 +152,10 @@ export default function EventsCalendarPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   /** Currently selected project filter: ALL_PROJECTS_FILTER, NO_PROJECT_FILTER, or a project id. */
   const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS_FILTER);
+  /** Whether due tasks appear on the calendar; the server render always shows them. */
+  const showTasks = useSyncExternalStore(subscribeShowTasks, readShowTasks, () => true);
+  /** The New event sheet and the day it opens on. */
+  const [newEventSheet, setNewEventSheet] = useState<{ open: boolean; draft?: Partial<EventInput> }>({ open: false });
 
   // ---------------------------------------------------------------------
   // Async / loading state
@@ -289,9 +337,10 @@ export default function EventsCalendarPage() {
   /**
    * Tasks that have a due date, narrowed down to the currently active
    * project filter. Tasks without a `dueDate` never appear on this
-   * calendar, regardless of the filter.
+   * calendar, regardless of the filter, and none do while "Show tasks" is off.
    */
   const filteredTasks = useMemo(() => {
+    if (!showTasks) return [];
     return tasks.filter((task) => {
       if (!task.dueDate) return false;
       if (projectFilter === ALL_PROJECTS_FILTER) return true;
@@ -299,7 +348,7 @@ export default function EventsCalendarPage() {
         return task.projectId === null || task.projectId === undefined;
       return task.projectId === projectFilter;
     });
-  }, [projectFilter, tasks]);
+  }, [projectFilter, showTasks, tasks]);
 
   /** `filteredTasks` grouped by local due-date day key (`YYYY-MM-DD`) for calendar-cell rendering. */
   const tasksByDay = useMemo(() => {
@@ -371,6 +420,34 @@ export default function EventsCalendarPage() {
     router.push(
       `/events?event=${encodeURIComponent(event.sourceEventId ?? event.id)}`,
     );
+  }
+
+  /**
+   * Creates the event from the New event sheet, adds it to local state and
+   * selects its first day. Returns an error message for the sheet, or null.
+   */
+  async function handleCreateEvent(input: EventInput) {
+    const res = await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(eventRequestBody(input)),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      return (data?.error as string | undefined) ?? "Could not create the event.";
+    }
+    const created = (await res.json()) as EventItem;
+    setEvents((prev) => [
+      ...prev,
+      { ...created, recurrence: normalizeRecurrence(created.recurrence) },
+    ]);
+    const day = getLocalDateOnly(created.startTime);
+    setSelectedDayKey(formatDayKey(day));
+    setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
+    setMobileRangeStart(day);
+    notifyWorkspaceChanged();
+    toast.success("Event created", { description: created.title });
+    return null;
   }
 
   /**
@@ -452,11 +529,25 @@ export default function EventsCalendarPage() {
           <div>
             <h1 className="text-4xl font-bold">Full Calendar</h1>
             <p className="mt-2 text-zinc-600 dark:text-zinc-300">
-              Explore all events in a larger monthly view with day-by-day
+              Your events and due tasks month by month, with each day&apos;s
               details.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                setNewEventSheet({
+                  open: true,
+                  // The selected day, in the project being viewed.
+                  draft: { startDate: selectedDayKey, projectId: selectedProject?.id ?? "" },
+                })
+              }
+              className={`${uiPrimaryButtonClass} px-3 py-1.5`}
+            >
+              <Plus aria-hidden="true" className="h-4 w-4" />
+              New event
+            </button>
             <CalendarSubscribe />
             <BackLink href="/events">Back to Events</BackLink>
           </div>
@@ -487,6 +578,27 @@ export default function EventsCalendarPage() {
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showTasks}
+                onClick={() => writeShowTasks(!showTasks)}
+                className={`${uiButtonClass} px-3`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
+                    showTasks ? "bg-emerald-600" : "bg-zinc-300 dark:bg-zinc-600"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform motion-reduce:transition-none ${
+                      showTasks ? "translate-x-3" : ""
+                    }`}
+                  />
+                </span>
+                Show tasks
+              </button>
               <button
                 onClick={() =>
                   setMonth(
@@ -741,11 +853,18 @@ export default function EventsCalendarPage() {
             {/* ----------------------------------------------------------
                 Sidebar: full detail list for the selected day
             ------------------------------------------------------------- */}
-            <aside className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-              <h3 className="text-lg font-semibold">{selectedDayLabel}</h3>
+            <aside
+              aria-labelledby="calendar-selected-day"
+              className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700"
+            >
+              <h3 id="calendar-selected-day" className="text-lg font-semibold">
+                {selectedDayLabel}
+              </h3>
               <p className="mt-1 text-sm text-zinc-500">
                 {selectedDayEvents.length + selectedDayTasks.length === 0
-                  ? "No events or tasks planned for this day."
+                  ? showTasks
+                    ? "No events or tasks planned for this day."
+                    : "No events planned for this day."
                   : `${selectedDayEvents.length + selectedDayTasks.length} item${selectedDayEvents.length + selectedDayTasks.length > 1 ? "s" : ""} scheduled`}
               </p>
 
@@ -873,6 +992,13 @@ export default function EventsCalendarPage() {
           </div>
         </section>
       </div>
+      <EventSheet
+        open={newEventSheet.open}
+        onOpenChange={(open) => setNewEventSheet((current) => ({ ...current, open }))}
+        draft={newEventSheet.draft}
+        projects={projects}
+        onSubmit={handleCreateEvent}
+      />
       {/* Confirmation modal shown before permanently triggering an event delete request */}
       <ConfirmDialog
         open={confirmDeleteId !== null}

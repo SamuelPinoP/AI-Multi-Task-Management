@@ -18,7 +18,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useEffectEvent, useMemo, useState, type FormEvent } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { EventSheet, type EventInput, type EventItem, type EventProject } from "@/components/events/event-sheet";
+import { EventSheet, eventRequestBody, type EventInput, type EventItem, type EventProject } from "@/components/events/event-sheet";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import {
   DropdownMenu,
@@ -329,13 +329,7 @@ export default function EventsPage() {
     const response = await fetch(editing ? `/api/events/${editing.id}` : "/api/events", {
       method: editing ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...input,
-        startTime: input.startTime || null,
-        endDate: input.endDate || null,
-        endTime: input.endTime || null,
-        repeatUntil: input.repeatUntil || null,
-      }),
+      body: JSON.stringify(eventRequestBody(input)),
     });
     if (!response.ok) return errorMessage(response, editing ? "Could not save the event." : "Could not create the event.");
     notifyWorkspaceChanged();

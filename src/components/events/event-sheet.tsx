@@ -78,6 +78,17 @@ export function validateEventInput(
   return "";
 }
 
+/** The JSON body POST and PATCH /api/events take: empty fields go out as null. */
+export function eventRequestBody(input: EventInput) {
+  return {
+    ...input,
+    startTime: input.startTime || null,
+    endDate: input.endDate || null,
+    endTime: input.endTime || null,
+    repeatUntil: input.repeatUntil || null,
+  };
+}
+
 function inputFromEvent(event: EventItem): EventInput {
   // For a repeating event, the end of its first occurrence (see firstOccurrenceEnd).
   const end = firstOccurrenceEnd(event);
