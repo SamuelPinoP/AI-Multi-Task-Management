@@ -3,7 +3,8 @@
 import { FileText } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
-import { uiButtonClass, uiDangerButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import { DeleteButton } from "@/components/ui/delete-button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { loadProjectMembers } from "./load-members";
@@ -210,9 +211,7 @@ export function TaskSheet({
               Cancel
             </button>
             {task && onDelete ? (
-              <button type="button" onClick={() => onDelete(task)} disabled={saving} className={`${uiDangerButtonClass} ml-auto`}>
-                Delete
-              </button>
+              <DeleteButton onClick={() => onDelete(task)} disabled={saving} className="ml-auto" />
             ) : null}
           </div>
         </form>

@@ -3,7 +3,8 @@
 import { FileText, NotebookPen } from "lucide-react";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { uiButtonClass, uiDangerButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import { DeleteButton } from "@/components/ui/delete-button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { eventTimeInputValue } from "@/lib/event-time";
 import { firstOccurrenceEnd, normalizeRecurrence } from "@/lib/recurrence";
@@ -256,9 +257,7 @@ export function EventSheet({
               Cancel
             </button>
             {event && onDelete ? (
-              <button type="button" onClick={() => onDelete(event)} disabled={saving} className={`${uiDangerButtonClass} ml-auto`}>
-                Delete
-              </button>
+              <DeleteButton onClick={() => onDelete(event)} disabled={saving} className="ml-auto" />
             ) : null}
           </div>
         </form>
