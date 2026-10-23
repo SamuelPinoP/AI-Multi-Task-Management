@@ -28,6 +28,8 @@ model User {
   sessions                     Session[]
   passwordResetTokens          PasswordResetToken[]
   emailVerificationTokens      EmailVerificationToken[]
+  notifications                Notification[]
+  pushSubscriptions            PushSubscription[]
   notes                        Note[]
   tasks                        Task[]
   weeklyGoals                  WeeklyGoal[]
@@ -85,6 +87,47 @@ model EmailVerificationToken {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+/// The in-app inbox behind the bell (SMART-08).
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String?
+  /// Where clicking it goes, an app path such as /tasks?task=<id>.
+  url       String?
+  /// Stops repeats, e.g. one "due today" reminder per task and due date.
+  dedupeKey String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, createdAt])
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  MENTION
+  TASK_DUE_SOON
+}
+
+/// A browser that asked for push notifications (Web Push, SMART-08).
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  /// The push service URL for this browser; unique across users.
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Note {
