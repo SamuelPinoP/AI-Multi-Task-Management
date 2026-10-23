@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildCalendarFeed, escapeText, foldLine, repeatRule, tokenFromFeedFile, type FeedEvent } from "./calendar-feed-core";
+import { buildCalendarFeed, escapeText, exceptionDates, foldLine, repeatRule, tokenFromFeedFile, type FeedEvent } from "./calendar-feed-core";
 
 const updatedAt = new Date("2026-10-20T15:30:00.000Z");
 
@@ -16,6 +16,7 @@ function event(overrides: Partial<FeedEvent>): FeedEvent {
     hasEndTime: false,
     recurrence: "NONE",
     repeatUntil: null,
+    skippedDates: [],
     updatedAt,
     projectName: null,
     ...overrides,
@@ -126,4 +127,15 @@ test("feed links carry a 32-character token and end in .ics", () => {
   assert.equal(tokenFromFeedFile(token), null);
   assert.equal(tokenFromFeedFile(`${token.slice(1)}.ics`), null);
   assert.equal(tokenFromFeedFile("../etc/passwd.ics"), null);
+});
+
+test("skipped days go out as EXDATE in the form of DTSTART (CAL-03)", () => {
+  const skippedDates = [new Date("2026-10-24T00:00:00.000Z"), new Date("2026-10-22T00:00:00.000Z")];
+  assert.equal(exceptionDates(event({ recurrence: "DAILY" })), null);
+  assert.equal(exceptionDates(event({ recurrence: "DAILY", skippedDates })), "EXDATE:20261022T090000,20261024T090000");
+  assert.equal(exceptionDates(event({ recurrence: "DAILY", hasStartTime: false, skippedDates })), "EXDATE;VALUE=DATE:20261022,20261024");
+  const lines = veventLines(buildCalendarFeed({ events: [event({ recurrence: "DAILY", skippedDates })], tasks: [], appUrl: "https://example.test" }));
+  assert.deepEqual(lines.slice(lines.indexOf("RRULE:FREQ=DAILY"), lines.indexOf("RRULE:FREQ=DAILY") + 2), ["RRULE:FREQ=DAILY", "EXDATE:20261022T090000,20261024T090000"]);
+  // One-off events have no RRULE, so no EXDATE either.
+  assert.ok(!veventLines(buildCalendarFeed({ events: [event({ skippedDates })], tasks: [], appUrl: "https://example.test" })).some((line) => line.startsWith("EXDATE")));
 });

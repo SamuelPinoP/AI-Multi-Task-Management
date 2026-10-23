@@ -48,6 +48,7 @@ export async function calendarFeedFor(userId: string, appUrl: string) {
         hasEndTime: true,
         recurrence: true,
         repeatUntil: true,
+        skippedDates: true,
         updatedAt: true,
         project,
       },

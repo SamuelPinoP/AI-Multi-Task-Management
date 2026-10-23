@@ -31,6 +31,7 @@ export default async function TodayPage() {
         endTime: event.endTime?.toISOString() ?? null,
         recurrence: normalizeRecurrence(event.recurrence),
         repeatUntil: event.repeatUntil?.toISOString() ?? null,
+        skippedDates: event.skippedDates.map((date) => date.toISOString()),
       }))}
     />
   );

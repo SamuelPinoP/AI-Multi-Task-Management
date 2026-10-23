@@ -159,6 +159,7 @@ export async function getHomeData(userId: string, now: Date, timeZone: string | 
           hasEndTime: true,
           recurrence: true,
           repeatUntil: true,
+          skippedDates: true,
           project: { select: { id: true, name: true, color: true } },
         },
         orderBy: { startTime: "asc" },

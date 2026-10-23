@@ -22,16 +22,19 @@ function extraDays(event: OccurrenceSource) {
  * Occurrences between `rangeStart` and `rangeEnd` (local dates, inclusive):
  * repeats are expanded, and events that span several days (one-off or each
  * repeat) are listed on each day they cover, as all-day entries after their
- * first day. Each occurrence carries `sourceEventId`, the stored event's id.
+ * first day. Each occurrence carries `sourceEventId`, the stored event's id,
+ * and `occurrenceStart`, when the repeat it belongs to started (the same as
+ * `startTime` except on the later days of one that spans days).
  */
 export function occurrencesInRange<T extends OccurrenceSource>(events: T[], rangeStart: Date, rangeEnd: Date) {
-  const occurrences: Array<T & { sourceEventId: string }> = [];
+  const occurrences: Array<T & { sourceEventId: string; occurrenceStart: string }> = [];
   const firstDayInRange = getLocalDateOnly(rangeStart);
   for (const event of events) {
     const span = extraDays(event);
     // Start earlier by the span, so an occurrence that began before the range but runs into it is found.
     const starts = expandRecurringEventsForRange([{ ...event, sourceEventId: event.id }], addDays(rangeStart, -span), rangeEnd);
-    for (const occurrence of starts) {
+    for (const start of starts) {
+      const occurrence = { ...start, occurrenceStart: start.startTime };
       if (eventWallTime(occurrence.startTime) >= rangeStart) occurrences.push(occurrence);
       const firstDay = getLocalDateOnly(occurrence.startTime);
       for (let offset = 1; offset <= span; offset += 1) {

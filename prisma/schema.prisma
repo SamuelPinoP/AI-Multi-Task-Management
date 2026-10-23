@@ -244,6 +244,8 @@ model Event {
   recurrence   Recurrence @default(NONE)
   /// The last day a repeat can start on (empty: keeps repeating). endTime is the first occurrence's end.
   repeatUntil  DateTime?  @db.Date
+  /// Days deleted from a repeating series, so they don't happen (CAL-03), like iCalendar's EXDATE.
+  skippedDates DateTime[] @default([]) @db.Date
 
   userId    String
   projectId String?

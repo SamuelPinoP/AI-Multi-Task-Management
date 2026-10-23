@@ -16,6 +16,8 @@ type ProjectCalendarEvent = {
   hasEndTime: boolean;
   recurrence?: Recurrence | null;
   repeatUntil?: string | null;
+  /** Days deleted from the series (CAL-03). */
+  skippedDates?: string[];
 };
 
 type ProjectCalendarProps = {

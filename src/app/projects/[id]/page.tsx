@@ -93,6 +93,7 @@ export default async function ProjectDetailPage({
           hasEndTime: true,
           recurrence: true,
           repeatUntil: true,
+          skippedDates: true,
         },
       },
       invitations: {
@@ -363,6 +364,7 @@ export default async function ProjectDetailPage({
               startTime: event.startTime.toISOString(),
               endTime: event.endTime ? event.endTime.toISOString() : null,
               repeatUntil: event.repeatUntil?.toISOString() ?? null,
+              skippedDates: event.skippedDates.map((date) => date.toISOString()),
             }))}
           />
         </section>

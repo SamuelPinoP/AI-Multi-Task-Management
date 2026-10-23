@@ -74,7 +74,7 @@ export default async function SharedProjectPage({ params }: PageProps) {
     },
     events: {
       where: { deletedAt: null },
-      select: { id: true, title: true, startTime: true, endTime: true, hasStartTime: true, hasEndTime: true, recurrence: true, repeatUntil: true },
+      select: { id: true, title: true, startTime: true, endTime: true, hasStartTime: true, hasEndTime: true, recurrence: true, repeatUntil: true, skippedDates: true },
     },
   });
   if (!project) notFound();

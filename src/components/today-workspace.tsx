@@ -36,6 +36,8 @@ type EventItem = {
   endTime: string | null;
   recurrence?: Recurrence | null;
   repeatUntil?: string | null;
+  /** Days deleted from the series (CAL-03). */
+  skippedDates?: string[];
   projectId?: string | null;
   project?: Project | null;
 };
