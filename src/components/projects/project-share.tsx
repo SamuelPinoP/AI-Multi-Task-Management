@@ -99,6 +99,7 @@ export function ProjectShare({ projectId, initialPath }: { projectId: string; in
             : "The current link stops working right away; send the new one to anyone who should still see the roadmap."
         }
         confirmLabel={confirm === "off" ? "Turn off" : "Replace link"}
+        kind="confirm"
         loading={busy}
         onConfirm={() => void request(confirm === "off" ? "DELETE" : "POST")}
         onCancel={() => setConfirm(null)}

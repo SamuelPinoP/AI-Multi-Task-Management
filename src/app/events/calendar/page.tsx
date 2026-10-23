@@ -25,6 +25,7 @@ import { useRouter } from "next/navigation";
 import { CalendarSubscribe } from "@/components/calendar-subscribe";
 import { EventSheet, eventRequestBody, type EventInput } from "@/components/events/event-sheet";
 import { BackLink, uiButtonClass, uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
+import { DeleteButton } from "@/components/ui/delete-button";
 import { toast } from "@/components/ui/toaster";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -892,18 +893,14 @@ export default function EventsCalendarPage() {
                       >
                         {event.title}
                       </button>
-                      <button
-                        type="button"
+                      {/* z-10 keeps it above the title's ::after. */}
+                      <DeleteButton
+                        size="sm"
+                        aria-label={`Delete ${event.title}`}
                         onClick={() => setConfirmDeleteId(event.sourceEventId ?? event.id)}
-                        disabled={
-                          deletingEventId === (event.sourceEventId ?? event.id)
-                        }
-                        className="relative z-10 inline-flex shrink-0 items-center rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {deletingEventId === (event.sourceEventId ?? event.id)
-                          ? "Deleting..."
-                          : "Delete"}
-                      </button>
+                        loading={deletingEventId === (event.sourceEventId ?? event.id)}
+                        className="z-10"
+                      />
                     </div>
                     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
                       {event.hasStartTime

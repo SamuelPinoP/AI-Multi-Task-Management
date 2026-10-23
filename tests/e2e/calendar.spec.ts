@@ -59,4 +59,12 @@ test("calendar: Show tasks hides due tasks and is remembered; New event opens on
   await expect(sheet).toBeHidden();
   await expect(today.getByRole("button", { name: created, exact: true })).toBeVisible();
   await expect(today.getByRole("article").filter({ hasText: created })).toContainText("4:30 PM");
+
+  // The card's delete button names its event; the dialog moves it to Trash.
+  await today.getByRole("button", { name: `Delete ${created}` }).click();
+  const confirm = page.getByRole("dialog", { name: "Delete event?" });
+  await confirm.getByRole("button", { name: "Move to Trash" }).click();
+  await expect(confirm).toBeHidden();
+  await expect(today.getByRole("button", { name: created, exact: true })).toHaveCount(0);
+  await expect(today.getByRole("button", { name: event, exact: true })).toBeVisible();
 });
