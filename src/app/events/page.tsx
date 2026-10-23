@@ -17,7 +17,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Plus, 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useEffectEvent, useMemo, useState, type FormEvent } from "react";
-import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DeleteEventDialog, deleteEventDays, type DeleteEventTarget, type DeleteScope } from "@/components/events/delete-event-dialog";
 import { EventSheet, eventRequestBody, type EventInput, type EventItem, type EventProject } from "@/components/events/event-sheet";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import {
@@ -32,7 +32,7 @@ import { cn } from "@/lib/cn";
 import { formatEventTime } from "@/lib/event-time";
 import { projectColor } from "@/lib/project-color";
 import { occurrencesInRange } from "@/lib/event-occurrences";
-import { describeRepeat, normalizeRecurrence } from "@/lib/recurrence";
+import { describeRepeat, normalizeRecurrence, storedDayKey } from "@/lib/recurrence";
 import { formatTaskDayKey, getLocalDateOnly } from "@/lib/task-date-buckets";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
@@ -152,8 +152,12 @@ export default function EventsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showPast, setShowPast] = useState(false);
   const [quickTitle, setQuickTitle] = useState("");
-  const [sheet, setSheet] = useState<{ open: boolean; event: EventItem | null; draft?: Partial<EventInput> }>({ open: false, event: null });
-  const [confirmDelete, setConfirmDelete] = useState<EventItem | null>(null);
+  /** `day`: the occurrence the sheet was opened from, so its Delete can offer that day alone. */
+  const [sheet, setSheet] = useState<{ open: boolean; event: EventItem | null; day?: string | null; draft?: Partial<EventInput> }>({
+    open: false,
+    event: null,
+  });
+  const [deleteTarget, setDeleteTarget] = useState<DeleteEventTarget | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
@@ -284,9 +288,15 @@ export default function EventsPage() {
     (a, b) => Number(a.hasStartTime) - Number(b.hasStartTime) || a.startTime.localeCompare(b.startTime),
   );
 
-  function openEvent(occurrence: EventItem) {
+  /** The stored event behind an occurrence, and the day its repeat started (null for a stored event, as in Past). */
+  function sourceAndDay(occurrence: EventItem) {
     const source = events.find((event) => event.id === (occurrence.sourceEventId ?? occurrence.id)) ?? occurrence;
-    setSheet({ open: true, event: source });
+    const day = occurrence.sourceEventId ? storedDayKey(occurrence.occurrenceStart ?? occurrence.startTime) : null;
+    return { event: source, day };
+  }
+
+  function openEvent(occurrence: EventItem) {
+    setSheet({ open: true, ...sourceAndDay(occurrence) });
   }
 
   function closeSheet(open: boolean) {
@@ -338,25 +348,26 @@ export default function EventsPage() {
     return null;
   }
 
-  async function deleteEvent(event: EventItem) {
+  /** Deletes the chosen days, or the whole event (CAL-03). */
+  async function deleteEvent(target: DeleteEventTarget, scope: DeleteScope) {
     setDeleting(true);
-    try {
-      const response = await fetch(`/api/events/${event.id}`, { method: "DELETE" });
-      if (!response.ok) throw new Error(await errorMessage(response, "Could not delete the event."));
-      setEvents((current) => current.filter((item) => item.id !== event.id));
-      notifyWorkspaceChanged();
-      if (sheet.event?.id === event.id) closeSheet(false);
-      toast.success("Moved to Trash", { description: event.title });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not delete the event.");
-    } finally {
-      setDeleting(false);
-      setConfirmDelete(null);
-    }
+    const deleted = await deleteEventDays(target, scope, {
+      onChanged: (id, days) => {
+        setEvents((current) => current.map((item) => (item.id === id ? { ...item, ...days } : item)));
+        notifyWorkspaceChanged();
+      },
+      onDeleted: (id) => {
+        setEvents((current) => current.filter((item) => item.id !== id));
+        notifyWorkspaceChanged();
+      },
+    });
+    // The sheet holds the series as it was; saving it would undo a new repeat-until.
+    if (deleted && sheet.open && sheet.event?.id === target.event.id) closeSheet(false);
+    setDeleting(false);
+    setDeleteTarget(null);
   }
 
-  const askDelete = (occurrence: EventItem) =>
-    setConfirmDelete(events.find((event) => event.id === (occurrence.sourceEventId ?? occurrence.id)) ?? occurrence);
+  const askDelete = (occurrence: EventItem) => setDeleteTarget(sourceAndDay(occurrence));
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
@@ -575,22 +586,16 @@ export default function EventsPage() {
         draft={sheet.draft}
         projects={projects}
         onSubmit={saveEvent}
-        onDelete={setConfirmDelete}
+        onDelete={(event) => setDeleteTarget({ event, day: sheet.day ?? null })}
         onWriteNotes={(event) => void writeMeetingNotes(event)}
       />
 
-      <ConfirmDialog
-        open={Boolean(confirmDelete)}
-        title="Delete this event?"
-        message={
-          confirmDelete
-            ? `“${confirmDelete.title}”${normalizeRecurrence(confirmDelete.recurrence) !== "NONE" ? " and all its repeats" : ""} move to Trash, where you can restore it.`
-            : ""
-        }
+      <DeleteEventDialog
+        target={deleteTarget}
         loading={deleting}
-        onCancel={() => setConfirmDelete(null)}
-        onConfirm={() => {
-          if (confirmDelete) void deleteEvent(confirmDelete);
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={(scope) => {
+          if (deleteTarget) void deleteEvent(deleteTarget, scope);
         }}
       />
     </div>

@@ -18,6 +18,8 @@ export type FeedEvent = {
   hasEndTime: boolean;
   recurrence: RecurrenceValue;
   repeatUntil: Date | null;
+  /** Days deleted from the series (CAL-03); they go out as EXDATE. */
+  skippedDates: Date[];
   updatedAt: Date;
   projectName: string | null;
 };
@@ -111,6 +113,19 @@ export function repeatRule(event: Pick<FeedEvent, "recurrence" | "repeatUntil" |
   return parts.join(";");
 }
 
+/**
+ * The days left out of a repeat, in the same form as DTSTART: dates for
+ * all-day events, else the start time on each day.
+ */
+export function exceptionDates(event: Pick<FeedEvent, "skippedDates" | "startTime" | "hasStartTime">) {
+  if (!event.skippedDates.length) return null;
+  const time = `T${pad(event.startTime.getUTCHours())}${pad(event.startTime.getUTCMinutes())}${pad(event.startTime.getUTCSeconds())}`;
+  const values = [...event.skippedDates]
+    .sort((a, b) => a.getTime() - b.getTime())
+    .map((day) => (event.hasStartTime ? `${dateValue(day)}${time}` : dateValue(day)));
+  return event.hasStartTime ? `EXDATE:${values.join(",")}` : `EXDATE;VALUE=DATE:${values.join(",")}`;
+}
+
 function eventLines(event: FeedEvent, appUrl: string) {
   const end = firstOccurrenceEnd(event);
   const endDate = end ? new Date(end) : null;
@@ -132,7 +147,11 @@ function eventLines(event: FeedEvent, appUrl: string) {
   }
 
   const rule = repeatRule(event);
-  if (rule) lines.push(`RRULE:${rule}`);
+  if (rule) {
+    lines.push(`RRULE:${rule}`);
+    const exceptions = exceptionDates(event);
+    if (exceptions) lines.push(exceptions);
+  }
   if (event.location) lines.push(`LOCATION:${escapeText(event.location)}`);
   const description = [event.projectName ? `Project: ${event.projectName}` : null, event.description].filter(Boolean).join("\n\n");
   if (description) lines.push(`DESCRIPTION:${escapeText(description)}`);

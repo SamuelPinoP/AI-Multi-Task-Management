@@ -43,6 +43,8 @@ export type RecurringEventBase = {
   recurrence?: RecurrenceValue | null;
   /** The last day a repeat can start on (a stored wall-clock date). Empty: it keeps repeating. */
   repeatUntil?: string | Date | null;
+  /** Days deleted from the series (stored dates); no repeat starts on them (CAL-03). */
+  skippedDates?: Array<string | Date> | null;
 };
 
 /** The fields that set how long each occurrence lasts (stored values, as strings or Dates). */
@@ -57,8 +59,8 @@ const DAY_MS = 86_400_000;
 const STEP_DAYS = { DAILY: 1, WEEKLY: 7, BIWEEKLY: 14 } as const;
 const MAX_OCCURRENCES = 1000;
 
-/** `YYYY-MM-DD` of a stored wall-clock value. */
-function storedDayKey(value: string | Date) {
+/** `YYYY-MM-DD` of a stored wall-clock value: the local day it falls on. */
+export function storedDayKey(value: string | Date) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
@@ -107,6 +109,14 @@ function firstIndexInRange(base: Date, recurrence: Exclude<RecurrenceValue, "NON
   return Math.max(0, months - 1);
 }
 
+/** Whether a repeat of `event` starts on `dayKey` (`YYYY-MM-DD`), counting skipped days. */
+export function repeatsOnDay(event: RecurringEventBase, dayKey: string) {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  const dayStart = new Date(year, month - 1, day);
+  const dayEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
+  return expandRecurringEventsForRange([{ ...event, skippedDates: [] }], dayStart, dayEnd).length > 0;
+}
+
 /**
  * Expands recurring events into the occurrences between `localRangeStart` and
  * `localRangeEnd`. The bounds are local dates (like a calendar's first and last
@@ -114,7 +124,8 @@ function firstIndexInRange(base: Date, recurrence: Exclude<RecurrenceValue, "NON
  * so the bounds are converted to that form before comparing.
  *
  * Each occurrence lasts as long as the first one (`startTime` to `endTime`).
- * A series stops after its `repeatUntil` day, or keeps going when it has none.
+ * A series stops after its `repeatUntil` day, or keeps going when it has none,
+ * and has no occurrence on its `skippedDates`.
  */
 export function expandRecurringEventsForRange<T extends RecurringEventBase>(
   events: T[],
@@ -136,12 +147,14 @@ export function expandRecurringEventsForRange<T extends RecurringEventBase>(
     const seriesEnd = event.repeatUntil ? new Date(`${storedDayKey(event.repeatUntil)}T23:59:59.999Z`) : null;
     const lastStart = seriesEnd && seriesEnd < rangeEnd ? seriesEnd : rangeEnd;
     const durationMs = occurrenceDurationMs(event);
+    const skipped = new Set((event.skippedDates ?? []).map(storedDayKey));
     const expanded: T[] = [];
 
     for (let n = firstIndexInRange(baseStart, recurrence, rangeStart); expanded.length < MAX_OCCURRENCES; n += 1) {
       const occurrenceStart = nthOccurrence(baseStart, recurrence, n);
       if (occurrenceStart > lastStart) break;
       if (occurrenceStart < rangeStart) continue;
+      if (skipped.has(storedDayKey(occurrenceStart))) continue;
       expanded.push({
         ...event,
         id: `${event.id}-${occurrenceStart.toISOString()}`,

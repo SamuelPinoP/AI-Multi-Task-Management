@@ -47,7 +47,7 @@ test("events: quick entry opens the sheet; repeats and multi-day events show on 
   // Delete from the row menu; it goes to Trash.
   await tomorrow.getByRole("button", { name: `More actions for ${meeting}` }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
-  await page.getByRole("dialog", { name: "Delete this event?" }).getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("dialog", { name: "Delete this event?" }).getByRole("button", { name: "Move to Trash" }).click();
   await expect(page.getByRole("button", { name: meeting, exact: true })).toHaveCount(0);
   await page.goto("/trash");
   await expect(page.getByText(meeting)).toBeVisible();

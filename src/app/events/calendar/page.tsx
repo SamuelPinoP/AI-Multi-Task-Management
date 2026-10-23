@@ -14,7 +14,8 @@
  *    including the ability to open an event for editing (navigates to the
  *    /events page with a deep-link query param) or open a task.
  *  - Allow marking a task done directly from the calendar, and deleting an
- *    event (with confirmation) directly from the day-detail panel.
+ *    event (with confirmation) directly from the day-detail panel; for a
+ *    repeating event, only that day, that day and later ones, or all (CAL-03).
  *  - "Show tasks" hides or shows due tasks (remembered per browser), and
  *    "New event" opens the Events page's sheet on the selected day (CAL-01).
  */
@@ -28,13 +29,19 @@ import { BackLink, uiButtonClass, uiCardClass, uiPrimaryButtonClass } from "@/co
 import { DeleteButton } from "@/components/ui/delete-button";
 import { toast } from "@/components/ui/toaster";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  DeleteEventDialog,
+  deleteEventDays,
+  type DeleteEventTarget,
+  type DeleteScope,
+} from "@/components/events/delete-event-dialog";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 import {
   describeRepeat,
   expandRecurringEventsForRange,
   formatRecurrenceLabel,
   normalizeRecurrence,
+  storedDayKey,
 } from "@/lib/recurrence";
 import { formatTaskDueDate, getLocalDateOnly } from "@/lib/task-date-buckets";
 import { formatEventTime } from "@/lib/event-time";
@@ -62,6 +69,8 @@ type EventItem = {
   recurrence?: Recurrence | null;
   /** The last day a repeat can start on; null keeps repeating. */
   repeatUntil?: string | null;
+  /** Days deleted from the series (CAL-03). */
+  skippedDates?: string[];
   projectId?: string | null;
   project?: Project | null;
 };
@@ -188,10 +197,10 @@ export default function EventsCalendarPage() {
   // ---------------------------------------------------------------------
   // Action state (delete event / complete task)
   // ---------------------------------------------------------------------
-  /** Id of the event currently being deleted, or null if none — drives the button's "Deleting..." state. */
-  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
-  /** Id of the event pending delete confirmation (drives the ConfirmDialog), or null if closed. */
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  /** The event (and the day it was picked on) waiting in the delete dialog, or null when it's closed. */
+  const [deleteTarget, setDeleteTarget] = useState<DeleteEventTarget | null>(null);
+  /** True while a delete request runs — drives the "Deleting..." states. */
+  const [deleting, setDeleting] = useState(false);
   /** Id of the task currently being marked done, or null if none — drives the button's "Saving…" state. */
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
 
@@ -495,28 +504,33 @@ export default function EventsCalendarPage() {
   }
 
   /**
-   * Deletes the event at `eventId` via the API (soft-delete / move to
-   * Trash, per the confirm dialog copy). On success, removes it from local
-   * state and closes the confirmation dialog.
+   * Opens the delete dialog for an occurrence: the stored event behind it,
+   * and the day it falls on, so a repeating event can lose just that day.
    */
-  async function handleDeleteEvent(eventId: string) {
-    try {
-      setDeletingEventId(eventId);
-      setError("");
-      const res = await fetch(`/api/events/${eventId}`, { method: "DELETE" });
+  function askDeleteEvent(occurrence: EventItem) {
+    const source =
+      events.find((event) => event.id === (occurrence.sourceEventId ?? occurrence.id)) ?? occurrence;
+    setDeleteTarget({ event: source, day: storedDayKey(occurrence.startTime) });
+  }
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Failed to delete event");
-      }
-
-      setEvents((prev) => prev.filter((event) => event.id !== eventId));
-      setConfirmDeleteId(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not delete event.");
-    } finally {
-      setDeletingEventId(null);
-    }
+  /**
+   * Deletes the chosen days (CAL-03), or moves the whole event to Trash, and
+   * updates local state; deleted days come back with the toast's Undo.
+   */
+  async function handleDeleteEvent(target: DeleteEventTarget, scope: DeleteScope) {
+    setDeleting(true);
+    await deleteEventDays(target, scope, {
+      onChanged: (id, days) => {
+        setEvents((prev) => prev.map((event) => (event.id === id ? { ...event, ...days } : event)));
+        notifyWorkspaceChanged();
+      },
+      onDeleted: (id) => {
+        setEvents((prev) => prev.filter((event) => event.id !== id));
+        notifyWorkspaceChanged();
+      },
+    });
+    setDeleting(false);
+    setDeleteTarget(null);
   }
 
   // ---------------------------------------------------------------------
@@ -897,8 +911,8 @@ export default function EventsCalendarPage() {
                       <DeleteButton
                         size="sm"
                         aria-label={`Delete ${event.title}`}
-                        onClick={() => setConfirmDeleteId(event.sourceEventId ?? event.id)}
-                        loading={deletingEventId === (event.sourceEventId ?? event.id)}
+                        onClick={() => askDeleteEvent(event)}
+                        loading={deleting && deleteTarget?.event.id === (event.sourceEventId ?? event.id)}
                         className="z-10"
                       />
                     </div>
@@ -996,21 +1010,13 @@ export default function EventsCalendarPage() {
         projects={projects}
         onSubmit={handleCreateEvent}
       />
-      {/* Confirmation modal shown before permanently triggering an event delete request */}
-      <ConfirmDialog
-        open={confirmDeleteId !== null}
-        title="Delete event?"
-        message="This will move the event to Trash. You can restore it later from the Trash page."
-        confirmLabel="Move to Trash"
-        loading={deletingEventId !== null}
-        onCancel={() => {
-          // Ignore cancel attempts while a delete request is in flight.
-          if (deletingEventId) return;
-          setConfirmDeleteId(null);
-        }}
-        onConfirm={() => {
-          if (!confirmDeleteId) return;
-          void handleDeleteEvent(confirmDeleteId);
+      {/* Asks which days of a repeating event to delete; other events confirm the move to Trash. */}
+      <DeleteEventDialog
+        target={deleteTarget}
+        loading={deleting}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={(scope) => {
+          if (deleteTarget) void handleDeleteEvent(deleteTarget, scope);
         }}
       />
     </main>

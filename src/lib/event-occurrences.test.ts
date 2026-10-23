@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { occurrencesInRange } from "./event-occurrences";
-import { expandRecurringEventsForRange, type RecurrenceValue } from "./recurrence";
+import { expandRecurringEventsForRange, repeatsOnDay, type RecurrenceValue } from "./recurrence";
 import { formatTaskDayKey } from "./task-date-buckets";
 
 // Range: Tuesday, October 20 through Saturday, October 24, 2026 (local dates).
@@ -129,4 +129,35 @@ test("a repeat that spans days shows on each day it covers, also when it began b
   assert.equal(new Set(result.map((item) => item.id)).size, result.length);
   // Sunday, October 18 is covered by the occurrence that started on the 16th.
   assert.deepEqual(days(occurrencesInRange([weekend], localDay(2026, 10, 18), localDay(2026, 10, 19, true))), ["2026-10-18"]);
+});
+
+test("skipped days have no occurrence; the days around them still do (CAL-03)", () => {
+  const standup = event("standup", { startTime: "2026-10-06T09:00:00.000Z", recurrence: "DAILY" });
+  const result = occurrencesInRange([{ ...standup, skippedDates: ["2026-10-22T00:00:00.000Z", new Date("2026-10-24T00:00:00.000Z")] }], rangeStart, rangeEnd);
+  assert.deepEqual(days(result), ["2026-10-20", "2026-10-21", "2026-10-23"]);
+});
+
+test("skipping a repeat that spans days removes every day it covers", () => {
+  const weekend = event("weekend", {
+    startTime: "2026-10-16T18:00:00.000Z",
+    endTime: "2026-10-18T10:00:00.000Z",
+    hasEndTime: true,
+    recurrence: "WEEKLY",
+  });
+  const skipped = { ...weekend, skippedDates: ["2026-10-16T00:00:00.000Z"] };
+  assert.deepEqual(days(occurrencesInRange([skipped], localDay(2026, 10, 16), localDay(2026, 10, 25, true))), ["2026-10-23", "2026-10-24", "2026-10-25"]);
+});
+
+test("skipped days don't matter to one-off events", () => {
+  const once = { ...event("once", {}), skippedDates: ["2026-10-20T00:00:00.000Z"] };
+  assert.deepEqual(days(occurrencesInRange([once], rangeStart, rangeEnd)), ["2026-10-20"]);
+});
+
+test("repeatsOnDay finds the days a series starts on, skipped or not", () => {
+  const weekly = { id: "w", startTime: "2026-10-20T09:00:00.000Z", endTime: null, recurrence: "WEEKLY" as const, skippedDates: ["2026-10-27T00:00:00.000Z"] };
+  assert.equal(repeatsOnDay(weekly, "2026-10-20"), true);
+  assert.equal(repeatsOnDay(weekly, "2026-10-27"), true);
+  assert.equal(repeatsOnDay(weekly, "2026-10-28"), false);
+  assert.equal(repeatsOnDay(weekly, "2026-10-13"), false);
+  assert.equal(repeatsOnDay({ ...weekly, repeatUntil: "2026-10-26T00:00:00.000Z" }, "2026-10-27"), false);
 });

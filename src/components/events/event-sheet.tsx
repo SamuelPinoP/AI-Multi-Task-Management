@@ -31,6 +31,10 @@ export type EventItem = {
   recurrence?: Recurrence | null;
   /** The last day a repeat can start on; null keeps repeating. */
   repeatUntil?: string | null;
+  /** Days deleted from the series (CAL-03). */
+  skippedDates?: string[];
+  /** On expanded occurrences: when the repeat started (see occurrencesInRange). */
+  occurrenceStart?: string;
   projectId?: string | null;
   project?: EventProject | null;
   /** Notes written for this event (SMART-05). */
