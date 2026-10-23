@@ -188,13 +188,16 @@ test("Move to… moves a node, with everything under it, without dragging", asyn
     .toBe("Beta, Alpha child");
   expect((await nodesNow()).find((node) => node.title === "Beta child")!.parentId).toBe(beta.id);
 
-  // Ctrl+Z puts it back where it was: under the root, after Alpha.
+  // Ctrl+Z puts it back where it was: under the root, after Alpha. Undo is ready once the
+  // browser has the save, which is when the toast appears.
+  const moved = page.getByText("Moved “Beta”.");
   const rootOrder = async () =>
     (await nodesNow())
       .filter((node) => node.parentId === rootId)
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((node) => node.title)
       .join(", ");
+  await expect(moved).toBeVisible();
   await page.keyboard.press("Control+z");
   await expect.poll(rootOrder).toBe("Alpha, Beta");
 
@@ -203,6 +206,7 @@ test("Move to… moves a node, with everything under it, without dragging", asyn
   await dialog.getByRole("combobox", { name: "Position" }).selectOption({ label: "First" });
   await dialog.getByRole("button", { name: "Move", exact: true }).click();
   await expect.poll(rootOrder).toBe("Beta, Alpha");
+  await expect(moved).toBeVisible();
   await page.getByRole("button", { name: "Undo" }).click();
   await expect.poll(rootOrder).toBe("Alpha, Beta");
 });
