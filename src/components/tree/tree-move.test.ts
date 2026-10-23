@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyMove, dropZoneFor, isDescendant, moveFor } from "./tree-move";
+import { applyMove, currentIndex, dropZoneFor, isDescendant, moveFor, moveParentOptions, movePositions } from "./tree-move";
 
 // root ─┬─ a ── a1 ── a1x
 //       ├─ b
@@ -87,4 +87,30 @@ test("every move moveFor proposes, applied, puts the node where the drop said", 
     if (zone === "before") assert.equal(siblings[at + 1], targetId);
     if (zone === "after") assert.equal(siblings[at - 1], targetId);
   }
+});
+
+const titled = nodes.map((item) => ({ ...item, title: item.id.toUpperCase() }));
+
+test("Move to… offers every node outside the moved node's own subtree, in tree order", () => {
+  assert.deepEqual(
+    moveParentOptions(titled, "a").map((option) => `${option.depth}:${option.id}`),
+    ["0:root", "1:b", "1:c"],
+  );
+  assert.deepEqual(
+    moveParentOptions(titled, "b").map((option) => `${option.depth}:${option.id}`),
+    ["0:root", "1:a", "2:a1", "3:a1x", "1:c"],
+  );
+});
+
+test("Move to… positions are first, then after each other child", () => {
+  assert.deepEqual(movePositions(titled, "b", "root"), [
+    { index: 0, label: "First" },
+    { index: 1, label: "After “A”" },
+    { index: 2, label: "After “C”" },
+  ]);
+  assert.deepEqual(movePositions(titled, "b", "a1x"), [{ index: 0, label: "First" }]);
+  assert.equal(currentIndex(nodes, "b"), 1);
+  assert.equal(currentIndex(nodes, "a1x"), 0);
+  assert.equal(currentIndex(nodes, "root"), 0);
+  assert.equal(moveFor(nodes, "b", "a", "after"), null, "staying at the current index is no move");
 });

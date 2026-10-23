@@ -1,7 +1,7 @@
 "use client";
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { GripVertical } from "lucide-react";
+import { CornerDownRight, GripVertical } from "lucide-react";
 import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { asTreeNodeColor, COLOR_LABELS, COLOR_TONES, TREE_NODE_COLORS } from "./tree-colors";
 import type { DropTarget } from "./tree-move";
@@ -32,6 +32,7 @@ export function TreeNodeRow({
   onDescriptionChange,
   onResize,
   onDelete,
+  onMoveRequest,
 }: {
   node: NestedNode;
   draggingId: string | null;
@@ -44,6 +45,7 @@ export function TreeNodeRow({
   onDescriptionChange: (node: TreeNode, description: string) => Promise<void>;
   onResize: (node: TreeNode, width: number, height: number) => Promise<void>;
   onDelete: (node: TreeNode) => void;
+  onMoveRequest: (node: TreeNode) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(node.title);
@@ -259,6 +261,17 @@ export function TreeNodeRow({
               <span>Sibling</span>
             </button>
           )}
+          {!isRoot && (
+            <button
+              type="button"
+              className={iconButtonClass}
+              title="Move to…"
+              aria-label="Move to…"
+              onClick={() => onMoveRequest(node)}
+            >
+              <CornerDownRight aria-hidden="true" className="h-4 w-4" />
+            </button>
+          )}
           <div className="relative">
             <button
               type="button"
@@ -322,6 +335,7 @@ export function TreeNodeRow({
                 onDescriptionChange={onDescriptionChange}
                 onResize={onResize}
                 onDelete={onDelete}
+                onMoveRequest={onMoveRequest}
               />
             </div>
           ))}
