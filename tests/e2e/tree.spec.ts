@@ -142,3 +142,71 @@ test("dragging a node moves it with everything under it, and the move is saved",
   const alphaBox = (await card("Alpha").boundingBox())!;
   expect(betaBox.x).toBeLessThan(alphaBox.x);
 });
+
+// TREE-03: the same moves without dragging (WCAG 2.5.7), so this runs on phones too.
+test("Move to… moves a node, with everything under it, without dragging", async ({ page }) => {
+  await continueAsGuest(page);
+  const post = async (url: string, data: Record<string, unknown>) => (await page.request.post(url, { data })).json();
+  const tree = (await post("/api/tree-pages", { title: "Menu test" })) as { id: string; nodes: { id: string }[] };
+  const rootId = tree.nodes[0].id;
+  const alpha = (await post(`/api/tree-pages/${tree.id}/nodes`, { title: "Alpha", parentId: rootId })) as { id: string };
+  await post(`/api/tree-pages/${tree.id}/nodes`, { title: "Alpha child", parentId: alpha.id });
+  const beta = (await post(`/api/tree-pages/${tree.id}/nodes`, { title: "Beta", parentId: rootId })) as { id: string };
+  await post(`/api/tree-pages/${tree.id}/nodes`, { title: "Beta child", parentId: beta.id });
+  const nodesNow = async () => {
+    const pages = (await (await page.request.get("/api/tree-pages")).json()) as {
+      id: string;
+      nodes: { id: string; title: string; parentId: string | null; sortOrder: number }[];
+    }[];
+    return pages.find((item) => item.id === tree.id)!.nodes;
+  };
+
+  await page.goto(`/tree/${tree.id}`);
+  const main = page.locator("#main-content");
+  const card = (title: string) => main.locator("article").filter({ has: page.getByRole("button", { name: title, exact: true }) });
+  await card("Beta").getByRole("button", { name: "Move to…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Move “Beta”" });
+  await expect(dialog).toBeVisible();
+  const under = dialog.getByRole("combobox", { name: "Put it under" });
+  // Nothing inside Beta's own subtree is offered, and staying put isn't a move.
+  await expect(under.locator("option", { hasText: "Beta child" })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Move", exact: true })).toBeDisabled();
+
+  await under.selectOption({ label: "   Alpha" });
+  await dialog.getByRole("combobox", { name: "Position" }).selectOption({ label: "First" });
+  await dialog.getByRole("button", { name: "Move", exact: true }).click();
+  await expect(dialog).toBeHidden();
+
+  await expect
+    .poll(async () =>
+      (await nodesNow())
+        .filter((node) => node.parentId === alpha.id)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((node) => node.title)
+        .join(", "),
+    )
+    .toBe("Beta, Alpha child");
+  expect((await nodesNow()).find((node) => node.title === "Beta child")!.parentId).toBe(beta.id);
+
+  // Ctrl+Z puts it back where it was: under the root, after Alpha. Undo is ready once the
+  // browser has the save, which is when the toast appears.
+  const moved = page.getByText("Moved “Beta”.");
+  const rootOrder = async () =>
+    (await nodesNow())
+      .filter((node) => node.parentId === rootId)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((node) => node.title)
+      .join(", ");
+  await expect(moved).toBeVisible();
+  await page.keyboard.press("Control+z");
+  await expect.poll(rootOrder).toBe("Alpha, Beta");
+
+  // So does the Undo in the toast that follows a move.
+  await card("Beta").getByRole("button", { name: "Move to…" }).click();
+  await dialog.getByRole("combobox", { name: "Position" }).selectOption({ label: "First" });
+  await dialog.getByRole("button", { name: "Move", exact: true }).click();
+  await expect.poll(rootOrder).toBe("Beta, Alpha");
+  await expect(moved).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect.poll(rootOrder).toBe("Alpha, Beta");
+});

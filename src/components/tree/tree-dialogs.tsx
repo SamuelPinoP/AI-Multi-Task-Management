@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { DeleteIntent, TreePage } from "./types";
+import { currentIndex, moveParentOptions, movePositions, type TreeMove } from "./tree-move";
+import type { DeleteIntent, TreeNode, TreePage } from "./types";
 
 export function NewTreePageDialog({
   title,
@@ -115,5 +116,82 @@ export function DeleteNodeDialog({
       onCancel={onCancel}
       onConfirm={onConfirm}
     />
+  );
+}
+
+const selectClass =
+  "mt-1.5 w-full rounded-xl border border-line bg-sunken px-3 py-2.5 text-sm font-semibold text-ink outline-none transition focus:border-accent focus:bg-surface focus:ring-4 focus:ring-accent/20";
+
+/** "Move to…" (TREE-03): the same moves as dragging, picked from two lists (WCAG 2.5.7). */
+export function MoveNodeDialog({
+  node,
+  nodes,
+  onCancel,
+  onMove,
+}: {
+  node: TreeNode;
+  nodes: TreeNode[];
+  onCancel: () => void;
+  onMove: (move: TreeMove) => void;
+}) {
+  const parents = moveParentOptions(nodes, node.id);
+  const [parentId, setParentId] = useState(node.parentId ?? parents[0]?.id ?? "");
+  const [index, setIndex] = useState(currentIndex(nodes, node.id));
+  const positions = parentId ? movePositions(nodes, node.id, parentId) : [];
+  const unchanged = parentId === node.parentId && index === currentIndex(nodes, node.id);
+
+  function chooseParent(next: string) {
+    setParentId(next);
+    // Back under the current parent, keep the current place; anywhere else, go last.
+    setIndex(next === node.parentId ? currentIndex(nodes, node.id) : movePositions(nodes, node.id, next).length - 1);
+  }
+
+  return (
+    <Dialog open onOpenChange={(next) => { if (!next) onCancel(); }}>
+      <DialogContent className="max-w-md">
+        <form
+          className="grid gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!unchanged && parentId) onMove({ nodeId: node.id, parentId, index });
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-xl">Move “{node.title}”</DialogTitle>
+            <DialogDescription>Everything under it moves too.</DialogDescription>
+          </DialogHeader>
+          <label className="block text-sm font-medium text-muted">
+            Put it under
+            <select value={parentId} onChange={(event) => chooseParent(event.target.value)} className={selectClass}>
+              {parents.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {/* Non-breaking spaces indent each level; an <option> can only hold text. */}
+                  {"\u00a0\u00a0\u00a0".repeat(option.depth)}
+                  {option.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm font-medium text-muted">
+            Position
+            <select value={index} onChange={(event) => setIndex(Number(event.target.value))} className={selectClass}>
+              {positions.map((position) => (
+                <option key={position.index} value={position.index}>
+                  {position.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <DialogFooter>
+            <button type="button" onClick={onCancel} className={uiButtonClass}>
+              Cancel
+            </button>
+            <button type="submit" disabled={unchanged} className={uiPrimaryButtonClass}>
+              Move
+            </button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
