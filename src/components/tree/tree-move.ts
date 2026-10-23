@@ -62,6 +62,36 @@ export function moveFor(nodes: Node[], nodeId: string, targetId: string, zone: D
   return { nodeId, parentId, index };
 }
 
+/** For "Move to…" (TREE-03): every node outside nodeId's own subtree, in tree order with its depth. */
+export function moveParentOptions<T extends Node & { title: string }>(nodes: T[], nodeId: string) {
+  const options: { id: string; title: string; depth: number }[] = [];
+  const visit = (parentId: string | null, depth: number) => {
+    for (const node of nodes.filter((item) => item.parentId === parentId).sort(compareNode)) {
+      if (node.id === nodeId) continue;
+      options.push({ id: node.id, title: node.title, depth });
+      visit(node.id, depth + 1);
+    }
+  };
+  visit(null, 0);
+  return options;
+}
+
+/** The places under parentId the node can take: first, or after each of its other children. */
+export function movePositions<T extends Node & { title: string }>(nodes: T[], nodeId: string, parentId: string) {
+  const others = childrenOf(nodes, parentId, nodeId) as T[];
+  return [
+    { index: 0, label: "First" },
+    ...others.map((child, i) => ({ index: i + 1, label: `After “${child.title}”` })),
+  ];
+}
+
+/** Where the node sits now among its siblings, as a move index. */
+export function currentIndex(nodes: Node[], nodeId: string) {
+  const node = nodes.find((item) => item.id === nodeId);
+  if (!node?.parentId) return 0;
+  return childrenOf(nodes, node.parentId, "").findIndex((item) => item.id === nodeId);
+}
+
 /** The node list after a move, numbering the new siblings 0, 1, 2… as the server does. */
 export function applyMove<T extends Node>(nodes: T[], move: TreeMove): T[] {
   const node = nodes.find((item) => item.id === move.nodeId);

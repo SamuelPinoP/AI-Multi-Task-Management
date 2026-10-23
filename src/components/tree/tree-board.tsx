@@ -15,10 +15,10 @@ import {
 } from "@dnd-kit/core";
 import { X } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { toast } from "@/components/ui/toaster";
-import { DeleteNodeDialog, DeleteTreePageDialog, NewTreePageDialog } from "./tree-dialogs";
+import { DeleteNodeDialog, DeleteTreePageDialog, MoveNodeDialog, NewTreePageDialog } from "./tree-dialogs";
 import {
   buildTree,
   clampZoom,
@@ -30,7 +30,7 @@ import {
   treePageHref,
   treePageIdFromPath,
 } from "./tree-layout";
-import { applyMove, type DropTarget, dropZoneFor, moveFor, type TreeMove } from "./tree-move";
+import { applyMove, currentIndex, type DropTarget, dropZoneFor, moveFor, type TreeMove } from "./tree-move";
 import { DragPreview, TreeNodeRow } from "./tree-node-card";
 import { TreePageSwitcher } from "./tree-page-switcher";
 import { ZoomControls } from "./tree-zoom-controls";
@@ -44,6 +44,8 @@ const screenReaderInstructions = {
   draggable:
     "To move a node, press Space or Enter on its handle, then use the arrow keys to move it over another node. Drop it with Space or Enter: near that node's left or right edge to place it beside it, in the middle to make it a child. Press Escape to cancel.",
 };
+
+const MOVE_TOAST_ID = "tree-move";
 
 /** Where the drag is now: the pointer, or the dragged handle's center when using the keyboard. */
 function dragX(event: DragMoveEvent) {
@@ -177,6 +179,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
     );
   }
   // Drag and drop (TREE-02): the tree moves at once, and goes back with a message if the server refuses.
+  const [moveIntent, setMoveIntent] = useState<TreeNode | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const dropTargetRef = useRef<DropTarget | null>(null);
@@ -222,8 +225,18 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
     const move = moveFor(activePage.nodes, nodeId, target.nodeId, target.zone);
     if (move) await moveNode(activePage.id, move);
   }
-  async function moveNode(pageId: string, move: TreeMove) {
-    const before = pages.find((page) => page.id === pageId)?.nodes ?? [];
+  // The latest pages, for moves that start later from a toast or a key, when this render's state is old.
+  const pagesRef = useRef(pages);
+  useEffect(() => {
+    pagesRef.current = pages;
+  }, [pages]);
+  // The way back from the last move, for the Undo in its toast and for Ctrl+Z (TREE-03).
+  const undoRef = useRef<{ pageId: string; move: TreeMove } | null>(null);
+
+  async function moveNode(pageId: string, move: TreeMove, { undoable = true } = {}) {
+    const before = pagesRef.current.find((page) => page.id === pageId)?.nodes ?? [];
+    const node = before.find((item) => item.id === move.nodeId);
+    const back = node?.parentId ? { nodeId: node.id, parentId: node.parentId, index: currentIndex(before, node.id) } : null;
     const setNodes = (update: (nodes: TreeNode[]) => TreeNode[]) =>
       setPages((current) => current.map((page) => (page.id === pageId ? { ...page, nodes: update(page.nodes) } : page)));
     setNodes((nodes) => applyMove(nodes, move));
@@ -237,12 +250,36 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
       if (!res.ok) throw new Error(data?.error || "The node couldn't be moved.");
       // The server answers with the new siblings in their saved order.
       const saved = data as TreeNode[];
-      setNodes((nodes) => nodes.map((node) => saved.find((item) => item.id === node.id) ?? node));
+      setNodes((nodes) => nodes.map((item) => saved.find((savedNode) => savedNode.id === item.id) ?? item));
+      if (undoable && node && back) {
+        undoRef.current = { pageId, move: back };
+        // One toast for the latest move: a new move replaces it, so no older Undo is left on screen.
+        toast.success(`Moved “${node.title}”.`, { id: MOVE_TOAST_ID, action: { label: "Undo", onClick: undoLastMove } });
+      }
     } catch (err) {
       setNodes(() => before);
       toast.error(err instanceof Error ? err.message : "The node couldn't be moved.");
     }
   }
+  function undoLastMove() {
+    const last = undoRef.current;
+    undoRef.current = null;
+    toast.dismiss(MOVE_TOAST_ID);
+    if (last) void moveNode(last.pageId, last.move, { undoable: false });
+  }
+  // Ctrl+Z (Cmd+Z) undoes the last move, unless the key is meant for a text field.
+  const onUndoKey = useEffectEvent((event: KeyboardEvent) => {
+    if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "z") return;
+    if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    if (!undoRef.current) return;
+    event.preventDefault();
+    undoLastMove();
+  });
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => onUndoKey(event);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
   const draggingNode = activePage?.nodes.find((node) => node.id === draggingId) ?? null;
 
   function updateZoom(delta: number) {
@@ -409,6 +446,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
                             onDescriptionChange={(item, description) => patchNode(item.id, { description })}
                             onResize={(item, width, height) => patchNode(item.id, { width, height })}
                             onDelete={requestDeleteNode}
+                            onMoveRequest={setMoveIntent}
                           />
                         ))}
                       </div>
@@ -448,6 +486,17 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
           loading={loading}
           onCancel={() => setDeletePageIntent(null)}
           onConfirm={() => void deletePage(deletePageIntent)}
+        />
+      )}
+      {moveIntent && activePage && (
+        <MoveNodeDialog
+          node={moveIntent}
+          nodes={activePage.nodes}
+          onCancel={() => setMoveIntent(null)}
+          onMove={(move) => {
+            setMoveIntent(null);
+            void moveNode(activePage.id, move);
+          }}
         />
       )}
       {deleteIntent && (
