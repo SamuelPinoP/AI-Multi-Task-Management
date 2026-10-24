@@ -19,35 +19,26 @@ export function BoardViews({ active, children }: { active: "kanban" | "tree"; ch
             aria-label="Board toolbar"
           >
             <div className="min-w-0 px-1 sm:px-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Task Board</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Boards</p>
               <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                Plan tasks as cards or shape them into editable trees.
+                Plan tasks as cards, or map ideas in tree pages.
               </p>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="inline-flex w-full rounded-2xl bg-zinc-100 p-1 dark:bg-zinc-950/70 sm:w-auto" role="group" aria-label="Board views">
-                <Link
-                  href="/board"
-                  className={`${boardViewLinkClass(active === "kanban")} flex-1 sm:flex-none`}
-                  aria-current={active === "kanban" ? "page" : undefined}
-                >
-                  Kanban View
-                </Link>
-                <Link
-                  href="/tree"
-                  className={`${boardViewLinkClass(active === "tree")} flex-1 sm:flex-none`}
-                  aria-current={active === "tree" ? "page" : undefined}
-                >
-                  Tree View
-                </Link>
-              </div>
-              <button
-                type="button"
-                disabled
-                className="inline-flex items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-white/60 px-4 py-2 text-sm font-semibold text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950/40 dark:text-zinc-500"
+            <div className="inline-flex w-full rounded-2xl bg-zinc-100 p-1 dark:bg-zinc-950/70 sm:w-auto" role="group" aria-label="Board views">
+              <Link
+                href="/board"
+                className={`${boardViewLinkClass(active === "kanban")} flex-1 sm:flex-none`}
+                aria-current={active === "kanban" ? "page" : undefined}
               >
-                Mindnote View — later
-              </button>
+                Kanban View
+              </Link>
+              <Link
+                href="/tree"
+                className={`${boardViewLinkClass(active === "tree")} flex-1 sm:flex-none`}
+                aria-current={active === "tree" ? "page" : undefined}
+              >
+                Tree View
+              </Link>
             </div>
           </nav>
         </section>
