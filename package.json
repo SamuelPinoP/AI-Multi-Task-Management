@@ -67,6 +67,9 @@
   "overrides": {
     "@prisma/studio-core": {
       "@radix-ui/react-toggle": "1.2.1"
+    },
+    "@vercel/cli-config": {
+      "zod": "^4.6.6"
     }
   }
 }
