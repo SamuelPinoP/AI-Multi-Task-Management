@@ -58,7 +58,7 @@ async function seedWorkspace(page: Page) {
 
 test("public pages have no WCAG A/AA violations", async ({ page }) => {
   const found: string[] = [];
-  for (const path of ["/login", "/signup", "/forgot-password", "/verify-email", "/verify-email?status=invalid"]) {
+  for (const path of ["/login", "/signup", "/signup?error=exists&email=a11y%40example.test", "/forgot-password", "/verify-email", "/verify-email?status=invalid"]) {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
     found.push(...(await violations(page, path)));
@@ -74,7 +74,8 @@ for (const theme of ["light", "dark"] as const) {
     await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
 
     const found: string[] = [];
-    for (const path of ["/", "/today", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/tree", treePath, "/planner", "/goals", "/roadmap", "/trash", sharePath]) {
+    // "/login?email=…" for another address shows "Switch accounts?".
+    for (const path of ["/", "/today", "/login?email=a11y-other%40example.test", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/tree", treePath, "/planner", "/goals", "/roadmap", "/trash", sharePath]) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
       found.push(...(await violations(page, path)));
