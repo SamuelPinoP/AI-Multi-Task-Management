@@ -22,6 +22,7 @@ import {
   type ProjectStatus,
 } from "@/components/projects/project-sheet";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -98,6 +99,11 @@ export default function ProjectsPage() {
     }
     void loadInitialData();
   }, []);
+
+  // An invitation answered or a project shared on another device shows up on coming back.
+  useRefreshOnReturn(() => {
+    void Promise.all([fetchProjects(), fetchInvitations()]);
+  });
 
   const counts = {
     ACTIVE: projects.filter((project) => project.status === "ACTIVE").length,
