@@ -1,4 +1,5 @@
 import "server-only";
+import { invitationHref } from "@/lib/auth-links";
 import {
   brevoPayload,
   parseEmailProvider,
@@ -24,6 +25,8 @@ type ProjectInvitationEmailParams = {
   inviterName: string | null;
   inviterEmail: string;
   projectName: string;
+  /** Whether `to` already has an account: the link opens log in instead of sign up. */
+  hasAccount: boolean;
   fallbackOrigin?: string;
 };
 
@@ -171,36 +174,49 @@ export async function sendProjectInvitationEmail({
   inviterName,
   inviterEmail,
   projectName,
+  hasAccount,
   fallbackOrigin,
 }: ProjectInvitationEmailParams): Promise<EmailDeliveryResult> {
-  const invitationUrl = `${getAppBaseUrl(fallbackOrigin)}/signup?email=${encodeURIComponent(to)}`;
+  // Only the invitee reads this email, so choosing the page by whether the
+  // address has an account tells the inviter nothing.
+  const baseUrl = getAppBaseUrl(fallbackOrigin);
+  const invitationUrl = `${baseUrl}${invitationHref(to, hasAccount)}`;
+  // In case they made an account after the invitation was sent.
+  const loginUrl = `${baseUrl}${invitationHref(to, true)}`;
+  const instruction = hasAccount
+    ? "Log in with this email address to accept or decline the invitation"
+    : "Create an account with this email address to accept or decline the invitation";
+  const safety = `For your safety, ${hasAccount ? "this link does" : "these links do"} not automatically accept the invitation.`;
   const safeAppName = escapeHtml(APP_NAME);
   const safeInviter = escapeHtml(inviterLabel(inviterName, inviterEmail));
   const safeProjectName = escapeHtml(projectName);
   const safeInvitationUrl = escapeHtml(invitationUrl);
+  const safeLoginUrl = escapeHtml(loginUrl);
 
   const text = [
     `${APP_NAME} project invitation`,
     "",
     `${inviterLabel(inviterName, inviterEmail)} invited you to collaborate on ${projectName}.`,
     "",
-    "Create an account or log in with this email address to accept or decline the invitation:",
+    `${instruction}:`,
     invitationUrl,
+    ...(hasAccount ? [] : ["", "Already have an account? Log in instead:", loginUrl]),
     "",
-    "For your safety, this link does not automatically accept the invitation.",
+    safety,
   ].join("\n");
 
   const html = `
     <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #18181b;">
       <h1 style="font-size: 20px; margin: 0 0 16px;">${safeAppName} project invitation</h1>
       <p>${safeInviter} invited you to collaborate on <strong>${safeProjectName}</strong>.</p>
-      <p>Create an account or log in with this email address to accept or decline the invitation.</p>
+      <p>${instruction}.</p>
       <p>
         <a href="${safeInvitationUrl}" style="display: inline-block; padding: 10px 14px; border-radius: 8px; background: #2563eb; color: #ffffff; text-decoration: none;">
-          Open invitation
+          ${hasAccount ? "Log in to respond" : "Create your account"}
         </a>
       </p>
-      <p style="font-size: 13px; color: #52525b;">For your safety, this link does not automatically accept the invitation.</p>
+      ${hasAccount ? "" : `<p>Already have an account? <a href="${safeLoginUrl}" style="color: #2563eb;">Log in instead</a>.</p>`}
+      <p style="font-size: 13px; color: #52525b;">${safety}</p>
     </div>
   `;
 
