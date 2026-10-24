@@ -58,11 +58,14 @@ export function sendInvitationEmail({
   req,
   inviter,
   invitedEmail,
+  hasAccount,
   projectName,
 }: {
   req: Request;
   inviter: Pick<AuthUser, "name" | "email">;
   invitedEmail: string;
+  /** From `checkProjectInvitation`: picks log in or sign up for the email's link. */
+  hasAccount: boolean;
   projectName: string;
 }) {
   return sendProjectInvitationEmail({
@@ -70,6 +73,7 @@ export function sendInvitationEmail({
     inviterName: inviter.name,
     inviterEmail: inviter.email,
     projectName,
+    hasAccount,
     fallbackOrigin: new URL(req.url).origin,
   });
 }

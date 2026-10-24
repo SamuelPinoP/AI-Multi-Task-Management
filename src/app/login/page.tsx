@@ -6,7 +6,10 @@ import {
   getSafeRedirectPath,
   isGuestLoginEnabled,
   isPublicSignupEnabled,
+  normalizeAuthEmail,
 } from "@/lib/auth";
+import { authPageHref } from "@/lib/auth-links";
+import { SignedInAsOtherAccount } from "@/components/signed-in-as-other-account";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 
 function getErrorMessage(error: string | undefined, signupEnabled: boolean, retry: string | undefined) {
@@ -27,13 +30,27 @@ function getErrorMessage(error: string | undefined, signupEnabled: boolean, retr
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; next?: string; retry?: string }>;
+  searchParams: Promise<{ error?: string; email?: string; next?: string; retry?: string }>;
 }) {
-  const currentUser = await getCurrentUser();
-  if (currentUser) redirect("/");
-
-  const { error, next, retry } = await searchParams;
+  const { error, email: emailParam, next, retry } = await searchParams;
   const nextPath = getSafeRedirectPath(next);
+  // Filled in from links that know the address, such as invitation emails.
+  const email = emailParam ? normalizeAuthEmail(emailParam) : "";
+
+  const currentUser = await getCurrentUser();
+  if (currentUser) {
+    if (!email || email === normalizeAuthEmail(currentUser.email)) redirect(nextPath);
+    return (
+      <SignedInAsOtherAccount
+        currentUser={currentUser}
+        email={email}
+        switchHref={authPageHref("login", { error: "logged-out", email, next: nextPath })}
+        stayHref={nextPath}
+      />
+    );
+  }
+
+  const signupHref = authPageHref("signup", { email, next: nextPath });
   const guestLoginEnabled = isGuestLoginEnabled();
   const signupEnabled = isPublicSignupEnabled();
   const errorMessage = getErrorMessage(error, signupEnabled, retry);
@@ -81,6 +98,7 @@ export default async function LoginPage({
                 name="email"
                 type="email"
                 autoComplete="email"
+                defaultValue={email}
                 required
                 className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
               />
@@ -116,7 +134,7 @@ export default async function LoginPage({
               <>
                 New here?{" "}
                 <Link
-                  href="/signup"
+                  href={signupHref}
                   className="font-medium text-zinc-950 underline underline-offset-4 dark:text-zinc-50"
                 >
                   Create an account
@@ -181,7 +199,7 @@ export default async function LoginPage({
                 </p>
               </div>
               <Link
-                href="/signup"
+                href={signupHref}
                 className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 dark:bg-emerald-300 dark:text-emerald-950 dark:hover:bg-emerald-200"
               >
                 Create an account

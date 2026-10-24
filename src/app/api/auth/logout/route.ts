@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hashSecureToken, SESSION_COOKIE_NAME } from "@/lib/auth";
+import { getSafeRedirectPath, hashSecureToken, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-function getLogoutRedirect(request: NextRequest) {
-  return new URL("/login?error=logged-out", request.url);
+async function getLogoutRedirect(request: NextRequest) {
+  // "Switch accounts?" on the log in and sign up pages sends the page to reopen signed out.
+  const formData = await request.formData().catch(() => null);
+  const next = formData?.get("next");
+  const nextPath = typeof next === "string" ? getSafeRedirectPath(next) : "/";
+  return new URL(nextPath === "/" ? "/login?error=logged-out" : nextPath, request.url);
 }
 
 function expireSessionCookie(response: NextResponse) {
@@ -24,7 +28,7 @@ export async function POST(request: NextRequest) {
     await prisma.session.deleteMany({ where: { token: hashSecureToken(token) } });
   }
 
-  const response = NextResponse.redirect(getLogoutRedirect(request), 303);
+  const response = NextResponse.redirect(await getLogoutRedirect(request), 303);
   expireSessionCookie(response);
 
   return response;

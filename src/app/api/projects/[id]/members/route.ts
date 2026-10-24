@@ -62,7 +62,13 @@ export async function POST(req: Request, context: RouteContext) {
     });
 
     const email = invitation
-      ? await sendInvitationEmail({ req, inviter: user, invitedEmail: invitation.invitedEmail, projectName: project.name })
+      ? await sendInvitationEmail({
+          req,
+          inviter: user,
+          invitedEmail: invitation.invitedEmail,
+          hasAccount: invitedUserId !== null,
+          projectName: project.name,
+        })
       : null;
 
     return NextResponse.json({ member, invitation, email }, { status: 201 });
