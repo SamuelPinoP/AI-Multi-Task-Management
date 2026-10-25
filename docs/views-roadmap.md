@@ -2,7 +2,7 @@
 
 Ideas and an action plan for making the sidebar more useful and for the two big planning views. Sizes: S (a day or less), M (a few days), L (a week or more). "Migration" means a Prisma schema change.
 
-Suggested order: TREE-01, TREE-02 with TREE-03, SIDE-05, MIND-01 and MIND-02, MIND-03, then the rest.
+Suggested order: TREE-01, TREE-02 with TREE-03 (all done except TREE-03's keyboard part), MIND-01 and MIND-02, MIND-03, then the rest.
 
 ## Sidebar
 
@@ -22,7 +22,7 @@ Each project in the sidebar opens to Overview, Board and Chat, so the chat is on
 | SIDE-02 | **Chats hub** at `/chats`. Done: every project chat in one list, unread first, with the open chat beside it; search, an Unread filter and Mark all read; a "Chats" sidebar item with the number of chats that have new messages, and G then M. | S–M | Built with SIDE-03. |
 | SIDE-03 | **Real unread counts on every device**. Done: the `ProjectChatRead (userId, projectId, lastReadAt)` table replaced `localStorage`; opening or posting in a chat marks it read, and a "New messages" line shows where you left off. | S | Migration `20261021150000_add_project_chat_read`. |
 | SIDE-04 | **Favorites**: pin any project, note, tree page or saved filter to a group at the top of the sidebar; drag to reorder. | M | Migration (`Favorite` table). |
-| SIDE-05 | **Views group**: Kanban, Tree, Mind, Timeline (today's Roadmap) and Calendar as sidebar items instead of tabs inside Boards. Tree pages list under Tree the way projects do. | S | Needs TREE-01 to give the tree its own route. |
+| SIDE-05 | **Views group** (decided against on October 24, 2026): Kanban, Tree, Mind, Timeline (today's Roadmap) and Calendar as sidebar items instead of tabs inside Boards. Tree pages list under Tree the way projects do. | S | Not building: it separates Kanban from Tasks and Calendar from Events, and adds a placeholder to the main navigation. Views stay as tabs on the page, as in Asana, Notion and Linear. |
 | SIDE-06 | **Saved filters**: "Assigned to me", "High priority this week", "No due date", each with a count. | M | Migration (`SavedView`). |
 | SIDE-07 | **Inbox** with a count (SMART-08). | M | Already planned. |
 | SIDE-08 | **Goals** with a small weekly progress ring (SMART-04, `WeeklyGoal`). | M | Already planned. |
@@ -83,7 +83,7 @@ Select several nodes and move them together, copy and paste a subtree, export as
 
 ## Mind view: notes, tasks and more in 3D
 
-Today Boards shows a disabled "Mindnote View — later" button. The idea is a map of the whole workspace: projects, tasks, notes, events, tree pages and people as points, with lines for how they connect. 3D is the showpiece, but a 2D map and a list must come first: they work on every device and for screen readers, and the 3D view reuses the same data.
+Boards gets a Mind tab once the Mind view exists; there's no placeholder before then. The idea is a map of the whole workspace: projects, tasks, notes, events, tree pages and people as points, with lines for how they connect. 3D is the showpiece, but a 2D map and a list must come first: they work on every device and for screen readers, and the 3D view reuses the same data.
 
 ### MIND-01 Graph data (M, no migration)
 
@@ -93,7 +93,7 @@ Today Boards shows a disabled "Mindnote View — later" button. The idea is a ma
 
 ### MIND-02 2D map and list (M)
 
-- A Mind route (`/mind`, also a SIDE-05 Views item). Load `react-force-graph-2d` (MIT) with `next/dynamic` and `ssr: false`, so its code loads only on this page.
+- A Mind route (`/mind`), with a Mind View tab on Boards next to Kanban and Tree. Load `react-force-graph-2d` (MIT) with `next/dynamic` and `ssr: false`, so its code loads only on this page.
 - Color by project, a shape or icon per type, size by importance (open tasks, due soon). Projects pull their items into clusters.
 - Click an item to open the existing task sheet, note editor or event sheet. Search, and filter chips by type and project.
 - A "List" toggle shows the same graph as a grouped outline: the accessible version and the phone default.
