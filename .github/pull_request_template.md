@@ -17,4 +17,4 @@
 
 <!-- Steps to see it working in the app: the action, the result to expect, and what it proves. Tick the ones you did yourself and say where (local production build or Vercel preview). -->
 
-- [ ] 
+- [ ] Do this, and see that. *Proves …*
