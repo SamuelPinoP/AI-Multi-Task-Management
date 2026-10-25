@@ -94,6 +94,17 @@ time zone too, so dates a test computes match the page's dates. (Git Bash
 passes `TZ=UTC` through but drops values with a slash, such as
 `America/New_York`.)
 
+### Pull requests
+
+Every PR description has three sections, in this order: Description (with
+deploy notes), Testing evidence, and QA. `.github/pull_request_template.md`
+starts it, and `AGENTS.md` (loaded by `CLAUDE.md` for Claude Code) has the
+full rule. `npm run evidence` runs lint, typecheck, unit tests in UTC and four
+other time zones, the storage tests and the Radix check, then prints a
+Markdown table with the counts for the Testing evidence section. Add
+`-- --build` for the production build, or `-- --e2e [spec ...]` to build and
+run Playwright against the build in UTC, like CI.
+
 ### Continuous integration
 
 `.github/workflows/ci.yml` runs on every push to `main` and every pull request.
