@@ -268,12 +268,11 @@ safe to leave public; with `CRON_SECRET` set it is required, as for backups.
 ![Project chat screenshot](docs/screenshots/project-chat.png)
 
 
-### Main Task Board
+### Boards
 
-The app includes a dedicated `/board` productivity area linked from the main navigation as **Task Board**. It currently supports:
+**Boards** in the sidebar opens two views, switched with the tabs at the top of the page:
 
-- **Kanban View** for organizing personal and project tasks by status across the workspace.
-- **Tree View** for user-specific editable hierarchy pages, such as Warrior, Study Plan, or Career Plan, with root nodes, child nodes, sibling nodes, renaming, deletion, simple reordering, and parent changes.
-- A disabled **Mindnote View** entry point so the board structure can be extended later without changing the primary navigation.
+- **Kanban View** (`/board`) for organizing personal and project tasks by status across the workspace.
+- **Tree View** (`/tree`, each page at `/tree/<id>`) for private hierarchy pages, such as Study Plan or Career Plan: root, child and sibling nodes, renaming, colors and sizes, dragging a node with everything under it, "Move to…", and undo (Ctrl+Z).
 
-Plans for drag and drop in the Tree View, a 3D Mind View and more sidebar tools are in [docs/views-roadmap.md](docs/views-roadmap.md).
+Plans for the Tree View's keyboard support and a Mind View are in [docs/views-roadmap.md](docs/views-roadmap.md).
