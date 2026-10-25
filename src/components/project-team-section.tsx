@@ -57,6 +57,14 @@ export function ProjectTeamSection({
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [invitations, setInvitations] =
     useState<PendingInvitation[]>(pendingInvitations);
+  // The shell refreshes the page on coming back, bringing the server's latest
+  // lists, such as an invitation accepted on another device.
+  const [shownLists, setShownLists] = useState({ initialMembers, pendingInvitations });
+  if (shownLists.initialMembers !== initialMembers || shownLists.pendingInvitations !== pendingInvitations) {
+    setShownLists({ initialMembers, pendingInvitations });
+    setMembers(initialMembers);
+    setInvitations(pendingInvitations);
+  }
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");

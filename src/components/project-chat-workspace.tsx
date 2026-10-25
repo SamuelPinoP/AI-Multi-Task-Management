@@ -5,6 +5,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AttachmentGallery, ComposerAttachmentTray } from "@/components/project-chat-attachments";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { formatFileSize } from "@/lib/project-chat-attachment-display";
+import { isPageIdle, onPageReturn } from "@/lib/use-page-activity";
 
 type ProjectCommentAttachment = {
   id: string;
@@ -52,7 +53,7 @@ type AttachmentUploadPlan =
     };
 
 const MAX_FILES_PER_MESSAGE = 5;
-// How often an open, visible chat checks for teammates' messages.
+// How often an open, visible chat checks for teammates' messages, until ten minutes without activity.
 const CHAT_REFRESH_MS = 7000;
 const STANDARD_FILE_SIZE_LIMIT = 10 * 1024 * 1024;
 const VIDEO_FILE_SIZE_LIMIT = 100 * 1024 * 1024;
@@ -226,7 +227,8 @@ export function ProjectChatWorkspace({
     let stopped = false;
 
     async function refresh() {
-      if (document.visibilityState !== "visible" || busyRef.current) return;
+      // Nobody reading for ten minutes: skip the checks, so the database can sleep. Coming back checks at once.
+      if (document.visibilityState !== "visible" || busyRef.current || isPageIdle()) return;
       try {
         const version = chatVersionRef.current;
         const res = await fetch(
@@ -249,14 +251,11 @@ export function ProjectChatWorkspace({
     }
 
     const timer = window.setInterval(() => void refresh(), CHAT_REFRESH_MS);
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") void refresh();
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
+    const stopListening = onPageReturn(() => void refresh());
     return () => {
       stopped = true;
       window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+      stopListening();
     };
   }, [projectId]);
 

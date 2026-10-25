@@ -59,6 +59,7 @@ import {
   serializeSidebarProjects,
   type SidebarProjectsOpen,
 } from "@/lib/sidebar-state";
+import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged, WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
 import type { WorkspaceNav, WorkspaceNavProject } from "@/lib/workspace-nav";
 
@@ -671,6 +672,14 @@ export function AppShell({
       window.removeEventListener(WORKSPACE_CHANGED_EVENT, refresh);
     };
   }, [pathname, showWorkspaceShell]);
+
+  // Coming back to the page, say after answering something on a phone, picks up changes made
+  // elsewhere: the counts here and the page itself when the server renders it.
+  useRefreshOnReturn(() => {
+    if (!showWorkspaceShell) return;
+    notifyWorkspaceChanged();
+    router.refresh();
+  });
 
   // Keyboard shortcuts (DES-06): Ctrl/Cmd+K, /, N, ? and "g then a letter"; see @/lib/shortcuts.
   useEffect(() => {
