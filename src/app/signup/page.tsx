@@ -1,32 +1,36 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { getCurrentUser, hashPassword, isPublicSignupEnabled, normalizeAuthEmail } from "@/lib/auth";
+import { getCurrentUser, getSafeRedirectPath, hashPassword, isPublicSignupEnabled, normalizeAuthEmail } from "@/lib/auth";
+import { authPageHref } from "@/lib/auth-links";
 import { sendEmailVerification } from "@/lib/email-verification";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { clientIpFrom, RATE_LIMITS, tooManyAttemptsMessage } from "@/lib/rate-limit-core";
+import { SignedInAsOtherAccount } from "@/components/signed-in-as-other-account";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 
 async function signupAction(formData: FormData) {
   "use server";
 
-  if (!isPublicSignupEnabled()) redirect("/signup?error=disabled");
-
   const name = String(formData.get("name") || "").trim();
   const email = normalizeAuthEmail(String(formData.get("email") || ""));
   const password = String(formData.get("password") || "");
   const confirmPassword = String(formData.get("confirmPassword") || "");
+  // Where to go after logging in, such as the invitations. Errors keep it and the email.
+  const next = getSafeRedirectPath(String(formData.get("next") || ""));
+  const retryHref = (error: string, retry?: number) => authPageHref("signup", { error, retry, email, next });
 
-  if (!name || !email || !password || !confirmPassword) redirect("/signup?error=missing");
-  if (password !== confirmPassword) redirect(`/signup?error=mismatch&email=${encodeURIComponent(email)}`);
-  if (password.length < 8) redirect(`/signup?error=password&email=${encodeURIComponent(email)}`);
+  if (!isPublicSignupEnabled()) redirect(retryHref("disabled"));
+  if (!name || !email || !password || !confirmPassword) redirect(retryHref("missing"));
+  if (password !== confirmPassword) redirect(retryHref("mismatch"));
+  if (password.length < 8) redirect(retryHref("password"));
 
   const limit = await consumeRateLimit(RATE_LIMITS.signupIp, clientIpFrom(await headers()));
-  if (!limit.allowed) redirect(`/signup?error=rate-limited&retry=${limit.retryAfterSeconds}`);
+  if (!limit.allowed) redirect(retryHref("rate-limited", limit.retryAfterSeconds));
 
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
-  if (existing) redirect("/signup?error=exists");
+  if (existing) redirect(retryHref("exists"));
 
   const user = await prisma.user.create({
     data: {
@@ -39,7 +43,7 @@ async function signupAction(formData: FormData) {
   // If this email doesn't go through, the banner in the app sends a new one.
   await sendEmailVerification(user);
 
-  redirect("/login?error=created");
+  redirect(authPageHref("login", { error: "created", email, next }));
 }
 
 function getErrorMessage(error: string | undefined, retry?: string) {
@@ -52,12 +56,25 @@ function getErrorMessage(error: string | undefined, retry?: string) {
   return null;
 }
 
-export default async function SignupPage({ searchParams }: { searchParams: Promise<{ error?: string; email?: string; retry?: string }> }) {
-  const currentUser = await getCurrentUser();
-  if (currentUser) redirect("/");
-
-  const { error, email, retry } = await searchParams;
+export default async function SignupPage({ searchParams }: { searchParams: Promise<{ error?: string; email?: string; next?: string; retry?: string }> }) {
+  const { error, email, next, retry } = await searchParams;
   const invitedEmail = email ? normalizeAuthEmail(email) : "";
+  const nextPath = getSafeRedirectPath(next);
+
+  const currentUser = await getCurrentUser();
+  if (currentUser) {
+    if (!invitedEmail || invitedEmail === normalizeAuthEmail(currentUser.email)) redirect(nextPath);
+    return (
+      <SignedInAsOtherAccount
+        currentUser={currentUser}
+        email={invitedEmail}
+        switchHref={authPageHref("signup", { email: invitedEmail, next: nextPath })}
+        stayHref={nextPath}
+      />
+    );
+  }
+
+  const loginHref = authPageHref("login", { email: invitedEmail, next: nextPath });
   const errorMessage = getErrorMessage(error, retry);
   const signupEnabled = isPublicSignupEnabled();
 
@@ -70,10 +87,21 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
           <p className="text-sm text-zinc-600 dark:text-zinc-400">Sign up with a name, email, and password.</p>
         </div>
 
-        {errorMessage ? <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900">{errorMessage}</p> : null}
+        {errorMessage ? (
+          <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900">
+            {errorMessage}
+            {error === "exists" ? (
+              <>
+                {" "}
+                <Link href={loginHref} className="font-medium underline underline-offset-4">Log in instead</Link>
+              </>
+            ) : null}
+          </p>
+        ) : null}
 
         {signupEnabled ? (
           <form action={signupAction} className="mt-6 space-y-4">
+            <input type="hidden" name="next" value={nextPath} />
             <div>
               <label htmlFor="name" className="text-sm font-medium">Name</label>
               <input id="name" name="name" autoComplete="name" required className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600" />
@@ -100,7 +128,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
         )}
 
         <p className="mt-5 text-center text-sm text-zinc-600 dark:text-zinc-400">
-          Already have an account? <Link href="/login" className="font-medium text-zinc-950 underline underline-offset-4 dark:text-zinc-50">Log in</Link>
+          Already have an account? <Link href={loginHref} className="font-medium text-zinc-950 underline underline-offset-4 dark:text-zinc-50">Log in</Link>
         </p>
       </section>
     </main>
