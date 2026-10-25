@@ -10,14 +10,19 @@ function startTracking() {
   if (tracker) return;
   const created = createActivityTracker();
   tracker = created;
+  const refreshAll = () => {
+    for (const listener of returnListeners) listener();
+  };
+  // Offline, as just after waking a laptop, a refresh would only fail: "online" runs it instead.
   const notify = (cameBack: boolean) => {
-    if (cameBack) for (const listener of returnListeners) listener();
+    if (cameBack && navigator.onLine) refreshAll();
   };
   for (const type of ACTIVITY_EVENTS) window.addEventListener(type, () => notify(created.activity()), { passive: true });
   window.addEventListener("focus", () => notify(created.returned()));
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") notify(created.returned());
   });
+  window.addEventListener("online", refreshAll);
 }
 
 /** True after ten minutes without a click, key press, scroll or touch: automatic checks wait for the reader. */

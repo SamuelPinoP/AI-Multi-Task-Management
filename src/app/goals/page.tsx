@@ -17,6 +17,7 @@ import { uiButtonClass, uiCardClass, uiPrimaryButtonClass } from "@/components/u
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import type { GoalsWeek } from "@/lib/goals";
+import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 type Goal = GoalsWeek["goals"][number];
@@ -264,6 +265,9 @@ export default function GoalsPage() {
     }
     void loadWeek();
   }, [requestedWeek]);
+
+  // Goals and their tasks changed on another device show up on coming back.
+  useRefreshOnReturn(() => void load());
 
   function goToWeek(key: string) {
     router.replace(`${pathname}?week=${key}`, { scroll: false });

@@ -28,6 +28,7 @@ import { cn } from "@/lib/cn";
 import { daysFrom } from "@/lib/home-summary";
 import { compareTaskDueDates, formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { topLevelTasks } from "@/lib/task-relations";
+import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged, TASK_CREATED_EVENT } from "@/lib/workspace-events";
 
 type StatusFilter = "ALL" | "OPEN" | "DONE";
@@ -144,6 +145,12 @@ export default function TasksPage() {
     window.addEventListener(TASK_CREATED_EVENT, refresh);
     return () => window.removeEventListener(TASK_CREATED_EVENT, refresh);
   }, []);
+
+  // Tasks assigned or changed on another device show up on coming back. An open
+  // task keeps its edits: the sheet only resets its form for a different task.
+  useRefreshOnReturn(() => {
+    void Promise.all([fetchTasks(false), fetchProjects()]);
+  });
 
   /** `?task=<id>`: clear the filters so the task is visible and open it. */
   const openLinkedTask = useEffectEvent((task: Task) => {
