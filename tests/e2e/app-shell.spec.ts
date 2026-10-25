@@ -98,6 +98,29 @@ test("The sidebar + creates a project and opens it", async ({ page, isMobile }) 
   await expect(pages.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
 });
 
+test("A long page scrolls inside the main area, not the whole window", async ({ page, isMobile }) => {
+  test.skip(isMobile, "The sidebar is a menu sheet on phones.");
+  const name = uniqueName("Scroll project");
+  await continueAsGuest(page);
+
+  const sidebar = page.getByRole("navigation", { name: "Workspace" });
+  await sidebar.getByRole("button", { name: "Create a project" }).click();
+  const sheet = page.getByRole("dialog", { name: "New project" });
+  await sheet.getByLabel("Name").fill(name);
+  await sheet.getByRole("button", { name: "Create project" }).click();
+  await expect(page).toHaveURL(/\/projects\/[^/]+$/);
+
+  // The GitHub panel's hidden label sits far below the fold. Hidden (sr-only)
+  // text is absolutely positioned, so it once escaped the scrolling main area
+  // and made the window scroll too: a second scrollbar.
+  await expect(page.getByRole("heading", { name: "GitHub" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Project Calendar" })).toBeAttached();
+  const main = page.locator("#main-content");
+  expect(await main.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  const windowOverflow = await page.evaluate(() => document.documentElement.scrollHeight - document.documentElement.clientHeight);
+  expect(windowOverflow).toBe(0);
+});
+
 test("Phone tabs and the menu reach every section", async ({ page, isMobile }) => {
   test.skip(!isMobile, "Bottom tabs only show on phones.");
   await continueAsGuest(page);
