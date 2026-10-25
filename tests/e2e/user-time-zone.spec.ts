@@ -7,7 +7,11 @@ import { continueAsGuest, uniqueName } from "./helpers";
 const timezoneId = new Date().getUTCHours() >= 10 ? "Pacific/Kiritimati" : "Pacific/Pago_Pago";
 test.use({ timezoneId });
 
-test(`"Due today" follows the browser's time zone (${timezoneId})`, async ({ page }) => {
+// The title stays fixed: Playwright lists tests in one process and runs them in
+// another, so a title with the zone in it changed when a run crossed 00:00 or
+// 10:00 UTC, and the test was "not found in the worker process".
+test(`"Due today" follows the browser's time zone`, async ({ page }) => {
+  test.info().annotations.push({ type: "time zone", description: timezoneId });
   const title = uniqueName("Due in my time zone");
 
   await continueAsGuest(page);
