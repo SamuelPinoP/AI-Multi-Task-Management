@@ -344,8 +344,9 @@ function Sidebar({
   const projectSummary = `${nav.activeProjectCount} active project${nav.activeProjectCount === 1 ? "" : "s"}`;
   const linkProps = { pathname, collapsed, onNavigate };
 
+  // relative keeps the collapsed sidebar's hidden labels inside this scroller, as on main.
   return (
-    <nav aria-label="Workspace" className="flex h-full flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2.5 py-3 [scrollbar-width:thin]">
+    <nav aria-label="Workspace" className="relative flex h-full flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2.5 py-3 [scrollbar-width:thin]">
       <div className={cn("flex items-center gap-2.5 px-1.5 pb-3", collapsed && "justify-center px-0")}>
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-[11px] font-extrabold text-accent-ink" aria-hidden="true">
           AM
@@ -829,7 +830,9 @@ export function AppShell({
         />
         <OfflineBanner />
         {currentUser.isGuest || currentUser.emailVerifiedAt ? null : <EmailVerificationBanner email={currentUser.email} />}
-        <main id="main-content" className="min-h-0 flex-1 overflow-y-auto pb-24 lg:pb-0">
+        {/* relative: hidden (sr-only) text is absolutely positioned, and it scrolls only inside a positioned
+            scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar. */}
+        <main id="main-content" className="relative min-h-0 flex-1 overflow-y-auto pb-24 lg:pb-0">
           {children}
         </main>
       </div>
