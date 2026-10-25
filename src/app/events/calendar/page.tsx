@@ -35,6 +35,7 @@ import {
   type DeleteEventTarget,
   type DeleteScope,
 } from "@/components/events/delete-event-dialog";
+import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 import {
   describeRepeat,
@@ -205,51 +206,61 @@ export default function EventsCalendarPage() {
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
 
   /**
-   * On mount: fetch events, tasks, and projects in parallel. Events have
-   * their recurrence value normalized before being stored. Any failure in
-   * events/tasks fetching surfaces a single generic error message.
+   * Fetch events, tasks, and projects in parallel: on mount, and quietly on
+   * coming back to the page. Events have their recurrence value normalized
+   * before being stored. Any failure in events/tasks fetching surfaces a
+   * single generic error message, except a quiet refresh keeps what's shown.
    */
-  useEffect(() => {
-    async function loadEvents() {
-      try {
+  async function loadItems(showLoading = true) {
+    try {
+      if (showLoading) {
         setFetching(true);
         setError("");
-
-        const [eventsResponse, tasksResponse, projectsData] = await Promise.all(
-          [
-            fetch("/api/events", { cache: "no-store" }),
-            fetch("/api/tasks", { cache: "no-store" }),
-            fetch("/api/projects", { cache: "no-store" }).then(async (res) => {
-              if (!res.ok) throw new Error("Failed to fetch projects");
-              return res.json() as Promise<Project[]>;
-            }),
-          ],
-        );
-        if (!eventsResponse.ok || !tasksResponse.ok) {
-          throw new Error("Failed to fetch calendar items");
-        }
-
-        const [eventsData, tasksData] = await Promise.all([
-          eventsResponse.json() as Promise<EventItem[]>,
-          tasksResponse.json() as Promise<TaskItem[]>,
-        ]);
-        setEvents(
-          eventsData.map((event) => ({
-            ...event,
-            recurrence: normalizeRecurrence(event.recurrence),
-          })),
-        );
-        setTasks(tasksData);
-        setProjects(projectsData);
-      } catch {
-        setError("Could not load calendar items.");
-      } finally {
-        setFetching(false);
       }
-    }
 
-    void loadEvents();
+      const [eventsResponse, tasksResponse, projectsData] = await Promise.all(
+        [
+          fetch("/api/events", { cache: "no-store" }),
+          fetch("/api/tasks", { cache: "no-store" }),
+          fetch("/api/projects", { cache: "no-store" }).then(async (res) => {
+            if (!res.ok) throw new Error("Failed to fetch projects");
+            return res.json() as Promise<Project[]>;
+          }),
+        ],
+      );
+      if (!eventsResponse.ok || !tasksResponse.ok) {
+        throw new Error("Failed to fetch calendar items");
+      }
+
+      const [eventsData, tasksData] = await Promise.all([
+        eventsResponse.json() as Promise<EventItem[]>,
+        tasksResponse.json() as Promise<TaskItem[]>,
+      ]);
+      setEvents(
+        eventsData.map((event) => ({
+          ...event,
+          recurrence: normalizeRecurrence(event.recurrence),
+        })),
+      );
+      setTasks(tasksData);
+      setProjects(projectsData);
+      setError("");
+    } catch {
+      if (showLoading) setError("Could not load calendar items.");
+    } finally {
+      if (showLoading) setFetching(false);
+    }
+  }
+
+  useEffect(() => {
+    async function loadInitialData() {
+      await loadItems();
+    }
+    void loadInitialData();
   }, []);
+
+  // Events and tasks changed on another device show up on coming back.
+  useRefreshOnReturn(() => void loadItems(false));
 
   // ---------------------------------------------------------------------
   // Derived data (memoized)

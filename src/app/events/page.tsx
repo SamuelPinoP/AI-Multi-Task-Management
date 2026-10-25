@@ -34,6 +34,7 @@ import { projectColor } from "@/lib/project-color";
 import { occurrencesInRange } from "@/lib/event-occurrences";
 import { describeRepeat, normalizeRecurrence, storedDayKey } from "@/lib/recurrence";
 import { formatTaskDayKey, getLocalDateOnly } from "@/lib/task-date-buckets";
+import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 const AGENDA_DAYS = 60;
@@ -194,6 +195,11 @@ export default function EventsPage() {
     }
     void loadInitialData();
   }, []);
+
+  // Events added or moved on another device show up on coming back. An open event keeps its edits.
+  useRefreshOnReturn(() => {
+    void Promise.all([fetchEvents(), fetchProjects()]);
+  });
 
   /** `?event=<id>`: clear the filters, show its month and open it. */
   const openLinkedEvent = useEffectEvent((event: EventItem) => {

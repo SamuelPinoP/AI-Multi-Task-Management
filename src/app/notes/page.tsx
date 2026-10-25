@@ -24,6 +24,7 @@ import { cn } from "@/lib/cn";
 import { relativeTime } from "@/lib/home-summary";
 import { taskFromSelection } from "@/lib/note-links";
 import { projectColor } from "@/lib/project-color";
+import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 type Project = { id: string; name: string; color: string | null };
@@ -144,6 +145,24 @@ export default function NotesPage() {
     }
     void loadInitialData();
   }, []);
+
+  // Notes changed on another device show up on coming back. The note open in the
+  // editor keeps the copy here, so a refresh never undoes what was just typed.
+  useRefreshOnReturn(() => {
+    void fetchProjects();
+    void (async () => {
+      try {
+        const response = await fetch("/api/notes");
+        if (!response.ok) return;
+        const fresh = (await response.json()) as Note[];
+        setNotes((current) =>
+          fresh.map((note) => (note.id === editingNoteId ? (current.find((item) => item.id === note.id) ?? note) : note)),
+        );
+      } catch {
+        // Offline or a hiccup: keep the list; the next return tries again.
+      }
+    })();
+  });
 
   // A linked note (?openNote=) fills the editor once the notes have loaded.
   const fillLinkedNote = useEffectEvent((note: Note) => loadIntoEditor(note));

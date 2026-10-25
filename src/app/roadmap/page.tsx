@@ -10,6 +10,7 @@ import {
 import { uiButtonClass, uiCardClass } from "@/components/ui";
 import { formatTaskDueDate, getLocalDateOnly } from "@/lib/task-date-buckets";
 import { eventWallTime, formatEventDateTime } from "@/lib/event-time";
+import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
@@ -133,6 +134,9 @@ export default function RoadmapPage() {
 
     return () => clearTimeout(timer);
   }, []);
+
+  // Changes made on another device show up on coming back, without the loading state.
+  useRefreshOnReturn(() => void fetchData(false));
 
   const expandedEvents = useMemo(() => {
     const now = new Date();
