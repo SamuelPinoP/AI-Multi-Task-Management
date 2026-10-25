@@ -1,5 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { continueAsGuest, openSection, uniqueName } from "./helpers";
+
+function dateInputValue(daysFromToday: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + daysFromToday);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
 test("New task adds a task, updates the sidebar and is found by search", async ({ page, isMobile }) => {
   const title = uniqueName("Shell task");
@@ -98,27 +104,50 @@ test("The sidebar + creates a project and opens it", async ({ page, isMobile }) 
   await expect(pages.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
 });
 
-test("A long page scrolls inside the main area, not the whole window", async ({ page, isMobile }) => {
+/** How far the window itself scrolls; the shell scrolls inside main, so it should be 0. */
+function windowOverflow(page: Page) {
+  return page.evaluate(() => document.documentElement.scrollHeight - document.documentElement.clientHeight);
+}
+
+test("Long pages scroll inside the main area, never the whole window", async ({ page, isMobile }) => {
   test.skip(isMobile, "The sidebar is a menu sheet on phones.");
-  const name = uniqueName("Scroll project");
+  test.setTimeout(120_000);
   await continueAsGuest(page);
 
-  const sidebar = page.getByRole("navigation", { name: "Workspace" });
-  await sidebar.getByRole("button", { name: "Create a project" }).click();
-  const sheet = page.getByRole("dialog", { name: "New project" });
-  await sheet.getByLabel("Name").fill(name);
-  await sheet.getByRole("button", { name: "Create project" }).click();
-  await expect(page).toHaveURL(/\/projects\/[^/]+$/);
+  // A daily event fills the Events agenda with 60 days of rows, each with a hidden
+  // "repeats" label; a new project's page has the GitHub panel's hidden label far down.
+  // Hidden (sr-only) text is absolutely positioned, so it once escaped the scrolling
+  // main area and made the window scroll too: a second scrollbar.
+  const post = async (url: string, data: Record<string, unknown>) => (await page.request.post(url, { data })).json();
+  const project = (await post("/api/projects", { name: uniqueName("Scroll project"), color: "#0f9488" })) as { id: string };
+  await post("/api/events", { title: "Daily stand-up", startDate: dateInputValue(-1), startTime: "09:00", endDate: "", endTime: "", recurrence: "DAILY", projectId: project.id });
+  await post("/api/tasks", { title: "Scroll task", dueDate: dateInputValue(0), projectId: project.id });
+  await post("/api/notes", { title: "Scroll note", content: "Some text", projectId: project.id });
 
-  // The GitHub panel's hidden label sits far below the fold. Hidden (sr-only)
-  // text is absolutely positioned, so it once escaped the scrolling main area
-  // and made the window scroll too: a second scrollbar.
-  await expect(page.getByRole("heading", { name: "GitHub" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Project Calendar" })).toBeAttached();
   const main = page.locator("#main-content");
-  expect(await main.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
-  const windowOverflow = await page.evaluate(() => document.documentElement.scrollHeight - document.documentElement.clientHeight);
-  expect(windowOverflow).toBe(0);
+  const overflowing: string[] = [];
+  for (const path of ["/", "/today", "/chats", "/tasks", "/projects", `/projects/${project.id}`, `/projects/${project.id}/board`, `/projects/${project.id}/chat`, "/notes", "/events", "/events/calendar", "/board", "/tree", "/planner", "/goals", "/roadmap", "/trash"]) {
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    const extra = await windowOverflow(page);
+    if (extra !== 0) overflowing.push(`${path}: ${extra}px`);
+  }
+  expect(overflowing).toEqual([]);
+
+  // The two pages from the report really are long, so main is what scrolls.
+  for (const path of ["/events", `/projects/${project.id}`]) {
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    expect(await main.evaluate((element) => element.scrollHeight > element.clientHeight * 2), path).toBe(true);
+  }
+
+  // The collapsed sidebar's labels are hidden text too, below the fold on a short window.
+  await page.setViewportSize({ width: 1280, height: 420 });
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+  const nav = page.getByRole("navigation", { name: "Workspace" });
+  expect(await nav.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  expect(await windowOverflow(page)).toBe(0);
 });
 
 test("Phone tabs and the menu reach every section", async ({ page, isMobile }) => {
