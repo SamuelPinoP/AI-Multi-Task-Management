@@ -2,6 +2,34 @@
 
 Rules for everyone who works in this repository, people and AI coding agents alike. `CLAUDE.md` loads this file for Claude Code; other agents read it directly.
 
+## Issues
+
+Every issue is a ticket someone else could pick up without asking questions. The repository is public, so never put secrets or personal data in one.
+
+- **Templates:** open issues from a template in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE): bug, feature, chore or epic. With `gh issue create`, use the same sections.
+- **Title:** the problem or the outcome, in plain words. Roadmap items start with their ID, for example "[TREE-04] A better tree canvas".
+- **Body:**
+  - **Summary:** one or two sentences.
+  - **Background:** links to the code, PRs and related issues.
+  - **Acceptance criteria:** a checklist someone can test.
+  - **Out of scope**, when it prevents a misunderstanding.
+  - **Open questions** or **Blocked on:** anything that waits on a decision or on the owner.
+  - **Details:** estimate (S, M, L, XL), migration, free-tier impact, related issues.
+  - Bugs add steps to reproduce, and the expected and actual results.
+- **Keep the requester's words.** When rewriting someone's issue, keep their text in a collapsed "Original request" block at the end.
+- **Labels:**
+  - Exactly one `type:` (bug, feature, chore, epic, docs).
+  - One or more `area:`.
+  - Exactly one `priority:` (high, medium, low).
+  - `status: needs info` while the issue waits on a decision or on the owner.
+  - The workflows rely on the names `maintenance` and `downtime`; never rename them.
+- **Size:** one issue should fit in one PR. Bigger work is an epic (`type: epic`) whose pieces are sub-issues. Split an issue that bundles unrelated problems, and link the pieces to each other.
+- **Owner:** every open issue has an assignee.
+- **Closing:**
+  - A PR that finishes an issue says `Fixes #N`.
+  - When closing by hand, start the body with a "Resolution" note naming the PRs and anything left undone. Leftover work gets its own issue, linked from the note.
+  - Close dropped work as "not planned".
+
 ## Pull requests
 
 Every pull request description follows [`.github/pull_request_template.md`](.github/pull_request_template.md), in this order: **Description**, **Testing evidence**, **QA**. GitHub fills the template in for PRs opened on the website; with `gh pr create --body-file`, start from the template yourself. AI agents write all three sections without being asked (#231).

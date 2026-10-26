@@ -1,0 +1,39 @@
+name: Chore
+description: Tooling, CI, tests, dependencies, docs or upkeep, with no change users will see.
+labels: ["type: chore"]
+assignees: ["SamuelPinoP"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What needs doing? One or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: background
+    attributes:
+      label: Why
+      description: What it improves or prevents, and links to related code, PRs or issues.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: A checklist someone can verify.
+      value: |
+        - [ ] A result someone can check
+    validations:
+      required: true
+  - type: dropdown
+    id: estimate
+    attributes:
+      label: Estimate
+      options:
+        - S (a few hours)
+        - M (a day or two)
+        - L (several days)
+        - Not sure
+    validations:
+      required: true

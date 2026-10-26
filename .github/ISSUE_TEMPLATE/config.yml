@@ -1,0 +1,4 @@
+# Every issue starts from a template, so each ticket has the sections AGENTS.md
+# ("Issues") asks for. Issues created through the API (the uptime and
+# maintenance workflows, `gh issue create`) aren't affected.
+blank_issues_enabled: false

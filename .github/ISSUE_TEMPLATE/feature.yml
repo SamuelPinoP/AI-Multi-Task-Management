@@ -1,0 +1,57 @@
+name: Feature
+description: A new capability, or an improvement people will notice.
+labels: ["type: feature"]
+assignees: ["SamuelPinoP"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What should exist, and who is it for? One or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: background
+    attributes:
+      label: Background
+      description: Why it matters, and links to related code, PRs or issues.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: A checklist someone can test. Include the phone layout and accessibility when the UI changes.
+      value: |
+        - [ ] A result someone can check
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What this doesn't include, when that prevents a misunderstanding.
+  - type: textarea
+    id: questions
+    attributes:
+      label: Open questions
+      description: Decisions still needed before or during the work.
+  - type: dropdown
+    id: estimate
+    attributes:
+      label: Estimate
+      options:
+        - S (a few hours)
+        - M (a day or two)
+        - L (several days)
+        - XL (make it an epic instead)
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: free-tier
+    attributes:
+      label: Free-tier impact
+      description: Extra requests, polling, storage or emails, measured against Vercel Hobby, Neon Free, Cloudflare R2 and Gmail. Write "None" if there are none.
+    validations:
+      required: true
