@@ -1,0 +1,39 @@
+name: Epic
+description: A large goal, delivered through several smaller issues.
+labels: ["type: epic"]
+assignees: ["SamuelPinoP"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        After creating the epic, add each piece as a sub-issue (Create sub-issue, at the bottom of the epic) so its progress shows here.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: The outcome, in one or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: background
+    attributes:
+      label: Background
+      description: Why it matters, what exists today, and links to plans or docs.
+    validations:
+      required: true
+  - type: textarea
+    id: pieces
+    attributes:
+      label: Pieces
+      description: The smaller issues it breaks into, roughly in order. Each becomes a sub-issue.
+      value: |
+        - [ ] #N A piece of the goal
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: How we'll know the whole goal is reached.
+    validations:
+      required: true

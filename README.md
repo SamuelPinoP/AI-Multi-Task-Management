@@ -94,7 +94,12 @@ time zone too, so dates a test computes match the page's dates. (Git Bash
 passes `TZ=UTC` through but drops values with a slash, such as
 `America/New_York`.)
 
-### Pull requests
+### Issues and pull requests
+
+`CONTRIBUTING.md` sums up the workflow, and `AGENTS.md` has the full rules.
+Issues start from a template in `.github/ISSUE_TEMPLATE/` (bug, feature, chore
+or epic). Each has acceptance criteria, one `type:`, `area:` and `priority:`
+label, and an owner; large work is an epic with sub-issues.
 
 Every PR description has three sections, in this order: Description (with
 deploy notes), Testing evidence, and QA. `.github/pull_request_template.md`
