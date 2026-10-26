@@ -77,6 +77,17 @@ EMAIL_FROM="AI Multi <noreply@example.com>"
 
 Email notifications are disabled when `EMAIL_PROVIDER` is omitted or set to `"disabled"`. In-app invitations continue to work either way. Keep every key and password server-only, with no `NEXT_PUBLIC_` prefix. With Gmail SMTP, mail is sent from `SMTP_USER` under the app's name. Each send waits at most 10 seconds for the mail server, so a slow server can't hang a request.
 
+### Checking that emails reach the inbox
+
+Every email is a complete HTML document with a matching plain-text part, the same sender, at most two links, and a footer saying who sent it and why (`src/lib/email-templates.ts`, #232). To see how a real email lands:
+
+1. Put the production email settings (`EMAIL_PROVIDER` and its keys) in your local `.env`.
+2. Open https://www.mail-tester.com and copy the address it shows.
+3. Run `npm run email:test -- <that address>`. It sends the "confirm your email" message, with links pointing at production. Add `reset`, `invitation`, `automation` or `all` after the address to send other emails, for example to your own inbox.
+4. Back on mail-tester, check the score (aim for 9/10 or more) and what it lists to fix.
+
+In Gmail, "Show original" on a received email should report `SPF: PASS`, `DKIM: PASS` and `DMARC: PASS`. If emails still land in junk, marking a few as "Not spam" teaches the filter. The strongest fix is sending from your own domain with SPF, DKIM and DMARC through Brevo's free plan, but a domain costs money.
+
 ## Deployment environment validation
 
 Run the deployment validator before the first Vercel deploy and after changing environment variables:

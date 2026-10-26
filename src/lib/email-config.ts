@@ -1,6 +1,9 @@
 // Email provider settings, kept free of server-only imports so they can be
 // unit tested. src/lib/email.ts does the sending.
 
+/** The sender name on every email. */
+export const APP_NAME = "AI Multi";
+
 export const EMAIL_PROVIDERS = ["disabled", "resend", "smtp", "brevo"] as const;
 export type EmailProvider = (typeof EMAIL_PROVIDERS)[number];
 
@@ -47,6 +50,11 @@ export function smtpSettings(env: Env): SmtpSettings | null {
   if (!user || !pass) return null;
   if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
   return { host, port, secure: port === 465, user, pass };
+}
+
+/** Gmail sends as the signed-in account, so the SMTP sender is always SMTP_USER, named after the app. */
+export function smtpSender(settings: SmtpSettings) {
+  return { name: APP_NAME, address: settings.user };
 }
 
 export type OutgoingEmail = { to: string; subject: string; text: string; html: string };

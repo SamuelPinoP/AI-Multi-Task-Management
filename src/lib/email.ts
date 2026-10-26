@@ -1,15 +1,21 @@
 import "server-only";
-import { invitationHref } from "@/lib/auth-links";
 import {
   brevoPayload,
   parseEmailProvider,
   parseMailbox,
+  smtpSender,
   smtpSettings,
   type EmailProvider,
   type OutgoingEmail,
 } from "@/lib/email-config";
+import {
+  emailVerificationEmail,
+  passwordResetEmail,
+  projectInvitationEmail,
+  taskAutomationEmail,
+  type EmailContent,
+} from "@/lib/email-templates";
 
-const APP_NAME = "AI Multi";
 const RESEND_API_URL = "https://api.resend.com/emails";
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 // Vercel functions have short time limits; give up on a slow mail server.
@@ -64,32 +70,15 @@ function getAppBaseUrl(fallbackOrigin?: string) {
   return configuredUrl.replace(/\/+$/, "");
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function inviterLabel(name: string | null, email: string) {
-  return name?.trim() ? `${name.trim()} (${email})` : email;
-}
-
 async function sendEmail({
   to,
-  subject,
-  text,
-  html,
+  content,
   successMessage,
   failureMessage,
   disabledMessage,
 }: {
   to: string;
-  subject: string;
-  text: string;
-  html: string;
+  content: EmailContent;
   successMessage: string;
   failureMessage: string;
   disabledMessage: string;
@@ -105,7 +94,7 @@ async function sendEmail({
   }
 
   try {
-    const sent = await deliver(provider, { to, subject, text, html });
+    const sent = await deliver(provider, { to, ...content });
     return sent
       ? { status: "sent", message: successMessage }
       : { status: "failed", message: failureMessage };
@@ -134,8 +123,7 @@ async function deliver(provider: Exclude<EmailProvider, "disabled">, email: Outg
       greetingTimeout: SMTP_TIMEOUT_MS,
       socketTimeout: SMTP_TIMEOUT_MS,
     });
-    // Gmail sends as the signed-in account, so the sender is always SMTP_USER.
-    await transport.sendMail({ from: { name: APP_NAME, address: settings.user }, ...email });
+    await transport.sendMail({ from: smtpSender(settings), ...email });
     return true;
   }
 
@@ -177,86 +165,19 @@ export async function sendProjectInvitationEmail({
   hasAccount,
   fallbackOrigin,
 }: ProjectInvitationEmailParams): Promise<EmailDeliveryResult> {
-  // Only the invitee reads this email, so choosing the page by whether the
-  // address has an account tells the inviter nothing.
-  const baseUrl = getAppBaseUrl(fallbackOrigin);
-  const invitationUrl = `${baseUrl}${invitationHref(to, hasAccount)}`;
-  // In case they made an account after the invitation was sent.
-  const loginUrl = `${baseUrl}${invitationHref(to, true)}`;
-  const instruction = hasAccount
-    ? "Log in with this email address to accept or decline the invitation"
-    : "Create an account with this email address to accept or decline the invitation";
-  const safety = `For your safety, ${hasAccount ? "this link does" : "these links do"} not automatically accept the invitation.`;
-  const safeAppName = escapeHtml(APP_NAME);
-  const safeInviter = escapeHtml(inviterLabel(inviterName, inviterEmail));
-  const safeProjectName = escapeHtml(projectName);
-  const safeInvitationUrl = escapeHtml(invitationUrl);
-  const safeLoginUrl = escapeHtml(loginUrl);
-
-  const text = [
-    `${APP_NAME} project invitation`,
-    "",
-    `${inviterLabel(inviterName, inviterEmail)} invited you to collaborate on ${projectName}.`,
-    "",
-    `${instruction}:`,
-    invitationUrl,
-    ...(hasAccount ? [] : ["", "Already have an account? Log in instead:", loginUrl]),
-    "",
-    safety,
-  ].join("\n");
-
-  const html = `
-    <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #18181b;">
-      <h1 style="font-size: 20px; margin: 0 0 16px;">${safeAppName} project invitation</h1>
-      <p>${safeInviter} invited you to collaborate on <strong>${safeProjectName}</strong>.</p>
-      <p>${instruction}.</p>
-      <p>
-        <a href="${safeInvitationUrl}" style="display: inline-block; padding: 10px 14px; border-radius: 8px; background: #2563eb; color: #ffffff; text-decoration: none;">
-          ${hasAccount ? "Log in to respond" : "Create your account"}
-        </a>
-      </p>
-      ${hasAccount ? "" : `<p>Already have an account? <a href="${safeLoginUrl}" style="color: #2563eb;">Log in instead</a>.</p>`}
-      <p style="font-size: 13px; color: #52525b;">${safety}</p>
-    </div>
-  `;
-
   return sendEmail({
     to,
-    subject: `${APP_NAME}: invitation to ${projectName}`,
-    text,
-    html,
+    content: projectInvitationEmail({ to, inviterName, inviterEmail, projectName, hasAccount, baseUrl: getAppBaseUrl(fallbackOrigin) }),
     successMessage: "Invitation created and email sent.",
     failureMessage: "Invitation created, but email could not be sent.",
     disabledMessage: "Invitation created. Email sending is not configured.",
   });
 }
 
-
 export async function sendPasswordResetEmail({ to, resetUrl }: PasswordResetEmailParams): Promise<EmailDeliveryResult> {
-  const safeAppName = escapeHtml(APP_NAME);
-  const safeResetUrl = escapeHtml(resetUrl);
-  const text = [
-    `${APP_NAME} password reset`,
-    "",
-    "Use this link to reset your password. It expires in 60 minutes:",
-    resetUrl,
-    "",
-    "If you did not request a password reset, you can ignore this email.",
-  ].join("\n");
-  const html = `
-    <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #18181b;">
-      <h1 style="font-size: 20px; margin: 0 0 16px;">${safeAppName} password reset</h1>
-      <p>Use this link to reset your password. It expires in 60 minutes.</p>
-      <p><a href="${safeResetUrl}" style="display: inline-block; padding: 10px 14px; border-radius: 8px; background: #2563eb; color: #ffffff; text-decoration: none;">Reset password</a></p>
-      <p style="font-size: 13px; color: #52525b;">If you did not request a password reset, you can ignore this email.</p>
-    </div>
-  `;
-
   return sendEmail({
     to,
-    subject: `${APP_NAME}: reset your password`,
-    text,
-    html,
+    content: passwordResetEmail({ resetUrl }),
     successMessage: "If an account exists, a reset link was sent.",
     failureMessage: "If an account exists, a reset link was sent.",
     disabledMessage: "If an account exists, a reset link was sent.",
@@ -265,32 +186,9 @@ export async function sendPasswordResetEmail({ to, resetUrl }: PasswordResetEmai
 
 /** "Confirm your email" with a link that proves the user owns the address (#130). */
 export async function sendEmailVerificationEmail({ to, verifyUrl }: EmailVerificationEmailParams): Promise<EmailDeliveryResult> {
-  const safeAppName = escapeHtml(APP_NAME);
-  const safeVerifyUrl = escapeHtml(verifyUrl);
-  const text = [
-    `Confirm your email for ${APP_NAME}`,
-    "",
-    "Open this link to confirm this is your email address. It expires in 24 hours:",
-    verifyUrl,
-    "",
-    "You need a confirmed email to join projects you're invited to.",
-    "If you didn't create an account, you can ignore this email.",
-  ].join("\n");
-  const html = `
-    <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #18181b;">
-      <h1 style="font-size: 20px; margin: 0 0 16px;">Confirm your email for ${safeAppName}</h1>
-      <p>Confirm this is your email address. The link expires in 24 hours.</p>
-      <p><a href="${safeVerifyUrl}" style="display: inline-block; padding: 10px 14px; border-radius: 8px; background: #2563eb; color: #ffffff; text-decoration: none;">Confirm email</a></p>
-      <p>You need a confirmed email to join projects you're invited to.</p>
-      <p style="font-size: 13px; color: #52525b;">If you didn't create an account, you can ignore this email.</p>
-    </div>
-  `;
-
   return sendEmail({
     to,
-    subject: `${APP_NAME}: confirm your email`,
-    text,
-    html,
+    content: emailVerificationEmail({ verifyUrl }),
     successMessage: "Confirmation email sent.",
     failureMessage: "The confirmation email could not be sent. Try again in a few minutes.",
     disabledMessage: "Email sending is not configured.",
@@ -307,34 +205,9 @@ export async function sendTaskAutomationEmail({
   actorName,
   fallbackOrigin,
 }: TaskAutomationEmailParams): Promise<EmailDeliveryResult> {
-  const projectUrl = `${getAppBaseUrl(fallbackOrigin)}/projects/${encodeURIComponent(projectId)}`;
-  const happened = trigger === "TASK_COMPLETED" ? "marked a task as done" : "added a task";
-  // Names are free text; keep the subject on one line.
-  const oneLine = (value: string) => value.replace(/\s+/g, " ").trim();
-  const subject = `${trigger === "TASK_COMPLETED" ? "Done in" : "New task in"} ${oneLine(projectName)}: ${oneLine(taskTitle)}`;
-  const text = [
-    `${actorName} ${happened} in ${projectName}:`,
-    "",
-    taskTitle,
-    "",
-    `Open the project: ${projectUrl}`,
-    "",
-    "You get this because an automation on the project is on. The project owner can turn it off on the project page.",
-  ].join("\n");
-  const html = `
-    <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #18181b;">
-      <p>${escapeHtml(actorName)} ${happened} in <strong>${escapeHtml(projectName)}</strong>:</p>
-      <p style="font-size: 16px; font-weight: bold; margin: 0 0 16px;">${escapeHtml(taskTitle)}</p>
-      <p><a href="${escapeHtml(projectUrl)}" style="display: inline-block; padding: 10px 14px; border-radius: 8px; background: #0a6f68; color: #ffffff; text-decoration: none;">Open the project</a></p>
-      <p style="font-size: 13px; color: #52525b;">You get this because an automation on the project is on. The project owner can turn it off on the project page.</p>
-    </div>
-  `;
-
   return sendEmail({
     to,
-    subject: `${APP_NAME}: ${subject}`,
-    text,
-    html,
+    content: taskAutomationEmail({ trigger, taskTitle, projectId, projectName, actorName, baseUrl: getAppBaseUrl(fallbackOrigin) }),
     successMessage: "Automation email sent.",
     failureMessage: "Automation email could not be sent.",
     disabledMessage: "Email sending is not configured.",
