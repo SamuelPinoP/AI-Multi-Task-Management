@@ -47,7 +47,7 @@ function TaskLine({ task, aside }: { task: WeekTask; aside?: ReactNode }) {
       >
         {done ? <Check className="h-2.5 w-2.5" /> : null}
       </span>
-      <Link href={`/tasks?task=${task.id}`} className={cn("min-w-0 flex-1 truncate hover:text-accent", done && "text-muted line-through")}>
+      <Link href={`/tasks?task=${task.id}`} className={cn("relative min-w-0 flex-1 truncate hover:text-accent", done && "text-muted line-through")}>
         {task.title}
         <span className="sr-only">{done ? " (done)" : " (open)"}</span>
       </Link>
@@ -95,7 +95,7 @@ function GoalCard({
   }
 
   return (
-    <li className={cn(uiCardClass, "grid gap-3 p-4")}>
+    <li className={cn(uiCardClass, "grid grid-cols-1 gap-3 p-4")}>
       <div className="flex items-start gap-3">
         <button
           type="button"
@@ -312,7 +312,7 @@ export default function GoalsPage() {
   const leftover = review ? review.slipped.length + review.openGoals.length : 0;
 
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+    <div className="mx-auto grid w-full grid-cols-1 max-w-5xl gap-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Goals</h1>
@@ -356,7 +356,7 @@ export default function GoalsPage() {
         </div>
       ) : (
         <>
-          <section aria-labelledby="goals-heading" className="grid gap-3">
+          <section aria-labelledby="goals-heading" className="grid grid-cols-1 gap-3">
             <h2 id="goals-heading" className="text-lg font-semibold">
               Goals for {data.week.isCurrent ? "this week" : data.week.label}
             </h2>
@@ -379,7 +379,7 @@ export default function GoalsPage() {
               </button>
             </form>
             {data.goals.length ? (
-              <ul className="grid gap-3">
+              <ul className="grid grid-cols-1 gap-3">
                 {data.goals.map((goal) => (
                   <GoalCard key={goal.id} goal={goal} candidates={data.candidates} onChanged={() => load()} />
                 ))}
@@ -392,7 +392,7 @@ export default function GoalsPage() {
           </section>
 
           {review ? (
-            <section aria-labelledby="review-heading" className="grid gap-3">
+            <section aria-labelledby="review-heading" className="grid grid-cols-1 gap-3">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <h2 id="review-heading" className="text-lg font-semibold">
@@ -409,7 +409,7 @@ export default function GoalsPage() {
                   <ArrowRight aria-hidden="true" className="h-4 w-4" />
                 </button>
               </div>
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 <ReviewColumn title="Done" count={review.done.length} empty="Nothing finished yet this week.">
                   {review.done.map((task) => (
                     <TaskLine key={task.id} task={task} />

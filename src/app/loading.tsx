@@ -15,7 +15,7 @@ function CardSkeleton({ rows }: { rows: number }) {
 
 export default function Loading() {
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6" aria-busy="true" aria-label="Loading">
+    <div className="mx-auto grid w-full grid-cols-1 max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6" aria-busy="true" aria-label="Loading">
       <div className="grid gap-2">
         <div className={`${pulse} h-3 w-32`} />
         <div className={`${pulse} h-7 w-64`} />
@@ -30,12 +30,12 @@ export default function Loading() {
           </div>
         ))}
       </div>
-      <div className="grid items-start gap-4 lg:grid-cols-[1.25fr_1fr]">
-        <div className="grid gap-4">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 gap-4">
           <CardSkeleton rows={5} />
           <CardSkeleton rows={3} />
         </div>
-        <div className="grid gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <CardSkeleton rows={2} />
           <CardSkeleton rows={3} />
           <CardSkeleton rows={3} />
