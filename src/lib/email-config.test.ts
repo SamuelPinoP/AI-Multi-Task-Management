@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { brevoPayload, parseEmailProvider, parseMailbox, smtpSettings } from "./email-config";
+import { brevoPayload, parseEmailProvider, parseMailbox, smtpSender, smtpSettings } from "./email-config";
+
+test("SMTP sends every email as the signed-in account, named AI Multi", () => {
+  const settings = smtpSettings({ SMTP_USER: "app@gmail.com", SMTP_PASS: "secret" });
+  assert.ok(settings);
+  assert.deepEqual(smtpSender(settings), { name: "AI Multi", address: "app@gmail.com" });
+});
 
 test("reads the email provider", () => {
   assert.equal(parseEmailProvider(undefined), "disabled");
