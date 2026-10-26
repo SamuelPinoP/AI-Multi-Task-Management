@@ -299,7 +299,7 @@ export default function RoadmapPage() {
             <select
               value={projectFilter}
               onChange={(e) => setProjectFilter(e.target.value)}
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className="min-w-0 rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
             >
               <option value="ALL">All projects</option>
               <option value="NONE">No project</option>
@@ -317,7 +317,7 @@ export default function RoadmapPage() {
               onChange={(e) =>
                 setTypeFilter(e.target.value as RoadmapTypeFilter)
               }
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className="min-w-0 rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
             >
               <option value="ALL">All</option>
               <option value="TASKS">Tasks</option>

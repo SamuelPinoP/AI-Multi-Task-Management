@@ -150,6 +150,34 @@ test("Long pages scroll inside the main area, never the whole window", async ({ 
   expect(await windowOverflow(page)).toBe(0);
 });
 
+test("Long titles never make a page wider than a phone screen", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "The pages only get too narrow on phones.");
+  test.setTimeout(120_000);
+  await continueAsGuest(page);
+
+  // The page wrappers are grids: an `auto` column can't shrink below its widest
+  // row's one-line width, so a long title used to widen the whole page (#288).
+  const long = "Renew passport photos and book the visa appointment before the trip";
+  const post = async (url: string, data: Record<string, unknown>) => (await page.request.post(url, { data })).json();
+  const project = (await post("/api/projects", { name: uniqueName("A project with a rather long name for a phone"), color: "#0f9488" })) as { id: string };
+  await post("/api/tasks", { title: long, dueDate: dateInputValue(1), priority: "HIGH", projectId: project.id });
+  await post("/api/tasks", { title: `${long} (personal)`, dueDate: dateInputValue(0) });
+  await post("/api/notes", { title: long, content: "Some text", projectId: project.id });
+  await post("/api/events", { title: long, startDate: dateInputValue(0), startTime: "16:00", endDate: "", endTime: "", recurrence: "NONE", projectId: project.id });
+  const deleted = (await post("/api/tasks", { title: `${long} (deleted)`, dueDate: dateInputValue(2) })) as { id: string };
+  await page.request.delete(`/api/tasks/${deleted.id}`);
+
+  const main = page.locator("#main-content");
+  const tooWide: string[] = [];
+  for (const path of ["/", "/today", "/chats", "/tasks", "/tasks/board", "/projects", `/projects/${project.id}`, `/projects/${project.id}/board`, `/projects/${project.id}/chat`, "/notes", "/events", "/events/calendar", "/board", "/tree", "/planner", "/goals", "/roadmap", "/trash"]) {
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    const extra = await main.evaluate((element) => element.scrollWidth - element.clientWidth);
+    if (extra > 0) tooWide.push(`${path}: ${extra}px`);
+  }
+  expect(tooWide).toEqual([]);
+});
+
 test("Phone tabs and the menu reach every section", async ({ page, isMobile }) => {
   test.skip(!isMobile, "Bottom tabs only show on phones.");
   await continueAsGuest(page);

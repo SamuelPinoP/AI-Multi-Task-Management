@@ -590,11 +590,11 @@ export default function EventsCalendarPage() {
                 year: "numeric",
               }).format(month)}
             </h2>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <select aria-label="Project"
                 value={projectFilter}
                 onChange={(e) => setProjectFilter(e.target.value)}
-                className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                className="min-w-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
               >
                 <option value={ALL_PROJECTS_FILTER}>All projects</option>
                 <option value={NO_PROJECT_FILTER}>No project</option>
@@ -650,7 +650,7 @@ export default function EventsCalendarPage() {
             </div>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             <div>
               {/* ------------------------------------------------------
                   Mobile-only: rolling 3-day view with Previous/Next nav
@@ -687,7 +687,7 @@ export default function EventsCalendarPage() {
                 </button>
               </div>
 
-              <div className="grid gap-3 sm:hidden">
+              <div className="grid grid-cols-1 gap-3 sm:hidden">
                 {mobileDays.map((day) => {
                   const dayKey = formatDayKey(day);
                   const isToday = dayKey === formatDayKey(new Date());

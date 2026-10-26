@@ -80,7 +80,7 @@ function TodayTimeline({ events, now }: { events: HomeEvent[]; now: Date }) {
   );
 
   return (
-    <ol className="grid grid-cols-[3.25rem_1fr] gap-x-2.5">
+    <ol className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-2.5">
       {events.flatMap((event, index) => {
         const color = event.project ? projectColor(event.project) : "var(--accent)";
         const row = [
@@ -152,7 +152,7 @@ export default async function HomePage() {
   const eventCount = home.todayEvents.length;
 
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+    <div className="mx-auto grid w-full grid-cols-1 max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs text-muted">{dateLine}</p>
@@ -189,8 +189,8 @@ export default async function HomePage() {
         />
       </section>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[1.25fr_1fr]">
-        <div className="grid gap-4">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 gap-4">
           <Card title="Focus" aside={home.openTaskCount ? "Sorted by due date and priority" : undefined}>
             {focusRows.length ? (
               <>
@@ -217,7 +217,7 @@ export default async function HomePage() {
           </Card>
         </div>
 
-        <div className="grid gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <Card
             title={
               <span className="flex items-center gap-1.5 text-accent">
@@ -319,7 +319,7 @@ export default async function HomePage() {
 
           {home.shortcuts.project || home.shortcuts.note ? (
             <Card title="Jump back in">
-              <div className="grid gap-1.5">
+              <div className="grid grid-cols-1 gap-1.5">
                 {home.shortcuts.project ? (
                   <Link href={`/projects/${home.shortcuts.project.id}`} className="flex items-center gap-2 rounded-lg px-1 py-1 text-[13px] hover:bg-surface-hover">
                     <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-[3px]" style={{ backgroundColor: projectColor(home.shortcuts.project) }} />
