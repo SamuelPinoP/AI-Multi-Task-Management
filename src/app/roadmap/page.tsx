@@ -262,7 +262,7 @@ export default function RoadmapPage() {
     <main className="min-h-screen px-6 py-10">
       <div className="mx-auto max-w-6xl space-y-8">
         <header>
-          <h1 className="text-4xl font-bold">Roadmap</h1>
+          <h1 className="text-title">Roadmap</h1>
           <p className="mt-2 text-zinc-600 dark:text-zinc-300">
             Plan upcoming tasks and events across projects. This view helps
             reviewers see deadlines, events, status, priority, and project

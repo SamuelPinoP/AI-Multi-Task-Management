@@ -98,7 +98,7 @@ function Count({ value }: { value: number }) {
   return (
     <>
       {" "}
-      <span aria-hidden="true" className="ml-auto text-[11px] tabular-nums text-muted">
+      <span aria-hidden="true" className="ml-auto font-mono text-2xs tabular-nums text-muted">
         {value}
       </span>
     </>
@@ -112,7 +112,7 @@ function Badge({ value }: { value: number }) {
       {" "}
       <span
         aria-hidden="true"
-        className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold tabular-nums text-accent-ink"
+        className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 font-mono text-2xs font-bold tabular-nums text-accent-ink"
       >
         {formatUnreadCount(value)}
       </span>
@@ -166,7 +166,7 @@ function SidebarLink({
 function GroupLabel({ children, collapsed }: { children: React.ReactNode; collapsed: boolean }) {
   if (collapsed) return <div className="mx-3 my-2 h-px bg-line" aria-hidden="true" />;
   return (
-    <p className="flex items-center justify-between px-2.5 pb-1 pt-4 text-[10.5px] font-bold uppercase tracking-[0.08em] text-muted">
+    <p className="flex items-center justify-between px-2.5 pb-1 pt-4 text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
       {children}
     </p>
   );
@@ -278,7 +278,7 @@ function SidebarProject({
                   {page.unread ? (
                     <>
                       {" "}
-                      <span aria-hidden="true" className="ml-auto rounded-full bg-accent px-1.5 py-px text-[10px] font-bold tabular-nums text-accent-ink">
+                      <span aria-hidden="true" className="ml-auto rounded-full bg-accent px-1.5 py-px font-mono text-2xs font-bold tabular-nums text-accent-ink">
                         {formatUnreadCount(page.unread)}
                       </span>
                     </>
@@ -349,7 +349,7 @@ function Sidebar({
   return (
     <nav aria-label="Workspace" className="relative flex h-full flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2.5 py-3 [scrollbar-width:thin]">
       <div className={cn("flex items-center gap-2.5 px-1.5 pb-3", collapsed && "justify-center px-0")}>
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-[11px] font-extrabold text-accent-ink" aria-hidden="true">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-2xs font-bold text-accent-ink" aria-hidden="true">
           AM
         </span>
         {collapsed ? null : (
@@ -375,7 +375,7 @@ function Sidebar({
         ) : (
           <>
             New task
-            <kbd aria-hidden="true" className="ml-auto rounded border border-current px-1 font-sans text-[10px] opacity-75">N</kbd>
+            <kbd aria-hidden="true" className="ml-auto rounded border border-current px-1 font-mono text-2xs opacity-75">N</kbd>
           </>
         )}
       </button>
@@ -469,7 +469,7 @@ function UserMenu({ user, onShowShortcuts }: { user: NonNullable<ShellUser>; onS
           <DropdownMenuLabel className="text-ink">
             <span className="flex items-center gap-2">
               <span className="truncate text-sm font-semibold">{user.isGuest ? "Guest workspace" : user.name || user.email}</span>
-              {user.isGuest ? <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-semibold text-warning">Guest</span> : null}
+              {user.isGuest ? <span className="rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-semibold text-warning">Guest</span> : null}
             </span>
             {user.isGuest ? (
               <span className="mt-0.5 block text-xs font-normal text-muted">Keep this browser session to keep access.</span>
@@ -560,7 +560,7 @@ function TopBar({
       >
         <Search aria-hidden="true" className="h-4 w-4" />
         Search or run a command
-        <kbd className="ml-auto rounded border border-line px-1.5 font-sans text-[10px]">Ctrl K</kbd>
+        <kbd className="ml-auto rounded border border-line px-1.5 font-mono text-2xs">Ctrl K</kbd>
       </button>
       <button
         type="button"
@@ -591,7 +591,7 @@ function MobileTabs({ pathname, onNewTask }: { pathname: string; onNewTask: () =
         key={item.href}
         href={item.href}
         aria-current={active ? "page" : undefined}
-        className={cn("grid justify-items-center gap-0.5 py-1 text-[10.5px]", active ? "font-bold text-accent" : "text-muted")}
+        className={cn("grid justify-items-center gap-0.5 py-1 text-2xs", active ? "font-bold text-accent" : "text-muted")}
       >
         <item.icon aria-hidden="true" className="h-5 w-5" />
         {item.label}
@@ -742,7 +742,7 @@ export function AppShell({
       <div className="flex min-h-screen flex-col overflow-x-hidden bg-canvas text-ink">
         <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <span className="flex items-center gap-2 text-sm font-semibold">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-[10px] font-extrabold text-accent-ink" aria-hidden="true">AM</span>
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-2xs font-bold text-accent-ink" aria-hidden="true">AM</span>
             AI Multi
           </span>
           <ThemeToggle />

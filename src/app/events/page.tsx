@@ -90,7 +90,7 @@ function EventRow({
   const repeats = normalizeRecurrence(event.recurrence) !== "NONE";
   return (
     <li className={cn("flex items-center gap-3 border-t border-line px-3 py-2 first:border-t-0 sm:px-4", highlighted && "bg-accent-soft/60")}>
-      <span className="w-[4.5rem] shrink-0 text-xs tabular-nums text-muted sm:w-24">
+      <span className="w-[4.5rem] shrink-0 font-mono text-xs tabular-nums text-muted sm:w-24">
         {showDate ? <span className="block font-semibold text-ink">{dayLabel(formatTaskDayKey(event.startTime), "", "")}</span> : null}
         {timeRange(event)}
       </span>
@@ -379,7 +379,7 @@ export default function EventsPage() {
     <div className="mx-auto grid w-full grid-cols-1 max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Events</h1>
+          <h1 className="text-title">Events</h1>
           <p className="mt-0.5 text-sm text-muted">
             {fetching ? "Loading..." : `${weekCount} in the next 7 days`}
           </p>
@@ -415,7 +415,7 @@ export default function EventsPage() {
           autoComplete="off"
           className="min-w-0 flex-1 bg-transparent py-1 text-sm text-ink outline-none placeholder:text-muted"
         />
-        <kbd className="hidden rounded border border-line px-1.5 font-sans text-[10px] text-muted sm:inline">Enter</kbd>
+        <kbd className="hidden rounded border border-line px-1.5 font-mono text-2xs text-muted sm:inline">Enter</kbd>
       </form>
 
       <div className="flex flex-wrap items-center gap-2" role="search" aria-label="Filter events">
@@ -522,7 +522,7 @@ export default function EventsPage() {
               <ChevronRight aria-hidden="true" className="h-4 w-4" />
             </button>
           </div>
-          <div className="mt-2 grid grid-cols-7 text-center text-[10.5px] font-semibold uppercase text-muted" aria-hidden="true">
+          <div className="mt-2 grid grid-cols-7 text-center text-2xs font-semibold uppercase text-muted" aria-hidden="true">
             {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
               <span key={index} className="py-1">{day}</span>
             ))}

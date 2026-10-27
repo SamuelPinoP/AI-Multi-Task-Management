@@ -9,7 +9,7 @@ function Keys({ keys }: { keys: string[] }) {
       {keys.map((key, index) => (
         <span key={index} className="flex items-center gap-1">
           {index ? <span className="text-xs text-muted">then</span> : null}
-          <kbd className="min-w-6 rounded border border-line bg-canvas px-1.5 py-0.5 text-center font-sans text-xs font-semibold">{key}</kbd>
+          <kbd className="min-w-6 rounded border border-line bg-canvas px-1.5 py-0.5 text-center font-mono text-xs font-semibold">{key}</kbd>
         </span>
       ))}
     </span>

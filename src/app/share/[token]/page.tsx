@@ -149,7 +149,7 @@ export default async function SharedProjectPage({ params }: PageProps) {
               className="h-3.5 w-3.5 shrink-0 rounded-full border border-line"
               style={{ backgroundColor: project.color || "transparent" }}
             />
-            <h1 className="text-3xl font-bold">{project.name}</h1>
+            <h1 className="text-title">{project.name}</h1>
             <span className="rounded-full border border-line px-2 py-0.5 text-xs">{statusLabels[project.status]}</span>
           </div>
           {project.description ? <p className="mt-3 max-w-3xl whitespace-pre-line text-ink/90">{project.description}</p> : null}

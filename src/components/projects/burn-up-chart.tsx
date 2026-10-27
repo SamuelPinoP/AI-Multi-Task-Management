@@ -104,7 +104,7 @@ export function BurnUpChart({ points, caption }: { points: BurnUpChartPoint[]; c
             {[0, yMax / 2, yMax].map((tick) => (
               <g key={tick}>
                 <line x1={MARGIN.left} x2={MARGIN.left + plotWidth} y1={y(tick)} y2={y(tick)} stroke="var(--line)" strokeWidth={1} />
-                <text x={MARGIN.left - 8} y={y(tick)} dy="0.32em" textAnchor="end" className="fill-muted text-[11px] tabular-nums">
+                <text x={MARGIN.left - 8} y={y(tick)} dy="0.32em" textAnchor="end" className="fill-muted font-mono text-2xs tabular-nums">
                   {tick}
                 </text>
               </g>
@@ -140,11 +140,11 @@ export function BurnUpChart({ points, caption }: { points: BurnUpChartPoint[]; c
                 />
               );
             })}
-            <text x={x(last) + 8} y={y(end.done)} dy="0.32em" className="fill-ink text-[11px] font-semibold tabular-nums">
+            <text x={x(last) + 8} y={y(end.done)} dy="0.32em" className="fill-ink font-mono text-2xs font-semibold tabular-nums">
               {end.done}
             </text>
             {endLabelsCollide ? null : (
-              <text x={x(last) + 8} y={y(end.scope)} dy="0.32em" className="fill-ink text-[11px] font-semibold tabular-nums">
+              <text x={x(last) + 8} y={y(end.scope)} dy="0.32em" className="fill-ink font-mono text-2xs font-semibold tabular-nums">
                 {end.scope}
               </text>
             )}

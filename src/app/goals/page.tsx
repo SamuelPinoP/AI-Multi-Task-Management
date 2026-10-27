@@ -315,7 +315,7 @@ export default function GoalsPage() {
     <div className="mx-auto grid w-full grid-cols-1 max-w-5xl gap-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Goals</h1>
+          <h1 className="text-title">Goals</h1>
           <p className="mt-0.5 text-sm text-muted">Pick a few goals for the week, link the tasks that move them, and review on Friday.</p>
         </div>
         {data ? (

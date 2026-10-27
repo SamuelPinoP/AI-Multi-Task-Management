@@ -14,14 +14,14 @@ export function ZoomControls({
       <button type="button" onClick={onZoomIn} className={zoomButtonClass} aria-label="Zoom in">
         +
       </button>
-      <div className="rounded-lg px-1 py-1 text-[0.65rem] font-bold tabular-nums text-muted">{Math.round(zoom * 100)}%</div>
+      <div className="rounded-lg px-1 py-1 font-mono text-2xs font-semibold tabular-nums text-muted">{Math.round(zoom * 100)}%</div>
       <button type="button" onClick={onZoomOut} className={zoomButtonClass} aria-label="Zoom out">
         −
       </button>
       <button
         type="button"
         onClick={onReset}
-        className="rounded-lg px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-muted transition hover:bg-surface-hover hover:text-ink sm:mt-1"
+        className="rounded-lg px-2 py-1 text-2xs font-bold uppercase tracking-wide text-muted transition hover:bg-surface-hover hover:text-ink sm:mt-1"
         aria-label="Reset zoom"
       >
         Reset
@@ -31,4 +31,4 @@ export function ZoomControls({
 }
 
 const zoomButtonClass =
-  "flex h-7 w-7 items-center justify-center rounded-xl border border-line bg-surface text-sm font-black shadow-sm transition hover:border-accent/40 hover:bg-accent-soft hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent/40 sm:h-8 sm:w-8 sm:text-base";
+  "flex h-7 w-7 items-center justify-center rounded-xl border border-line bg-surface text-sm font-semibold shadow-sm transition hover:border-accent/40 hover:bg-accent-soft hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent/40 sm:h-8 sm:w-8 sm:text-base";

@@ -232,7 +232,7 @@ export function QuickAdd({
           aria-describedby={smart ? "quick-add-details" : undefined}
           className="min-w-0 flex-1 bg-transparent py-1 text-sm text-ink outline-none placeholder:text-muted"
         />
-        <kbd className="hidden rounded border border-line px-1.5 font-sans text-[10px] text-muted sm:inline">Enter</kbd>
+        <kbd className="hidden rounded border border-line px-1.5 font-mono text-2xs text-muted sm:inline">Enter</kbd>
       </div>
       {smart ? (
         <div id="quick-add-details" aria-live="polite" className={cn("flex flex-wrap items-center gap-1.5 pl-6", !showDetails && "hidden")}>
