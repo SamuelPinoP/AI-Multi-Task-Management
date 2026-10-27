@@ -115,7 +115,9 @@ After an intended visual change, make new Linux reference images:
 
 1. Push your branch, then run the workflow by hand:
    `gh workflow run visual.yml --ref <your-branch> -f update=true`.
-2. When it finishes, download the images over the old ones:
+2. When it finishes, delete the old Linux images (`gh run download` won't
+   overwrite files) and download the new ones:
+   `rm tests/visual/__screenshots__/*-linux.png`, then
    `gh run download <run-id> -n visual-screenshots -D tests/visual/__screenshots__`.
 3. Look at them, commit them, and push. The next run compares against them.
 
