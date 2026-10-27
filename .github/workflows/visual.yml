@@ -1,0 +1,98 @@
+name: Visual regression
+
+# Screenshots of Home, Tasks, Boards and the Calendar, desktop and phone,
+# compared with the reference images in tests/visual/__screenshots__
+# (TEST-05, #269). Not a required check: a failure is a diff to look at in the
+# report, not a blocked merge.
+#
+# To make new reference images after an intended change, run this workflow on
+# your branch with "update" ticked, download the visual-screenshots artifact
+# and commit it. The README's "Visual regression screenshots" has the commands.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      update:
+        description: Write new reference images instead of comparing
+        type: boolean
+        default: false
+
+concurrency:
+  group: visual-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DATABASE_URL: postgresql://app:app@localhost:5432/app_test?schema=public
+  EMAIL_PROVIDER: disabled
+  PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER: local
+  PROJECT_CHAT_VIDEO_STORAGE_PROVIDER: local
+  TZ: UTC
+  E2E_SERVER_MODE: start
+
+jobs:
+  visual:
+    name: Visual regression (not required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Compare the screenshots with the reference images
+        if: ${{ !inputs.update }}
+        run: npm run test:visual
+      - name: Write new reference images
+        if: ${{ inputs.update }}
+        run: npm run test:visual -- --update-snapshots
+      # The reference images as this run left them: new ones are written when
+      # missing, or for every page with "update" ticked.
+      - name: Upload the screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-screenshots
+          path: tests/visual/__screenshots__/
+          retention-days: 14
+      - name: Upload the report with the differences
+        id: report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-report-${{ github.run_number }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+      - name: Link the report from the run summary
+        if: ${{ failure() && steps.report.outputs.artifact-url }}
+        run: |
+          {
+            echo "### Visual regression report"
+            echo ""
+            echo "[Download the report](${{ steps.report.outputs.artifact-url }}) (kept 14 days)."
+            echo "Unzip it and open \`playwright-report/index.html\`: each failed page shows the expected, actual and diff images."
+          } >> "$GITHUB_STEP_SUMMARY"

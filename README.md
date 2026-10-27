@@ -94,6 +94,31 @@ time zone too, so dates a test computes match the page's dates. (Git Bash
 passes `TZ=UTC` through but drops values with a slash, such as
 `America/New_York`.)
 
+### Visual regression screenshots
+
+`npm run test:visual` takes screenshots of Home, Tasks, Boards and the
+Calendar, on a desktop browser and a phone-sized one, and compares them with
+the reference images in `tests/visual/__screenshots__/`
+(`tests/visual/main-pages.spec.ts`, `playwright.visual.config.ts`). It starts
+the server the same way as `npm run test:e2e`, so build first and set
+`E2E_SERVER_MODE=start` and `TZ=UTC` like CI. Each test signs in as a new
+guest and adds fixed data; due dates are only ever yesterday, today or
+tomorrow, the calendar runs on a fixed clock, and what still changes between
+runs (the greeting, times, avatar colors) is masked.
+
+The committed reference images are made on Linux in CI, because Windows and
+macOS render fonts differently. On those systems the first run writes your
+own reference images (git ignores them) and fails; later runs compare against
+them, which is useful for checking your own change.
+
+After an intended visual change, make new Linux reference images:
+
+1. Push your branch, then run the workflow by hand:
+   `gh workflow run visual.yml --ref <your-branch> -f update=true`.
+2. When it finishes, download the images over the old ones:
+   `gh run download <run-id> -n visual-screenshots -D tests/visual/__screenshots__`.
+3. Look at them, commit them, and push. The next run compares against them.
+
 ### Issues and pull requests
 
 `CONTRIBUTING.md` sums up the workflow, and `AGENTS.md` has the full rules.
@@ -124,6 +149,11 @@ Every CI run records a video, a trace and screenshots of each Playwright test
 and keeps the HTML report as a run artifact for 14 days; the run summary links
 to it. Unzip it and open `playwright-report/index.html`, or open a `trace.zip`
 at https://trace.playwright.dev.
+
+`.github/workflows/visual.yml` runs the visual regression screenshots on every
+pull request and push to `main`. It isn't a required check: when a page
+changes, the run fails and keeps a report with the expected, actual and diff
+images for 14 days, linked from the run summary, but merging isn't blocked.
 
 `.github/workflows/preview-smoke.yml` runs the Playwright tests tagged
 `@smoke` (`tests/e2e/smoke.spec.ts`) against each Vercel preview once it is
