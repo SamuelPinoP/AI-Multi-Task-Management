@@ -55,3 +55,7 @@ public/uploads/
 
 # Local database backups (see scripts/restore-database-backup.ts)
 /backups/
+
+# Visual regression images from Windows or macOS: the reference images are made on Linux in CI.
+/tests/visual/__screenshots__/*-win32.png
+/tests/visual/__screenshots__/*-darwin.png

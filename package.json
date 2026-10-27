@@ -22,6 +22,7 @@
     "typecheck": "tsc --noEmit",
     "test:e2e": "node scripts/run-playwright-e2e.mjs",
     "test:e2e:headed": "node scripts/run-playwright-e2e.mjs --headed",
+    "test:visual": "node scripts/run-playwright-e2e.mjs --config playwright.visual.config.ts",
     "evidence": "node scripts/testing-evidence.mjs"
   },
   "dependencies": {
