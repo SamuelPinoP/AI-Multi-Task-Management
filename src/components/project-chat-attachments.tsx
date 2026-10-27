@@ -164,7 +164,7 @@ const BADGE_COLORS: Record<AttachmentKind, string> = {
 /** A small document-shaped badge carrying the file extension. */
 function FileBadge({ kind, fileName, size = "md" }: { kind: AttachmentKind; fileName: string; size?: "sm" | "md" | "lg" }) {
   const sizeClass =
-    size === "lg" ? "h-24 w-20 rounded-2xl text-base" : size === "sm" ? "h-9 w-8 rounded-lg text-[9px]" : "h-11 w-10 rounded-xl text-[10px]";
+    size === "lg" ? "h-24 w-20 rounded-2xl text-base" : size === "sm" ? "h-10 w-9 rounded-lg text-2xs" : "h-11 w-10 rounded-xl text-2xs";
   return (
     <span
       aria-hidden="true"
@@ -1116,7 +1116,7 @@ export function ComposerAttachmentTray({
             <p className="mt-1 truncate text-[11px] font-medium text-zinc-800 dark:text-zinc-100" title={file.name}>
               {file.name}
             </p>
-            <p className="text-[10px] text-zinc-500">{formatFileSize(file.size)}</p>
+            <p className="font-mono text-2xs text-zinc-500">{formatFileSize(file.size)}</p>
             <button
               type="button"
               onClick={() => onRemove(id)}

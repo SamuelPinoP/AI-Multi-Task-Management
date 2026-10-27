@@ -59,5 +59,5 @@ export function CommandSeparator({ className, ...props }: ComponentProps<typeof 
 }
 
 export function CommandShortcut({ className, ...props }: ComponentProps<"kbd">) {
-  return <kbd className={cn("ml-auto font-sans text-[11px] text-muted", className)} {...props} />;
+  return <kbd className={cn("ml-auto font-mono text-2xs text-muted", className)} {...props} />;
 }

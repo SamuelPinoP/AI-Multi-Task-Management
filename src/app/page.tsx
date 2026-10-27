@@ -20,7 +20,7 @@ function Card({ title, aside, className, children }: { title: ReactNode; aside?:
   return (
     <section className={cn("rounded-xl border border-line bg-surface p-4", className)}>
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h2 className="flex items-center gap-1.5 text-sm font-semibold">{title}</h2>
+        <h2 className="flex items-center gap-1.5 text-card">{title}</h2>
         {aside ? <span className="text-xs text-muted">{aside}</span> : null}
       </div>
       {children}
@@ -73,7 +73,7 @@ function TodayTimeline({ events, now }: { events: HomeEvent[]; now: Date }) {
   const nextIndex = events.findIndex((event) => event.hasStartTime && eventWallTime(event.startTime) > now);
   const nowAt = nextIndex === -1 ? events.length : nextIndex;
   const nowLine = (
-    <li key="now" className="col-span-2 my-0.5 flex items-center gap-1.5 text-[10.5px] font-bold text-danger" aria-label={`Now, ${nowLabel}`}>
+    <li key="now" className="col-span-2 my-0.5 flex items-center gap-1.5 font-mono text-2xs font-semibold text-danger" aria-label={`Now, ${nowLabel}`}>
       <span aria-hidden="true">NOW {nowLabel}</span>
       <span aria-hidden="true" className="h-px flex-1 bg-danger" />
     </li>
@@ -85,7 +85,7 @@ function TodayTimeline({ events, now }: { events: HomeEvent[]; now: Date }) {
         const color = event.project ? projectColor(event.project) : "var(--accent)";
         const row = [
           <li key={event.id} className="contents">
-            <span className="pt-2 text-xs tabular-nums text-muted">
+            <span className="pt-2 font-mono text-xs tabular-nums text-muted">
               {event.hasStartTime ? formatEventTime(event.startTime).replace(/\s?[AP]M$/, "") : "All day"}
             </span>
             <Link
@@ -156,7 +156,7 @@ export default async function HomePage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs text-muted">{dateLine}</p>
-          <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight">{greeting}</h1>
+          <h1 className="mt-0.5 text-title">{greeting}</h1>
           <p className="mt-0.5 text-sm text-muted">
             {taskSummary(stats.dueToday, stats.overdue)}
             {eventSummary}
@@ -264,7 +264,7 @@ export default async function HomePage() {
                         <Link href={`/projects/${project.id}`} className="min-w-0 flex-1 truncate text-[13px] font-semibold hover:text-accent">
                           {project.name}
                         </Link>
-                        <span className={cn("shrink-0 rounded-full px-2 py-px text-[10.5px] font-bold", style.className)}>{style.label}</span>
+                        <span className={cn("shrink-0 rounded-full px-2 py-px text-2xs font-bold", style.className)}>{style.label}</span>
                       </div>
                       <div
                         className="mt-1.5 h-1.5 overflow-hidden rounded-full border border-line bg-canvas"
@@ -295,7 +295,7 @@ export default async function HomePage() {
                   <li key={activity.id} className="flex items-start gap-2 py-1 text-[13px]">
                     <span
                       aria-hidden="true"
-                      className="mt-px grid h-5 w-5 shrink-0 place-items-center rounded-full text-[9.5px] font-bold text-white"
+                      className="mt-px grid h-5 w-5 shrink-0 place-items-center rounded-full text-2xs font-bold text-white"
                       style={{ backgroundColor: paletteColor(activity.user.id) }}
                     >
                       {activity.user.name.charAt(0).toUpperCase()}
@@ -304,7 +304,7 @@ export default async function HomePage() {
                       {activity.message}
                       {activity.project ? <span className="text-muted"> · {activity.project.name}</span> : null}
                     </span>
-                    <time dateTime={activity.createdAt.toISOString()} className="shrink-0 text-xs text-muted">
+                    <time dateTime={activity.createdAt.toISOString()} className="shrink-0 font-mono text-xs tabular-nums text-muted">
                       {relativeTime(activity.createdAt, realNow, timeZone)}
                     </time>
                   </li>

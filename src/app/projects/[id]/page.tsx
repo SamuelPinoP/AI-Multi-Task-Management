@@ -203,7 +203,7 @@ export default async function ProjectDetailPage({
               <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
                 Project workspace
               </p>
-              <h1 className="mt-1 text-3xl font-bold">{project.name}</h1>
+              <h1 className="mt-1 text-title">{project.name}</h1>
               {project.description ? (
                 <p className="mt-3 max-w-3xl text-zinc-700 dark:text-zinc-300">
                   {project.description}

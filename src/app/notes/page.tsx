@@ -393,7 +393,7 @@ export default function NotesPage() {
     <div className="mx-auto grid w-full grid-cols-1 max-w-5xl gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Notes</h1>
+          <h1 className="text-title">Notes</h1>
           <p className="mt-0.5 text-sm text-muted">{fetching ? "Loading..." : `${notes.length} note${notes.length === 1 ? "" : "s"}`}</p>
         </div>
       </header>

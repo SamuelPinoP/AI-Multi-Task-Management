@@ -64,7 +64,7 @@ function ChatRow({ chat, selected }: { chat: ChatSummary; selected: boolean }) {
           {chat.lastMessage?.attachmentCount ? <Paperclip aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted" /> : null}
           <span className={cn("min-w-0 flex-1 truncate text-[13px]", unread ? "text-ink" : "text-muted")}>{chatPreview(chat)}</span>
           {unread ? (
-            <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold tabular-nums text-accent-ink">
+            <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 font-mono text-2xs font-bold tabular-nums text-accent-ink">
               {formatUnreadCount(chat.unread)}
               <span className="sr-only"> unread message{chat.unread === 1 ? "" : "s"}</span>
             </span>
@@ -138,7 +138,7 @@ export function ChatsHub({
         <div className="grid gap-3 px-4 pb-3 pt-5">
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
-              <h1 id="chats-heading" className="text-2xl font-extrabold tracking-tight">Chats</h1>
+              <h1 id="chats-heading" className="text-title">Chats</h1>
               <p className="mt-0.5 text-sm text-muted">{summary}</p>
             </div>
             <button

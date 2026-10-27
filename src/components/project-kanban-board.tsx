@@ -161,7 +161,7 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
       <section className="flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white/95 p-4 shadow-sm shadow-zinc-200/60 dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none sm:p-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Kanban View</p>
-          <h1 className="mt-1 truncate text-2xl font-bold tracking-tight">{projectName}</h1>
+          <h1 className="mt-1 truncate text-title">{projectName}</h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             {canEdit ? "Move cards or create new tasks directly on the board." : "Viewer access is read-only."}
           </p>

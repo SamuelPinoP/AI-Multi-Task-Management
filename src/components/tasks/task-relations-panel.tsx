@@ -136,7 +136,7 @@ export function TaskRelationsPanel({ task, relations }: { task: Task; relations:
               <li key={blocker.id} className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-surface-hover">
                 <span
                   className={cn(
-                    "shrink-0 rounded px-1.5 text-[10px] font-bold",
+                    "shrink-0 rounded px-1.5 text-2xs font-bold",
                     blocker.status === "DONE" ? "bg-success-soft text-success" : "bg-caution-soft text-caution",
                   )}
                 >

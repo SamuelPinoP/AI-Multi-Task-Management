@@ -9,7 +9,7 @@ export function ProgressRing({ done, total, className }: { done: number; total: 
   const ratio = total ? done / total : 0;
 
   return (
-    <span className={cn("inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums text-muted", className)} title={`${done} of ${total} subtasks done`}>
+    <span className={cn("inline-flex shrink-0 items-center gap-1 font-mono text-2xs tabular-nums text-muted", className)} title={`${done} of ${total} subtasks done`}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" className="-rotate-90">
         <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--accent-soft)" strokeWidth={2.5} />
         <circle
@@ -40,7 +40,7 @@ export function BlockedBadge({ titles, className }: { titles: string[]; classNam
   return (
     <span
       title={waitingOn}
-      className={cn("inline-flex shrink-0 items-center gap-1 rounded bg-caution-soft px-1.5 text-[10px] font-bold text-caution", className)}
+      className={cn("inline-flex shrink-0 items-center gap-1 rounded bg-caution-soft px-1.5 text-2xs font-bold text-caution", className)}
     >
       <Lock aria-hidden="true" className="h-2.5 w-2.5" />
       <span aria-hidden="true">Blocked</span>

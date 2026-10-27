@@ -149,7 +149,7 @@ export function TodayWorkspace({
       <div className="mx-auto max-w-5xl space-y-6">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-4xl font-bold">Today</h1>
+            <h1 className="text-title">Today</h1>
             <p className="text-zinc-600 dark:text-zinc-300">{currentDate}</p>
           </div>
           <div className="flex flex-wrap gap-2">

@@ -9,7 +9,7 @@ export default function Error({ reset }: { reset: () => void }) {
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-red-700 dark:text-red-300">
           Something went wrong
         </p>
-        <h1 className="mt-2 text-3xl font-bold text-zinc-950 dark:text-zinc-50">
+        <h1 className="mt-2 text-title text-zinc-950 dark:text-zinc-50">
           We couldn&apos;t load this page.
         </h1>
         <p className="mt-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300">

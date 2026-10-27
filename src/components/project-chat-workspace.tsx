@@ -746,7 +746,7 @@ export function ProjectChatWorkspace({
                             Edited
                           </span>
                         ) : null}
-                        <time dateTime={comment.createdAt}>
+                        <time dateTime={comment.createdAt} className="font-mono tabular-nums">
                           {new Date(comment.createdAt).toLocaleString()}
                         </time>
                         {isOwnMessage ? (

@@ -92,7 +92,7 @@ export default async function PlannerPage() {
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700 dark:text-blue-300">Rule-based productivity assistant</p>
-              <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">Smart Daily Planner</h1>
+              <h1 className="mt-3 text-title">Smart Daily Planner</h1>
               <p className="mt-3 text-base leading-7 text-zinc-600 dark:text-zinc-300">A deterministic planning engine analyzes your accessible tasks, events, active projects, recent notes, project chat, and activity—without sending data to a paid external AI service.</p>
             </div>
             <div className="rounded-2xl border border-zinc-200 bg-white/75 p-4 text-sm text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300">

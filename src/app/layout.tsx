@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 import { cookies } from "next/headers";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
@@ -17,6 +18,12 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "AI Multi", statusBarStyle: "default" },
   icons: { apple: "/icons/apple-touch-icon.png" },
 };
+
+// Geist for the interface and Geist Mono for counts, times and keyboard hints (DES-08).
+// next/font downloads them at build time and serves them from the app, so pages make no
+// requests to Google, and its size-adjusted fallback keeps text from jumping as they load.
+const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 // The installed app's title bar follows the canvas color of each theme.
 export const viewport: Viewport = {
@@ -40,7 +47,7 @@ export default async function RootLayout({
   const sidebarProjectsOpen = parseSidebarProjects(cookieStore.get(SIDEBAR_PROJECTS_COOKIE)?.value);
 
   return (
-    <html lang="en" suppressHydrationWarning className="h-full antialiased">
+    <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="h-full flex flex-col bg-canvas text-ink">
         <ThemeInitScript />
         <TimeZoneCookie />

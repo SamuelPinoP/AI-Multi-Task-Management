@@ -96,11 +96,11 @@ export function TaskRow({
         </span>
       ) : null}
       {task.status === "IN_PROGRESS" ? (
-        <span className="hidden shrink-0 rounded bg-accent-soft px-1.5 text-[10px] font-bold text-accent sm:inline">In progress</span>
+        <span className="hidden shrink-0 rounded bg-accent-soft px-1.5 text-2xs font-bold text-accent sm:inline">In progress</span>
       ) : null}
       <span
         className={cn(
-          "shrink-0 rounded border px-1.5 text-[10px] font-bold",
+          "shrink-0 rounded border px-1.5 text-2xs font-bold",
           task.priority === "HIGH" && !done ? "border-danger/35 text-danger" : "border-line bg-canvas text-muted",
         )}
       >
@@ -120,7 +120,7 @@ export function TaskRow({
       {task.assignee ? (
         <span
           title={`Assigned to ${task.assignee.name}`}
-          className="hidden h-5 w-5 shrink-0 place-items-center rounded-full text-[9.5px] font-bold text-white sm:grid"
+          className="hidden h-5 w-5 shrink-0 place-items-center rounded-full text-2xs font-bold text-white sm:grid"
           style={{ backgroundColor: paletteColor(task.assignee.id) }}
         >
           <span aria-hidden="true">{task.assignee.name.charAt(0).toUpperCase()}</span>

@@ -438,7 +438,7 @@ export function ProjectTeamSection({
                       <li key={note.id} className="rounded border px-2 py-1">
                         {note.message}{" "}
                         {note.visibility === "PRIVATE" ? (
-                          <span className="ml-1 rounded border border-purple-300 bg-purple-50 px-1 py-0.5 text-[10px] font-semibold text-purple-700">
+                          <span className="ml-1 rounded border border-purple-300 bg-purple-50 px-1 py-0.5 text-2xs font-semibold text-purple-700">
                             Private
                           </span>
                         ) : null}
