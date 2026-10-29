@@ -1,10 +1,11 @@
 "use client";
 
-import { ChangeEvent, DragEvent, Fragment, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, Fragment, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AttachmentGallery, ComposerAttachmentTray } from "@/components/project-chat-attachments";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { formatFileSize } from "@/lib/project-chat-attachment-display";
+import { sendsChatMessage } from "@/lib/shortcuts";
 import { isPageIdle, onPageReturn } from "@/lib/use-page-activity";
 
 type ProjectCommentAttachment = {
@@ -113,6 +114,11 @@ function isEdited(comment: ProjectComment) {
       new Date(comment.createdAt).getTime() >
     1000
   );
+}
+
+/** Whether a key press in a message box sends the message or saves the edit (#303). */
+function sendsOnKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+  return sendsChatMessage(event.nativeEvent, window.matchMedia("(pointer: coarse)").matches);
 }
 
 function PinIcon({
@@ -491,6 +497,11 @@ export function ProjectChatWorkspace({
     setError("");
   }
 
+  function cancelEditing() {
+    setEditingCommentId(null);
+    setEditMessage("");
+  }
+
   async function saveEditedMessage(comment: ProjectComment) {
     const trimmed = editMessage.trim();
     if (!trimmed && comment.attachments.length === 0) {
@@ -833,6 +844,14 @@ export function ProjectChatWorkspace({
                           onChange={(event) =>
                             setEditMessage(event.target.value)
                           }
+                          onKeyDown={(event) => {
+                            if (event.key === "Escape" && !event.nativeEvent.isComposing) {
+                              cancelEditing();
+                            } else if (sendsOnKeyDown(event)) {
+                              event.preventDefault();
+                              void saveEditedMessage(comment);
+                            }
+                          }}
                           rows={3}
                           className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                         />
@@ -840,10 +859,7 @@ export function ProjectChatWorkspace({
                           <button
                             type="button"
                             className={`${uiButtonClass} px-3 py-1.5 text-xs`}
-                            onClick={() => {
-                              setEditingCommentId(null);
-                              setEditMessage("");
-                            }}
+                            onClick={cancelEditing}
                           >
                             Cancel
                           </button>
@@ -946,6 +962,12 @@ export function ProjectChatWorkspace({
                     onChange={(e) => {
                       setMessage(e.target.value);
                       if (error) setError("");
+                    }}
+                    onKeyDown={(event) => {
+                      if (!sendsOnKeyDown(event)) return;
+                      event.preventDefault();
+                      // Enter in an empty box, or while a message is still sending, does nothing.
+                      if (!isSubmitting && (message.trim() || selectedAttachments.length > 0)) void sendMessage();
                     }}
                     placeholder="Share an update, decision, blocker, or handoff..."
                     rows={1}
