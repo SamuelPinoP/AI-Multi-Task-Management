@@ -2,7 +2,7 @@ const pulse = "animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800";
 
 function CardSkeleton({ rows }: { rows: number }) {
   return (
-    <div className="rounded-xl border border-line bg-surface p-4">
+    <div className="rounded-xl border border-line bg-surface p-4 shadow-card">
       <div className={`${pulse} h-4 w-24`} />
       <div className="mt-3 grid gap-2.5">
         {Array.from({ length: rows }, (_, index) => (
@@ -24,7 +24,7 @@ export default function Loading() {
       <div className="h-11 rounded-xl border border-line bg-surface" />
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         {Array.from({ length: 3 }, (_, index) => (
-          <div key={index} className="rounded-xl border border-line bg-surface px-3 py-2.5">
+          <div key={index} className="rounded-xl border border-line bg-surface px-3 py-2.5 shadow-card">
             <div className={`${pulse} h-3 w-20`} />
             <div className={`${pulse} mt-2 h-6 w-8`} />
           </div>
