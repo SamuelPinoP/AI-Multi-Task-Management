@@ -30,6 +30,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import { LogoMark } from "@/components/brand/logo-mark";
 import { CommandPalette } from "@/components/command-palette";
 import { NewTaskDialog } from "@/components/new-task-dialog";
 import { NotificationsMenu } from "@/components/notifications-menu";
@@ -342,20 +343,19 @@ function Sidebar({
     { href: "/trash", label: "Trash", icon: Trash2 },
   ];
   const workspaceName = user.isGuest ? "Guest workspace" : `${firstName(user)}'s workspace`;
-  const projectSummary = `${nav.activeProjectCount} active project${nav.activeProjectCount === 1 ? "" : "s"}`;
   const linkProps = { pathname, collapsed, onNavigate };
 
   // relative keeps the collapsed sidebar's hidden labels inside this scroller, as on main.
   return (
     <nav aria-label="Workspace" className="relative flex h-full flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2.5 py-3 [scrollbar-width:thin]">
       <div className={cn("flex items-center gap-2.5 px-1.5 pb-3", collapsed && "justify-center px-0")}>
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-2xs font-bold text-accent-ink" aria-hidden="true">
-          AM
-        </span>
-        {collapsed ? null : (
+        <LogoMark className="h-8 w-8 shrink-0" />
+        {collapsed ? (
+          <span className="sr-only">AI Multi</span>
+        ) : (
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{workspaceName}</p>
-            <p className="truncate text-xs text-muted">{projectSummary}</p>
+            <p className="truncate text-sm font-semibold">AI Multi</p>
+            <p className="truncate text-xs text-muted">{workspaceName}</p>
           </div>
         )}
       </div>
@@ -742,7 +742,7 @@ export function AppShell({
       <div className="flex min-h-screen flex-col overflow-x-hidden bg-canvas text-ink">
         <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <span className="flex items-center gap-2 text-sm font-semibold">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-2xs font-bold text-accent-ink" aria-hidden="true">AM</span>
+            <LogoMark className="h-7 w-7" />
             AI Multi
           </span>
           <ThemeToggle />
