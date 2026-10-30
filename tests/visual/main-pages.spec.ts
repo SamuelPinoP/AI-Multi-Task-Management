@@ -50,8 +50,10 @@ test("Home", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("link", { name: "Write the launch post" })).toBeVisible();
   await page.waitForLoadState("networkidle");
-  // The header says good morning, afternoon or evening, and today's date.
-  await expect(page).toHaveScreenshot("home.png", { mask: [...changing(page), page.locator("#main-content header").first()] });
+  // The header says good morning, afternoon or evening, and today's date. The
+  // activities are created within the same moment, so their order varies.
+  const activity = page.locator("section", { has: page.getByRole("heading", { name: "Activity", exact: true }) }).locator("ul");
+  await expect(page).toHaveScreenshot("home.png", { mask: [...changing(page), page.locator("#main-content header").first(), activity] });
 });
 
 test("Tasks", async ({ page }) => {

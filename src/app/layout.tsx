@@ -16,7 +16,8 @@ export const metadata: Metadata = {
   description: "AI productivity app for notes, tasks, and events.",
   applicationName: "AI Multi",
   appleWebApp: { capable: true, title: "AI Multi", statusBarStyle: "default" },
-  icons: { apple: "/icons/apple-touch-icon.png" },
+  // The Spark mark (DES-07): an SVG for the browser tab, with app/favicon.ico as the fallback.
+  icons: { icon: { url: "/icons/icon.svg", type: "image/svg+xml" }, apple: "/icons/apple-touch-icon.png" },
 };
 
 // Geist for the interface and Geist Mono for counts, times and keyboard hints (DES-08).

@@ -60,6 +60,32 @@ test("Sidebar collapses and stays collapsed after a reload", async ({ page, isMo
   await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
 });
 
+test("The browser tab and the sidebar show the AI Multi mark", async ({ page, isMobile }) => {
+  await continueAsGuest(page);
+
+  // Every page links the Spark icon.svg and the favicon.ico fallback (#292).
+  const icons = await page.locator('link[rel="icon"]').evaluateAll((links) =>
+    [...new Set(links.map((link) => `${link.getAttribute("href")} ${link.getAttribute("type") ?? ""}`))],
+  );
+  const svg = icons.find((icon) => icon.includes("image/svg+xml"))?.split(" ")[0];
+  const ico = icons.find((icon) => icon.startsWith("/favicon.ico"))?.split(" ")[0];
+  expect(svg, icons.join(", ")).toBeTruthy();
+  expect(ico, icons.join(", ")).toBeTruthy();
+  const svgResponse = await page.request.get(svg!);
+  expect(svgResponse.ok()).toBe(true);
+  expect(await svgResponse.text()).toContain("#0a6f68");
+  expect((await page.request.get(ico!)).ok()).toBe(true);
+
+  test.skip(isMobile, "The sidebar is a menu sheet on phones.");
+  // The mark is decorative; screen readers hear the name once, even with the sidebar collapsed.
+  const sidebar = page.getByRole("navigation", { name: "Workspace" });
+  await expect(sidebar.getByText("AI Multi", { exact: true })).toBeVisible();
+  await expect(sidebar.getByText("Guest workspace", { exact: true })).toBeVisible();
+  await expect(sidebar.locator('svg[aria-hidden="true"]').first()).toBeVisible();
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(sidebar.getByText("AI Multi", { exact: true })).toHaveClass(/sr-only/);
+});
+
 test("A sidebar project opens to its pages and stays open after a reload", async ({ page, isMobile }) => {
   test.skip(isMobile, "The sidebar is a menu sheet on phones.");
   const name = uniqueName("Sidebar project");
