@@ -466,7 +466,7 @@ export default function EventsPage() {
             </div>
           ) : (
             agenda.map(([key, items]) => (
-              <section key={key} aria-labelledby={`day-${key}`} className="rounded-xl border border-line bg-surface">
+              <section key={key} aria-labelledby={`day-${key}`} className="rounded-xl border border-line bg-surface shadow-card">
                 <h2 id={`day-${key}`} className="flex items-center gap-2 px-3 pb-1 pt-3 text-sm font-semibold sm:px-4">
                   <span className={key === todayKey ? "text-accent" : undefined}>{dayLabel(key, todayKey, tomorrowKey)}</span>
                   <span className="text-xs font-normal text-muted">{items.length}</span>
@@ -487,7 +487,7 @@ export default function EventsPage() {
           )}
 
           {!fetching && past.length ? (
-            <section aria-labelledby="past-events" className="rounded-xl border border-line bg-surface">
+            <section aria-labelledby="past-events" className="rounded-xl border border-line bg-surface shadow-card">
               <h2 id="past-events" className="px-3 py-2 sm:px-4">
                 <button
                   type="button"
@@ -510,7 +510,7 @@ export default function EventsPage() {
           ) : null}
         </div>
 
-        <aside aria-label="Month calendar" className="hidden rounded-xl border border-line bg-surface p-3 lg:block">
+        <aside aria-label="Month calendar" className="hidden rounded-xl border border-line bg-surface p-3 shadow-card lg:block">
           <div className="flex items-center justify-between">
             <button type="button" onClick={() => setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))} aria-label="Previous month" className="grid h-7 w-7 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink">
               <ChevronLeft aria-hidden="true" className="h-4 w-4" />

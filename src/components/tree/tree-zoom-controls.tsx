@@ -10,7 +10,7 @@ export function ZoomControls({
   onReset: () => void;
 }) {
   return (
-    <div className="absolute bottom-2 right-2 z-40 flex items-center gap-1 rounded-2xl border border-line bg-surface/90 p-1 text-ink shadow-lg shadow-zinc-950/10 backdrop-blur sm:bottom-auto sm:right-3 sm:top-3 sm:flex-col sm:p-1.5">
+    <div className="absolute bottom-2 right-2 z-40 flex items-center gap-1 rounded-2xl border border-line bg-raised/90 p-1 text-ink shadow-raised backdrop-blur sm:bottom-auto sm:right-3 sm:top-3 sm:flex-col sm:p-1.5">
       <button type="button" onClick={onZoomIn} className={zoomButtonClass} aria-label="Zoom in">
         +
       </button>

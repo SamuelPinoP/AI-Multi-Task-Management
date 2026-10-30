@@ -470,7 +470,7 @@ export default function NotesPage() {
               <li key={note.id} id={`note-${note.id}`}>
                 <div
                   className={cn(
-                    "relative flex h-full w-full flex-col rounded-xl border bg-surface p-4 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700",
+                    "relative flex h-full w-full flex-col rounded-xl border bg-surface p-4 shadow-card transition-colors hover:border-zinc-300 dark:hover:border-zinc-700",
                     editingNoteId === note.id ? "border-accent" : "border-line",
                   )}
                 >

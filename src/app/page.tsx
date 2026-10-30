@@ -18,7 +18,7 @@ const linkClass = "inline-flex items-center gap-1 text-sm font-medium text-accen
 
 function Card({ title, aside, className, children }: { title: ReactNode; aside?: ReactNode; className?: string; children: ReactNode }) {
   return (
-    <section className={cn("rounded-xl border border-line bg-surface p-4", className)}>
+    <section className={cn("rounded-xl border border-line bg-surface p-4 shadow-card", className)}>
       <div className="mb-2 flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-1.5 text-card">{title}</h2>
         {aside ? <span className="text-xs text-muted">{aside}</span> : null}
@@ -46,7 +46,7 @@ function Stat({ label, value, tone, note, series, seriesLabel }: {
   seriesLabel: string;
 }) {
   return (
-    <div role="group" aria-label={`${label}: ${value}`} className="flex items-center justify-between gap-2 rounded-xl border border-line bg-surface px-3 py-2.5">
+    <div role="group" aria-label={`${label}: ${value}`} className="flex items-center justify-between gap-2 rounded-xl border border-line bg-surface px-3 py-2.5 shadow-card">
       <div className="min-w-0">
         <p className="truncate text-xs text-muted">{label}</p>
         <p className="flex flex-wrap items-baseline gap-x-1.5">

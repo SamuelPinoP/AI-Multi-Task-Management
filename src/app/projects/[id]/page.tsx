@@ -304,7 +304,7 @@ export default async function ProjectDetailPage({
               {project.notes.map((note) => (
                 <article
                   key={note.id}
-                  className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800"
+                  className="rounded-2xl border border-line bg-surface p-5 shadow-card"
                 >
                   <h3 className="text-lg font-semibold">{note.title}</h3>
                   <p className="mt-2 text-zinc-700 dark:text-zinc-300">
@@ -381,7 +381,7 @@ export default async function ProjectDetailPage({
               {project.events.map((event) => (
                 <article
                   key={event.id}
-                  className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800"
+                  className="rounded-2xl border border-line bg-surface p-5 shadow-card"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-lg font-semibold">{event.title}</h3>

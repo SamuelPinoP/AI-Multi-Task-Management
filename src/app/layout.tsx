@@ -29,7 +29,7 @@ const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono"
 export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f6f8f7" },
-    { media: "(prefers-color-scheme: dark)", color: "#0e1413" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0f0e" },
   ],
 };
 
