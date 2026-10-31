@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { continueAsGuest, uniqueName } from "./helpers";
 
-test("a new workspace shows one next step in every empty card", async ({ page }) => {
+test("a new workspace shows one next step in every empty card", async ({ page, isMobile }) => {
   await continueAsGuest(page);
 
   await expect(page.getByText("Nothing is due today.")).toBeVisible();
@@ -12,6 +12,17 @@ test("a new workspace shows one next step in every empty card", async ({ page })
   await expect(page.getByRole("link", { name: "Plan an event" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Create your first project" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Invite a teammate" })).toBeVisible();
+
+  // With no events and no tasks, Now and next is one line (DES-10).
+  const band = page.getByRole("region", { name: "Now and next" });
+  await expect(band).toHaveText(/^No events today and no open tasks\.\s*Add a task$/);
+  await band.getByRole("button", { name: "Add a task" }).click();
+  await expect(page.getByLabel("Add a task", { exact: true })).toBeFocused();
+  // Wider screens show the quick add's shortcuts; phones keep the placeholder only.
+  const hints = page.locator("#quick-add-hints");
+  await expect(hints).toContainText("#project");
+  if (isMobile) await expect(hints).toBeHidden();
+  else await expect(hints).toBeVisible();
 });
 
 test("quick add puts a task in Focus; completing it can be undone", async ({ page }) => {

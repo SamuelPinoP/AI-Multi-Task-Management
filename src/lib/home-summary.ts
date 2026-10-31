@@ -118,16 +118,68 @@ export function relativeTime(instant: Date, realNow: Date, timeZone?: string | n
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: timeZone ?? undefined }).format(instant);
 }
 
-/** SVG paths for a sparkline: the line and the area under it. */
-export function sparklinePaths(values: number[], width = 72, height = 26, padding = 3) {
-  if (values.length === 0) return { line: "", area: "", last: { x: 0, y: height } };
-  const max = Math.max(...values, 1);
-  const step = values.length > 1 ? width / (values.length - 1) : 0;
-  const points = values.map((value, index) => ({
-    x: Number((index * step).toFixed(2)),
-    y: Number((height - padding - (value / max) * (height - padding * 2)).toFixed(2)),
-  }));
-  const line = points.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ");
-  const area = `${line} L${points[points.length - 1].x} ${height} L0 ${height}Z`;
-  return { line, area, last: points[points.length - 1] };
+/** Bar heights from 0 to 1 for a 7-day chart, scaled to the busiest day (DES-10). */
+export function barHeights(values: number[]) {
+  const max = Math.max(0, ...values);
+  return values.map((value) => (max ? value / max : 0));
+}
+
+/** "45 min", "1 h" or "1 h 50 min". */
+export function formatMinutes(minutes: number) {
+  const total = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(total / 60);
+  const rest = total % 60;
+  if (!hours) return `${rest} min`;
+  return rest ? `${hours} h ${rest} min` : `${hours} h`;
+}
+
+/** Short names for the last `days` days, oldest first, ending with "Today". */
+export function weekDayLabels(now: Date, days = 7) {
+  const weekday = new Intl.DateTimeFormat("en-US", { weekday: "short" });
+  return Array.from({ length: days }, (_, index) =>
+    index === days - 1 ? "Today" : weekday.format(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1 - index))),
+  );
+}
+
+/** "Wed 0, Thu 1, …, Today 3": a 7-day series with its days, for screen readers. */
+export function describeWeek(values: number[], now: Date) {
+  const days = weekDayLabels(now, values.length);
+  return values.map((value, index) => `${days[index]} ${value}`).join(", ");
+}
+
+/**
+ * Home's "Now and next" band (DES-10). Now is the timed event under way at `now`,
+ * or else the top Focus task; Next is the next timed event to start. Times are
+ * wall-clock Dates (`eventWallTime`), and an event without an end time is never
+ * under way. With no events and no tasks, the band is `empty`.
+ */
+export function nowAndNext<E extends { start: Date; end: Date | null; hasStartTime: boolean }, T>(
+  events: E[],
+  now: Date,
+  focus: T[] = [],
+) {
+  const timed = events.filter((event) => event.hasStartTime).sort((a, b) => a.start.getTime() - b.start.getTime());
+  const current = timed.find((event) => event.start <= now && event.end !== null && event.end > now) ?? null;
+  return {
+    current,
+    task: current ? null : (focus[0] ?? null),
+    next: timed.find((event) => event.start > now) ?? null,
+    empty: !events.length && !focus.length,
+  };
+}
+
+/**
+ * The band's Suggested next: the planner's first suggestion that isn't an event
+ * (Now and Next show those) or the task Now already shows.
+ */
+export function bandSuggestion<S extends { kind: string; related?: { type: string; id: string } }>(
+  suggestions: S[],
+  nowTaskId: string | null,
+) {
+  return (
+    suggestions.find(
+      (suggestion) =>
+        suggestion.kind !== "EVENT" && !(suggestion.related?.type === "TASK" && suggestion.related.id === nowTaskId),
+    ) ?? null
+  );
 }

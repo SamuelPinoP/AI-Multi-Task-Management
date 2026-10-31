@@ -3,6 +3,7 @@ import { continueAsGuest } from "../e2e/helpers";
 
 /*
  * Screenshots of the main pages, compared with reference images (TEST-05, #269).
+ * Home is also taken in dark mode (DES-10).
  *
  * Each test signs in as a new guest and adds the same data. Due dates are
  * yesterday, today and tomorrow, which the pages show as words, so the images
@@ -43,17 +44,27 @@ function changing(page: Page) {
   ];
 }
 
-test("Home", async ({ page }) => {
-  await continueAsGuest(page);
-  await addTasks(page);
-
+async function screenshotHome(page: Page, name: string) {
   await page.goto("/");
-  await expect(page.getByRole("link", { name: "Write the launch post" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Write the launch post" }).first()).toBeVisible();
   await page.waitForLoadState("networkidle");
   // The header says good morning, afternoon or evening, and today's date. The
   // activities are created within the same moment, so their order varies.
   const activity = page.locator("section", { has: page.getByRole("heading", { name: "Activity", exact: true }) }).locator("ul");
-  await expect(page).toHaveScreenshot("home.png", { mask: [...changing(page), page.locator("#main-content header").first(), activity] });
+  await expect(page).toHaveScreenshot(name, { mask: [...changing(page), page.locator("#main-content header").first(), activity] });
+}
+
+test("Home", async ({ page }) => {
+  await continueAsGuest(page);
+  await addTasks(page);
+  await screenshotHome(page, "home.png");
+});
+
+test("Home in dark mode", async ({ page }) => {
+  await continueAsGuest(page);
+  await addTasks(page);
+  await page.evaluate(() => localStorage.setItem("ai-multi-theme", "dark"));
+  await screenshotHome(page, "home-dark.png");
 });
 
 test("Tasks", async ({ page }) => {

@@ -34,6 +34,22 @@ type ProjectListItem = ProjectOption & { accessLevel?: string; status?: string }
 
 const TASKS_ENDPOINT = "/api/tasks";
 const priorityLabels = { HIGH: "High", MEDIUM: "Medium", LOW: "Low" } as const;
+/** The quick-add syntax, shown as hints on wider screens (DES-10). */
+const syntaxHints = [
+  ["fri", "due date"],
+  ["#project", "project"],
+  ["!high", "priority"],
+  ["@name", "assignee"],
+] as const;
+
+/** A button that puts the cursor in the page's quick add, for empty states that say "Add a task". */
+export function QuickAddFocusButton({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <button type="button" onClick={() => document.getElementById(QUICK_ADD_INPUT_ID)?.focus()} className={className}>
+      {children}
+    </button>
+  );
+}
 
 /** Projects the user can add tasks to (not archived, not view-only). */
 async function fetchTaskProjects(): Promise<ProjectOption[]> {
@@ -229,11 +245,22 @@ export function QuickAdd({
           placeholder={placeholder ?? (smart ? "Add a task: Draft slides fri #project !high" : "Add a task and press Enter")}
           maxLength={200}
           autoComplete="off"
-          aria-describedby={smart ? "quick-add-details" : undefined}
+          aria-describedby={smart ? "quick-add-details quick-add-hints" : undefined}
           className="min-w-0 flex-1 bg-transparent py-1 text-sm text-ink outline-none placeholder:text-muted"
         />
         <kbd className="hidden rounded border border-line px-1.5 font-mono text-2xs text-muted sm:inline">Enter</kbd>
       </div>
+      {smart ? (
+        <p id="quick-add-hints" className={cn("hidden flex-wrap items-center gap-x-3 gap-y-1 pl-6 text-xs text-muted", !showDetails && "sm:flex")}>
+          <span className="sr-only">Shortcuts: </span>
+          {syntaxHints.map(([token, meaning]) => (
+            <span key={token} className="inline-flex items-center gap-1">
+              <kbd className="rounded border border-line bg-canvas px-1 font-mono text-2xs text-ink">{token}</kbd>
+              {meaning}
+            </span>
+          ))}
+        </p>
+      ) : null}
       {smart ? (
         <div id="quick-add-details" aria-live="polite" className={cn("flex flex-wrap items-center gap-1.5 pl-6", !showDetails && "hidden")}>
           {showDetails ? (
