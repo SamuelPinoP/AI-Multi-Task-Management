@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
+import { ACCENTS } from "../../src/lib/accent";
 import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
 
 // TEST-04 (#140) and DES-06 (#134): every page passes axe's WCAG 2.1 A and AA rules.
@@ -116,6 +117,37 @@ for (const theme of ["light", "dark"] as const) {
     expect(found).toEqual([]);
   });
 }
+
+// DES-15 (#321): Home and the account menu that picks the color, in every accent palette and both themes.
+test("every accent palette has no WCAG A/AA violations", async ({ page, isMobile }) => {
+  test.skip(isMobile, "The palettes don't depend on the screen size.");
+  test.setTimeout(120_000);
+  await continueAsGuest(page);
+  await seedWorkspace(page);
+
+  const found: string[] = [];
+  for (const theme of ["light", "dark"]) {
+    for (const { id } of ACCENTS) {
+      await page.evaluate(
+        ([themeValue, accentValue]) => {
+          localStorage.setItem("ai-multi-theme", themeValue);
+          localStorage.setItem("ai-multi-accent", accentValue);
+        },
+        [theme, id],
+      );
+      await page.goto("/");
+      await page.waitForLoadState("networkidle");
+      await expect(page.locator("html")).toHaveAttribute("data-accent", id);
+      found.push(...(await violations(page, `Home (${id}, ${theme})`)));
+
+      await page.getByRole("button", { name: "Account menu" }).click();
+      await expect(page.getByRole("menuitemradio", { name: "Teal" })).toBeVisible();
+      found.push(...(await violations(page, `account menu (${id}, ${theme})`)));
+      await page.keyboard.press("Escape");
+    }
+  }
+  expect(found).toEqual([]);
+});
 
 // Unread badges only show after someone else posts, which the scans above never do.
 test("unread chat badges have no WCAG A/AA violations", async ({ page, browser, isMobile }) => {
