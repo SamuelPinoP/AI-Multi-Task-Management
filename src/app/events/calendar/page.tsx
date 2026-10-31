@@ -3,8 +3,9 @@
 /**
  * EventsCalendarPage
  * -------------------
- * The "Full Calendar" page: a larger, combined month view that shows both
- * events and tasks-with-due-dates side by side, with a day-detail sidebar.
+ * The Calendar's Month tab (DES-13; the Agenda tab is /events): a larger,
+ * combined month view that shows both events and tasks-with-due-dates
+ * side by side, with a day-detail sidebar.
  *
  * Responsibilities:
  *  - Fetch events, tasks, and projects in parallel on mount.
@@ -12,20 +13,19 @@
  *    per-day previews of events and due tasks, filterable by project.
  *  - Show full details for whichever day is selected in a side panel,
  *    including the ability to open an event for editing (navigates to the
- *    /events page with a deep-link query param) or open a task.
+ *    Agenda tab with a deep-link query param) or open a task.
  *  - Allow marking a task done directly from the calendar, and deleting an
  *    event (with confirmation) directly from the day-detail panel; for a
  *    repeating event, only that day, that day and later ones, or all (CAL-03).
  *  - "Show tasks" hides or shows due tasks (remembered per browser), and
- *    "New event" opens the Events page's sheet on the selected day (CAL-01).
+ *    "New event" opens the event sheet on the selected day (CAL-01).
  */
 
-import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarSubscribe } from "@/components/calendar-subscribe";
+import { CalendarHeader } from "@/components/events/calendar-header";
 import { EventSheet, eventRequestBody, type EventInput } from "@/components/events/event-sheet";
-import { BackLink, uiButtonClass, uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
+import { uiButtonClass, uiCardClass } from "@/components/ui";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { toast } from "@/components/ui/toaster";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
@@ -432,7 +432,7 @@ export default function EventsCalendarPage() {
   // ---------------------------------------------------------------------
 
   /**
-   * Navigates to the main Events page with a deep-link query param, which
+   * Navigates to the Agenda tab (/events) with a deep-link query param, which
    * causes that page to auto-select and open the event for editing.
    * Uses `sourceEventId` (the original stored event id) rather than the
    * expanded occurrence's id, since recurring occurrences are virtual.
@@ -548,38 +548,17 @@ export default function EventsCalendarPage() {
   // Render
   // ---------------------------------------------------------------------
   return (
-    <main className="min-h-screen px-6 py-10">
-      <div className="mx-auto max-w-7xl">
-        {/* Page header with title/description and a link back to the Events page */}
-        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-title">Full Calendar</h1>
-            <p className="mt-2 text-zinc-600 dark:text-zinc-300">
-              Your events and due tasks month by month, with each day&apos;s
-              details.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() =>
-                setNewEventSheet({
-                  open: true,
-                  // The selected day, in the project being viewed.
-                  draft: { startDate: selectedDayKey, projectId: selectedProject?.id ?? "" },
-                })
-              }
-              className={`${uiPrimaryButtonClass} px-3 py-1.5`}
-            >
-              <Plus aria-hidden="true" className="h-4 w-4" />
-              New event
-            </button>
-            <CalendarSubscribe />
-            <BackLink href="/events">Back to Events</BackLink>
-          </div>
-        </div>
+    // The same frame and header as the Agenda tab, so switching tabs moves nothing but the view.
+    <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+      <div className="grid grid-cols-1 gap-4">
+        <CalendarHeader
+          active="month"
+          summary="Events and due tasks"
+          // The selected day, in the project being viewed.
+          onNewEvent={() => setNewEventSheet({ open: true, draft: { startDate: selectedDayKey, projectId: selectedProject?.id ?? "" } })}
+        />
 
-        {error && <p className="mb-6 text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600">{error}</p>}
 
         <section className={uiCardClass}>
           {/* Month heading + project filter + month navigation */}
@@ -895,7 +874,7 @@ export default function EventsCalendarPage() {
               </p>
 
               <div className="mt-4 space-y-3">
-                {/* Full event cards: clicking opens the event for editing on the Events page */}
+                {/* Full event cards: clicking opens the event for editing on the Agenda tab */}
                 {selectedDayEvents.map((event) => (
                   <article
                     key={event.id}
@@ -1030,6 +1009,6 @@ export default function EventsCalendarPage() {
           if (deleteTarget) void handleDeleteEvent(deleteTarget, scope);
         }}
       />
-    </main>
+    </div>
   );
 }
