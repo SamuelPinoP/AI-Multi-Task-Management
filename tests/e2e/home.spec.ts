@@ -115,7 +115,7 @@ test("a teammate's message shows in Team chat with an unread mark, and Activity 
     const invitations = (await (await member.request.get("/api/project-invitations")).json()) as { id: string; project: { id: string } }[];
     const invitation = invitations.find((item) => item.project.id === project.id)!;
     expect((await member.request.patch(`/api/project-invitations/${invitation.id}`, { data: { action: "ACCEPT" } })).ok()).toBe(true);
-    const message = uniqueName("Ready for review");
+    const message = `${uniqueName("Ready for review")}: the hero copy, the pricing table and the signup flow all changed today`;
     expect((await page.request.post(`/api/projects/${project.id}/comments`, { data: { message } })).status()).toBe(201);
 
     await member.goto("/");
@@ -124,6 +124,10 @@ test("a teammate's message shows in Team chat with an unread mark, and Activity 
     await expect(row).toContainText(message);
     await expect(row).toContainText("1 unread message");
     await expect(chat.getByRole("link", { name: "View all chats" })).toHaveAttribute("href", "/chats");
+    // A long message is cut short inside the card; it doesn't push the time and the count past its edge.
+    const card = (await chat.boundingBox())!;
+    const link = (await row.boundingBox())!;
+    expect(link.x + link.width).toBeLessThanOrEqual(card.x + card.width);
 
     // The project's avatars name both people, and Activity says who did what.
     const projects = member.locator("section").filter({ has: member.getByRole("heading", { name: "Projects", exact: true }) });

@@ -9,7 +9,7 @@ import { projectColor } from "@/lib/project-color";
  */
 export function TeamChatList({ chats }: { chats: ChatSummary[] }) {
   return (
-    <ul className="grid gap-0.5">
+    <ul className="grid grid-cols-1 gap-0.5">
       {chats.map((chat) => {
         const unread = chat.unread > 0;
         return (
