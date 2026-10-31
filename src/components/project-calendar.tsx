@@ -110,7 +110,7 @@ export function ProjectCalendar({ projectColor, events }: ProjectCalendarProps) 
   }
 
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
+    <section className="rounded-2xl border border-line bg-surface p-6 shadow-card">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-xl font-semibold">
           {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(month)}

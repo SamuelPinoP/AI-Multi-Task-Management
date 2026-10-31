@@ -4,38 +4,16 @@ import { Check } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { saveTaskStatus } from "@/components/home/save-task-status";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import type { HomeFocusTask } from "@/lib/home-data";
 import { paletteColor, projectColor } from "@/lib/project-color";
-import { formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 export type FocusRow = HomeFocusTask & { dueLabel: string | null; late: boolean };
 
 const priorityLabel = { HIGH: "High", MEDIUM: "Med", LOW: "Low" } as const;
-
-async function saveStatus(task: HomeFocusTask, status: HomeFocusTask["status"]) {
-  // The task API replaces every field, so send the task back with the new status.
-  const response = await fetch(`/api/tasks/${task.id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      title: task.title,
-      description: task.description ?? "",
-      status,
-      priority: task.priority,
-      dueDate: task.dueDate ? formatTaskDueDateInput(task.dueDate) : null,
-      recurrence: task.recurrence,
-      projectId: task.projectId ?? "",
-      assigneeId: task.projectId ? (task.assigneeId ?? "") : "",
-    }),
-  });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? "Could not update the task.");
-  }
-}
 
 /** The Focus card's rows: complete a task in place, with Undo. */
 export function FocusList({ tasks }: { tasks: FocusRow[] }) {
@@ -46,7 +24,7 @@ export function FocusList({ tasks }: { tasks: FocusRow[] }) {
   async function complete(task: FocusRow) {
     setCompletedIds((ids) => [...ids, task.id]);
     try {
-      await saveStatus(task, "DONE");
+      await saveTaskStatus(task, "DONE");
       notifyWorkspaceChanged();
       router.refresh();
       toast.success("Task completed", {
@@ -55,7 +33,7 @@ export function FocusList({ tasks }: { tasks: FocusRow[] }) {
           label: "Undo",
           onClick: async () => {
             try {
-              await saveStatus(task, task.status);
+              await saveTaskStatus(task, task.status);
               setCompletedIds((ids) => ids.filter((id) => id !== task.id));
               notifyWorkspaceChanged();
               router.refresh();

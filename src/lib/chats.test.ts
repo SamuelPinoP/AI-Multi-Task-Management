@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatPreview, filterChatSummaries, formatChatTime, formatUnreadCount, sortChatSummaries, type ChatSummary } from "./chats";
+import {
+  chatPreview,
+  filterChatSummaries,
+  formatChatTime,
+  formatUnreadCount,
+  sortChatSummaries,
+  teammateCount,
+  type ChatSummary,
+} from "./chats";
 
 function chat(name: string, unread: number, at: string | null, text = "Hello"): ChatSummary {
   return {
@@ -10,6 +18,7 @@ function chat(name: string, unread: number, at: string | null, text = "Hello"): 
     accessLevel: "EDITOR",
     memberCount: 2,
     unread,
+    teammates: 1,
     lastMessage: at ? { author: "Ana", text, attachmentCount: 0, at, timeLabel: "9:40 AM" } : null,
   };
 }
@@ -87,4 +96,12 @@ test("message times follow the user's time zone across midnight", () => {
   const late = new Date("2026-10-21T02:30:00.000Z");
   assert.equal(formatChatTime(late, now, "America/New_York"), "Yesterday");
   assert.equal(plain(formatChatTime(late, now, "UTC")), "2:30 AM");
+});
+
+test("teammates are the other people with an account, owner included", () => {
+  const project = { userId: "owner", members: [{ userId: "owner" }, { userId: "ana" }, { userId: null }, { userId: "me" }] };
+  // A member without an account can't chat, and the user doesn't count.
+  assert.equal(teammateCount(project, "me"), 2);
+  assert.equal(teammateCount(project, "owner"), 2);
+  assert.equal(teammateCount({ userId: "me", members: [{ userId: null }] }, "me"), 0);
 });

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { continueAsGuest, openSection, uniqueName } from "./helpers";
+import { continueAsGuest, expectHome, openSection, uniqueName } from "./helpers";
 
 function dateInputValue(daysFromToday: number) {
   const date = new Date();
@@ -60,6 +60,32 @@ test("Sidebar collapses and stays collapsed after a reload", async ({ page, isMo
   await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
 });
 
+test("The browser tab and the sidebar show the AI Multi mark", async ({ page, isMobile }) => {
+  await continueAsGuest(page);
+
+  // Every page links the Spark icon.svg and the favicon.ico fallback (#292).
+  const icons = await page.locator('link[rel="icon"]').evaluateAll((links) =>
+    [...new Set(links.map((link) => `${link.getAttribute("href")} ${link.getAttribute("type") ?? ""}`))],
+  );
+  const svg = icons.find((icon) => icon.includes("image/svg+xml"))?.split(" ")[0];
+  const ico = icons.find((icon) => icon.startsWith("/favicon.ico"))?.split(" ")[0];
+  expect(svg, icons.join(", ")).toBeTruthy();
+  expect(ico, icons.join(", ")).toBeTruthy();
+  const svgResponse = await page.request.get(svg!);
+  expect(svgResponse.ok()).toBe(true);
+  expect(await svgResponse.text()).toContain("#0a6f68");
+  expect((await page.request.get(ico!)).ok()).toBe(true);
+
+  test.skip(isMobile, "The sidebar is a menu sheet on phones.");
+  // The mark is decorative; screen readers hear the name once, even with the sidebar collapsed.
+  const sidebar = page.getByRole("navigation", { name: "Workspace" });
+  await expect(sidebar.getByText("AI Multi", { exact: true })).toBeVisible();
+  await expect(sidebar.getByText("Guest workspace", { exact: true })).toBeVisible();
+  await expect(sidebar.locator('svg[aria-hidden="true"]').first()).toBeVisible();
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(sidebar.getByText("AI Multi", { exact: true })).toHaveClass(/sr-only/);
+});
+
 test("A sidebar project opens to its pages and stays open after a reload", async ({ page, isMobile }) => {
   test.skip(isMobile, "The sidebar is a menu sheet on phones.");
   const name = uniqueName("Sidebar project");
@@ -103,6 +129,12 @@ test("The sidebar + creates a project and opens it", async ({ page, isMobile }) 
   const pages = sidebar.getByRole("group", { name: `${name} pages` });
   await expect(pages.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
 });
+
+/** Where the Calendar's Agenda and Month tabs start; both views share the header, so it never moves. */
+async function calendarTabsPosition(page: Page) {
+  const box = (await page.getByRole("navigation", { name: "Calendar views" }).boundingBox())!;
+  return { x: Math.round(box.x), y: Math.round(box.y) };
+}
 
 /** How far the window itself scrolls; the shell scrolls inside main, so it should be 0. */
 function windowOverflow(page: Page) {
@@ -182,15 +214,127 @@ test("Phone tabs and the menu reach every section", async ({ page, isMobile }) =
   test.skip(!isMobile, "Bottom tabs only show on phones.");
   await continueAsGuest(page);
 
+  // The Calendar tab opens the same page as the sidebar's Calendar item (DES-13):
+  // the Agenda at first, then whichever view was used last, and it's current on both.
   const tabs = page.getByRole("navigation", { name: "Primary" });
-  await tabs.getByRole("link", { name: "Calendar" }).click();
+  const calendar = tabs.getByRole("link", { name: "Calendar" });
+  const views = page.getByRole("navigation", { name: "Calendar views" });
+  await calendar.click();
+  await expect(page).toHaveURL(/\/events$/);
+  await expect(calendar).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText("0 in the next 7 days")).toBeVisible();
+  const agendaTabs = await calendarTabsPosition(page);
+  await views.getByRole("link", { name: "Month" }).click();
   await expect(page).toHaveURL(/\/events\/calendar$/);
-  await expect(tabs.getByRole("link", { name: "Calendar" })).toHaveAttribute("aria-current", "page");
+  await expect(views.getByRole("link", { name: "Month" })).toHaveAttribute("aria-current", "page");
+  await expect(calendar).toHaveAttribute("aria-current", "page");
+  // On a phone too, the header keeps to one line on both views, so the tabs stay under the finger.
+  expect(await calendarTabsPosition(page)).toEqual(agendaTabs);
+  await tabs.getByRole("link", { name: "Home" }).click();
+  await expectHome(page);
+  await calendar.click();
+  await expect(page).toHaveURL(/\/events\/calendar$/);
 
   await openSection(page, "Boards");
   await expect(page).toHaveURL(/\/board$/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
+  // Trash waits at the bottom of the menu.
   await openSection(page, "Trash");
+  await expect(page).toHaveURL(/\/trash$/);
+});
+
+test("One Calendar item opens the Agenda and Month tabs and remembers the last one", async ({ page, isMobile }) => {
+  test.skip(isMobile, "The sidebar is a menu sheet on phones.");
+  await continueAsGuest(page);
+  const created = await page.request.post("/api/events", {
+    data: { title: uniqueName("Tab event"), startDate: dateInputValue(1), startTime: "10:00", endDate: "", endTime: "", recurrence: "NONE" },
+  });
+  const event = (await created.json()) as { id: string };
+
+  const sidebar = page.getByRole("navigation", { name: "Workspace" });
+  const calendar = sidebar.getByRole("link", { name: "Calendar", exact: true });
+  const views = page.getByRole("navigation", { name: "Calendar views" });
+  await expect(sidebar.getByRole("link", { name: "Events" })).toHaveCount(0);
+
+  // A new account starts on the Agenda.
+  await calendar.click();
+  await expect(page).toHaveURL(/\/events$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Calendar" })).toBeVisible();
+  await expect(views.getByRole("link", { name: "Agenda" })).toHaveAttribute("aria-current", "page");
+  await expect(calendar).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText("1 in the next 7 days")).toBeVisible();
+  const agendaTabs = await calendarTabsPosition(page);
+
+  await views.getByRole("link", { name: "Month" }).click();
+  await expect(page).toHaveURL(/\/events\/calendar$/);
+  await expect(views.getByRole("link", { name: "Month" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { level: 1, name: "Calendar" })).toBeVisible();
+  await expect(calendar).toHaveAttribute("aria-current", "page");
+  expect(await calendarTabsPosition(page)).toEqual(agendaTabs);
+
+  // From another page, and after a reload, Calendar opens the Month it was left on.
+  await sidebar.getByRole("link", { name: "Home", exact: true }).click();
+  await expectHome(page);
+  await page.reload();
+  await expect(calendar).toHaveAttribute("href", "/events/calendar");
+  await calendar.click();
+  await expect(page).toHaveURL(/\/events\/calendar$/);
+
+  // Opening one event (what the month, search and Home link to) shows it on the Agenda,
+  // but it isn't picking a view: closing it and coming back still opens the Month.
+  await page.goto(`/events?event=${event.id}`);
+  await expect(page.getByRole("dialog", { name: "Edit event" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/\/events$/);
+  await sidebar.getByRole("link", { name: "Home", exact: true }).click();
+  await expectHome(page);
+  await calendar.click();
+  await expect(page).toHaveURL(/\/events\/calendar$/);
+
+  // The old addresses still work, each on its own tab; opening one makes it the view Calendar opens.
+  await page.goto("/events");
+  await expect(views.getByRole("link", { name: "Agenda" })).toHaveAttribute("aria-current", "page");
+  await expect(calendar).toHaveAttribute("href", "/events");
+  await page.goto("/events/calendar");
+  await expect(views.getByRole("link", { name: "Month" })).toHaveAttribute("aria-current", "page");
+  await expect(calendar).toHaveAttribute("href", "/events/calendar");
+});
+
+test("Trash sits in the sidebar footer next to Collapse, an icon with its name when collapsed", async ({ page, isMobile }) => {
+  test.skip(isMobile, "The sidebar is a menu sheet on phones.");
+  await continueAsGuest(page);
+
+  const sidebar = page.getByRole("navigation", { name: "Workspace" });
+  const trash = sidebar.getByRole("link", { name: "Trash" });
+  const collapse = sidebar.getByRole("button", { name: "Collapse sidebar" });
+
+  // Below the Tools group, on one line with Collapse.
+  const roadmapBox = (await sidebar.getByRole("link", { name: "Roadmap" }).boundingBox())!;
+  const trashBox = (await trash.boundingBox())!;
+  const collapseBox = (await collapse.boundingBox())!;
+  expect(trashBox.y).toBeGreaterThan(roadmapBox.y + roadmapBox.height);
+  expect(Math.abs(trashBox.y + trashBox.height / 2 - (collapseBox.y + collapseBox.height / 2))).toBeLessThan(2);
+  expect(trashBox.x + trashBox.width).toBeLessThanOrEqual(collapseBox.x);
+
+  // It stays in the command palette.
+  await page.keyboard.press("Control+K");
+  await page.getByPlaceholder("Search or run a command...").fill("trash");
+  await page.getByRole("option", { name: "Trash", exact: true }).click();
+  await expect(page).toHaveURL(/\/trash$/);
+  await expect(trash).toHaveAttribute("aria-current", "page");
+
+  // Collapsed, only its icon shows; its name is the tooltip and the link's name.
+  await collapse.click();
+  const expand = sidebar.getByRole("button", { name: "Expand sidebar" });
+  await expect(expand).toBeVisible();
+  await expect(trash).toHaveAttribute("title", "Trash");
+  await expect(trash.getByText("Trash", { exact: true })).toHaveClass(/sr-only/);
+  const collapsedTrash = (await trash.boundingBox())!;
+  const expandBox = (await expand.boundingBox())!;
+  expect(collapsedTrash.y + collapsedTrash.height).toBeLessThanOrEqual(expandBox.y);
+  await sidebar.getByRole("link", { name: "Home", exact: true }).click();
+  await expectHome(page);
+  await trash.click();
   await expect(page).toHaveURL(/\/trash$/);
 });

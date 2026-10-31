@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, Clock } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BurnUpChart } from "@/components/projects/burn-up-chart";
@@ -11,11 +11,12 @@ const statusStyles = {
   ON_TRACK: { label: "On track", className: "bg-success-soft text-success", icon: CheckCircle2 },
   AT_RISK: { label: "At risk", className: "bg-danger-soft text-danger", icon: AlertTriangle },
   STALE: { label: "Stale", className: "bg-caution-soft text-caution", icon: Clock },
+  NOT_STARTED: { label: "Not started", className: "bg-sunken text-muted", icon: CircleDashed },
 } as const;
 
 function Tile({ label, value, detail, children }: { label: string; value: ReactNode; detail: string; children?: ReactNode }) {
   return (
-    <div className="rounded-xl border border-line bg-surface p-4" role="group" aria-label={label}>
+    <div className="rounded-xl border border-line bg-surface p-4 shadow-card" role="group" aria-label={label}>
       <p className="text-xs font-medium text-muted">{label}</p>
       <p className="mt-1 text-2xl font-semibold">{value}</p>
       {children}

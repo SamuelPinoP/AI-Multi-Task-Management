@@ -381,7 +381,7 @@ function CreateNodePopover({
   }
   const label = `Create ${intent.mode === "child" ? "child" : "sibling"}`;
   return (
-    <div className="absolute left-1/2 top-[calc(100%+0.75rem)] z-30 w-64 -translate-x-1/2 rounded-2xl border border-line bg-surface p-3 text-left text-ink shadow-2xl shadow-zinc-950/10 dark:shadow-black/40">
+    <div className="absolute left-1/2 top-[calc(100%+0.75rem)] z-30 w-64 -translate-x-1/2 rounded-2xl border border-line bg-raised p-3 text-left text-ink shadow-raised">
       <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">{label}</p>
       <input
         ref={inputRef}
@@ -416,7 +416,7 @@ function CreateNodePopover({
 
 function ColorPalette({ selected, onSelect }: { selected: TreeNodeColor; onSelect: (color: TreeNodeColor) => void }) {
   return (
-    <div className="absolute right-0 top-9 z-40 grid w-44 grid-cols-3 gap-2 rounded-2xl border border-line bg-surface p-2 shadow-xl shadow-zinc-950/10 dark:shadow-black/40">
+    <div className="absolute right-0 top-9 z-40 grid w-44 grid-cols-3 gap-2 rounded-2xl border border-line bg-raised p-2 shadow-raised">
       {TREE_NODE_COLORS.map((color) => (
         <button
           key={color}

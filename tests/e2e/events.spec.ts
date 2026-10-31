@@ -86,7 +86,7 @@ test("events: a weekly 9:00-9:15 event repeats every week until its repeat-until
   // Today, in a week, and not in two weeks (after the repeat-until date).
   const row = (region: Locator) => region.getByRole("listitem").filter({ hasText: weekly });
   await expect(row(page.getByRole("region", { name: /^Today/ }))).toContainText("9:00 AM – 9:15 AM");
-  await expect(row(page.getByRole("region", { name: new RegExp(`^${agendaLabel(7)}`) }))).toContainText("9:00 AM – 9:15 AM");
+  await expect(row(page.getByRole("region", { name: new RegExp(`^${agendaLabel(7)}\\b`) }))).toContainText("9:00 AM – 9:15 AM");
   await expect(page.getByRole("button", { name: weekly, exact: true })).toHaveCount(2);
 
   // The sheet shows the first occurrence and the repeat-until date.
@@ -100,7 +100,7 @@ test("events: a weekly 9:00-9:15 event repeats every week until its repeat-until
   await edit.getByLabel("Repeat until").fill("");
   await edit.getByRole("button", { name: "Save changes" }).click();
   await expect(edit).toBeHidden();
-  await expect(row(page.getByRole("region", { name: new RegExp(`^${agendaLabel(14)}`) }))).toContainText("9:00 AM – 9:15 AM");
+  await expect(row(page.getByRole("region", { name: new RegExp(`^${agendaLabel(14)}\\b`) }))).toContainText("9:00 AM – 9:15 AM");
 });
 
 test("events API: repeat-until is checked, and an edit without it keeps it", async ({ page }) => {

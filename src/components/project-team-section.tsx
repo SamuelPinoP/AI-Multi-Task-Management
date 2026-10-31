@@ -235,7 +235,7 @@ export function ProjectTeamSection({
       <div className={`${uiCardClass} p-4`}>
         {isOwner ? (
           <>
-            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
+            <div className="mb-4 rounded-xl border border-accent/30 bg-accent-soft p-3 text-sm text-ink">
               You are the project owner. You can invite collaborators by email,
               add members for planning (adding an email also sends them an
               invitation), remove non-owner members, and keep member notes.
@@ -270,7 +270,7 @@ export function ProjectTeamSection({
               </button>
             </form>
             {inviteMessage && (
-              <p className="mb-3 text-sm text-emerald-700 dark:text-emerald-300">
+              <p className="mb-3 text-sm text-success">
                 {inviteMessage}
               </p>
             )}
@@ -371,11 +371,11 @@ export function ProjectTeamSection({
                   <span>({m.role})</span>
                   {m.email ? <span>• {m.email}</span> : null}
                   {m.userId ? (
-                    <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                    <span className="rounded-full border border-success/40 bg-success-soft px-2 py-0.5 text-[11px] font-semibold text-success">
                       Has access
                     </span>
                   ) : m.email && pendingInviteEmails.has(m.email) ? (
-                    <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                    <span className="rounded-full border border-warning/40 bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning">
                       Waiting for acceptance
                     </span>
                   ) : null}

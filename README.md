@@ -96,9 +96,9 @@ passes `TZ=UTC` through but drops values with a slash, such as
 
 ### Visual regression screenshots
 
-`npm run test:visual` takes screenshots of Home, Tasks, Boards and the
-Calendar, on a desktop browser and a phone-sized one, and compares them with
-the reference images in `tests/visual/__screenshots__/`
+`npm run test:visual` takes screenshots of Home (in light and dark mode),
+Tasks, Boards and the Calendar, on a desktop browser and a phone-sized one,
+and compares them with the reference images in `tests/visual/__screenshots__/`
 (`tests/visual/main-pages.spec.ts`, `playwright.visual.config.ts`). It starts
 the server the same way as `npm run test:e2e`, so build first and set
 `E2E_SERVER_MODE=start` and `TZ=UTC` like CI. Each test signs in as a new
@@ -315,6 +315,15 @@ safe to leave public; with `CRON_SECRET` set it is required, as for backups.
 ### Project Chat
 ![Project chat screenshot](docs/screenshots/project-chat.png)
 
+
+### Calendar
+
+**Calendar** in the sidebar (and in the phone's bottom bar) opens two views of your events, switched with the tabs at the top of the page. It opens the one you used last. Both views share the header, with **New event** and **Subscribe** (a private feed for Google, Apple or Outlook calendars).
+
+- **Agenda** (`/events`, G then E) for today and the next 60 days by day, with quick entry, search and a project filter.
+- **Month** (`/events/calendar`, G then C) for a month grid of events and due tasks, with the selected day's details.
+
+Trash sits at the bottom of the sidebar, next to Collapse.
 
 ### Boards
 

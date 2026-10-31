@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  CalendarClock,
   CalendarDays,
   ChevronRight,
   Download,
@@ -30,6 +29,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import { LogoMark } from "@/components/brand/logo-mark";
 import { CommandPalette } from "@/components/command-palette";
 import { NewTaskDialog } from "@/components/new-task-dialog";
 import { NotificationsMenu } from "@/components/notifications-menu";
@@ -51,6 +51,7 @@ import { toast } from "@/components/ui/toaster";
 import { isFullHeightPage, isNavItemActive, pageTitleFor, type NavMatch } from "@/lib/app-nav";
 import { cn } from "@/lib/cn";
 import { isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
+import { calendarNavItem } from "@/lib/calendar-view";
 import { formatUnreadCount } from "@/lib/chats";
 import { paletteColor, projectColor } from "@/lib/project-color";
 import {
@@ -59,6 +60,7 @@ import {
   serializeSidebarProjects,
   type SidebarProjectsOpen,
 } from "@/lib/sidebar-state";
+import { useCalendarView } from "@/lib/use-calendar-view";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged, WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
 import type { WorkspaceNav, WorkspaceNavProject } from "@/lib/workspace-nav";
@@ -88,6 +90,11 @@ function firstName(user: NonNullable<ShellUser>) {
 
 function initial(user: NonNullable<ShellUser>) {
   return firstName(user).charAt(0).toUpperCase();
+}
+
+/** One Calendar item for the agenda and the month (DES-13): it opens the view used last and is active on both. */
+function useCalendarItem(): NavItem {
+  return { ...calendarNavItem(useCalendarView()), label: "Calendar", icon: CalendarDays };
 }
 
 /**
@@ -330,8 +337,7 @@ function Sidebar({
   ];
   const workItems: NavItem[] = [
     { href: "/tasks", label: "Tasks", icon: SquareCheckBig, exact: true, count: nav.openTasks },
-    { href: "/events", label: "Events", icon: CalendarClock, exact: true },
-    { href: "/events/calendar", label: "Calendar", icon: CalendarDays },
+    useCalendarItem(),
     { href: "/notes", label: "Notes", icon: NotebookPen },
     { href: "/board", label: "Boards", icon: SquareKanban, match: ["/tasks/board", "/tree"] },
   ];
@@ -339,23 +345,21 @@ function Sidebar({
     { href: "/planner", label: "Planner", icon: Sparkles },
     { href: "/goals", label: "Goals", icon: Target },
     { href: "/roadmap", label: "Roadmap", icon: MapIcon },
-    { href: "/trash", label: "Trash", icon: Trash2 },
   ];
   const workspaceName = user.isGuest ? "Guest workspace" : `${firstName(user)}'s workspace`;
-  const projectSummary = `${nav.activeProjectCount} active project${nav.activeProjectCount === 1 ? "" : "s"}`;
   const linkProps = { pathname, collapsed, onNavigate };
 
   // relative keeps the collapsed sidebar's hidden labels inside this scroller, as on main.
   return (
     <nav aria-label="Workspace" className="relative flex h-full flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2.5 py-3 [scrollbar-width:thin]">
       <div className={cn("flex items-center gap-2.5 px-1.5 pb-3", collapsed && "justify-center px-0")}>
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-2xs font-bold text-accent-ink" aria-hidden="true">
-          AM
-        </span>
-        {collapsed ? null : (
+        <LogoMark className="h-8 w-8 shrink-0" />
+        {collapsed ? (
+          <span className="sr-only">AI Multi</span>
+        ) : (
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{workspaceName}</p>
-            <p className="truncate text-xs text-muted">{projectSummary}</p>
+            <p className="truncate text-sm font-semibold">AI Multi</p>
+            <p className="truncate text-xs text-muted">{workspaceName}</p>
           </div>
         )}
       </div>
@@ -428,23 +432,26 @@ function Sidebar({
       <GroupLabel collapsed={collapsed}>Tools</GroupLabel>
       {toolItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
 
-      {onToggleCollapsed ? (
-        <div className="mt-auto pt-3">
+      {/* Trash is rarely needed, so it waits at the bottom next to Collapse (DES-13); collapsed, it stacks above it. */}
+      <div className={cn("mt-auto flex gap-0.5 pt-3", collapsed ? "flex-col" : "items-center")}>
+        <div className={cn("min-w-0", !collapsed && "flex-1")}>
+          <SidebarLink item={{ href: "/trash", label: "Trash", icon: Trash2 }} {...linkProps} />
+        </div>
+        {onToggleCollapsed ? (
           <button
             type="button"
             onClick={onToggleCollapsed}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             className={cn(
-              "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-muted transition-colors hover:bg-surface-hover hover:text-ink",
-              collapsed && "justify-center px-0",
+              "grid shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink",
+              collapsed ? "py-2" : "h-8 w-8",
             )}
           >
             {collapsed ? <PanelLeftOpen aria-hidden="true" className="h-4 w-4" /> : <PanelLeftClose aria-hidden="true" className="h-4 w-4" />}
-            {collapsed ? null : "Collapse"}
           </button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </nav>
   );
 }
@@ -551,7 +558,8 @@ function TopBar({
             <span aria-hidden="true" className="hidden text-muted sm:inline">/</span>
           </>
         ) : null}
-        <span className="truncate font-bold">{title}</span>
+        {/* On desktop the page's own heading says it; nested pages keep the breadcrumb (DES-10). */}
+        <span className={cn("truncate font-bold", !parent && "lg:hidden")}>{title}</span>
       </div>
       <button
         type="button"
@@ -580,7 +588,7 @@ function MobileTabs({ pathname, onNewTask, inFlow }: { pathname: string; onNewTa
   const tabs: NavItem[] = [
     { href: "/", label: "Home", icon: House },
     { href: "/tasks", label: "Tasks", icon: SquareCheckBig, exact: true },
-    { href: "/events/calendar", label: "Calendar", icon: CalendarDays },
+    useCalendarItem(),
     { href: "/projects", label: "Projects", icon: FolderKanban },
   ];
 
@@ -748,7 +756,7 @@ export function AppShell({
       <div className="flex min-h-screen flex-col overflow-x-hidden bg-canvas text-ink">
         <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <span className="flex items-center gap-2 text-sm font-semibold">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-2xs font-bold text-accent-ink" aria-hidden="true">AM</span>
+            <LogoMark className="h-7 w-7" />
             AI Multi
           </span>
           <ThemeToggle />

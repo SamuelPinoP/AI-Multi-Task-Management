@@ -414,7 +414,7 @@ export default function TasksPage() {
         </div>
       ) : (
         sections.map((section) => (
-          <section key={section.key} aria-labelledby={`section-${section.key}`} className="rounded-xl border border-line bg-surface">
+          <section key={section.key} aria-labelledby={`section-${section.key}`} className="rounded-xl border border-line bg-surface shadow-card">
             <h2 id={`section-${section.key}`} className="flex items-center gap-2 px-3 pb-1 pt-3 text-sm font-semibold sm:px-4">
               <span className={section.key === "OVERDUE" ? "text-danger" : undefined}>{sectionTitles[section.key]}</span>
               <span className="text-xs font-normal text-muted">{section.tasks.length}</span>

@@ -41,6 +41,7 @@ test("page titles prefer the longest matching prefix", () => {
   assert.deepEqual(pageTitleFor("/tasks/board", []), { title: "Boards" });
   assert.deepEqual(pageTitleFor("/tree", []), { title: "Tree view" });
   assert.deepEqual(pageTitleFor("/tree/page-1", []), { title: "Tree view" });
+  assert.deepEqual(pageTitleFor("/events", []), { title: "Calendar" });
   assert.deepEqual(pageTitleFor("/events/calendar", []), { title: "Calendar" });
   assert.deepEqual(pageTitleFor("/today", []), { title: "My day" });
   assert.deepEqual(pageTitleFor("/chats", []), { title: "Chats" });

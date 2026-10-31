@@ -222,7 +222,7 @@ export default async function ProjectDetailPage({
                   project.status.slice(1).toLowerCase()}
               </span>
               <span
-                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${isOwner ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300" : "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"}`}
+                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${isOwner ? "border-accent/30 bg-accent-soft text-accent" :"border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"}`}
               >
                 {roleLabel}
               </span>
@@ -304,7 +304,7 @@ export default async function ProjectDetailPage({
               {project.notes.map((note) => (
                 <article
                   key={note.id}
-                  className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800"
+                  className="rounded-2xl border border-line bg-surface p-5 shadow-card"
                 >
                   <h3 className="text-lg font-semibold">{note.title}</h3>
                   <p className="mt-2 text-zinc-700 dark:text-zinc-300">
@@ -381,7 +381,7 @@ export default async function ProjectDetailPage({
               {project.events.map((event) => (
                 <article
                   key={event.id}
-                  className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800"
+                  className="rounded-2xl border border-line bg-surface p-5 shadow-card"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-lg font-semibold">{event.title}</h3>
