@@ -59,7 +59,8 @@ async function addTeammate(page: Page, browser: Browser, baseURL: string | undef
 function changing(page: Page) {
   return [
     page.locator("time"),
-    page.getByRole("button", { name: "Account menu" }),
+    // includeHidden: an open menu hides the rest of the page, avatar included, from role queries.
+    page.getByRole("button", { name: "Account menu", includeHidden: true }),
     page.locator("#main-content .rounded-full[style*='background-color']"),
   ];
 }
