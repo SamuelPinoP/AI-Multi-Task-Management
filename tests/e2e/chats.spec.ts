@@ -148,6 +148,8 @@ test("on desktop an open chat hides the list until the Chats button shows it, an
   await expect(conversation.getByRole("heading", { name: projectName })).toBeVisible();
   await expect(list).toBeHidden();
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  // The page keeps one "Chats" heading for screen readers while its list is hidden.
+  await expect(owner.getByRole("heading", { level: 1, name: "Chats" })).toHaveCount(1);
   const fullWidth = (await conversation.boundingBox())!.width;
 
   // Shown: the list is back as before, and the conversation gives it the room.
@@ -156,6 +158,7 @@ test("on desktop an open chat hides the list until the Chats button shows it, an
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(list.getByRole("link", { name: new RegExp(`^${otherName}.*1 unread message$`) })).toBeVisible();
   expect((await conversation.boundingBox())!.width).toBeLessThan(fullWidth - 300);
+  await expect(owner.getByRole("heading", { level: 1, name: "Chats" })).toHaveCount(1);
 
   // The choice survives a reload, and hiding it again is remembered too.
   await owner.reload();

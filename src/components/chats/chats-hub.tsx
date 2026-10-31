@@ -234,6 +234,8 @@ export function ChatsHub({
       <section aria-label="Conversation" className={cn("min-w-0 flex-1 flex-col bg-surface lg:flex", selected ? "flex" : "hidden")}>
         {selected ? (
           <>
+            {/* The page's heading lives in the list; while the list is hidden, screen readers still get it here. */}
+            <h1 className={cn("sr-only", listOpen && "lg:hidden")}>Chats</h1>
             {/* One row on phones: back, name, and the two links as icons (their words come back from sm). */}
             <div className="flex items-center gap-2 border-b border-line px-2 py-2 sm:gap-3 sm:px-5 sm:py-3">
               <Link
