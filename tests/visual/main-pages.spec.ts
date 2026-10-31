@@ -4,7 +4,8 @@ import { continueAsGuest, signUpAndLogIn } from "../e2e/helpers";
 /*
  * Screenshots of the main pages, compared with reference images (TEST-05, #269).
  * Home is also taken in dark mode (DES-10), with a teammate who has left an
- * unread message in Team chat (DES-11).
+ * unread message in Team chat (DES-11), and Tasks with the Blue accent and the
+ * account menu open (DES-15).
  *
  * Each test signs in as a new guest and adds the same data. Due dates are
  * yesterday, today and tomorrow, which the pages show as words, so the images
@@ -94,6 +95,20 @@ test("Tasks", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Plan the next sprint", exact: true })).toBeVisible();
   await page.waitForLoadState("networkidle");
   await expect(page).toHaveScreenshot("tasks.png", { mask: changing(page) });
+});
+
+// DES-15: another accent palette, with the account menu open on its swatches.
+test("Tasks with the Blue accent", async ({ page }) => {
+  await continueAsGuest(page);
+  await addTasks(page);
+  await page.evaluate(() => localStorage.setItem("ai-multi-accent", "blue"));
+
+  await page.goto("/tasks");
+  await expect(page.getByRole("button", { name: "Plan the next sprint", exact: true })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await expect(page.getByRole("menuitemradio", { name: "Blue" })).toHaveAttribute("aria-checked", "true");
+  await expect(page).toHaveScreenshot("tasks-blue.png", { mask: changing(page) });
 });
 
 test("Boards", async ({ page }) => {
