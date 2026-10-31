@@ -7,6 +7,7 @@ test.describe.configure({ mode: "serial" });
 const contexts: BrowserContext[] = [];
 let owner: Page;
 let teammate: Page;
+let ownerEmail = "";
 let projectId = "";
 let projectName = "";
 
@@ -39,6 +40,7 @@ test.beforeAll(async ({ browser }, testInfo) => {
     accounts.push({ page, email });
   }
   owner = accounts[0].page;
+  ownerEmail = accounts[0].email;
   teammate = accounts[1].page;
 
   projectName = uniqueName("Chats hub project");
@@ -78,6 +80,10 @@ test("unread messages are counted, shown first and cleared when the chat is open
   await expect(conversation.getByRole("heading", { name: projectName })).toBeVisible();
   await expect(conversation.getByRole("separator", { name: "New messages" })).toBeVisible();
   await expect(conversation.getByText("Homepage copy is ready for review.")).toBeVisible();
+
+  // The open chat takes the whole width; the Chats button brings the list back beside it (#324).
+  await expect(row).toBeHidden();
+  await conversation.getByRole("button", { name: "Chats", exact: true }).click();
 
   // Opening it marked it read: the list and the sidebar stop counting it, and it stays under Unread until a reload.
   await expect(row).toBeVisible();
@@ -124,6 +130,45 @@ test("a message that arrives while the chat is open counts as read", async () =>
   await teammate.goto("/chats");
   await expect(chatRow(teammate)).toBeVisible();
   await expect(chatRow(teammate)).not.toHaveAccessibleName(/unread/);
+});
+
+test("on desktop an open chat hides the list until the Chats button shows it, and the choice is remembered", async () => {
+  // A second chat with a message the owner hasn't read, so the button has something to count.
+  const otherName = uniqueName("Chats hub other project");
+  const otherId = (await ok<{ id: string }>(await teammate.request.post("/api/projects", { data: { name: otherName } }))).id;
+  await ok(await teammate.request.post(`/api/projects/${otherId}/invitations`, { data: { email: ownerEmail, role: "EDITOR" } }));
+  const invitations = await ok<Array<{ id: string; project: { id: string } }>>(await owner.request.get("/api/project-invitations"));
+  await ok(await owner.request.patch(`/api/project-invitations/${invitations.find((item) => item.project.id === otherId)!.id}`, { data: { action: "ACCEPT" } }));
+  await ok(await teammate.request.post(`/api/projects/${otherId}/comments`, { multipart: { message: "Draft is in the other project." } }));
+
+  await owner.goto(`/chats?project=${projectId}`);
+  const conversation = owner.getByRole("region", { name: "Conversation" });
+  const list = owner.getByRole("list", { name: "Project chats" });
+  const toggle = conversation.getByRole("button", { name: "Chats, 1 with new messages" });
+  await expect(conversation.getByRole("heading", { name: projectName })).toBeVisible();
+  await expect(list).toBeHidden();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  const fullWidth = (await conversation.boundingBox())!.width;
+
+  // Shown: the list is back as before, and the conversation gives it the room.
+  await toggle.click();
+  await expect(list).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(list.getByRole("link", { name: new RegExp(`^${otherName}.*1 unread message$`) })).toBeVisible();
+  expect((await conversation.boundingBox())!.width).toBeLessThan(fullWidth - 300);
+
+  // The choice survives a reload, and hiding it again is remembered too.
+  await owner.reload();
+  await expect(list).toBeVisible();
+  await toggle.click();
+  await expect(list).toBeHidden();
+  await owner.reload();
+  await expect(conversation.getByRole("heading", { name: projectName })).toBeVisible();
+  await expect(list).toBeHidden();
+
+  // With no chat open, the list is the page.
+  await owner.goto("/chats");
+  await expect(list).toBeVisible();
 });
 
 test("Mark all read clears every chat", async () => {

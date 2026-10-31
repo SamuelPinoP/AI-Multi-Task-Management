@@ -3,9 +3,21 @@
 /**
  * The Chats hub (SIDE-02): the list of project chats on the left, the open
  * chat on the right. On phones the list and the chat are separate screens.
+ * On desktop an open chat gets the whole width; its Chats button shows the
+ * list beside it again, and that choice is remembered (#324).
  */
 
-import { ArrowLeft, CheckCheck, LayoutDashboard, MessagesSquare, Paperclip, Search, SquareKanban } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCheck,
+  LayoutDashboard,
+  MessagesSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Paperclip,
+  Search,
+  SquareKanban,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -13,6 +25,7 @@ import { ProjectChatWorkspace } from "@/components/project-chat-workspace";
 import { uiButtonClass } from "@/components/ui";
 import { toast } from "@/components/ui/toaster";
 import {
+  CHATS_LIST_COOKIE,
   chatPreview,
   filterChatSummaries,
   formatUnreadCount,
@@ -79,12 +92,16 @@ export function ChatsHub({
   chats,
   selected,
   currentUser,
+  initialListOpen,
 }: {
   chats: ChatSummary[];
   selected: OpenedProjectChat | null;
   currentUser: { name: string | null; email: string };
+  /** Whether the list shows beside an open chat on desktop, from the CHATS_LIST_COOKIE. */
+  initialListOpen: boolean;
 }) {
   const router = useRouter();
+  const [listOpen, setListOpen] = useState(initialListOpen);
   const [filter, setFilter] = useState<ChatFilter>("all");
   const [query, setQuery] = useState("");
   const [markingAll, setMarkingAll] = useState(false);
@@ -107,6 +124,12 @@ export function ChatsHub({
   useEffect(() => {
     if (selectedId) notifyWorkspaceChanged();
   }, [selectedId]);
+
+  function toggleList() {
+    const next = !listOpen;
+    setListOpen(next);
+    document.cookie = `${CHATS_LIST_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+  }
 
   async function markAllRead() {
     setMarkingAll(true);
@@ -131,9 +154,15 @@ export function ChatsHub({
 
   return (
     <div className="flex h-full min-h-0">
+      {/* Phones show the list or the chat. On desktop the list stays beside the chat only while it's open. */}
       <section
+        id="chat-list"
         aria-labelledby="chats-heading"
-        className={cn("min-h-0 w-full flex-col bg-canvas lg:flex lg:w-[22.5rem] lg:shrink-0 lg:border-r lg:border-line", selected ? "hidden" : "flex")}
+        className={cn(
+          "min-h-0 w-full flex-col bg-canvas lg:w-[22.5rem] lg:shrink-0 lg:border-r lg:border-line",
+          selected ? "hidden" : "flex",
+          selected && !listOpen ? "lg:hidden" : "lg:flex",
+        )}
       >
         <div className="grid gap-3 px-4 pb-3 pt-5">
           <div className="flex items-start gap-3">
@@ -216,6 +245,32 @@ export function ChatsHub({
               >
                 <ArrowLeft aria-hidden="true" className="h-5 w-5" />
               </Link>
+              {/* Desktop: shows or hides the list beside the chat, with the count of chats that have new messages. */}
+              <button
+                type="button"
+                onClick={toggleList}
+                aria-expanded={listOpen}
+                aria-controls="chat-list"
+                aria-label={unreadChats ? `Chats, ${unreadChats} with new messages` : undefined}
+                title={listOpen ? "Hide the chat list" : "Show the chat list"}
+                className={cn(uiButtonClass, "hidden shrink-0 gap-1.5 px-2.5 py-1.5 text-xs lg:inline-flex", listOpen && "bg-surface-hover")}
+              >
+                {listOpen ? (
+                  <PanelLeftClose aria-hidden="true" className="h-4 w-4 text-muted" />
+                ) : (
+                  <PanelLeftOpen aria-hidden="true" className="h-4 w-4 text-muted" />
+                )}
+                Chats
+                {unreadChats ? (
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 font-mono text-2xs font-bold tabular-nums text-accent-ink"
+                  >
+                    {formatUnreadCount(unreadChats)}
+                  </span>
+                ) : null}
+              </button>
+              <span aria-hidden="true" className="hidden h-6 w-px shrink-0 bg-line lg:block" />
               <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded" style={{ backgroundColor: projectColor({ id: selected.id, color: selected.color }) }} />
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-base font-bold">{selected.name}</h2>
@@ -234,9 +289,11 @@ export function ChatsHub({
                 </Link>
               </div>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col sm:p-4">
+            {/* The pane has its own header and edges, so the chat inside it goes without a card frame. */}
+            <div className="flex min-h-0 flex-1 flex-col">
               <ProjectChatWorkspace
                 key={selected.id}
+                framed={false}
                 projectId={selected.id}
                 currentUser={currentUser}
                 readOnly={selected.readOnly}
