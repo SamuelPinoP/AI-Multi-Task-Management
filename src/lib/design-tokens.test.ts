@@ -41,7 +41,7 @@ function contrast(a: string, b: string) {
 const PALETTE = ["canvas", "surface", "raised", "sunken", "surface-hover", "ink", "muted", "line", "accent", "accent-hover", "accent-ink", "accent-soft"];
 const ZINC = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map((step) => `color-zinc-${step}`);
 
-const TEXT =["ink", "muted", "color-zinc-500", "accent", "danger", "warning", "caution", "success"];
+const TEXT = ["ink", "muted", "color-zinc-500", "accent", "danger", "warning", "caution", "success"];
 const SURFACES = ["canvas", "sunken", "surface", "raised", "surface-hover"];
 const PILLS = [
   ["accent", "accent-soft"],
