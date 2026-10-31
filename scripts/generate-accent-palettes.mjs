@@ -43,13 +43,13 @@ const PALETTES = {
     light: { accent: [0.48, 0.15, 338], "accent-hover": [0.42, 0.14, 338], "accent-ink": "#ffffff", "accent-soft": [0.94, 0.03, 340] },
     dark: { accent: [0.76, 0.105, 340], "accent-hover": [0.82, 0.09, 340], "accent-ink": [0.2, 0.037, 340], "accent-soft": [0.29, 0.055, 340] },
   },
-  // Near-black buttons on near-neutral grays. Its soft color is darker than
-  // the others' so selected items still stand out from hovered ones.
+  // Near-black buttons on near-neutral grays. Its soft color has the others'
+  // lightness: muted text sits on it in cards like Home's "Suggested next".
   graphite: {
     hue: 255,
     tint: 0.45,
-    light: { accent: [0.3, 0.012, 255], "accent-hover": [0.22, 0.01, 255], "accent-ink": "#ffffff", "accent-soft": [0.9, 0.008, 255] },
-    dark: { accent: [0.9, 0.008, 255], "accent-hover": [0.96, 0.005, 255], "accent-ink": [0.2, 0.003, 255], "accent-soft": [0.36, 0.012, 255] },
+    light: { accent: [0.3, 0.012, 255], "accent-hover": [0.22, 0.01, 255], "accent-ink": "#ffffff", "accent-soft": [0.94, 0.008, 255] },
+    dark: { accent: [0.9, 0.008, 255], "accent-hover": [0.96, 0.005, 255], "accent-ink": [0.2, 0.003, 255], "accent-soft": [0.29, 0.012, 255] },
   },
 };
 

@@ -385,7 +385,7 @@
   --accent: #2a2e34;
   --accent-hover: #181b1f;
   --accent-ink: #ffffff;
-  --accent-soft: #dadee3;
+  --accent-soft: #e8ebf1;
   --color-zinc-50: #f7f7f8;
   --color-zinc-100: #eff0f1;
   --color-zinc-200: #e1e3e6;
@@ -412,7 +412,7 @@
   --accent: #dadee3;
   --accent-hover: #eff2f5;
   --accent-ink: #151617;
-  --accent-soft: #393e43;
+  --accent-soft: #272c31;
   --color-zinc-500: #92969a;
 }
 /* End of the accent palettes. */

@@ -45,6 +45,9 @@ const TEXT = ["ink", "muted", "color-zinc-500", "accent", "danger", "warning", "
 const SURFACES = ["canvas", "sunken", "surface", "raised", "surface-hover"];
 const PILLS = [
   ["accent", "accent-soft"],
+  // Cards tinted with accent-soft carry text too: Home's "Suggested next", the sign-up box.
+  ["ink", "accent-soft"],
+  ["muted", "accent-soft"],
   ["danger", "danger-soft"],
   ["warning", "warning-soft"],
   ["caution", "caution-soft"],
@@ -77,7 +80,7 @@ for (const { id, name } of ACCENTS) {
       assert.deepEqual(failures(colors, TEXT.flatMap((fg) => SURFACES.map((bg) => [fg, bg]))), []);
     });
 
-    test(`${name}, ${theme} theme: status pills and accent buttons pass 4.5:1`, () => {
+    test(`${name}, ${theme} theme: pills, accent-soft cards and accent buttons pass 4.5:1`, () => {
       assert.deepEqual(failures(colors, PILLS), []);
     });
   }
