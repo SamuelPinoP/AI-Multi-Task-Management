@@ -1,5 +1,5 @@
 import "server-only";
-import { formatChatTime, sortChatSummaries, type ChatAccessLevel, type ChatSummary } from "@/lib/chats";
+import { formatChatTime, sortChatSummaries, teammateCount, type ChatAccessLevel, type ChatSummary } from "@/lib/chats";
 import { prisma } from "@/lib/prisma";
 import { getProjectAccessForUser, projectAccessWhereForProject } from "@/lib/project-access";
 import {
@@ -62,6 +62,7 @@ export async function getChatSummaries(user: ChatUser): Promise<ChatSummary[]> {
         accessLevel: getProjectAccessForUser(project, user.id)?.accessLevel ?? "VIEWER",
         memberCount: peopleCount(project),
         unread: unread.get(project.id) ?? 0,
+        teammates: teammateCount(project, user.id),
         lastMessage: last
           ? {
               author: last.userId === user.id ? "You" : firstName(last.user),

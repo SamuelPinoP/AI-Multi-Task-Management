@@ -7,7 +7,7 @@
 import { getLocalDateOnly } from "@/lib/task-date-buckets";
 
 export type HomePriority = "HIGH" | "MEDIUM" | "LOW";
-export type ProjectHealthStatus = "ON_TRACK" | "AT_RISK" | "STALE";
+export type ProjectHealthStatus = "ON_TRACK" | "AT_RISK" | "STALE" | "NOT_STARTED";
 
 const DAY_MS = 86_400_000;
 /** Days without an update before an active project counts as stale. */
@@ -77,15 +77,24 @@ export function overdueCounts(
   });
 }
 
-/** The automatic project status: overdue work is at risk, no updates for a week is stale. */
+/**
+ * The automatic project status: overdue work is at risk, no updates for a week
+ * is stale, and a project with nothing done or in progress hasn't started (DES-11).
+ */
 export function projectHealth(
-  project: { totalTasks: number; doneTasks: number; overdueTasks: number; lastUpdate: Date },
+  project: { totalTasks: number; doneTasks: number; inProgressTasks: number; overdueTasks: number; lastUpdate: Date },
   now: Date,
 ) {
   const percentDone = project.totalTasks ? Math.round((project.doneTasks / project.totalTasks) * 100) : 0;
   const idleDays = Math.max(0, -daysFrom(project.lastUpdate, now));
   const status: ProjectHealthStatus =
-    project.overdueTasks > 0 ? "AT_RISK" : idleDays >= STALE_AFTER_DAYS ? "STALE" : "ON_TRACK";
+    project.overdueTasks > 0
+      ? "AT_RISK"
+      : idleDays >= STALE_AFTER_DAYS
+        ? "STALE"
+        : !project.doneTasks && !project.inProgressTasks
+          ? "NOT_STARTED"
+          : "ON_TRACK";
   return { status, percentDone, idleDays };
 }
 
@@ -122,6 +131,17 @@ export function relativeTime(instant: Date, realNow: Date, timeZone?: string | n
 export function barHeights(values: number[]) {
   const max = Math.max(0, ...values);
   return values.map((value) => (max ? value / max : 0));
+}
+
+/**
+ * An Activity message as the rest of a sentence that starts with a name (DES-11):
+ * "Created task: “Draft”" becomes "created the task “Draft”".
+ */
+export function activityAction(message: string) {
+  const text = message.trim().replace(/\.$/, "");
+  const labelled = text.match(/^([A-Z][a-z]+) ([a-z]+): (.+)$/);
+  if (labelled) return `${labelled[1].toLowerCase()} the ${labelled[2]} ${labelled[3]}`;
+  return /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 }
 
 /** "45 min", "1 h" or "1 h 50 min". */
