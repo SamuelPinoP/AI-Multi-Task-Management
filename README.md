@@ -324,3 +324,7 @@ safe to leave public; with `CRON_SECRET` set it is required, as for backups.
 - **Tree View** (`/tree`, each page at `/tree/<id>`) for private hierarchy pages, such as Study Plan or Career Plan: root, child and sibling nodes, renaming, colors and sizes, dragging a node with everything under it, "Move to…", and undo (Ctrl+Z).
 
 Plans for the Tree View's keyboard support and a Mind View are in [docs/views-roadmap.md](docs/views-roadmap.md).
+
+## License
+
+AI Multi is open source under the [MIT License](LICENSE).
