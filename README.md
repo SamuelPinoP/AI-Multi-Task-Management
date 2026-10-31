@@ -324,3 +324,12 @@ safe to leave public; with `CRON_SECRET` set it is required, as for backups.
 - **Tree View** (`/tree`, each page at `/tree/<id>`) for private hierarchy pages, such as Study Plan or Career Plan: root, child and sibling nodes, renaming, colors and sizes, dragging a node with everything under it, "Move to…", and undo (Ctrl+Z).
 
 Plans for the Tree View's keyboard support and a Mind View are in [docs/views-roadmap.md](docs/views-roadmap.md).
+
+### Calendar
+
+**Calendar** in the sidebar (and in the phone's bottom bar) opens two views of your events, switched with the tabs at the top of the page. It opens the one you used last. Both views share the header, with **New event** and **Subscribe** (a private feed for Google, Apple or Outlook calendars).
+
+- **Agenda** (`/events`, G then E) for today and the next 60 days by day, with quick entry, search and a project filter.
+- **Month** (`/events/calendar`, G then C) for a month grid of events and due tasks, with the selected day's details.
+
+Trash sits at the bottom of the sidebar, next to Collapse.

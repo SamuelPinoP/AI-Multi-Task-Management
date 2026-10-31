@@ -12,6 +12,8 @@ import { getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
 import { eventWallTime, formatEventTime } from "@/lib/event-time";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 import { projectColor } from "@/lib/project-color";
+import { calendarViews } from "@/lib/calendar-view";
+import { useCalendarView } from "@/lib/use-calendar-view";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
@@ -73,6 +75,8 @@ export function TodayWorkspace({
   const [tasks, setTasks] = useState(initialTasks);
   const [events] = useState(initialEvents);
   const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null);
+  // Like the sidebar's Calendar item, opens the Agenda or Month tab, whichever was used last.
+  const calendarView = useCalendarView();
 
   const { overdueTasks, dueTodayTasks, todayEvents, upcomingEvents } =
     useMemo(() => {
@@ -156,10 +160,7 @@ export function TodayWorkspace({
             <Link href="/tasks" className={uiButtonClass}>
               Tasks
             </Link>
-            <Link href="/events" className={uiButtonClass}>
-              Events
-            </Link>
-            <Link href="/events/calendar" className={uiButtonClass}>
+            <Link href={calendarViews[calendarView].href} className={uiButtonClass}>
               Calendar
             </Link>
           </div>
