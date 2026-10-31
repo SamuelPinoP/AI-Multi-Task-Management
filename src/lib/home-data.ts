@@ -52,10 +52,15 @@ export type HomeEvent = {
 /** A band event with its wall-clock start and end (DES-10). */
 export type HomeBandEvent = HomeEvent & { start: Date; end: Date | null };
 
+/** Someone in a project, for its avatars (DES-11). `id` is the user's, or the member's when they have no account. */
+export type HomePerson = { id: string; name: string; isYou: boolean };
+
 export type HomeProjectHealth = {
   id: string;
   name: string;
   color: string | null;
+  /** The owner first, then the members. */
+  people: HomePerson[];
   status: ProjectHealthStatus;
   percentDone: number;
   totalTasks: number;
@@ -187,6 +192,11 @@ export async function getHomeData(userId: string, now: Date, timeZone: string | 
           name: true,
           color: true,
           updatedAt: true,
+          user: { select: { id: true, name: true, email: true } },
+          members: {
+            select: { id: true, userId: true, name: true, user: { select: { name: true } } },
+            orderBy: { createdAt: "asc" },
+          },
           tasks: { where: { deletedAt: null }, select: { status: true, dueDate: true, updatedAt: true } },
         },
         orderBy: { updatedAt: "desc" },
@@ -308,6 +318,7 @@ export async function getHomeData(userId: string, now: Date, timeZone: string | 
 
   const projectHealthRows = projects.map((project) => {
     const doneTasks = project.tasks.filter((task) => task.status === TaskStatus.DONE).length;
+    const inProgressTasks = project.tasks.filter((task) => task.status === TaskStatus.IN_PROGRESS).length;
     const overdueTasks = project.tasks.filter(
       (task) => task.status !== TaskStatus.DONE && task.dueDate && daysFrom(task.dueDate, now) < 0,
     ).length;
@@ -316,13 +327,20 @@ export async function getHomeData(userId: string, now: Date, timeZone: string | 
       project.updatedAt,
     );
     const health = projectHealth(
-      { totalTasks: project.tasks.length, doneTasks, overdueTasks, lastUpdate: wall(lastUpdate) },
+      { totalTasks: project.tasks.length, doneTasks, inProgressTasks, overdueTasks, lastUpdate: wall(lastUpdate) },
       now,
     );
+    const people: HomePerson[] = [
+      { id: project.user.id, name: project.user.name || project.user.email, isYou: project.user.id === userId },
+      ...project.members
+        .filter((member) => member.userId !== project.user.id)
+        .map((member) => ({ id: member.userId ?? member.id, name: member.user?.name || member.name, isYou: member.userId === userId })),
+    ];
     return {
       id: project.id,
       name: project.name,
       color: project.color,
+      people,
       totalTasks: project.tasks.length,
       doneTasks,
       overdueTasks,

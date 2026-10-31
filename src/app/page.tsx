@@ -1,28 +1,46 @@
-import { ArrowRight, NotebookPen, Sparkles } from "lucide-react";
+import { NotebookPen, Sparkles } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { AvatarStack } from "@/components/home/avatar-stack";
 import { FocusList } from "@/components/home/focus-list";
 import { NowAndNext } from "@/components/home/now-and-next";
 import { QuickAdd, QuickAddFocusButton } from "@/components/home/quick-add";
+import { TeamChatList } from "@/components/home/team-chat";
 import { WeekBars } from "@/components/home/week-bars";
 import { LandingPage } from "@/components/landing-page";
 import { uiButtonClass } from "@/components/ui";
 import { getCurrentUser, isGuestLoginEnabled, isPublicSignupEnabled } from "@/lib/auth";
+import { getChatSummaries } from "@/lib/chats-data";
 import { cn } from "@/lib/cn";
 import { eventWallTime, formatEventTime } from "@/lib/event-time";
 import { getHomeData, type HomeEvent, type HomeProjectHealth } from "@/lib/home-data";
-import { daysFrom, dueLabel, greetingFor, relativeTime, taskSummary } from "@/lib/home-summary";
+import { activityAction, daysFrom, dueLabel, greetingFor, relativeTime, taskSummary } from "@/lib/home-summary";
 import { paletteColor, projectColor } from "@/lib/project-color";
 import { getUserNow, getUserTimeZone } from "@/lib/user-time-server";
 
 const linkClass = "inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline";
+/** Shared projects in Home's Team chat card (DES-11). */
+const TEAM_CHAT_LIMIT = 4;
 
-function Card({ title, aside, className, children }: { title: ReactNode; aside?: ReactNode; className?: string; children: ReactNode }) {
+/** A Home card. Cards that lead to a full page put "View all" where others put a note (DES-11). */
+function Card({ title, aside, viewAll, className, children }: {
+  title: ReactNode;
+  aside?: ReactNode;
+  viewAll?: { href: string; label: string };
+  className?: string;
+  children: ReactNode;
+}) {
   return (
     <section className={cn("rounded-xl border border-line bg-surface p-4 shadow-card", className)}>
       <div className="mb-2 flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-1.5 text-card">{title}</h2>
-        {aside ? <span className="text-xs text-muted">{aside}</span> : null}
+        {viewAll ? (
+          <Link href={viewAll.href} aria-label={viewAll.label} className="shrink-0 text-xs font-medium text-accent hover:underline">
+            View all
+          </Link>
+        ) : aside ? (
+          <span className="text-xs text-muted">{aside}</span>
+        ) : null}
       </div>
       {children}
     </section>
@@ -117,6 +135,7 @@ const healthStyles: Record<HomeProjectHealth["status"], { label: string; classNa
   ON_TRACK: { label: "On track", className: "bg-success-soft text-success" },
   AT_RISK: { label: "At risk", className: "bg-danger-soft text-danger" },
   STALE: { label: "Stale", className: "bg-caution-soft text-caution" },
+  NOT_STARTED: { label: "Not started", className: "bg-sunken text-muted" },
 };
 
 function healthDetail(project: HomeProjectHealth) {
@@ -124,7 +143,9 @@ function healthDetail(project: HomeProjectHealth) {
   const done = `${project.percentDone}% done`;
   if (project.status === "AT_RISK") return `${done} · ${project.overdueTasks} overdue`;
   if (!project.totalTasks) return "No tasks yet";
-  return `${done} · ${project.doneTasks} of ${project.totalTasks} tasks`;
+  const tasks = `${project.totalTasks} task${project.totalTasks === 1 ? "" : "s"}`;
+  if (project.status === "NOT_STARTED") return `${tasks}, none started`;
+  return `${done} · ${project.doneTasks} of ${tasks}`;
 }
 
 export default async function HomePage() {
@@ -135,7 +156,9 @@ export default async function HomePage() {
 
   // The user's wall clock, so "today" follows their time zone, not the server's (#125).
   const [now, timeZone] = await Promise.all([getUserNow(), getUserTimeZone()]);
-  const home = await getHomeData(user.id, now, timeZone);
+  // Team chat reads the Chats page's summaries: one more query on load, no polling (DES-11).
+  const [home, chats] = await Promise.all([getHomeData(user.id, now, timeZone), getChatSummaries(user)]);
+  const teamChats = chats.filter((chat) => chat.teammates > 0).slice(0, TEAM_CHAT_LIMIT);
   const realNow = new Date();
   const { stats } = home;
 
@@ -203,16 +226,9 @@ export default async function HomePage() {
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         <div className="grid grid-cols-1 gap-4">
-          <Card title="Focus" aside={home.openTaskCount ? "Sorted by due date and priority" : undefined}>
+          <Card title="Focus" viewAll={home.openTaskCount ? { href: "/tasks", label: "View all tasks" } : undefined}>
             {focusRows.length ? (
-              <>
-                <FocusList tasks={focusRows} />
-                {home.openTaskCount > focusRows.length ? (
-                  <Link href="/tasks" className={cn(linkClass, "mt-2")}>
-                    All {home.openTaskCount} open tasks <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
-                  </Link>
-                ) : null}
-              </>
+              <FocusList tasks={focusRows} />
             ) : (
               <EmptyState action={<QuickAddFocusButton className={linkClass}>Add your first task</QuickAddFocusButton>}>
                 Nothing to focus on yet.
@@ -230,7 +246,7 @@ export default async function HomePage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4">
-          <Card title="Project health" aside={home.projects.length ? "Active projects" : undefined}>
+          <Card title="Projects" viewAll={home.projects.length ? { href: "/projects", label: "View all projects" } : undefined}>
             {home.projects.length ? (
               <ul>
                 {home.projects.map((project) => {
@@ -255,7 +271,10 @@ export default async function HomePage() {
                       >
                         <div className="h-full" style={{ width: `${project.percentDone}%`, backgroundColor: color }} />
                       </div>
-                      <p className="mt-1 text-xs text-muted">{healthDetail(project)}</p>
+                      <div className="mt-1.5 flex items-center justify-between gap-2">
+                        <p className="min-w-0 truncate text-xs text-muted">{healthDetail(project)}</p>
+                        <AvatarStack people={project.people} label={`${project.name} members`} />
+                      </div>
                     </li>
                   );
                 })}
@@ -266,6 +285,12 @@ export default async function HomePage() {
               </EmptyState>
             )}
           </Card>
+
+          {teamChats.length ? (
+            <Card title="Team chat" viewAll={{ href: "/chats", label: "View all chats" }}>
+              <TeamChatList chats={teamChats} />
+            </Card>
+          ) : null}
 
           <Card title="Activity" aside={home.activity.length ? "You and your teammates" : undefined}>
             {home.activity.length ? (
@@ -280,7 +305,8 @@ export default async function HomePage() {
                       {activity.user.name.charAt(0).toUpperCase()}
                     </span>
                     <span className="min-w-0 flex-1">
-                      {activity.message}
+                      <span className="font-semibold">{activity.user.id === user.id ? "You" : activity.user.name}</span>{" "}
+                      {activityAction(activity.message)}
                       {activity.project ? <span className="text-muted"> · {activity.project.name}</span> : null}
                     </span>
                     <time dateTime={activity.createdAt.toISOString()} className="shrink-0 font-mono text-xs tabular-nums text-muted">

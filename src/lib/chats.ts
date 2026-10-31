@@ -11,6 +11,8 @@ export type ChatSummary = {
   memberCount: number;
   /** Messages from others since the user last read this chat (SIDE-03). */
   unread: number;
+  /** Other people with an account in the project; Home shows Team chat only when a chat has some (DES-11). */
+  teammates: number;
   lastMessage: {
     /** "You" or the author's first name. */
     author: string;
@@ -55,6 +57,13 @@ export function chatPreview(chat: ChatSummary) {
   if (!last) return "No messages yet";
   if (last.text) return `${last.author}: ${last.text}`;
   return `${last.author} sent ${last.attachmentCount} file${last.attachmentCount === 1 ? "" : "s"}`;
+}
+
+/** People with an account in the project besides the user: the owner and members who signed up (DES-11). */
+export function teammateCount(project: { userId: string; members: { userId: string | null }[] }, userId: string) {
+  const others = new Set(project.members.flatMap((member) => (member.userId && member.userId !== userId ? [member.userId] : [])));
+  if (project.userId !== userId) others.add(project.userId);
+  return others.size;
 }
 
 /** Badge text: more than 99 reads "99+". */

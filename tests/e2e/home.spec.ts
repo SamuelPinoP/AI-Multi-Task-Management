@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { continueAsGuest, uniqueName } from "./helpers";
+import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
 
 test("a new workspace shows one next step in every empty card", async ({ page, isMobile }) => {
   await continueAsGuest(page);
@@ -36,6 +36,9 @@ test("quick add puts a task in Focus; completing it can be undone", async ({ pag
   await expect(page.getByText("Task added")).toBeVisible();
   await expect(focus.getByRole("link", { name: title })).toBeVisible();
   await expect(page.getByLabel("Add a task")).toHaveValue("");
+  // Activity says who did it (DES-11).
+  const activity = page.locator("section").filter({ has: page.getByRole("heading", { name: "Activity" }) });
+  await expect(activity).toContainText(`You created the task “${title}”`);
 
   await focus.getByRole("button", { name: `Complete ${title}` }).click();
   await expect(focus.getByRole("link", { name: title })).toHaveCount(0);
@@ -53,6 +56,9 @@ test("Focus orders overdue work first and project health flags it", async ({ pag
   const project = (await (
     await page.request.post("/api/projects", { data: { name: uniqueName("Health project") } })
   ).json()) as { id: string; name: string };
+  const idle = (await (
+    await page.request.post("/api/projects", { data: { name: uniqueName("Idle project") } })
+  ).json()) as { id: string; name: string };
 
   const day = (offset: number) => {
     const date = new Date();
@@ -62,6 +68,7 @@ test("Focus orders overdue work first and project health flags it", async ({ pag
   for (const data of [
     { title: later, dueDate: day(3), priority: "HIGH" },
     { title: late, dueDate: day(-2), priority: "LOW", projectId: project.id },
+    { title: uniqueName("Waiting task"), projectId: idle.id },
   ]) {
     expect((await page.request.post("/api/tasks", { data })).ok()).toBe(true);
   }
@@ -72,10 +79,82 @@ test("Focus orders overdue work first and project health flags it", async ({ pag
   await expect(focus.getByRole("listitem").first()).toContainText("2 days late");
   await expect(page.getByRole("group", { name: "Overdue: 1" })).toBeVisible();
 
-  const health = page.locator("section").filter({ has: page.getByRole("heading", { name: "Project health" }) });
-  const row = health.getByRole("listitem").filter({ hasText: project.name });
+  await expect(focus.getByRole("link", { name: "View all tasks" })).toHaveAttribute("href", "/tasks");
+
+  const projects = page.locator("section").filter({ has: page.getByRole("heading", { name: "Projects", exact: true }) });
+  await expect(projects.getByRole("link", { name: "View all projects" })).toHaveAttribute("href", "/projects");
+  const row = projects.getByRole("listitem").filter({ hasText: project.name });
   await expect(row).toContainText("At risk");
   await expect(row).toContainText("1 overdue");
+  await expect(row.getByRole("list", { name: `${project.name} members` }).getByTitle("You")).toBeVisible();
+  // Nothing done or in progress reads "Not started", not "On track" (DES-11).
+  const idleRow = projects.getByRole("listitem").filter({ hasText: idle.name });
+  await expect(idleRow).toContainText("Not started");
+  await expect(idleRow).toContainText("1 task, none started");
+
+  // A chat nobody else can read stays off Home: Team chat is for shared projects.
+  expect((await page.request.post(`/api/projects/${project.id}/comments`, { data: { message: "Note to self" } })).status()).toBe(201);
+  await page.reload();
+  await expect(focus).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Team chat" })).toHaveCount(0);
+});
+
+test("a teammate's message shows in Team chat with an unread mark, and Activity names them", async ({ page, browser, baseURL }) => {
+  test.setTimeout(90_000);
+  const owner = await signUpAndLogIn(page, "E2E home owner");
+  const projectName = uniqueName("Team home");
+  const project = (await (await page.request.post("/api/projects", { data: { name: projectName } })).json()) as { id: string };
+  const taskTitle = uniqueName("Shared task");
+  expect((await page.request.post("/api/tasks", { data: { title: taskTitle, projectId: project.id } })).ok()).toBe(true);
+
+  const memberContext = await browser.newContext({ baseURL });
+  const member = await memberContext.newPage();
+  try {
+    const { email } = await signUpAndLogIn(member, "E2E home member");
+    expect((await page.request.post(`/api/projects/${project.id}/invitations`, { data: { email, role: "EDITOR" } })).status()).toBe(201);
+    const invitations = (await (await member.request.get("/api/project-invitations")).json()) as { id: string; project: { id: string } }[];
+    const invitation = invitations.find((item) => item.project.id === project.id)!;
+    expect((await member.request.patch(`/api/project-invitations/${invitation.id}`, { data: { action: "ACCEPT" } })).ok()).toBe(true);
+    const message = `${uniqueName("Ready for review")}: the hero copy, the pricing table and the signup flow all changed today`;
+    expect((await page.request.post(`/api/projects/${project.id}/comments`, { data: { message } })).status()).toBe(201);
+
+    await member.goto("/");
+    const chat = member.locator("section").filter({ has: member.getByRole("heading", { name: "Team chat" }) });
+    const row = chat.getByRole("link", { name: new RegExp(projectName) });
+    await expect(row).toContainText(message);
+    await expect(row).toContainText("1 unread message");
+    await expect(chat.getByRole("link", { name: "View all chats" })).toHaveAttribute("href", "/chats");
+    // A long message is cut short inside the card; it doesn't push the time and the count past its edge.
+    const card = (await chat.boundingBox())!;
+    const link = (await row.boundingBox())!;
+    expect(link.x + link.width).toBeLessThanOrEqual(card.x + card.width);
+
+    // The project's avatars name both people, and Activity says who did what.
+    const projects = member.locator("section").filter({ has: member.getByRole("heading", { name: "Projects", exact: true }) });
+    const people = projects.getByRole("list", { name: `${projectName} members` });
+    await expect(people.getByRole("listitem")).toHaveCount(2);
+    await expect(people.getByTitle(owner.name)).toBeVisible();
+    await expect(people.getByTitle("You")).toBeVisible();
+    const activity = member.locator("section").filter({ has: member.getByRole("heading", { name: "Activity" }) });
+    await expect(activity).toContainText(`${owner.name} created the task “${taskTitle}”`);
+
+    for (const theme of ["light", "dark"]) {
+      await member.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
+      await member.reload();
+      await expect(row).toBeVisible();
+      const results = await new AxeBuilder({ page: member }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+      expect(results.violations.map((violation) => `${violation.id}: ${violation.help}`), `Home with Team chat (${theme})`).toEqual([]);
+    }
+
+    // The row opens that chat, which marks it read.
+    await row.click();
+    await expect(member).toHaveURL(new RegExp(`/chats\\?project=${project.id}$`));
+    await member.goto("/");
+    await expect(row).toContainText(message);
+    await expect(row).not.toContainText("unread");
+  } finally {
+    await memberContext.close();
+  }
 });
 
 // DES-10: the band compares event times with the user's wall clock. The browser

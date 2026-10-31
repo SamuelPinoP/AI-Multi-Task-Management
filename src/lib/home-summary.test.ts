@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  activityAction,
   bandSuggestion,
   barHeights,
   dailyCounts,
@@ -72,14 +73,34 @@ test("overdueCounts follows creation, due date and completion", () => {
 });
 
 test("project health: overdue is at risk, a quiet week is stale", () => {
-  assert.deepEqual(projectHealth({ totalTasks: 13, doneTasks: 8, overdueTasks: 0, lastUpdate: day(-1) }, now), {
+  assert.deepEqual(projectHealth({ totalTasks: 13, doneTasks: 8, inProgressTasks: 0, overdueTasks: 0, lastUpdate: day(-1) }, now), {
     status: "ON_TRACK",
     percentDone: 62,
     idleDays: 1,
   });
-  assert.equal(projectHealth({ totalTasks: 8, doneTasks: 3, overdueTasks: 3, lastUpdate: day(0) }, now).status, "AT_RISK");
-  assert.equal(projectHealth({ totalTasks: 5, doneTasks: 1, overdueTasks: 0, lastUpdate: day(-9) }, now).status, "STALE");
-  assert.equal(projectHealth({ totalTasks: 0, doneTasks: 0, overdueTasks: 0, lastUpdate: day(0) }, now).percentDone, 0);
+  assert.equal(projectHealth({ totalTasks: 8, doneTasks: 3, inProgressTasks: 0, overdueTasks: 3, lastUpdate: day(0) }, now).status, "AT_RISK");
+  assert.equal(projectHealth({ totalTasks: 5, doneTasks: 1, inProgressTasks: 0, overdueTasks: 0, lastUpdate: day(-9) }, now).status, "STALE");
+  assert.equal(projectHealth({ totalTasks: 0, doneTasks: 0, inProgressTasks: 0, overdueTasks: 0, lastUpdate: day(0) }, now).percentDone, 0);
+});
+
+test("project health: nothing done or in progress hasn't started", () => {
+  const fresh = { totalTasks: 4, doneTasks: 0, inProgressTasks: 0, overdueTasks: 0, lastUpdate: day(0) };
+  assert.equal(projectHealth(fresh, now).status, "NOT_STARTED");
+  assert.equal(projectHealth({ ...fresh, totalTasks: 0 }, now).status, "NOT_STARTED");
+  assert.equal(projectHealth({ ...fresh, inProgressTasks: 1 }, now).status, "ON_TRACK");
+  assert.equal(projectHealth({ ...fresh, doneTasks: 1 }, now).status, "ON_TRACK");
+  // Overdue and quiet projects keep their status.
+  assert.equal(projectHealth({ ...fresh, overdueTasks: 1 }, now).status, "AT_RISK");
+  assert.equal(projectHealth({ ...fresh, lastUpdate: day(-9) }, now).status, "STALE");
+});
+
+test("activity messages read on after a name", () => {
+  assert.equal(activityAction("Created task: “Draft slides”"), "created the task “Draft slides”");
+  assert.equal(activityAction("Completed task: “Fix: login”"), "completed the task “Fix: login”");
+  assert.equal(activityAction("Restored note: “Plan”"), "restored the note “Plan”");
+  assert.equal(activityAction('Added a discussion comment in project "AI Multi".'), 'added a discussion comment in project "AI Multi"');
+  // A message that starts with a name or an acronym stays as it is.
+  assert.equal(activityAction("AI planner suggested a task"), "AI planner suggested a task");
 });
 
 test("greeting by hour", () => {
