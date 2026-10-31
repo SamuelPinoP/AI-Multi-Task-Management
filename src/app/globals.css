@@ -4,7 +4,8 @@
 /*
  * Design tokens (DES-04). One teal accent, a green-tinted neutral scale and
  * semantic colors for priority and status. Components use the semantic names
- * (bg-surface, text-muted, border-line, bg-accent, text-danger, ...).
+ * (bg-surface, text-muted, border-line, bg-accent, text-danger, ...). Teal is
+ * the default of five accent palettes; see "Accent colors" below.
  */
 :root {
   color-scheme: light;
@@ -190,6 +191,231 @@
 .dark {
   --color-zinc-500: #8b9995;
 }
+
+/*
+ * Accent colors (DES-15). data-accent on <html> picks a palette: teal (the
+ * tokens above), blue, violet, plum or graphite, chosen in the account menu.
+ * Each palette sets the accent and the tinted neutrals, zinc included, in
+ * light and dark mode. Status, project, chart and tree colors and the brand
+ * mark stay the same in all of them. On any other element, data-accent
+ * scopes a palette to it: that's how the menu's swatches show their color.
+ */
+/* Accent palettes (DES-15): written by scripts/generate-accent-palettes.mjs. Edit the script, not these blocks. */
+[data-accent="teal"] {
+  --canvas: #f6f8f7;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --sunken: #edf1f0;
+  --surface-hover: #e4ebe9;
+  --ink: #101a19;
+  --muted: #5d6b67;
+  --line: #dee5e2;
+  --accent: #0a6f68;
+  --accent-hover: #085c56;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcefeb;
+  --color-zinc-50: #f6f8f7;
+  --color-zinc-100: #edf1f0;
+  --color-zinc-200: #dee5e2;
+  --color-zinc-300: #c7d1ce;
+  --color-zinc-400: #95a39f;
+  --color-zinc-500: #5d6b67;
+  --color-zinc-600: #4e5c58;
+  --color-zinc-700: #3a4643;
+  --color-zinc-800: #25302e;
+  --color-zinc-900: #172120;
+  --color-zinc-950: #0e1413;
+}
+
+.dark[data-accent="teal"],
+.dark [data-accent="teal"] {
+  --canvas: #0a0f0e;
+  --surface: #182221;
+  --raised: #202b2a;
+  --sunken: #111918;
+  --surface-hover: #243130;
+  --ink: #e3ebe9;
+  --muted: #8fa09b;
+  --line: #2a3634;
+  --accent: #3fc2b4;
+  --accent-hover: #5fd3c6;
+  --accent-ink: #06201d;
+  --accent-soft: #143532;
+  --color-zinc-500: #8b9995;
+}
+
+[data-accent="blue"] {
+  --canvas: #f6f8fa;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --sunken: #eef0f4;
+  --surface-hover: #e5eaf0;
+  --ink: #121820;
+  --muted: #5f6875;
+  --line: #dee4ea;
+  --accent: #195fbf;
+  --accent-hover: #0f4ea3;
+  --accent-ink: #ffffff;
+  --accent-soft: #e0ecfe;
+  --color-zinc-50: #f6f8fa;
+  --color-zinc-100: #eef0f4;
+  --color-zinc-200: #dee4ea;
+  --color-zinc-300: #c8cfd8;
+  --color-zinc-400: #97a0ad;
+  --color-zinc-500: #5f6875;
+  --color-zinc-600: #505966;
+  --color-zinc-700: #3c444e;
+  --color-zinc-800: #272e37;
+  --color-zinc-900: #191f27;
+  --color-zinc-950: #0f1318;
+}
+
+.dark[data-accent="blue"],
+.dark [data-accent="blue"] {
+  --canvas: #0b0e12;
+  --surface: #1a2028;
+  --raised: #222932;
+  --sunken: #13181e;
+  --surface-hover: #272f39;
+  --ink: #e4e9f1;
+  --muted: #919dac;
+  --line: #2c343e;
+  --accent: #75aef5;
+  --accent-hover: #92c1fd;
+  --accent-ink: #081629;
+  --accent-soft: #172b49;
+  --color-zinc-500: #8d96a3;
+}
+
+[data-accent="violet"] {
+  --canvas: #f7f7f9;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --sunken: #f0eff4;
+  --surface-hover: #e9e8f0;
+  --ink: #171620;
+  --muted: #676574;
+  --line: #e3e2ea;
+  --accent: #6443cc;
+  --accent-hover: #5432b2;
+  --accent-ink: #ffffff;
+  --accent-soft: #eae8ff;
+  --color-zinc-50: #f7f7f9;
+  --color-zinc-100: #f0eff4;
+  --color-zinc-200: #e3e2ea;
+  --color-zinc-300: #cecdd8;
+  --color-zinc-400: #9f9dac;
+  --color-zinc-500: #676574;
+  --color-zinc-600: #585665;
+  --color-zinc-700: #43414d;
+  --color-zinc-800: #2d2c37;
+  --color-zinc-900: #1e1d27;
+  --color-zinc-950: #121218;
+}
+
+.dark[data-accent="violet"],
+.dark [data-accent="violet"] {
+  --canvas: #0e0d12;
+  --surface: #1f1e28;
+  --raised: #282731;
+  --sunken: #17161e;
+  --surface-hover: #2e2c39;
+  --ink: #e9e8f0;
+  --muted: #9b99ab;
+  --line: #33323d;
+  --accent: #ad9ffa;
+  --accent-hover: #c0b6ff;
+  --accent-ink: #161229;
+  --accent-soft: #2b244b;
+  --color-zinc-500: #9593a2;
+}
+
+[data-accent="plum"] {
+  --canvas: #f9f7f8;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --sunken: #f3eff1;
+  --surface-hover: #eee7eb;
+  --ink: #1d151a;
+  --muted: #70636b;
+  --line: #e8e1e5;
+  --accent: #90347a;
+  --accent-hover: #7a2667;
+  --accent-ink: #ffffff;
+  --accent-soft: #fae4f2;
+  --color-zinc-50: #f9f7f8;
+  --color-zinc-100: #f3eff1;
+  --color-zinc-200: #e8e1e5;
+  --color-zinc-300: #d5cbd1;
+  --color-zinc-400: #a89ba3;
+  --color-zinc-500: #70636b;
+  --color-zinc-600: #61545c;
+  --color-zinc-700: #4a3f46;
+  --color-zinc-800: #342a30;
+  --color-zinc-900: #241c21;
+  --color-zinc-950: #161114;
+}
+
+.dark[data-accent="plum"],
+.dark [data-accent="plum"] {
+  --canvas: #110c0f;
+  --surface: #251d22;
+  --raised: #2f252b;
+  --sunken: #1c1519;
+  --surface-hover: #352a31;
+  --ink: #eee6eb;
+  --muted: #a696a0;
+  --line: #3a2f36;
+  --accent: #de97c6;
+  --accent-hover: #ecaed7;
+  --accent-ink: #210f1b;
+  --accent-soft: #3d2034;
+  --color-zinc-500: #9e9199;
+}
+
+[data-accent="graphite"] {
+  --canvas: #f7f7f8;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --sunken: #eff0f1;
+  --surface-hover: #e8e9ec;
+  --ink: #16181b;
+  --muted: #64686c;
+  --line: #e1e3e6;
+  --accent: #2a2e34;
+  --accent-hover: #181b1f;
+  --accent-ink: #ffffff;
+  --accent-soft: #e8ebf1;
+  --color-zinc-50: #f7f7f8;
+  --color-zinc-100: #eff0f1;
+  --color-zinc-200: #e1e3e6;
+  --color-zinc-300: #cccfd2;
+  --color-zinc-400: #9ca0a4;
+  --color-zinc-500: #64686c;
+  --color-zinc-600: #55595d;
+  --color-zinc-700: #404347;
+  --color-zinc-800: #2b2e31;
+  --color-zinc-900: #1d1f22;
+  --color-zinc-950: #111314;
+}
+
+.dark[data-accent="graphite"],
+.dark [data-accent="graphite"] {
+  --canvas: #0d0e0f;
+  --surface: #1e2023;
+  --raised: #26292c;
+  --sunken: #16171a;
+  --surface-hover: #2b2e32;
+  --ink: #e7e9ec;
+  --muted: #989ca1;
+  --line: #313337;
+  --accent: #dadee3;
+  --accent-hover: #eff2f5;
+  --accent-ink: #151617;
+  --accent-soft: #272c31;
+  --color-zinc-500: #92969a;
+}
+/* End of the accent palettes. */
 
 body {
   background: var(--canvas);

@@ -597,8 +597,8 @@ export default function EventsCalendarPage() {
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform motion-reduce:transition-none ${
-                      showTasks ? "translate-x-3" : ""
+                    className={`absolute top-0.5 left-0.5 h-3 w-3 rounded-full shadow-sm transition-transform motion-reduce:transition-none ${
+                      showTasks ? "translate-x-3 bg-accent-ink" : "bg-white"
                     }`}
                   />
                 </span>
