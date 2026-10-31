@@ -1,12 +1,14 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
+import { ACCENTS } from "../../src/lib/accent";
 import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
 
 // TEST-04 (#140) and DES-06 (#134): every page passes axe's WCAG 2.1 A and AA rules.
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 
-async function violations(page: Page, label: string) {
+/** axe's WCAG violations on the page, or only inside `include` (a CSS selector). */
+async function violations(page: Page, label: string, include?: string) {
   // Let open/close animations finish, so colors are measured at full opacity.
   // Loading spinners loop forever, so skip animations that never end.
   await page.evaluate(() =>
@@ -17,7 +19,8 @@ async function violations(page: Page, label: string) {
         .map((animation) => animation.finished.catch(() => undefined)),
     ),
   );
-  const results = await new AxeBuilder({ page }).withTags(wcag).analyze();
+  const axe = new AxeBuilder({ page }).withTags(wcag);
+  const results = await (include ? axe.include(include) : axe).analyze();
   return results.violations.map(
     (violation) => `${label}: ${violation.id} (${violation.nodes.length}) ${violation.help} -> ${violation.nodes[0]?.target.join(" ")}`,
   );
@@ -116,6 +119,39 @@ for (const theme of ["light", "dark"] as const) {
     expect(found).toEqual([]);
   });
 }
+
+// DES-15 (#321): Home and the account menu that picks the color, in every accent palette and both themes.
+test("every accent palette has no WCAG A/AA violations", async ({ page, isMobile }) => {
+  test.skip(isMobile, "The palettes don't depend on the screen size.");
+  test.setTimeout(120_000);
+  await continueAsGuest(page);
+  await seedWorkspace(page);
+
+  const found: string[] = [];
+  for (const theme of ["light", "dark"]) {
+    for (const { id } of ACCENTS) {
+      await page.evaluate(
+        ([themeValue, accentValue]) => {
+          localStorage.setItem("ai-multi-theme", themeValue);
+          localStorage.setItem("ai-multi-accent", accentValue);
+        },
+        [theme, id],
+      );
+      await page.goto("/");
+      await page.waitForLoadState("networkidle");
+      await expect(page.locator("html")).toHaveAttribute("data-accent", id);
+      found.push(...(await violations(page, `Home (${id}, ${theme})`)));
+
+      // Only the menu: while it's open, Radix hides the page behind it with aria-hidden
+      // and keeps focus in the menu, which axe's aria-hidden-focus rule accepts only for dialogs.
+      await page.getByRole("button", { name: "Account menu" }).click();
+      await expect(page.getByRole("menuitemradio", { name: "Teal" })).toBeVisible();
+      found.push(...(await violations(page, `account menu (${id}, ${theme})`, '[role="menu"]')));
+      await page.keyboard.press("Escape");
+    }
+  }
+  expect(found).toEqual([]);
+});
 
 // Unread badges only show after someone else posts, which the scans above never do.
 test("unread chat badges have no WCAG A/AA violations", async ({ page, browser, isMobile }) => {
