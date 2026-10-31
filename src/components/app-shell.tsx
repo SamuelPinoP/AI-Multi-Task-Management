@@ -29,6 +29,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import { AccentMenuItems } from "@/components/accent-menu";
 import { LogoMark } from "@/components/brand/logo-mark";
 import { CommandPalette } from "@/components/command-palette";
 import { NewTaskDialog } from "@/components/new-task-dialog";
@@ -496,6 +497,7 @@ function UserMenu({ user, onShowShortcuts }: { user: NonNullable<ShellUser>; onS
             Dark
             {theme === "dark" ? <span className="ml-auto text-xs text-accent">On</span> : null}
           </DropdownMenuItem>
+          <AccentMenuItems />
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onShowShortcuts}>
             <Keyboard />

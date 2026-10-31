@@ -150,8 +150,9 @@ export function ProjectAutomations({
                       <span
                         aria-hidden="true"
                         className={cn(
-                          "absolute top-0.5 h-4.5 w-4.5 rounded-full bg-white shadow transition-[left]",
-                          rule.enabled ? "left-[1.375rem]" : "left-0.5",
+                          "absolute top-0.5 h-4.5 w-4.5 rounded-full shadow transition-[left]",
+                          // On a light dark-mode accent a white knob would vanish; accent-ink is white in light mode.
+                          rule.enabled ? "left-[1.375rem] bg-accent-ink" : "left-0.5 bg-white",
                         )}
                       />
                     </button>
