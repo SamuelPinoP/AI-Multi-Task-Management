@@ -2,8 +2,10 @@ import "server-only";
 import { ProjectStatus, Recurrence, TaskStatus } from "@prisma/client";
 import { eventWallTime, toEventStorageTime } from "@/lib/event-time";
 import {
+  bandSuggestion,
   dailyCounts,
   daysFrom,
+  nowAndNext,
   overdueCounts,
   projectHealth,
   sortFocusTasks,
@@ -47,6 +49,9 @@ export type HomeEvent = {
   project: { id: string; name: string; color: string | null } | null;
 };
 
+/** A band event with its wall-clock start and end (DES-10). */
+export type HomeBandEvent = HomeEvent & { start: Date; end: Date | null };
+
 export type HomeProjectHealth = {
   id: string;
   name: string;
@@ -80,7 +85,18 @@ export type HomeData = {
     doneSeries: number[];
   };
   todayEvents: HomeEvent[];
-  suggestion: PlannerSuggestion | null;
+  /** The "Now and next" band (DES-10). */
+  band: {
+    /** The timed event under way, or else `task`, the top Focus task. */
+    current: HomeBandEvent | null;
+    task: HomeFocusTask | null;
+    next: HomeBandEvent | null;
+    /** No events today and no open tasks: the band is one line. */
+    empty: boolean;
+    suggestion: PlannerSuggestion | null;
+    /** The suggested task in full, so Start can mark it In progress. */
+    suggestionTask: HomeFocusTask | null;
+  };
   projects: HomeProjectHealth[];
   activity: HomeActivity[];
   shortcuts: { project: { id: string; name: string; color: string | null } | null; note: { id: string; title: string } | null };
@@ -233,21 +249,20 @@ export async function getHomeData(userId: string, now: Date, timeZone: string | 
     })),
   ].flatMap((task) => (task.dueDate ? [{ ...task, dueDate: task.dueDate }] : []));
 
-  const focus = sortFocusTasks(openTasks, now)
-    .slice(0, FOCUS_LIMIT)
-    .map((task) => ({
-      id: task.id,
-      title: task.title,
-      description: task.description,
-      status: task.status,
-      priority: task.priority,
-      dueDate: task.dueDate?.toISOString() ?? null,
-      recurrence: task.recurrence,
-      projectId: task.projectId,
-      assigneeId: task.assigneeId,
-      project: task.project,
-      assignee: task.assignee,
-    }));
+  const toFocusTask = (task: (typeof openTasks)[number]): HomeFocusTask => ({
+    id: task.id,
+    title: task.title,
+    description: task.description,
+    status: task.status,
+    priority: task.priority,
+    dueDate: task.dueDate?.toISOString() ?? null,
+    recurrence: task.recurrence,
+    projectId: task.projectId,
+    assigneeId: task.assigneeId,
+    project: task.project,
+    assignee: task.assignee,
+  });
+  const focus = sortFocusTasks(openTasks, now).slice(0, FOCUS_LIMIT).map(toFocusTask);
 
   const todayEvents = occurrencesInRange(
     events.map((event) => ({
@@ -275,10 +290,21 @@ export async function getHomeData(userId: string, now: Date, timeZone: string | 
       project: event.project,
     }));
 
+  const band = nowAndNext(
+    todayEvents.map((event) => ({
+      ...event,
+      start: eventWallTime(event.startTime),
+      end: event.endTime ? eventWallTime(event.endTime) : null,
+    })),
+    now,
+    focus,
+  );
   const sectionOrder = ["urgent", "dueToday", "upcoming", "suggestedFocus", "projectFollowUp"];
-  const suggestion =
-    [...planner.sections].sort((a, b) => sectionOrder.indexOf(a.key) - sectionOrder.indexOf(b.key)).flatMap((section) => section.suggestions)[0] ??
-    null;
+  const suggestion = bandSuggestion(
+    [...planner.sections].sort((a, b) => sectionOrder.indexOf(a.key) - sectionOrder.indexOf(b.key)).flatMap((section) => section.suggestions),
+    band.task?.id ?? null,
+  );
+  const suggestedTask = suggestion?.related?.type === "TASK" ? openTasks.find((task) => task.id === suggestion.related?.id) : undefined;
 
   const projectHealthRows = projects.map((project) => {
     const doneTasks = project.tasks.filter((task) => task.status === TaskStatus.DONE).length;
@@ -327,7 +353,7 @@ export async function getHomeData(userId: string, now: Date, timeZone: string | 
       doneSeries: dailyCounts(completions, now),
     },
     todayEvents,
-    suggestion,
+    band: { ...band, suggestion, suggestionTask: suggestedTask ? toFocusTask(suggestedTask) : null },
     projects: projectHealthRows,
     activity: activities.map((activity) => ({
       id: activity.id,

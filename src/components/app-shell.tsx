@@ -551,7 +551,8 @@ function TopBar({
             <span aria-hidden="true" className="hidden text-muted sm:inline">/</span>
           </>
         ) : null}
-        <span className="truncate font-bold">{title}</span>
+        {/* On desktop the page's own heading says it; nested pages keep the breadcrumb (DES-10). */}
+        <span className={cn("truncate font-bold", !parent && "lg:hidden")}>{title}</span>
       </div>
       <button
         type="button"

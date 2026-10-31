@@ -96,9 +96,9 @@ passes `TZ=UTC` through but drops values with a slash, such as
 
 ### Visual regression screenshots
 
-`npm run test:visual` takes screenshots of Home, Tasks, Boards and the
-Calendar, on a desktop browser and a phone-sized one, and compares them with
-the reference images in `tests/visual/__screenshots__/`
+`npm run test:visual` takes screenshots of Home (in light and dark mode),
+Tasks, Boards and the Calendar, on a desktop browser and a phone-sized one,
+and compares them with the reference images in `tests/visual/__screenshots__/`
 (`tests/visual/main-pages.spec.ts`, `playwright.visual.config.ts`). It starts
 the server the same way as `npm run test:e2e`, so build first and set
 `E2E_SERVER_MODE=start` and `TZ=UTC` like CI. Each test signs in as a new
