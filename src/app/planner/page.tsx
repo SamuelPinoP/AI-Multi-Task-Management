@@ -10,9 +10,9 @@ import { generateSmartPlanner, type PlannerPriority, type PlannerSuggestion } fr
 import { getUserNow } from "@/lib/user-time-server";
 
 function priorityClass(priority: PlannerPriority) {
-  if (priority === "HIGH") return "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-200";
-  if (priority === "MEDIUM") return "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-200";
-  return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200";
+  if (priority === "HIGH") return "bg-danger-soft text-danger";
+  if (priority === "MEDIUM") return "bg-warning-soft text-warning";
+  return "bg-success-soft text-success";
 }
 
 async function createTaskFromSuggestion(formData: FormData) {
