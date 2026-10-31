@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Events: the agenda first, the form second (DES-02).
+ * The Calendar's Agenda tab (DES-13; the Month tab is /events/calendar): the agenda first, the form second (DES-02).
  *
  * - Quick entry takes a title and opens the New event sheet for the date and time.
  * - An agenda of today and the next 60 days, grouped by day. Repeating events
@@ -13,13 +13,13 @@
  * Event times are stored wall-clock values; see `@/lib/event-time`.
  */
 
-import { CalendarDays, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Plus, Repeat, Search, Trash2 } from "lucide-react";
-import Link from "next/link";
+import { ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Plus, Repeat, Search, Trash2 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useEffectEvent, useMemo, useState, type FormEvent } from "react";
+import { CalendarHeader } from "@/components/events/calendar-header";
 import { DeleteEventDialog, deleteEventDays, type DeleteEventTarget, type DeleteScope } from "@/components/events/delete-event-dialog";
 import { EventSheet, eventRequestBody, type EventInput, type EventItem, type EventProject } from "@/components/events/event-sheet";
-import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import { uiButtonClass } from "@/components/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -377,28 +377,11 @@ export default function EventsPage() {
 
   return (
     <div className="mx-auto grid w-full grid-cols-1 max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-title">Events</h1>
-          <p className="mt-0.5 text-sm text-muted">
-            {fetching ? "Loading..." : `${weekCount} in the next 7 days`}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/events/calendar" className={cn(uiButtonClass, "px-3 py-1.5")}>
-            <CalendarDays aria-hidden="true" className="h-4 w-4 text-muted" />
-            Calendar
-          </Link>
-          <button
-            type="button"
-            onClick={() => setSheet({ open: true, event: null, draft: { startDate: selectedDayKey >= todayKey ? selectedDayKey : todayKey } })}
-            className={cn(uiPrimaryButtonClass, "px-3 py-1.5")}
-          >
-            <Plus aria-hidden="true" className="h-4 w-4" />
-            New event
-          </button>
-        </div>
-      </header>
+      <CalendarHeader
+        active="agenda"
+        summary={fetching ? "Loading..." : `${weekCount} in the next 7 days`}
+        onNewEvent={() => setSheet({ open: true, event: null, draft: { startDate: selectedDayKey >= todayKey ? selectedDayKey : todayKey } })}
+      />
 
       <form
         onSubmit={startQuickEntry}

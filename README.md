@@ -316,6 +316,15 @@ safe to leave public; with `CRON_SECRET` set it is required, as for backups.
 ![Project chat screenshot](docs/screenshots/project-chat.png)
 
 
+### Calendar
+
+**Calendar** in the sidebar (and in the phone's bottom bar) opens two views of your events, switched with the tabs at the top of the page. It opens the one you used last. Both views share the header, with **New event** and **Subscribe** (a private feed for Google, Apple or Outlook calendars).
+
+- **Agenda** (`/events`, G then E) for today and the next 60 days by day, with quick entry, search and a project filter.
+- **Month** (`/events/calendar`, G then C) for a month grid of events and due tasks, with the selected day's details.
+
+Trash sits at the bottom of the sidebar, next to Collapse.
+
 ### Boards
 
 **Boards** in the sidebar opens two views, switched with the tabs at the top of the page:
