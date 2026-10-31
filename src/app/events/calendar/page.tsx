@@ -614,7 +614,7 @@ export default function EventsCalendarPage() {
                 <span
                   aria-hidden="true"
                   className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
-                    showTasks ? "bg-emerald-600" : "bg-zinc-300 dark:bg-zinc-600"
+                    showTasks ? "bg-accent" : "bg-zinc-300 dark:bg-zinc-600"
                   }`}
                 >
                   <span
@@ -756,7 +756,7 @@ export default function EventsCalendarPage() {
                           .map((task) => (
                             <p
                               key={task.id}
-                              className={`truncate rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200 ${task.status === "DONE" ? "opacity-60 line-through" : ""}`}
+                              className={`truncate rounded-xl border border-accent/30 bg-accent-soft px-3 py-2 text-sm text-accent ${task.status === "DONE" ? "opacity-60 line-through" : ""}`}
                             >
                               □ {task.title}
                             </p>
@@ -856,7 +856,7 @@ export default function EventsCalendarPage() {
                               .map((task) => (
                                 <p
                                   key={task.id}
-                                  className={`truncate rounded border-l-2 border-emerald-500 bg-emerald-50 px-1.5 py-0.5 text-xs text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200 ${task.status === "DONE" ? "opacity-60 line-through" : ""}`}
+                                  className={`truncate rounded border-l-2 border-accent bg-accent-soft px-1.5 py-0.5 text-xs text-accent ${task.status === "DONE" ? "opacity-60 line-through" : ""}`}
                                 >
                                   Task · {task.title}
                                 </p>
@@ -957,18 +957,18 @@ export default function EventsCalendarPage() {
                 {selectedDayTasks.map((task) => (
                   <article
                     key={task.id}
-                    className={`relative rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 transition hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:hover:border-emerald-700 ${task.status === "DONE" ? "opacity-65" : ""}`}
+                    className={`relative rounded-lg border border-accent/30 bg-accent-soft/60 p-3 transition hover:border-accent/50 hover:bg-accent-soft ${task.status === "DONE" ? "opacity-65" : ""}`}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       {/* The title opens the task; its ::after covers the card so the whole card is clickable. */}
                       <Link
                         href={`/tasks?task=${encodeURIComponent(task.id)}`}
-                        className={`font-medium after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-emerald-500 ${task.status === "DONE" ? "line-through" : ""}`}
+                        className={`font-medium after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent ${task.status === "DONE" ? "line-through" : ""}`}
                       >
                         {task.title}
                       </Link>
                       {task.status === "DONE" ? (
-                        <span className="relative z-10 rounded-full bg-emerald-700 px-2 py-0.5 text-xs font-semibold text-white">
+                        <span className="relative z-10 rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-ink">
                           Task
                         </span>
                       ) : (
@@ -976,13 +976,13 @@ export default function EventsCalendarPage() {
                           type="button"
                           onClick={() => void handleCompleteTask(task)}
                           disabled={completingTaskId === task.id}
-                          className="relative z-10 rounded-full bg-emerald-700 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="relative z-10 rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {completingTaskId === task.id ? "Saving…" : "Done"}
                         </button>
                       )}
                     </div>
-                    <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-200">
+                    <p className="mt-1 text-sm text-accent">
                       Status: {task.status.replace("_", " ")} · Priority:{" "}
                       {task.priority}
                     </p>
