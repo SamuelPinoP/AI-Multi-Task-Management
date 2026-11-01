@@ -27,6 +27,9 @@ export type ChatSummary = {
 
 export type ChatFilter = "all" | "unread";
 
+/** "1" while the desktop Chats page shows its list beside an open chat; the list hides by default (#324). */
+export const CHATS_LIST_COOKIE = "chats-list-open";
+
 /** Unread chats first, then the newest message; chats without messages last, by name. */
 export function sortChatSummaries(chats: ChatSummary[]) {
   return [...chats].sort((a, b) => {

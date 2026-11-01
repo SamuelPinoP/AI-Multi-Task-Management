@@ -184,6 +184,7 @@ export function ProjectChatWorkspace({
   readOnly = false,
   attachmentsDisabledMessage,
   newSince,
+  framed = true,
 }: {
   projectId: string;
   initialComments: ProjectComment[];
@@ -193,6 +194,8 @@ export function ProjectChatWorkspace({
   attachmentsDisabledMessage?: string;
   /** When the user last read this chat: a "New messages" line goes above the first later message from someone else. */
   newSince?: string;
+  /** A card frame from sm up, for a chat on its own page; off where a pane already frames it (the Chats page). */
+  framed?: boolean;
 }) {
   const [comments, setComments] = useState(initialComments);
   // Fixed when the chat opens, so the line stays put while the user replies.
@@ -657,7 +660,12 @@ export function ProjectChatWorkspace({
   return (
     <>
       {/* On phones the chat runs edge to edge; the card frame starts at sm. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-zinc-200 bg-white shadow-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-950 sm:rounded-2xl sm:border sm:shadow-xl dark:shadow-none">
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col overflow-hidden border-zinc-200 bg-white shadow-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none",
+          framed && "sm:rounded-2xl sm:border sm:shadow-xl",
+        )}
+      >
         {pinnedComments.length > 0 ? (
           <section
             className="bg-white/95 px-3 py-2 dark:bg-zinc-950 sm:px-6 sm:py-3"
