@@ -3,9 +3,21 @@
 /**
  * The Chats hub (SIDE-02): the list of project chats on the left, the open
  * chat on the right. On phones the list and the chat are separate screens.
+ * On desktop an open chat gets the whole width; its Chats button shows the
+ * list beside it again, and that choice is remembered (#324).
  */
 
-import { ArrowLeft, CheckCheck, LayoutDashboard, MessagesSquare, Paperclip, Search, SquareKanban } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCheck,
+  LayoutDashboard,
+  MessagesSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Paperclip,
+  Search,
+  SquareKanban,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -13,6 +25,7 @@ import { ProjectChatWorkspace } from "@/components/project-chat-workspace";
 import { uiButtonClass } from "@/components/ui";
 import { toast } from "@/components/ui/toaster";
 import {
+  CHATS_LIST_COOKIE,
   chatPreview,
   filterChatSummaries,
   formatUnreadCount,
@@ -79,12 +92,16 @@ export function ChatsHub({
   chats,
   selected,
   currentUser,
+  initialListOpen,
 }: {
   chats: ChatSummary[];
   selected: OpenedProjectChat | null;
   currentUser: { name: string | null; email: string };
+  /** Whether the list shows beside an open chat on desktop, from the CHATS_LIST_COOKIE. */
+  initialListOpen: boolean;
 }) {
   const router = useRouter();
+  const [listOpen, setListOpen] = useState(initialListOpen);
   const [filter, setFilter] = useState<ChatFilter>("all");
   const [query, setQuery] = useState("");
   const [markingAll, setMarkingAll] = useState(false);
@@ -107,6 +124,12 @@ export function ChatsHub({
   useEffect(() => {
     if (selectedId) notifyWorkspaceChanged();
   }, [selectedId]);
+
+  function toggleList() {
+    const next = !listOpen;
+    setListOpen(next);
+    document.cookie = `${CHATS_LIST_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+  }
 
   async function markAllRead() {
     setMarkingAll(true);
@@ -131,9 +154,15 @@ export function ChatsHub({
 
   return (
     <div className="flex h-full min-h-0">
+      {/* Phones show the list or the chat. On desktop the list stays beside the chat only while it's open. */}
       <section
+        id="chat-list"
         aria-labelledby="chats-heading"
-        className={cn("min-h-0 w-full flex-col bg-canvas lg:flex lg:w-[22.5rem] lg:shrink-0 lg:border-r lg:border-line", selected ? "hidden" : "flex")}
+        className={cn(
+          "min-h-0 w-full flex-col bg-canvas lg:w-[22.5rem] lg:shrink-0 lg:border-r lg:border-line",
+          selected ? "hidden" : "flex",
+          selected && !listOpen ? "lg:hidden" : "lg:flex",
+        )}
       >
         <div className="grid gap-3 px-4 pb-3 pt-5">
           <div className="flex items-start gap-3">
@@ -205,38 +234,68 @@ export function ChatsHub({
       <section aria-label="Conversation" className={cn("min-w-0 flex-1 flex-col bg-surface lg:flex", selected ? "flex" : "hidden")}>
         {selected ? (
           <>
-            <div className="border-b border-line px-4 py-3 sm:px-5">
+            {/* The page's heading lives in the list; while the list is hidden, screen readers still get it here. */}
+            <h1 className={cn("sr-only", listOpen && "lg:hidden")}>Chats</h1>
+            {/* One row on phones: back, name, and the two links as icons (their words come back from sm). */}
+            <div className="flex items-center gap-2 border-b border-line px-2 py-2 sm:gap-3 sm:px-5 sm:py-3">
               <Link
                 href="/chats"
                 scroll={false}
-                className="-ml-1.5 mb-2 inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-sm font-medium text-muted hover:bg-surface-hover hover:text-ink lg:hidden"
+                aria-label="All chats"
+                title="All chats"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink lg:hidden"
               >
-                <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-                All chats
+                <ArrowLeft aria-hidden="true" className="h-5 w-5" />
               </Link>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded" style={{ backgroundColor: projectColor({ id: selected.id, color: selected.color }) }} />
-                <div className="min-w-48 flex-1">
-                  <h2 className="truncate text-base font-bold">{selected.name}</h2>
-                  <p className="text-xs text-muted">
-                    {plural(selected.memberCount, "member")} · {roleText[selected.accessLevel]}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Link href={`/projects/${selected.id}/board`} className={cn(uiButtonClass, "gap-1.5 px-2.5 py-1.5 text-xs")}>
-                    <SquareKanban aria-hidden="true" className="h-3.5 w-3.5 text-muted" />
-                    Board
-                  </Link>
-                  <Link href={`/projects/${selected.id}`} className={cn(uiButtonClass, "gap-1.5 px-2.5 py-1.5 text-xs")}>
-                    <LayoutDashboard aria-hidden="true" className="h-3.5 w-3.5 text-muted" />
-                    Open project
-                  </Link>
-                </div>
+              {/* Desktop: shows or hides the list beside the chat, with the count of chats that have new messages. */}
+              <button
+                type="button"
+                onClick={toggleList}
+                aria-expanded={listOpen}
+                aria-controls="chat-list"
+                aria-label={unreadChats ? `Chats, ${unreadChats} with new messages` : undefined}
+                title={listOpen ? "Hide the chat list" : "Show the chat list"}
+                className={cn(uiButtonClass, "hidden shrink-0 gap-1.5 px-2.5 py-1.5 text-xs lg:inline-flex", listOpen && "bg-surface-hover")}
+              >
+                {listOpen ? (
+                  <PanelLeftClose aria-hidden="true" className="h-4 w-4 text-muted" />
+                ) : (
+                  <PanelLeftOpen aria-hidden="true" className="h-4 w-4 text-muted" />
+                )}
+                Chats
+                {unreadChats ? (
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 font-mono text-2xs font-bold tabular-nums text-accent-ink"
+                  >
+                    {formatUnreadCount(unreadChats)}
+                  </span>
+                ) : null}
+              </button>
+              <span aria-hidden="true" className="hidden h-6 w-px shrink-0 bg-line lg:block" />
+              <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded" style={{ backgroundColor: projectColor({ id: selected.id, color: selected.color }) }} />
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-base font-bold">{selected.name}</h2>
+                <p className="truncate text-xs text-muted">
+                  {plural(selected.memberCount, "member")} · {roleText[selected.accessLevel]}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-1.5 sm:gap-2">
+                <Link href={`/projects/${selected.id}/board`} className={cn(uiButtonClass, "gap-1.5 p-2 text-xs sm:px-2.5 sm:py-1.5")}>
+                  <SquareKanban aria-hidden="true" className="h-4 w-4 text-muted sm:h-3.5 sm:w-3.5" />
+                  <span className="sr-only sm:not-sr-only">Board</span>
+                </Link>
+                <Link href={`/projects/${selected.id}`} className={cn(uiButtonClass, "gap-1.5 p-2 text-xs sm:px-2.5 sm:py-1.5")}>
+                  <LayoutDashboard aria-hidden="true" className="h-4 w-4 text-muted sm:h-3.5 sm:w-3.5" />
+                  <span className="sr-only sm:not-sr-only">Open project</span>
+                </Link>
               </div>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
+            {/* The pane has its own header and edges, so the chat inside it goes without a card frame. */}
+            <div className="flex min-h-0 flex-1 flex-col">
               <ProjectChatWorkspace
                 key={selected.id}
+                framed={false}
                 projectId={selected.id}
                 currentUser={currentUser}
                 readOnly={selected.readOnly}

@@ -122,7 +122,7 @@ export function LandingPage({
                     What reviewers can evaluate quickly
                   </h2>
                 </div>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                <span className="rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold text-accent">
                   Demo-ready
                 </span>
               </div>

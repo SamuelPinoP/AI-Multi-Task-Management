@@ -42,7 +42,7 @@ export function TreePageSwitcher({
   }
 
   return (
-    <nav aria-label="Tree pages" className="rounded-2xl border border-line bg-surface/85 p-2.5 shadow-sm shadow-zinc-200/60 backdrop-blur dark:shadow-none sm:p-3">
+    <nav aria-label="Tree pages" className="rounded-2xl border border-line bg-surface/85 p-2.5 shadow-card backdrop-blur sm:p-3">
       <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <button type="button" onClick={onCreate} className={`${uiPrimaryButtonClass} shrink-0 shadow-sm`}>
           New Tree Page

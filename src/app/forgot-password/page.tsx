@@ -48,7 +48,7 @@ export default async function ForgotPasswordPage({ searchParams }: { searchParam
       <section className={`${uiCardClass} w-full p-6`}>
         <h1 className="text-2xl font-semibold">Reset your password</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Enter your account email and we will send a reset link if the account exists.</p>
-        {sent ? <p className="mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900">{GENERIC_MESSAGE}</p> : null}
+        {sent ? <p className="mt-4 rounded-xl bg-success-soft px-3 py-2 text-sm text-success ring-1 ring-success/25">{GENERIC_MESSAGE}</p> : null}
         {error === "rate-limited" ? <p role="alert" className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900">{tooManyAttemptsMessage("reset requests", Number(retry) || 60)}</p> : null}
         <form action={forgotPasswordAction} className="mt-6 space-y-4">
           <div>

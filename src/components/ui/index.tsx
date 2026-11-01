@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 
-export const uiCardClass = "rounded-2xl border border-line bg-surface p-6 shadow-sm shadow-zinc-900/[0.03] dark:shadow-none";
+export const uiCardClass = "rounded-2xl border border-line bg-surface p-6 shadow-card";
 
 const uiButtonBase = "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
 

@@ -21,8 +21,7 @@ const pageTitles: Array<[prefix: string, title: string]> = [
   ["/chats", "Chats"],
   ["/tasks/board", "Boards"],
   ["/tasks", "Tasks"],
-  ["/events/calendar", "Calendar"],
-  ["/events", "Events"],
+  ["/events", "Calendar"],
   ["/notes", "Notes"],
   ["/board", "Boards"],
   ["/tree", "Tree view"],
@@ -32,6 +31,11 @@ const pageTitles: Array<[prefix: string, title: string]> = [
   ["/roadmap", "Roadmap"],
   ["/trash", "Trash"],
 ];
+
+/** Pages that fill the screen and scroll inside, like the chats: on phones the bottom tabs sit under them, not over them. */
+export function isFullHeightPage(pathname: string) {
+  return pathname === "/chats" || /^\/projects\/[^/]+\/chat$/.test(pathname);
+}
 
 /** The top bar's title; project pages show "Projects / <name>". */
 export function pageTitleFor(pathname: string, projects: Array<{ id: string; name: string }>): { parent?: string; title: string } {

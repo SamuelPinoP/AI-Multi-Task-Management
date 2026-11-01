@@ -1,9 +1,11 @@
 "use client";
 
+import { SendHorizontal } from "lucide-react";
 import { ChangeEvent, DragEvent, Fragment, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AttachmentGallery, ComposerAttachmentTray } from "@/components/project-chat-attachments";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import { formatFileSize } from "@/lib/project-chat-attachment-display";
 import { sendsChatMessage } from "@/lib/shortcuts";
 import { isPageIdle, onPageReturn } from "@/lib/use-page-activity";
@@ -61,6 +63,12 @@ const VIDEO_FILE_SIZE_LIMIT = 100 * 1024 * 1024;
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".m4v"]);
 const ACCEPTED_FILE_TYPES =
   ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.webm,.m4v,.zip";
+// The message box grows with its text, like WhatsApp's: up to 6 lines on a phone and 10 on wider
+// screens, never past 40% of the screen's height, then it scrolls. The textarea and an invisible
+// copy of its text share these classes and one grid cell, so the copy sets the height and the
+// textarea stretches to it. Phones get 16px text, so iOS doesn't zoom in when the box is tapped.
+const COMPOSER_TEXT_CLASS =
+  "col-start-1 row-start-1 max-h-[min(calc(6lh+1rem),40dvh)] px-4 py-2 text-base sm:max-h-[min(calc(10lh+1rem),40dvh)] sm:text-sm";
 
 function getFileExtension(fileName: string) {
   const dotIndex = fileName.lastIndexOf(".");
@@ -114,6 +122,16 @@ function isEdited(comment: ProjectComment) {
       new Date(comment.createdAt).getTime() >
     1000
   );
+}
+
+/** "Oct 29, 5:13 PM", short enough for a phone; the full date and time show on hover. */
+function formatMessageTime(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 /** Whether a key press in a message box sends the message or saves the edit (#303). */
@@ -172,6 +190,7 @@ export function ProjectChatWorkspace({
   readOnly = false,
   attachmentsDisabledMessage,
   newSince,
+  framed = true,
 }: {
   projectId: string;
   initialComments: ProjectComment[];
@@ -181,6 +200,8 @@ export function ProjectChatWorkspace({
   attachmentsDisabledMessage?: string;
   /** When the user last read this chat: a "New messages" line goes above the first later message from someone else. */
   newSince?: string;
+  /** A card frame from sm up, for a chat on its own page; off where a pane already frames it (the Chats page). */
+  framed?: boolean;
 }) {
   const [comments, setComments] = useState(initialComments);
   // Fixed when the chat opens, so the line stays put while the user replies.
@@ -210,6 +231,7 @@ export function ProjectChatWorkspace({
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>(
     {},
   );
+  const threadRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Whether the reader is at the bottom of the thread; only then do new messages scroll it.
@@ -227,6 +249,17 @@ export function ProjectChatWorkspace({
       messagesEndRef.current?.scrollIntoView({ block: "end" });
     }
   }, [comments]);
+
+  // The thread gets shorter as the message box grows; a reader at the bottom stays at the latest message.
+  useEffect(() => {
+    const thread = threadRef.current;
+    if (!thread) return;
+    const observer = new ResizeObserver(() => {
+      if (nearBottomRef.current) thread.scrollTop = thread.scrollHeight;
+    });
+    observer.observe(thread);
+    return () => observer.disconnect();
+  }, []);
 
   // Picks up teammates' messages, edits, deletes and pins while the chat is open.
   useEffect(() => {
@@ -637,24 +670,31 @@ export function ProjectChatWorkspace({
 
   return (
     <>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl shadow-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
+      {/* On phones the chat runs edge to edge; the card frame starts at sm. */}
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col overflow-hidden border-zinc-200 bg-white shadow-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none",
+          framed && "sm:rounded-2xl sm:border sm:shadow-xl",
+        )}
+      >
         {pinnedComments.length > 0 ? (
           <section
-            className="bg-white/95 px-4 py-3 dark:bg-zinc-950 sm:px-6"
+            className="bg-white/95 px-3 py-2 dark:bg-zinc-950 sm:px-6 sm:py-3"
             aria-label="Pinned messages"
           >
-            <div className="mx-auto max-w-5xl rounded-2xl bg-amber-50/80 p-3 ring-1 ring-amber-200/70 dark:bg-amber-950/20 dark:ring-amber-900/60">
+            <div className="mx-auto max-w-5xl rounded-2xl bg-amber-50/80 p-2.5 ring-1 ring-amber-200/70 dark:bg-amber-950/20 dark:ring-amber-900/60 sm:p-3">
               <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">
                 <PinIcon filled className="h-3.5 w-3.5" />
                 Pinned messages
               </div>
-              <div className="grid gap-2 md:grid-cols-3">
+              {/* One row on phones that scrolls sideways, instead of three stacked cards. */}
+              <div className="flex gap-2 overflow-x-auto md:grid md:grid-cols-3 md:overflow-visible">
                 {pinnedComments.map((comment) => (
                   <button
                     key={comment.id}
                     type="button"
                     onClick={() => jumpToComment(comment.id)}
-                    className="min-w-0 rounded-xl bg-white/85 px-3 py-2 text-left text-sm shadow-sm transition hover:-translate-y-0.5 hover:bg-white dark:bg-zinc-900/80 dark:hover:bg-zinc-900"
+                    className="w-56 min-w-0 shrink-0 rounded-xl bg-white/85 px-3 py-2 text-left text-sm shadow-sm transition hover:-translate-y-0.5 hover:bg-white dark:bg-zinc-900/80 dark:hover:bg-zinc-900 md:w-auto"
                   >
                     <span className="block truncate font-medium text-zinc-900 dark:text-zinc-100">
                       {comment.author.name || comment.author.email}
@@ -671,21 +711,23 @@ export function ProjectChatWorkspace({
         ) : null}
 
         <div
-          className="min-h-0 flex-1 overflow-y-auto bg-zinc-100/60 px-4 py-4 dark:bg-zinc-950 sm:px-6 lg:px-8"
+          ref={threadRef}
+          className="min-h-0 flex-1 overflow-y-auto bg-zinc-100/60 px-3 py-3 dark:bg-zinc-950 sm:px-6 sm:py-4 lg:px-8"
           onScroll={(event) => {
             const element = event.currentTarget;
             nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 120;
           }}
         >
-          <div className="mx-auto flex max-w-5xl flex-col gap-4">
+          {/* An empty chat centers its hint in the space instead of hanging it from the top. */}
+          <div className={cn("mx-auto flex max-w-5xl flex-col gap-3 sm:gap-4", comments.length === 0 && "min-h-full justify-center")}>
             {comments.length === 0 ? (
-              <div className="rounded-2xl bg-white/80 p-8 text-center shadow-sm ring-1 ring-zinc-200/70 dark:bg-zinc-900/70 dark:ring-zinc-800/70">
-                <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              <div className="rounded-2xl bg-white/80 p-5 text-center shadow-sm ring-1 ring-zinc-200/70 dark:bg-zinc-900/70 dark:ring-zinc-800/70 sm:p-8">
+                <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100 sm:text-lg">
                   Start the project conversation.
                 </p>
                 <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">
                   Post a kickoff update, decision, blocker, or handoff. Use the
-                  paperclip or drag files into the composer to share references,
+                  paperclip<span className="hidden sm:inline"> or drag files into the composer</span> to share references,
                   screenshots, PDFs, and other project artifacts.
                 </p>
               </div>
@@ -708,7 +750,7 @@ export function ProjectChatWorkspace({
                   ) : null}
                   <article
                     id={`comment-${comment.id}`}
-                    className={`rounded-2xl bg-white/95 p-4 text-sm shadow-sm shadow-zinc-200/60 ring-1 transition dark:bg-zinc-900/80 dark:shadow-none ${
+                    className={`rounded-2xl bg-white/95 p-3 text-sm shadow-sm shadow-zinc-200/60 ring-1 transition dark:bg-zinc-900/80 dark:shadow-none sm:p-4 ${
                       isPending
                         ? "opacity-80 ring-zinc-300 dark:ring-zinc-700"
                         : comment.pinned
@@ -716,119 +758,125 @@ export function ProjectChatWorkspace({
                           : "ring-zinc-200/70 dark:ring-zinc-800/70"
                     }`}
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold uppercase text-white dark:bg-zinc-100 dark:text-zinc-900">
-                          {(comment.author.name || comment.author.email).slice(
-                            0,
-                            1,
-                          )}
-                        </span>
-                        <div>
-                          <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+                    <div className="flex items-start gap-2.5">
+                      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold uppercase text-white dark:bg-zinc-100 dark:text-zinc-900">
+                        {(comment.author.name || comment.author.email).slice(
+                          0,
+                          1,
+                        )}
+                      </span>
+                      {/* The name, then the time and badges: two short lines, where a phone used to stack four. */}
+                      <div className="min-w-0 flex-1">
+                        <p className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate font-semibold text-zinc-900 dark:text-zinc-100">
                             {comment.author.name || comment.author.email}
-                          </p>
+                          </span>
                           {isOwnMessage ? (
-                            <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                            <span className="shrink-0 text-2xs font-medium uppercase tracking-wide text-zinc-500">
                               You
-                            </p>
+                            </span>
+                          ) : null}
+                        </p>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
+                          <time
+                            dateTime={comment.createdAt}
+                            title={new Date(comment.createdAt).toLocaleString()}
+                            className="font-mono tabular-nums"
+                          >
+                            {formatMessageTime(comment.createdAt)}
+                          </time>
+                          {comment.pinned ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                              <PinIcon filled />
+                              Pinned
+                            </span>
+                          ) : null}
+                          {isPending ? (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                              Sending
+                            </span>
+                          ) : null}
+                          {isMutating ? (
+                            <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                              Saving
+                            </span>
+                          ) : null}
+                          {isEdited(comment) ? (
+                            <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">
+                              Edited
+                            </span>
                           ) : null}
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                        {comment.pinned ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
-                            <PinIcon filled />
-                            Pinned
-                          </span>
-                        ) : null}
-                        {isPending ? (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
-                            Sending
-                          </span>
-                        ) : null}
-                        {isMutating ? (
-                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                            Saving
-                          </span>
-                        ) : null}
-                        {isEdited(comment) ? (
-                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">
-                            Edited
-                          </span>
-                        ) : null}
-                        <time dateTime={comment.createdAt} className="font-mono tabular-nums">
-                          {new Date(comment.createdAt).toLocaleString()}
-                        </time>
-                        {isOwnMessage ? (
-                          <span className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => void togglePinned(comment)}
-                              disabled={isMutating}
-                              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium transition disabled:opacity-50 ${
-                                comment.pinned
-                                  ? "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-950"
-                                  : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                              }`}
-                              aria-label={
-                                comment.pinned ? "Unpin message" : "Pin message"
-                              }
-                              title={
-                                comment.pinned ? "Unpin message" : "Pin message"
-                              }
+                      {/* Icons only on phones; the words come back from sm. */}
+                      {isOwnMessage ? (
+                        <span className="flex shrink-0 items-center gap-0.5 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => void togglePinned(comment)}
+                            disabled={isMutating}
+                            className={`inline-flex items-center gap-1 rounded-full p-1.5 font-medium transition disabled:opacity-50 sm:px-2 sm:py-1 ${
+                              comment.pinned
+                                ? "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-950"
+                                : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                            }`}
+                            aria-label={
+                              comment.pinned ? "Unpin message" : "Pin message"
+                            }
+                            title={
+                              comment.pinned ? "Unpin message" : "Pin message"
+                            }
+                          >
+                            <PinIcon filled={comment.pinned} />
+                            <span className="sr-only sm:not-sr-only">{comment.pinned ? "Unpin" : "Pin"}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => startEditing(comment)}
+                            disabled={isMutating}
+                            className="inline-flex items-center gap-1 rounded-full p-1.5 font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 sm:px-2 sm:py-1"
+                          >
+                            <svg
+                              aria-hidden="true"
+                              viewBox="0 0 20 20"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.7"
+                              className="h-3.5 w-3.5"
                             >
-                              <PinIcon filled={comment.pinned} />
-                              <span>{comment.pinned ? "Unpin" : "Pin"}</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => startEditing(comment)}
-                              disabled={isMutating}
-                              className="inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                              <path
+                                d="m4 14.5-.5 2 2-.5 9.25-9.25a1.4 1.4 0 0 0-2-2L4 14.5Z"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                            <span className="sr-only sm:not-sr-only">Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTargetId(comment.id)}
+                            disabled={isMutating}
+                            className="inline-flex items-center gap-1 rounded-full p-1.5 font-medium text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/40 dark:hover:text-red-300 sm:px-2 sm:py-1"
+                            aria-label="Delete message"
+                          >
+                            <svg
+                              aria-hidden="true"
+                              viewBox="0 0 20 20"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.7"
+                              className="h-3.5 w-3.5"
                             >
-                              <svg
-                                aria-hidden="true"
-                                viewBox="0 0 20 20"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.7"
-                                className="h-3.5 w-3.5"
-                              >
-                                <path
-                                  d="m4 14.5-.5 2 2-.5 9.25-9.25a1.4 1.4 0 0 0-2-2L4 14.5Z"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                              <span>Edit</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteTargetId(comment.id)}
-                              disabled={isMutating}
-                              className="inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/40 dark:hover:text-red-300"
-                              aria-label="Delete message"
-                            >
-                              <svg
-                                aria-hidden="true"
-                                viewBox="0 0 20 20"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.7"
-                                className="h-3.5 w-3.5"
-                              >
-                                <path
-                                  d="M7 5V3.75A1.25 1.25 0 0 1 8.25 2.5h3.5A1.25 1.25 0 0 1 13 3.75V5m3 0H4m1.25 0 .6 10.4A1.75 1.75 0 0 0 7.6 17h4.8a1.75 1.75 0 0 0 1.75-1.6L14.75 5"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                              <span>Delete</span>
-                            </button>
-                          </span>
-                        ) : null}
-                      </div>
+                              <path
+                                d="M7 5V3.75A1.25 1.25 0 0 1 8.25 2.5h3.5A1.25 1.25 0 0 1 13 3.75V5m3 0H4m1.25 0 .6 10.4A1.75 1.75 0 0 0 7.6 17h4.8a1.75 1.75 0 0 0 1.75-1.6L14.75 5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                            <span className="sr-only sm:not-sr-only">Delete</span>
+                          </button>
+                        </span>
+                      ) : null}
                     </div>
                     {isEditing ? (
                       <div className="mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
@@ -855,7 +903,7 @@ export function ProjectChatWorkspace({
                           rows={3}
                           className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                         />
-                        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                        <div className="mt-3 flex justify-end gap-2">
                           <button
                             type="button"
                             className={`${uiButtonClass} px-3 py-1.5 text-xs`}
@@ -873,7 +921,7 @@ export function ProjectChatWorkspace({
                         </div>
                       </div>
                     ) : comment.message ? (
-                      <p className="mt-3 whitespace-pre-wrap leading-6 text-zinc-800 dark:text-zinc-200">
+                      <p className="mt-2 whitespace-pre-wrap leading-6 text-zinc-800 dark:text-zinc-200 sm:mt-3">
                         {comment.message}
                       </p>
                     ) : null}
@@ -919,15 +967,16 @@ export function ProjectChatWorkspace({
               onChange={handleFileChange}
             />
             {readOnly ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200 sm:p-4">
                 Read-only access: you can review project chat and attachments,
                 but only Owners and Editors can post messages or upload files.
               </div>
             ) : (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+              // One row at every size: attach, the message box, send. The buttons stay at the bottom as the box grows.
+              <div className="flex items-end gap-2">
                 <button
                   type="button"
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-start rounded-xl bg-white text-zinc-600 shadow-sm ring-1 ring-zinc-200 transition hover:-translate-y-0.5 hover:text-zinc-950 hover:ring-zinc-300 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:text-zinc-50 dark:hover:ring-zinc-700 sm:h-auto sm:min-h-9"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-zinc-600 shadow-sm ring-1 ring-zinc-200 transition hover:text-zinc-950 hover:ring-zinc-300 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:text-zinc-50 dark:hover:ring-zinc-700 sm:h-9 sm:w-9"
                   onClick={() => {
                     if (attachmentsDisabledMessage) setError(attachmentsDisabledMessage);
                     else fileInputRef.current?.click();
@@ -956,23 +1005,33 @@ export function ProjectChatWorkspace({
                   onDragLeave={() => setIsDragging(false)}
                   onDrop={handleDrop}
                 >
-                  <textarea
-                    id="project-chat-message"
-                    value={message}
-                    onChange={(e) => {
-                      setMessage(e.target.value);
-                      if (error) setError("");
-                    }}
-                    onKeyDown={(event) => {
-                      if (!sendsOnKeyDown(event)) return;
-                      event.preventDefault();
-                      // Enter in an empty box, or while a message is still sending, does nothing.
-                      if (!isSubmitting && (message.trim() || selectedAttachments.length > 0)) void sendMessage();
-                    }}
-                    placeholder="Share an update, decision, blocker, or handoff..."
-                    rows={1}
-                    className="min-h-9 w-full resize-none rounded-2xl border-0 bg-transparent px-4 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
-                  />
+                  <div className="grid grid-cols-1">
+                    <textarea
+                      id="project-chat-message"
+                      value={message}
+                      onChange={(e) => {
+                        setMessage(e.target.value);
+                        if (error) setError("");
+                      }}
+                      onKeyDown={(event) => {
+                        if (!sendsOnKeyDown(event)) return;
+                        event.preventDefault();
+                        // Enter in an empty box, or while a message is still sending, does nothing.
+                        if (!isSubmitting && (message.trim() || selectedAttachments.length > 0)) void sendMessage();
+                      }}
+                      placeholder="Share an update, decision, blocker, or handoff..."
+                      rows={1}
+                      // At least two lines on a phone, so the whole hint shows; one line from sm.
+                      className={`${COMPOSER_TEXT_CLASS} min-h-[calc(2lh+1rem)] w-full resize-none rounded-2xl border-0 bg-transparent text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 sm:min-h-[calc(1lh+1rem)]`}
+                    />
+                    {/* The trailing space gives a final empty line its height. */}
+                    <div
+                      aria-hidden="true"
+                      className={`${COMPOSER_TEXT_CLASS} invisible overflow-hidden whitespace-pre-wrap break-words`}
+                    >
+                      {`${message} `}
+                    </div>
+                  </div>
                   {selectedAttachments.length > 0 ? (
                     <ComposerAttachmentTray
                       attachments={selectedAttachments}
@@ -981,12 +1040,16 @@ export function ProjectChatWorkspace({
                   ) : null}
                 </div>
 
+                {/* An icon on phones and "Send" from sm; either way its name is "Send message". The message
+                    itself shows "Sending" while it uploads. */}
                 <button
                   type="submit"
-                  className={`${uiPrimaryButtonClass} h-9 shrink-0 self-start px-5 sm:h-auto sm:min-h-9`}
+                  className={cn(uiPrimaryButtonClass, "h-10 w-10 shrink-0 px-0 sm:h-9 sm:w-auto sm:px-4")}
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? "Sending..." : "Send message"}
+                  <SendHorizontal aria-hidden="true" className="h-4 w-4" />
+                  <span className="sr-only sm:not-sr-only">Send</span>
+                  <span className="sr-only"> message</span>
                 </button>
               </div>
             )}

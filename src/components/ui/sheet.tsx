@@ -29,7 +29,7 @@ export function SheetContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         className={cn(
-          "fixed z-50 flex flex-col gap-4 overflow-y-auto border-line bg-surface p-6 text-ink shadow-xl outline-none",
+          "fixed z-50 flex flex-col gap-4 overflow-y-auto border-line bg-raised p-6 text-ink shadow-raised outline-none",
           sideClass[side],
           className,
         )}

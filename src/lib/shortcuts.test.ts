@@ -25,6 +25,13 @@ test("g then a letter goes to a page", () => {
   assert.equal(resolveShortcut("z", true), null);
 });
 
+test("g then e or c opens the Calendar's Agenda or Month tab", () => {
+  assert.deepEqual(resolveShortcut("e", true), { type: "go", href: "/events" });
+  assert.deepEqual(resolveShortcut("c", true), { type: "go", href: "/events/calendar" });
+  assert.equal(goTargets.e.label, "Calendar: Agenda");
+  assert.equal(goTargets.c.label, "Calendar: Month");
+});
+
 test("every go target is a different page", () => {
   const hrefs = Object.values(goTargets).map((target) => target.href);
   assert.equal(new Set(hrefs).size, hrefs.length);

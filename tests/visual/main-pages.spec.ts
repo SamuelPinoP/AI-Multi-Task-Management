@@ -1,8 +1,11 @@
-import { expect, test, type Page } from "@playwright/test";
-import { continueAsGuest } from "../e2e/helpers";
+import { expect, test, type Browser, type Page } from "@playwright/test";
+import { continueAsGuest, signUpAndLogIn } from "../e2e/helpers";
 
 /*
  * Screenshots of the main pages, compared with reference images (TEST-05, #269).
+ * Home is also taken in dark mode (DES-10), with a teammate who has left an
+ * unread message in Team chat (DES-11), and Tasks with the Blue accent and the
+ * account menu open (DES-15).
  *
  * Each test signs in as a new guest and adds the same data. Due dates are
  * yesterday, today and tomorrow, which the pages show as words, so the images
@@ -23,7 +26,7 @@ async function post(page: Page, url: string, data: Record<string, unknown>) {
   return (await response.json()) as { id: string };
 }
 
-/** Two projects and five tasks: overdue, due today, due tomorrow, and done. */
+/** Two projects and five tasks: overdue, due today, due tomorrow, and done. Returns the first project's id. */
 async function addTasks(page: Page) {
   const website = await post(page, "/api/projects", { name: "Launch website", color: "#0f9488" });
   const app = await post(page, "/api/projects", { name: "Mobile app", color: "#d97706" });
@@ -32,26 +35,57 @@ async function addTasks(page: Page) {
   await post(page, "/api/tasks", { title: "Review open pull requests", dueDate: dateInputValue(0), priority: "MEDIUM", status: "IN_PROGRESS", projectId: app.id });
   await post(page, "/api/tasks", { title: "Plan the next sprint", dueDate: dateInputValue(1), priority: "LOW" });
   await post(page, "/api/tasks", { title: "Set up the domain", priority: "MEDIUM", status: "DONE", projectId: website.id });
+  return website.id;
+}
+
+/** A teammate joins the project and leaves a message, so Home shows Team chat. Their name is random, but chat shows only "E2E". */
+async function addTeammate(page: Page, browser: Browser, baseURL: string | undefined, projectId: string) {
+  const context = await browser.newContext({ baseURL });
+  try {
+    const teammate = await context.newPage();
+    const { email } = await signUpAndLogIn(teammate, "E2E teammate");
+    await post(page, `/api/projects/${projectId}/invitations`, { email, role: "EDITOR" });
+    const invitations = (await (await teammate.request.get("/api/project-invitations")).json()) as { id: string; project: { id: string } }[];
+    const invitation = invitations.find((item) => item.project.id === projectId);
+    expect(invitation, "the invitation reached the teammate").toBeTruthy();
+    expect((await teammate.request.patch(`/api/project-invitations/${invitation!.id}`, { data: { action: "ACCEPT" } })).ok()).toBe(true);
+    await post(teammate, `/api/projects/${projectId}/comments`, { message: "The staging build is ready for review." });
+  } finally {
+    await context.close();
+  }
 }
 
 /** Parts of every page that differ between runs. */
 function changing(page: Page) {
   return [
     page.locator("time"),
-    page.getByRole("button", { name: "Account menu" }),
+    // includeHidden: an open menu hides the rest of the page, avatar included, from role queries.
+    page.getByRole("button", { name: "Account menu", includeHidden: true }),
     page.locator("#main-content .rounded-full[style*='background-color']"),
   ];
 }
 
-test("Home", async ({ page }) => {
-  await continueAsGuest(page);
-  await addTasks(page);
-
+async function screenshotHome(page: Page, name: string) {
   await page.goto("/");
-  await expect(page.getByRole("link", { name: "Write the launch post" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Write the launch post" }).first()).toBeVisible();
   await page.waitForLoadState("networkidle");
-  // The header says good morning, afternoon or evening, and today's date.
-  await expect(page).toHaveScreenshot("home.png", { mask: [...changing(page), page.locator("#main-content header").first()] });
+  // The header says good morning, afternoon or evening, and today's date. The
+  // activities are created within the same moment, so their order varies.
+  const activity = page.locator("section", { has: page.getByRole("heading", { name: "Activity", exact: true }) }).locator("ul");
+  await expect(page).toHaveScreenshot(name, { mask: [...changing(page), page.locator("#main-content header").first(), activity] });
+}
+
+test("Home", async ({ page, browser, baseURL }) => {
+  await continueAsGuest(page);
+  await addTeammate(page, browser, baseURL, await addTasks(page));
+  await screenshotHome(page, "home.png");
+});
+
+test("Home in dark mode", async ({ page, browser, baseURL }) => {
+  await continueAsGuest(page);
+  await addTeammate(page, browser, baseURL, await addTasks(page));
+  await page.evaluate(() => localStorage.setItem("ai-multi-theme", "dark"));
+  await screenshotHome(page, "home-dark.png");
 });
 
 test("Tasks", async ({ page }) => {
@@ -62,6 +96,20 @@ test("Tasks", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Plan the next sprint", exact: true })).toBeVisible();
   await page.waitForLoadState("networkidle");
   await expect(page).toHaveScreenshot("tasks.png", { mask: changing(page) });
+});
+
+// DES-15: another accent palette, with the account menu open on its swatches.
+test("Tasks with the Blue accent", async ({ page }) => {
+  await continueAsGuest(page);
+  await addTasks(page);
+  await page.evaluate(() => localStorage.setItem("ai-multi-accent", "blue"));
+
+  await page.goto("/tasks");
+  await expect(page.getByRole("button", { name: "Plan the next sprint", exact: true })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await expect(page.getByRole("menuitemradio", { name: "Blue" })).toHaveAttribute("aria-checked", "true");
+  await expect(page).toHaveScreenshot("tasks-blue.png", { mask: changing(page) });
 });
 
 test("Boards", async ({ page }) => {

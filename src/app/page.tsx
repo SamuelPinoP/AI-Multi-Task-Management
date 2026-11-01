@@ -1,27 +1,46 @@
-import { ArrowRight, NotebookPen, Sparkles } from "lucide-react";
+import { NotebookPen, Sparkles } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { AvatarStack } from "@/components/home/avatar-stack";
 import { FocusList } from "@/components/home/focus-list";
-import { QUICK_ADD_INPUT_ID, QuickAdd } from "@/components/home/quick-add";
-import { Sparkline } from "@/components/home/sparkline";
+import { NowAndNext } from "@/components/home/now-and-next";
+import { QuickAdd, QuickAddFocusButton } from "@/components/home/quick-add";
+import { TeamChatList } from "@/components/home/team-chat";
+import { WeekBars } from "@/components/home/week-bars";
 import { LandingPage } from "@/components/landing-page";
 import { uiButtonClass } from "@/components/ui";
 import { getCurrentUser, isGuestLoginEnabled, isPublicSignupEnabled } from "@/lib/auth";
+import { getChatSummaries } from "@/lib/chats-data";
 import { cn } from "@/lib/cn";
 import { eventWallTime, formatEventTime } from "@/lib/event-time";
 import { getHomeData, type HomeEvent, type HomeProjectHealth } from "@/lib/home-data";
-import { daysFrom, dueLabel, greetingFor, relativeTime, taskSummary } from "@/lib/home-summary";
+import { activityAction, daysFrom, dueLabel, greetingFor, relativeTime, taskSummary } from "@/lib/home-summary";
 import { paletteColor, projectColor } from "@/lib/project-color";
 import { getUserNow, getUserTimeZone } from "@/lib/user-time-server";
 
 const linkClass = "inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline";
+/** Shared projects in Home's Team chat card (DES-11). */
+const TEAM_CHAT_LIMIT = 4;
 
-function Card({ title, aside, className, children }: { title: ReactNode; aside?: ReactNode; className?: string; children: ReactNode }) {
+/** A Home card. Cards that lead to a full page put "View all" where others put a note (DES-11). */
+function Card({ title, aside, viewAll, className, children }: {
+  title: ReactNode;
+  aside?: ReactNode;
+  viewAll?: { href: string; label: string };
+  className?: string;
+  children: ReactNode;
+}) {
   return (
-    <section className={cn("rounded-xl border border-line bg-surface p-4", className)}>
+    <section className={cn("rounded-xl border border-line bg-surface p-4 shadow-card", className)}>
       <div className="mb-2 flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-1.5 text-card">{title}</h2>
-        {aside ? <span className="text-xs text-muted">{aside}</span> : null}
+        {viewAll ? (
+          <Link href={viewAll.href} aria-label={viewAll.label} className="shrink-0 text-xs font-medium text-accent hover:underline">
+            View all
+          </Link>
+        ) : aside ? (
+          <span className="text-xs text-muted">{aside}</span>
+        ) : null}
       </div>
       {children}
     </section>
@@ -37,26 +56,30 @@ function EmptyState({ children, action }: { children: ReactNode; action: ReactNo
   );
 }
 
-function Stat({ label, value, tone, note, series, seriesLabel }: {
+/** One number in the numbers strip, with its last 7 days as bars (DES-10). */
+function Stat({ label, value, tone, note, series, seriesLabel, now }: {
   label: string;
   value: number;
   tone?: "danger";
   note?: ReactNode;
   series: number[];
   seriesLabel: string;
+  now: Date;
 }) {
   return (
-    <div role="group" aria-label={`${label}: ${value}`} className="flex items-center justify-between gap-2 rounded-xl border border-line bg-surface px-3 py-2.5">
+    <div
+      role="group"
+      aria-label={`${label}: ${value}`}
+      className="flex min-w-0 flex-col justify-between gap-1.5 bg-surface px-3 py-2.5 sm:flex-row sm:items-end sm:gap-3 sm:px-4 sm:py-3"
+    >
       <div className="min-w-0">
-        <p className="truncate text-xs text-muted">{label}</p>
+        <p className="truncate text-2xs text-muted sm:text-xs">{label}</p>
         <p className="flex flex-wrap items-baseline gap-x-1.5">
-          <span className={cn("text-xl font-bold tabular-nums", tone === "danger" && value > 0 && "text-danger")}>{value}</span>
+          <span className={cn("text-xl font-semibold", tone === "danger" && value > 0 && "text-danger")}>{value}</span>
           {note}
         </p>
       </div>
-      <span className="hidden sm:block">
-        <Sparkline values={series} label={seriesLabel} />
-      </span>
+      <WeekBars values={series} now={now} label={seriesLabel} />
     </div>
   );
 }
@@ -112,6 +135,7 @@ const healthStyles: Record<HomeProjectHealth["status"], { label: string; classNa
   ON_TRACK: { label: "On track", className: "bg-success-soft text-success" },
   AT_RISK: { label: "At risk", className: "bg-danger-soft text-danger" },
   STALE: { label: "Stale", className: "bg-caution-soft text-caution" },
+  NOT_STARTED: { label: "Not started", className: "bg-sunken text-muted" },
 };
 
 function healthDetail(project: HomeProjectHealth) {
@@ -119,7 +143,9 @@ function healthDetail(project: HomeProjectHealth) {
   const done = `${project.percentDone}% done`;
   if (project.status === "AT_RISK") return `${done} · ${project.overdueTasks} overdue`;
   if (!project.totalTasks) return "No tasks yet";
-  return `${done} · ${project.doneTasks} of ${project.totalTasks} tasks`;
+  const tasks = `${project.totalTasks} task${project.totalTasks === 1 ? "" : "s"}`;
+  if (project.status === "NOT_STARTED") return `${tasks}, none started`;
+  return `${done} · ${project.doneTasks} of ${tasks}`;
 }
 
 export default async function HomePage() {
@@ -130,19 +156,15 @@ export default async function HomePage() {
 
   // The user's wall clock, so "today" follows their time zone, not the server's (#125).
   const [now, timeZone] = await Promise.all([getUserNow(), getUserTimeZone()]);
-  const home = await getHomeData(user.id, now, timeZone);
+  // Team chat reads the Chats page's summaries: one more query on load, no polling (DES-11).
+  const [home, chats] = await Promise.all([getHomeData(user.id, now, timeZone), getChatSummaries(user)]);
+  const teamChats = chats.filter((chat) => chat.teammates > 0).slice(0, TEAM_CHAT_LIMIT);
   const realNow = new Date();
   const { stats } = home;
 
   const firstName = user.isGuest ? null : (user.name || user.email).trim().split(/[\s@]/)[0];
   const greeting = `${greetingFor(now.getHours())}${firstName ? `, ${firstName}` : ""}`;
   const dateLine = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" }).format(now);
-  const nextEvent = home.todayEvents.find((event) => event.hasStartTime && eventWallTime(event.startTime) > now);
-  const eventSummary = nextEvent
-    ? ` Your next event, ${nextEvent.title}, starts at ${formatEventTime(nextEvent.startTime)}.`
-    : home.todayEvents.length
-      ? " No more events today."
-      : "";
   const weekDelta = stats.doneThisWeek - stats.doneLastWeek;
   const focusRows = home.focus.map((task) => ({
     ...task,
@@ -157,10 +179,7 @@ export default async function HomePage() {
         <div className="min-w-0">
           <p className="text-xs text-muted">{dateLine}</p>
           <h1 className="mt-0.5 text-title">{greeting}</h1>
-          <p className="mt-0.5 text-sm text-muted">
-            {taskSummary(stats.dueToday, stats.overdue)}
-            {eventSummary}
-          </p>
+          <p className="mt-0.5 text-sm text-muted">{taskSummary(stats.dueToday, stats.overdue)}</p>
         </div>
         <Link href="/planner" className={cn(uiButtonClass, "px-3 py-1.5")}>
           <Sparkles aria-hidden="true" className="h-4 w-4 text-accent" />
@@ -168,19 +187,33 @@ export default async function HomePage() {
         </Link>
       </header>
 
-      <QuickAdd />
+      <NowAndNext band={home.band} now={now} eventCount={eventCount} />
 
-      <section aria-label="Your numbers" className="grid grid-cols-3 gap-2 sm:gap-3">
-        <Stat label="Due today" value={stats.dueToday} series={stats.dueTodaySeries} seriesLabel="Tasks due on each of the last 7 days" />
-        <Stat label="Overdue" value={stats.overdue} tone="danger" series={stats.overdueSeries} seriesLabel="Overdue tasks at the end of each of the last 7 days" />
+      <section aria-label="Your numbers" className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-line bg-line shadow-card">
+        <Stat
+          label="Due today"
+          value={stats.dueToday}
+          series={stats.dueTodaySeries}
+          seriesLabel="Tasks due on each of the last 7 days"
+          now={now}
+        />
+        <Stat
+          label="Overdue"
+          value={stats.overdue}
+          tone="danger"
+          series={stats.overdueSeries}
+          seriesLabel="Overdue tasks at the end of each of the last 7 days"
+          now={now}
+        />
         <Stat
           label="Done this week"
           value={stats.doneThisWeek}
           series={stats.doneSeries}
           seriesLabel="Tasks completed on each of the last 7 days"
+          now={now}
           note={
             weekDelta !== 0 ? (
-              <span className={cn("hidden text-[11px] font-semibold sm:inline", weekDelta > 0 ? "text-success" : "text-muted")}>
+              <span className={cn("hidden text-2xs font-semibold sm:inline", weekDelta > 0 ? "text-success" : "text-muted")}>
                 {weekDelta > 0 ? "+" : ""}
                 {weekDelta} vs last week
               </span>
@@ -189,20 +222,15 @@ export default async function HomePage() {
         />
       </section>
 
+      <QuickAdd />
+
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         <div className="grid grid-cols-1 gap-4">
-          <Card title="Focus" aside={home.openTaskCount ? "Sorted by due date and priority" : undefined}>
+          <Card title="Focus" viewAll={home.openTaskCount ? { href: "/tasks", label: "View all tasks" } : undefined}>
             {focusRows.length ? (
-              <>
-                <FocusList tasks={focusRows} />
-                {home.openTaskCount > focusRows.length ? (
-                  <Link href="/tasks" className={cn(linkClass, "mt-2")}>
-                    All {home.openTaskCount} open tasks <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
-                  </Link>
-                ) : null}
-              </>
+              <FocusList tasks={focusRows} />
             ) : (
-              <EmptyState action={<label htmlFor={QUICK_ADD_INPUT_ID} className={cn(linkClass, "cursor-pointer")}>Add your first task</label>}>
+              <EmptyState action={<QuickAddFocusButton className={linkClass}>Add your first task</QuickAddFocusButton>}>
                 Nothing to focus on yet.
               </EmptyState>
             )}
@@ -218,40 +246,7 @@ export default async function HomePage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4">
-          <Card
-            title={
-              <span className="flex items-center gap-1.5 text-accent">
-                <Sparkles aria-hidden="true" className="h-4 w-4" />
-                Suggested next
-              </span>
-            }
-            aside="Planner"
-            className="border-transparent bg-accent-soft"
-          >
-            {home.suggestion ? (
-              <>
-                <p className="text-[13px] font-semibold">{home.suggestion.title}</p>
-                <p className="mt-1 text-xs text-muted">{home.suggestion.reason}</p>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {home.suggestion.actionHref ? (
-                    <Link
-                      href={home.suggestion.actionHref}
-                      className="rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-accent-ink transition-colors hover:bg-accent-hover"
-                    >
-                      Open
-                    </Link>
-                  ) : null}
-                  <Link href="/planner" className="rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-surface-hover">
-                    See the full plan
-                  </Link>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted">You&apos;re all caught up. Add a task to get a suggestion.</p>
-            )}
-          </Card>
-
-          <Card title="Project health" aside={home.projects.length ? "Active projects" : undefined}>
+          <Card title="Projects" viewAll={home.projects.length ? { href: "/projects", label: "View all projects" } : undefined}>
             {home.projects.length ? (
               <ul>
                 {home.projects.map((project) => {
@@ -276,7 +271,10 @@ export default async function HomePage() {
                       >
                         <div className="h-full" style={{ width: `${project.percentDone}%`, backgroundColor: color }} />
                       </div>
-                      <p className="mt-1 text-xs text-muted">{healthDetail(project)}</p>
+                      <div className="mt-1.5 flex items-center justify-between gap-2">
+                        <p className="min-w-0 truncate text-xs text-muted">{healthDetail(project)}</p>
+                        <AvatarStack people={project.people} label={`${project.name} members`} />
+                      </div>
                     </li>
                   );
                 })}
@@ -287,6 +285,12 @@ export default async function HomePage() {
               </EmptyState>
             )}
           </Card>
+
+          {teamChats.length ? (
+            <Card title="Team chat" viewAll={{ href: "/chats", label: "View all chats" }}>
+              <TeamChatList chats={teamChats} />
+            </Card>
+          ) : null}
 
           <Card title="Activity" aside={home.activity.length ? "You and your teammates" : undefined}>
             {home.activity.length ? (
@@ -301,7 +305,8 @@ export default async function HomePage() {
                       {activity.user.name.charAt(0).toUpperCase()}
                     </span>
                     <span className="min-w-0 flex-1">
-                      {activity.message}
+                      <span className="font-semibold">{activity.user.id === user.id ? "You" : activity.user.name}</span>{" "}
+                      {activityAction(activity.message)}
                       {activity.project ? <span className="text-muted"> · {activity.project.name}</span> : null}
                     </span>
                     <time dateTime={activity.createdAt.toISOString()} className="shrink-0 font-mono text-xs tabular-nums text-muted">

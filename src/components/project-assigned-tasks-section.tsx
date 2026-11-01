@@ -80,7 +80,7 @@ export function ProjectAssignedTasksSection({ projectId, tasks, members }: Proje
             const isUpdating = updatingTaskId === task.id;
 
             return (
-              <article key={task.id} className="rounded-2xl border border-zinc-200 p-5 shadow-sm dark:border-zinc-800">
+              <article key={task.id} className="rounded-2xl border border-line bg-surface p-5 shadow-card">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-semibold">{task.title}</h3>

@@ -158,7 +158,7 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
 
   return (
     <div className="space-y-4">
-      <section className="flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white/95 p-4 shadow-sm shadow-zinc-200/60 dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+      <section className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4 shadow-card sm:p-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Kanban View</p>
           <h1 className="mt-1 truncate text-title">{projectName}</h1>
@@ -167,7 +167,7 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
           </p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-sm sm:min-w-72">
-          {STATUS_COLUMNS.map((column) => <div key={column.status} className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-950/40"><p className="font-semibold">{taskCounts.get(column.status) ?? 0}</p><p className="text-xs text-zinc-500">{column.title}</p></div>)}
+          {STATUS_COLUMNS.map((column) => <div key={column.status} className="rounded-xl border border-line bg-sunken p-3"><p className="font-semibold">{taskCounts.get(column.status) ?? 0}</p><p className="text-xs text-zinc-500">{column.title}</p></div>)}
         </div>
       </section>
 
@@ -177,14 +177,14 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
         {STATUS_COLUMNS.map((column) => {
           const columnTasks = tasks.filter((task) => task.status === column.status);
           return (
-            <section key={column.status} className="flex min-h-96 flex-col rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+            <section key={column.status} className="flex min-h-96 flex-col rounded-2xl border border-line bg-sunken p-4">
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div><h2 className="text-lg font-semibold">{column.title}</h2><p className="text-xs text-zinc-500 dark:text-zinc-400">{column.help}</p></div>
                 <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium dark:bg-zinc-700">{columnTasks.length}</span>
               </div>
 
               {canEdit && (creatingStatus === column.status ? (
-                <div className="mb-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+                <div className="mb-3 rounded-xl border border-line bg-surface p-3 shadow-card">
                   <input value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="Task title" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
                   <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                     <select aria-label="Priority" value={newTaskPriority} onChange={(e) => setNewTaskPriority(e.target.value as Priority)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900">{PRIORITIES.map((priority) => <option key={priority} value={priority}>{formatEnum(priority)}</option>)}</select>
@@ -200,7 +200,7 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
                 const dueIndicator = getDueIndicator(task);
                 const progress = subtaskProgress(task.subtasks);
                 const blockers = task.status === "DONE" ? [] : openBlockers(task.blockedBy);
-                return <article key={task.id} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"><div className="flex items-start justify-between gap-3"><h3 className="font-semibold">{task.title}</h3><span className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700">{formatEnum(task.status)}</span></div>{task.description && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">{task.description}</p>}<div className="mt-3 flex flex-wrap gap-2"><span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300">Priority: {formatEnum(task.priority)}</span>{task.dueDate && <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium dark:border-zinc-700">Due: {formatTaskDueDate(task.dueDate)}</span>}{task.assignee && <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium dark:border-zinc-700">Assigned: {task.assignee.name}</span>}{dueIndicator && <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${dueIndicator.className}`}>{dueIndicator.label}</span>}{blockers.length > 0 && <BlockedBadge titles={blockers.map((blocker) => blocker.title)} className="rounded-full px-2.5 py-1 text-xs" />}{progress.total > 0 && <ProgressRing done={progress.done} total={progress.total} className="text-xs" />}</div>{canEdit && <div className="mt-4 flex flex-wrap gap-2">{STATUS_COLUMNS.filter((option) => option.status !== task.status).map((option) => <button key={option.status} type="button" disabled={updatingTaskId === task.id} onClick={() => void moveTask(task, option.status)} className={`${uiButtonClass} rounded-lg px-2.5 py-1.5 text-xs`}>Move to {option.title}</button>)}</div>}</article>;
+                return <article key={task.id} className="rounded-xl border border-line bg-surface p-4 shadow-card"><div className="flex items-start justify-between gap-3"><h3 className="font-semibold">{task.title}</h3><span className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700">{formatEnum(task.status)}</span></div>{task.description && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">{task.description}</p>}<div className="mt-3 flex flex-wrap gap-2"><span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300">Priority: {formatEnum(task.priority)}</span>{task.dueDate && <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium dark:border-zinc-700">Due: {formatTaskDueDate(task.dueDate)}</span>}{task.assignee && <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium dark:border-zinc-700">Assigned: {task.assignee.name}</span>}{dueIndicator && <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${dueIndicator.className}`}>{dueIndicator.label}</span>}{blockers.length > 0 && <BlockedBadge titles={blockers.map((blocker) => blocker.title)} className="rounded-full px-2.5 py-1 text-xs" />}{progress.total > 0 && <ProgressRing done={progress.done} total={progress.total} className="text-xs" />}</div>{canEdit && <div className="mt-4 flex flex-wrap gap-2">{STATUS_COLUMNS.filter((option) => option.status !== task.status).map((option) => <button key={option.status} type="button" disabled={updatingTaskId === task.id} onClick={() => void moveTask(task, option.status)} className={`${uiButtonClass} rounded-lg px-2.5 py-1.5 text-xs`}>Move to {option.title}</button>)}</div>}</article>;
               })}</div>}
             </section>
           );
