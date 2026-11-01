@@ -42,3 +42,19 @@ export function isTypingTarget(target: EventTarget | null) {
   const element = target as HTMLElement;
   return Boolean(element.closest("input, textarea, select, [contenteditable=''], [contenteditable='true']"));
 }
+
+type ChatKeyPress = Pick<KeyboardEvent, "key" | "shiftKey" | "altKey" | "ctrlKey" | "metaKey" | "isComposing" | "keyCode">;
+
+/**
+ * Whether a key press in a chat message box sends the message (#303). Like most
+ * chat apps, Enter sends and Shift+Enter starts a new line. On-screen keyboards
+ * have no Shift, so on a touch screen Enter starts a new line and the Send button
+ * sends. Ctrl+Enter and ⌘+Enter send everywhere.
+ */
+export function sendsChatMessage(press: ChatKeyPress, touchScreen: boolean) {
+  // An Enter that picks a word in an input method (Japanese, Chinese, Korean…) only picks it.
+  // Safari reports that press with isComposing already false, but with keyCode 229.
+  if (press.key !== "Enter" || press.isComposing || press.keyCode === 229) return false;
+  if (press.shiftKey || press.altKey) return false;
+  return press.ctrlKey || press.metaKey || !touchScreen;
+}
