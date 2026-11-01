@@ -49,7 +49,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "@/components/ui/toaster";
-import { isNavItemActive, pageTitleFor, type NavMatch } from "@/lib/app-nav";
+import { isFullHeightPage, isNavItemActive, pageTitleFor, type NavMatch } from "@/lib/app-nav";
 import { cn } from "@/lib/cn";
 import { isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
 import { calendarNavItem } from "@/lib/calendar-view";
@@ -586,7 +586,7 @@ function TopBar({
   );
 }
 
-function MobileTabs({ pathname, onNewTask }: { pathname: string; onNewTask: () => void }) {
+function MobileTabs({ pathname, onNewTask, inFlow }: { pathname: string; onNewTask: () => void; inFlow: boolean }) {
   const tabs: NavItem[] = [
     { href: "/", label: "Home", icon: House },
     { href: "/tasks", label: "Tasks", icon: SquareCheckBig, exact: true },
@@ -612,7 +612,12 @@ function MobileTabs({ pathname, onNewTask }: { pathname: string; onNewTask: () =
   return (
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 items-center border-t border-line bg-surface/95 px-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur lg:hidden"
+      // Over a scrolling page the bar floats at the bottom; under a full-height page it takes its own row,
+      // so the page ends right above it.
+      className={cn(
+        inFlow ? "shrink-0" : "fixed inset-x-0 bottom-0",
+        "z-30 grid grid-cols-5 items-center border-t border-line bg-surface/95 px-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur lg:hidden",
+      )}
     >
       {tabs.slice(0, 2).map(tab)}
       <button
@@ -647,6 +652,7 @@ export function AppShell({
   // Share pages (SMART-12) look the same to everyone, signed in or not.
   const isPublicPage = publicPaths.has(pathname) || isLoggedOutLanding || pathname.startsWith("/share/");
   const showWorkspaceShell = Boolean(currentUser && initialNav && !isPublicPage);
+  const fullHeight = isFullHeightPage(pathname);
 
   const [nav, setNav] = useState(initialNav);
   const [collapsed, setCollapsed] = useState(initialSidebarCollapsed);
@@ -851,12 +857,11 @@ export function AppShell({
         {currentUser.isGuest || currentUser.emailVerifiedAt ? null : <EmailVerificationBanner email={currentUser.email} />}
         {/* relative: hidden (sr-only) text is absolutely positioned, and it scrolls only inside a positioned
             scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar. */}
-        <main id="main-content" className="relative min-h-0 flex-1 overflow-y-auto pb-24 lg:pb-0">
+        <main id="main-content" className={cn("relative min-h-0 flex-1 overflow-y-auto", !fullHeight && "pb-24 lg:pb-0")}>
           {children}
         </main>
+        <MobileTabs pathname={pathname} onNewTask={openNewTask} inFlow={fullHeight} />
       </div>
-
-      <MobileTabs pathname={pathname} onNewTask={openNewTask} />
 
       <CommandPalette
         open={searchOpen}

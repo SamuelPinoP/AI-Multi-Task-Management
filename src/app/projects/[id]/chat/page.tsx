@@ -1,5 +1,6 @@
+import { ChevronLeft } from "lucide-react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BackLink } from "@/components/ui";
 import { ProjectChatWorkspace } from "@/components/project-chat-workspace";
 import { requirePageUser } from "@/lib/auth";
 import { openProjectChat } from "@/lib/chats-data";
@@ -20,17 +21,19 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
   if (!chat) notFound();
 
   return (
-    <main className="flex h-full min-h-0 flex-col overflow-hidden bg-zinc-50 px-4 py-2 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 sm:px-6 lg:px-8">
-      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-1.5 overflow-hidden">
-        <header className="rounded-xl border border-zinc-200 bg-white/95 px-3 py-1.5 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-900/70 dark:shadow-none sm:px-4">
-          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-lg">{chat.name}</h1>
-            </div>
-            <div className="flex shrink-0 sm:justify-end">
-              <BackLink href={`/projects/${chat.id}`} className="rounded-lg px-2.5 py-1 text-xs">Back to Project</BackLink>
-            </div>
-          </div>
+    // Phones get the whole width: one slim title row, then the chat edge to edge.
+    <main className="flex h-full min-h-0 flex-col overflow-hidden bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 sm:px-6 sm:py-2 lg:px-8">
+      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:gap-1.5">
+        <header className="flex min-w-0 items-center gap-1 border-b border-line bg-surface px-2 py-1.5 sm:border-0 sm:bg-transparent sm:px-0">
+          <Link
+            href={`/projects/${chat.id}`}
+            aria-label="Back to Project"
+            title="Back to Project"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink"
+          >
+            <ChevronLeft aria-hidden="true" className="h-5 w-5" />
+          </Link>
+          <h1 className="truncate text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-lg">{chat.name}</h1>
         </header>
 
         <ProjectChatWorkspace

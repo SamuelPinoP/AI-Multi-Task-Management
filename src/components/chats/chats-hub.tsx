@@ -205,36 +205,36 @@ export function ChatsHub({
       <section aria-label="Conversation" className={cn("min-w-0 flex-1 flex-col bg-surface lg:flex", selected ? "flex" : "hidden")}>
         {selected ? (
           <>
-            <div className="border-b border-line px-4 py-3 sm:px-5">
+            {/* One row on phones: back, name, and the two links as icons (their words come back from sm). */}
+            <div className="flex items-center gap-2 border-b border-line px-2 py-2 sm:gap-3 sm:px-5 sm:py-3">
               <Link
                 href="/chats"
                 scroll={false}
-                className="-ml-1.5 mb-2 inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-sm font-medium text-muted hover:bg-surface-hover hover:text-ink lg:hidden"
+                aria-label="All chats"
+                title="All chats"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink lg:hidden"
               >
-                <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-                All chats
+                <ArrowLeft aria-hidden="true" className="h-5 w-5" />
               </Link>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded" style={{ backgroundColor: projectColor({ id: selected.id, color: selected.color }) }} />
-                <div className="min-w-48 flex-1">
-                  <h2 className="truncate text-base font-bold">{selected.name}</h2>
-                  <p className="text-xs text-muted">
-                    {plural(selected.memberCount, "member")} · {roleText[selected.accessLevel]}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Link href={`/projects/${selected.id}/board`} className={cn(uiButtonClass, "gap-1.5 px-2.5 py-1.5 text-xs")}>
-                    <SquareKanban aria-hidden="true" className="h-3.5 w-3.5 text-muted" />
-                    Board
-                  </Link>
-                  <Link href={`/projects/${selected.id}`} className={cn(uiButtonClass, "gap-1.5 px-2.5 py-1.5 text-xs")}>
-                    <LayoutDashboard aria-hidden="true" className="h-3.5 w-3.5 text-muted" />
-                    Open project
-                  </Link>
-                </div>
+              <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded" style={{ backgroundColor: projectColor({ id: selected.id, color: selected.color }) }} />
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-base font-bold">{selected.name}</h2>
+                <p className="truncate text-xs text-muted">
+                  {plural(selected.memberCount, "member")} · {roleText[selected.accessLevel]}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-1.5 sm:gap-2">
+                <Link href={`/projects/${selected.id}/board`} className={cn(uiButtonClass, "gap-1.5 p-2 text-xs sm:px-2.5 sm:py-1.5")}>
+                  <SquareKanban aria-hidden="true" className="h-4 w-4 text-muted sm:h-3.5 sm:w-3.5" />
+                  <span className="sr-only sm:not-sr-only">Board</span>
+                </Link>
+                <Link href={`/projects/${selected.id}`} className={cn(uiButtonClass, "gap-1.5 p-2 text-xs sm:px-2.5 sm:py-1.5")}>
+                  <LayoutDashboard aria-hidden="true" className="h-4 w-4 text-muted sm:h-3.5 sm:w-3.5" />
+                  <span className="sr-only sm:not-sr-only">Open project</span>
+                </Link>
               </div>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
+            <div className="flex min-h-0 flex-1 flex-col sm:p-4">
               <ProjectChatWorkspace
                 key={selected.id}
                 projectId={selected.id}
