@@ -87,6 +87,11 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto(`/projects/${projectId}`);
     await page.waitForLoadState("networkidle");
     found.push(...(await violations(page, "project page at 320px")));
+    // The Quick Actions forms only render after a click; the due date once had no label (#305).
+    for (const action of ["Add Note", "Add Task", "Add Event"]) {
+      await page.getByRole("button", { name: action, exact: true }).click();
+      found.push(...(await violations(page, `project page's ${action} form at 320px`)));
+    }
     if (viewport) await page.setViewportSize(viewport);
 
     // Dialogs and sheets too.
