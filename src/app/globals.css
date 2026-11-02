@@ -187,6 +187,28 @@
   --text-title--font-weight: 600;
 }
 
+/*
+ * Form fields on phones (#337). iOS Safari zooms the page in when a field
+ * whose text is under 16px gets focus, and leaves it zoomed. Below 640px
+ * (Tailwind's sm) the small sizes resolve to at least 16px inside fields, so
+ * their classes keep working everywhere else, and fields that inherit their
+ * size get at least 16px too. Pinch zoom stays on: the viewport sets no
+ * maximum-scale.
+ */
+@layer base {
+  @media (width < 40rem) {
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
+    textarea,
+    select {
+      --text-2xs: max(1rem, 16px);
+      --text-xs: max(1rem, 16px);
+      --text-sm: max(1rem, 16px);
+      --text-base: max(1rem, 16px);
+      font-size: max(1em, 16px);
+    }
+  }
+}
+
 /* In dark mode zinc-500 carries muted text on dark surfaces, so it is lifted to pass WCAG AA (4.5:1). */
 .dark {
   --color-zinc-500: #8b9995;
