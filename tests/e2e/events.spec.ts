@@ -122,3 +122,72 @@ test("events API: repeat-until is checked, and an edit without it keeps it", asy
   const oneOff = await page.request.patch(`/api/events/${id}`, { data: { ...base, recurrence: "NONE" } });
   expect(((await oneOff.json()) as { repeatUntil: string | null }).repeatUntil).toBeNull();
 });
+
+/** How the week strip names a day: "Tuesday, November 3, 2026". */
+function fullDate(daysFromToday: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + daysFromToday);
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(date);
+}
+
+// DES-17 (#332): below 1024 px a week strip sits above the agenda. It jumps to a day, and follows the scroll.
+test("agenda on a phone: the week strip jumps to a day and follows the scroll", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "Wide screens keep the side month calendar instead.");
+  const event = uniqueName("Strip event");
+  await continueAsGuest(page);
+  expect(
+    (await page.request.post("/api/events", { data: { title: event, startDate: dateInputValue(9), startTime: "11:00", endDate: "", endTime: "", recurrence: "NONE" } })).ok(),
+  ).toBe(true);
+
+  await page.goto("/events");
+  const days = page.getByRole("group", { name: "Days of the week" });
+  await expect(days.getByRole("button", { pressed: true })).toHaveAccessibleName(`${fullDate(0)}, today, nothing planned`);
+  if (new Date().getDay() > 0) await expect(days.getByRole("button", { name: new RegExp(`^${fullDate(-1)}`) })).toBeDisabled();
+
+  // Nine days out is next week, or the week after from a Friday or Saturday.
+  await page.getByRole("button", { name: "Next week" }).click();
+  const target = days.getByRole("button", { name: `${fullDate(9)}, 1 item` });
+  if (!(await target.isVisible())) await page.getByRole("button", { name: "Next week" }).click();
+  await target.click();
+  await expect(target).toHaveAttribute("aria-pressed", "true");
+
+  // The day's entry lands just under the strip, not behind it.
+  const entry = page.getByRole("region", { name: new RegExp(`^${agendaLabel(9)}\\b`) });
+  await expect(entry.getByRole("button", { name: event, exact: true })).toBeInViewport();
+  const strip = await days.locator("..").boundingBox();
+  const top = await entry.boundingBox();
+  expect(strip && top).toBeTruthy();
+  expect(top!.y).toBeGreaterThanOrEqual(strip!.y + strip!.height - 1);
+  expect(top!.y).toBeLessThanOrEqual(strip!.y + strip!.height + 24);
+
+  // Scrolling the agenda moves the strip to the day at the top, here tomorrow, an empty day with its own line.
+  await page.evaluate((key) => document.getElementById(`agenda-${key}`)?.scrollIntoView({ block: "start" }), dateInputValue(1));
+  await expect(days.getByRole("button", { pressed: true })).toHaveAccessibleName(new RegExp(`^${fullDate(1)}`));
+  await expect(page.locator(`#agenda-${dateInputValue(1)}`)).toContainText("Nothing planned");
+});
+
+// DES-17 (#332): due tasks show beside events, behind the "Show tasks" switch the Month tab shares.
+test("agenda: due tasks show with the events, and the Show tasks switch is shared with the Month tab", async ({ page }) => {
+  const task = uniqueName("Agenda task");
+  await continueAsGuest(page);
+  const created = (await (await page.request.post("/api/tasks", { data: { title: task, dueDate: dateInputValue(1), priority: "HIGH" } })).json()) as { id: string };
+
+  await page.goto("/events");
+  const tomorrow = page.getByRole("region", { name: /^Tomorrow/ });
+  await expect(tomorrow.getByRole("link", { name: task })).toBeVisible();
+  await expect(tomorrow.getByRole("listitem").filter({ hasText: task })).toContainText("High");
+
+  // Ticking it off marks it done.
+  const box = tomorrow.getByRole("checkbox", { name: `Done: ${task}` });
+  await box.click();
+  await expect(box).toBeChecked();
+  const tasks = (await (await page.request.get("/api/tasks")).json()) as { id: string; status: string }[];
+  expect(tasks.find((item) => item.id === created.id)?.status).toBe("DONE");
+
+  // Off here means off on the Month tab too.
+  await page.getByRole("switch", { name: "Show tasks" }).click();
+  await expect(page.getByRole("link", { name: task })).toHaveCount(0);
+  await page.getByRole("navigation", { name: "Calendar views" }).getByRole("link", { name: "Month" }).click();
+  await expect(page.getByRole("switch", { name: "Show tasks" })).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByText(task)).toHaveCount(0);
+});

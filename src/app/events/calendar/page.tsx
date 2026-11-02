@@ -30,7 +30,9 @@ import { EventSheet, eventRequestBody, type EventInput } from "@/components/even
 import { uiButtonClass, uiCardClass } from "@/components/ui";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { toast } from "@/components/ui/toaster";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ShowTasksSwitch } from "@/components/events/show-tasks-switch";
+import { useShowTasks } from "@/lib/show-tasks";
 import {
   DeleteEventDialog,
   deleteEventDays,
@@ -116,44 +118,6 @@ function formatDayKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-/**
- * The "Show tasks" switch, kept in localStorage so it stays as the user left
- * it. Tasks show by default; storage can be unavailable (private windows), in
- * which case the switch still works for the visit.
- */
-const SHOW_TASKS_KEY = "ai-multi-calendar-show-tasks";
-const showTasksListeners = new Set<() => void>();
-let showTasksFallback = true;
-
-function readShowTasks() {
-  try {
-    const saved = localStorage.getItem(SHOW_TASKS_KEY);
-    return saved === null ? showTasksFallback : saved !== "false";
-  } catch {
-    return showTasksFallback;
-  }
-}
-
-function writeShowTasks(value: boolean) {
-  showTasksFallback = value;
-  try {
-    localStorage.setItem(SHOW_TASKS_KEY, String(value));
-  } catch {
-    // Not saved; the fallback keeps it for this visit.
-  }
-  showTasksListeners.forEach((listener) => listener());
-}
-
-/** Follows the switch here and in other tabs (the storage event). */
-function subscribeShowTasks(listener: () => void) {
-  showTasksListeners.add(listener);
-  window.addEventListener("storage", listener);
-  return () => {
-    showTasksListeners.delete(listener);
-    window.removeEventListener("storage", listener);
-  };
-}
-
 export default function EventsCalendarPage() {
   // ---------------------------------------------------------------------
   // Core data state
@@ -167,8 +131,8 @@ export default function EventsCalendarPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   /** Currently selected project filter: ALL_PROJECTS_FILTER, NO_PROJECT_FILTER, or a project id. */
   const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS_FILTER);
-  /** Whether due tasks appear on the calendar; the server render always shows them. */
-  const showTasks = useSyncExternalStore(subscribeShowTasks, readShowTasks, () => true);
+  /** Whether due tasks appear on the calendar, shared with the Agenda tab; the server render always shows them. */
+  const [showTasks] = useShowTasks();
   /** The New event sheet and the day it opens on. */
   const [newEventSheet, setNewEventSheet] = useState<{ open: boolean; draft?: Partial<EventInput> }>({ open: false });
 
@@ -619,27 +583,7 @@ export default function EventsCalendarPage() {
                   </option>
                 ))}
               </select>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={showTasks}
-                onClick={() => writeShowTasks(!showTasks)}
-                className={`${uiButtonClass} px-3`}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
-                    showTasks ? "bg-accent" : "bg-zinc-300 dark:bg-zinc-600"
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 h-3 w-3 rounded-full shadow-sm transition-transform motion-reduce:transition-none ${
-                      showTasks ? "translate-x-3 bg-accent-ink" : "bg-white"
-                    }`}
-                  />
-                </span>
-                Show tasks
-              </button>
+              <ShowTasksSwitch />
               <button
                 onClick={() =>
                   setMonth(
