@@ -169,3 +169,57 @@ test("events API: deleting days checks the day, the event and the request", asyn
   // The request fixture has no session.
   expect((await request.patch(`/api/events/${weekly}/repeats`, { data: { skipDate: dateInputValue(7) } })).status()).toBe(401);
 });
+
+// DES-16 (#331): on a phone the Month tab is a month grid with a dot per item; the selected
+// day's events and tasks are listed under it, and the grid can shrink to one week.
+test("calendar on a phone: pick a day in the month grid, then move a week at a time", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "The grid with dots replaces the month's previews below 640 px.");
+  const event = uniqueName("Phone event");
+  const task = uniqueName("Phone task");
+  // A day in this month besides today, so it's in the grid whatever the date.
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const offset = tomorrow.getMonth() === new Date().getMonth() ? 1 : -1;
+  const fullDate = (daysFromToday: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() + daysFromToday);
+    return new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(date);
+  };
+  await continueAsGuest(page);
+  expect((await page.request.post("/api/tasks", { data: { title: task, dueDate: dateInputValue(offset) } })).ok()).toBe(true);
+  expect(
+    (
+      await page.request.post("/api/events", {
+        data: { title: event, startDate: dateInputValue(offset), startTime: "10:00", endDate: "", endTime: "", recurrence: "NONE" },
+      })
+    ).ok(),
+  ).toBe(true);
+
+  await page.goto("/events/calendar");
+  const grid = page.locator("#calendar-phone-grid");
+  await expect(grid.getByRole("button", { pressed: true })).toHaveAccessibleName(`${fullDate(0)}, today, nothing planned`);
+
+  // The day's button counts its items; picking it lists them under the grid, the event's time first.
+  const day = grid.getByRole("button", { name: `${fullDate(offset)}, 2 items` });
+  await day.click();
+  await expect(day).toHaveAttribute("aria-pressed", "true");
+  const panel = dayPanel(page, offset);
+  await expect(panel.getByRole("link", { name: task })).toBeVisible();
+  const eventCard = panel.getByRole("article").filter({ has: page.getByRole("button", { name: event, exact: true }) });
+  await expect(eventCard.getByText("10:00 AM", { exact: true }).filter({ visible: true })).toHaveCount(1);
+
+  // One week: seven days, and Next week moves the selection seven days on.
+  await page.getByRole("button", { name: "Show one week" }).click();
+  await expect(grid.getByRole("button")).toHaveCount(7);
+  await expect(day).toBeVisible();
+  await page.getByRole("button", { name: "Next week" }).click();
+  await expect(dayPanel(page, offset + 7)).toBeVisible();
+  await expect(grid.getByRole("button", { pressed: true })).toHaveAccessibleName(new RegExp(`^${fullDate(offset + 7)}`));
+
+  // Back to the month, then to today.
+  await page.getByRole("button", { name: "Show the month" }).click();
+  expect(await grid.getByRole("button").count()).toBeGreaterThanOrEqual(28);
+  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await expect(dayPanel(page, 0)).toBeVisible();
+  await expect(grid.getByRole("button", { pressed: true })).toHaveAccessibleName(`${fullDate(0)}, today, nothing planned`);
+});
