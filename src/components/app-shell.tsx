@@ -38,6 +38,7 @@ import { ProjectSheet, type ProjectInput } from "@/components/projects/project-s
 import { clearOfflineData, OfflineBanner, promptInstall, useInstallPrompt } from "@/components/pwa";
 import { EmailVerificationBanner } from "@/components/email-verification";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
+import { TextSizeMenuItems } from "@/components/text-size-menu";
 import { ThemeToggle, useTheme } from "@/components/theme-provider";
 import {
   DropdownMenu,
@@ -120,7 +121,7 @@ function Badge({ value }: { value: number }) {
       {" "}
       <span
         aria-hidden="true"
-        className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 font-mono text-2xs font-bold tabular-nums text-accent-ink"
+        className="ml-auto inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-accent px-1.5 font-mono text-2xs font-bold tabular-nums text-accent-ink"
       >
         {formatUnreadCount(value)}
       </span>
@@ -277,7 +278,7 @@ function SidebarProject({
                   aria-current={pageActive ? "page" : undefined}
                   aria-label={page.unread ? `${page.label}, ${page.unread} unread` : undefined}
                   className={cn(
-                    "flex items-center gap-2 rounded-md px-2 py-1 text-[13px] text-muted transition-colors hover:bg-surface-hover hover:text-ink",
+                    "flex items-center gap-2 rounded-md px-2 py-1 text-[0.8125rem] text-muted transition-colors hover:bg-surface-hover hover:text-ink",
                     pageActive && "bg-surface font-medium text-ink shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
                   )}
                 >
@@ -498,6 +499,7 @@ function UserMenu({ user, onShowShortcuts }: { user: NonNullable<ShellUser>; onS
             {theme === "dark" ? <span className="ml-auto text-xs text-accent">On</span> : null}
           </DropdownMenuItem>
           <AccentMenuItems />
+          <TextSizeMenuItems />
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onShowShortcuts}>
             <Keyboard />

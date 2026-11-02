@@ -171,11 +171,13 @@
  * Type scale (DES-08): page titles use text-title (28px at weight 600) and
  * Home's card titles text-card (15px at 600). Secondary text, text-xs, is
  * 12.5px instead of Tailwind's 12px, and text-2xs (11px) is the smallest size
- * anywhere: badges, counts and keyboard hints. Weight 800 isn't used.
+ * anywhere: badges, counts and keyboard hints. It stays 11px at the Small text
+ * size too (DES-19). Weight 800 isn't used. Sizes are in rem, never px, so the
+ * text size setting scales them.
  * Counts, sizes, clock times and keyboard hints use font-mono with tabular-nums.
  */
 @theme {
-  --text-2xs: 0.6875rem;
+  --text-2xs: max(0.6875rem, 11px);
   --text-2xs--line-height: 1rem;
   --text-xs: 0.78125rem;
   --text-card: 0.9375rem;
@@ -185,6 +187,25 @@
   --text-title--line-height: 2.125rem;
   --text-title--letter-spacing: -0.02em;
   --text-title--font-weight: 600;
+}
+
+/*
+ * Text size (DES-19): data-text-size on <html>, chosen in the account menu
+ * (src/lib/text-size.ts), sets the root font size, and with it every rem:
+ * text, icons, spacing and corners grow together. Percentages keep the
+ * browser's own text size in the sum. Default has no rule. Media queries don't
+ * follow the root size, so the layouts switch at the same widths.
+ */
+html[data-text-size="small"] {
+  font-size: 93.75%;
+}
+
+html[data-text-size="large"] {
+  font-size: 112.5%;
+}
+
+html[data-text-size="larger"] {
+  font-size: 125%;
 }
 
 /*

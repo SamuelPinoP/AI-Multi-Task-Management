@@ -116,7 +116,7 @@ function TodayTimeline({ events, now }: { events: HomeEvent[]; now: Date }) {
               className="my-1 block rounded-r-lg border-l-[3px] px-2.5 py-1.5 transition-opacity hover:opacity-80"
               style={{ borderColor: color, backgroundColor: `color-mix(in srgb, ${color} 10%, var(--surface))` }}
             >
-              <span className="block truncate text-[13px] font-semibold">{event.title}</span>
+              <span className="block truncate text-[0.8125rem] font-semibold">{event.title}</span>
               <span className="block truncate text-xs text-muted">
                 {eventRange(event)}
                 {event.location ? ` · ${event.location}` : ""}
@@ -256,7 +256,7 @@ export default async function HomePage() {
                     <li key={project.id} className="border-t border-line py-2 first:border-t-0">
                       <div className="flex items-center gap-2">
                         <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-[3px]" style={{ backgroundColor: color }} />
-                        <Link href={`/projects/${project.id}`} className="min-w-0 flex-1 truncate text-[13px] font-semibold hover:text-accent">
+                        <Link href={`/projects/${project.id}`} className="min-w-0 flex-1 truncate text-[0.8125rem] font-semibold hover:text-accent">
                           {project.name}
                         </Link>
                         <span className={cn("shrink-0 rounded-full px-2 py-px text-2xs font-bold", style.className)}>{style.label}</span>
@@ -296,7 +296,7 @@ export default async function HomePage() {
             {home.activity.length ? (
               <ul className="grid gap-1">
                 {home.activity.map((activity) => (
-                  <li key={activity.id} className="flex items-start gap-2 py-1 text-[13px]">
+                  <li key={activity.id} className="flex items-start gap-2 py-1 text-[0.8125rem]">
                     <span
                       aria-hidden="true"
                       className="mt-px grid h-5 w-5 shrink-0 place-items-center rounded-full text-2xs font-bold text-white"
@@ -326,7 +326,7 @@ export default async function HomePage() {
             <Card title="Jump back in">
               <div className="grid grid-cols-1 gap-1.5">
                 {home.shortcuts.project ? (
-                  <Link href={`/projects/${home.shortcuts.project.id}`} className="flex items-center gap-2 rounded-lg px-1 py-1 text-[13px] hover:bg-surface-hover">
+                  <Link href={`/projects/${home.shortcuts.project.id}`} className="flex items-center gap-2 rounded-lg px-1 py-1 text-[0.8125rem] hover:bg-surface-hover">
                     <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-[3px]" style={{ backgroundColor: projectColor(home.shortcuts.project) }} />
                     <span className="min-w-0 flex-1 truncate">
                       <span className="text-muted">Project: </span>
@@ -335,7 +335,7 @@ export default async function HomePage() {
                   </Link>
                 ) : null}
                 {home.shortcuts.note ? (
-                  <Link href={`/notes?openNote=${home.shortcuts.note.id}`} className="flex items-center gap-2 rounded-lg px-1 py-1 text-[13px] hover:bg-surface-hover">
+                  <Link href={`/notes?openNote=${home.shortcuts.note.id}`} className="flex items-center gap-2 rounded-lg px-1 py-1 text-[0.8125rem] hover:bg-surface-hover">
                     <NotebookPen aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted" />
                     <span className="min-w-0 flex-1 truncate">
                       <span className="text-muted">Note: </span>

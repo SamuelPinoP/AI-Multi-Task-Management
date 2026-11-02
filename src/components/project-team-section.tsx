@@ -371,11 +371,11 @@ export function ProjectTeamSection({
                   <span>({m.role})</span>
                   {m.email ? <span>• {m.email}</span> : null}
                   {m.userId ? (
-                    <span className="rounded-full border border-success/40 bg-success-soft px-2 py-0.5 text-[11px] font-semibold text-success">
+                    <span className="rounded-full border border-success/40 bg-success-soft px-2 py-0.5 text-2xs font-semibold text-success">
                       Has access
                     </span>
                   ) : m.email && pendingInviteEmails.has(m.email) ? (
-                    <span className="rounded-full border border-warning/40 bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning">
+                    <span className="rounded-full border border-warning/40 bg-warning-soft px-2 py-0.5 text-2xs font-semibold text-warning">
                       Waiting for acceptance
                     </span>
                   ) : null}

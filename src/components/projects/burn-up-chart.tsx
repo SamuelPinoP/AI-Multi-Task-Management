@@ -115,7 +115,7 @@ export function BurnUpChart({ points, caption }: { points: BurnUpChartPoint[]; c
                 x={x(index)}
                 y={HEIGHT - 6}
                 textAnchor={index === 0 ? "start" : index === last ? "end" : "middle"}
-                className="fill-muted text-[11px]"
+                className="fill-muted text-2xs"
               >
                 {index === last ? "Today" : formatDay(points[index].date)}
               </text>
