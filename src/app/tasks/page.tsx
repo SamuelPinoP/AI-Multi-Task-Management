@@ -46,6 +46,9 @@ const sectionTitles: Record<SectionKey, string> = {
 const controlClass =
   "min-w-0 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/25";
 
+/** The priority, project and sort filters: at least 8.5rem each on phones, sized to their labels from 640px. */
+const filterClass = `${controlClass} flex-1 basis-34 sm:flex-none sm:basis-auto`;
+
 function sectionFor(task: Task, now: Date): SectionKey {
   if (task.status === "DONE") return "DONE";
   if (!task.dueDate) return "NO_DATE";
@@ -341,20 +344,21 @@ export default function TasksPage() {
             </button>
           ))}
         </div>
-        <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto">
-          <select aria-label="Priority" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as "ALL" | Priority)} className={controlClass}>
+        {/* On phones the filters share rows two by two, so their 16px labels (#337) aren't cut off. */}
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap">
+          <select aria-label="Priority" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as "ALL" | Priority)} className={filterClass}>
             <option value="ALL">Any priority</option>
             <option value="HIGH">High</option>
             <option value="MEDIUM">Medium</option>
             <option value="LOW">Low</option>
           </select>
-          <select aria-label="Project" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} className={controlClass}>
+          <select aria-label="Project" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} className={filterClass}>
             <option value="">All projects</option>
             {projects.map((project) => (
               <option key={project.id} value={project.id}>{project.name}</option>
             ))}
           </select>
-          <select aria-label="Sort" value={sortBy} onChange={(event) => setSortBy(event.target.value as SortOption)} className={controlClass}>
+          <select aria-label="Sort" value={sortBy} onChange={(event) => setSortBy(event.target.value as SortOption)} className={filterClass}>
             <option value="DUE_DATE_ASC">Due soonest</option>
             <option value="DUE_DATE_DESC">Due latest</option>
             <option value="NEWEST">Newest</option>
