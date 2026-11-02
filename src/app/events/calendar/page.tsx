@@ -9,8 +9,9 @@
  *
  * Responsibilities:
  *  - Fetch events, tasks, and projects in parallel on mount.
- *  - Render a month grid (desktop) or a rolling 3-day view (mobile) showing
- *    per-day previews of events and due tasks, filterable by project.
+ *  - Render a month grid with per-day previews of events and due tasks
+ *    (wider screens) or, on a phone, a compact month grid with a dot per item
+ *    that can shrink to one week (DES-16); both filterable by project.
  *  - Show full details for whichever day is selected in a side panel,
  *    including the ability to open an event for editing (navigates to the
  *    Agenda tab with a deep-link query param) or open a task.
@@ -21,6 +22,7 @@
  *    "New event" opens the event sheet on the selected day (CAL-01).
  */
 
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarHeader } from "@/components/events/calendar-header";
@@ -35,6 +37,8 @@ import {
   type DeleteEventTarget,
   type DeleteScope,
 } from "@/components/events/delete-event-dialog";
+import { cn } from "@/lib/cn";
+import { projectColor } from "@/lib/project-color";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 import {
@@ -188,12 +192,8 @@ export default function EventsCalendarPage() {
   const [selectedDayKey, setSelectedDayKey] = useState(() =>
     formatDayKey(new Date()),
   );
-  /** Start-of-day Date anchoring the mobile 3-day rolling view; defaults to today at midnight. */
-  const [mobileRangeStart, setMobileRangeStart] = useState(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return today;
-  });
+  /** Phones only: the grid shows just the selected day's week, so the day's list gets more room (DES-16). */
+  const [phoneWeekOnly, setPhoneWeekOnly] = useState(false);
 
   // ---------------------------------------------------------------------
   // Action state (delete event / complete task)
@@ -399,25 +399,17 @@ export default function EventsCalendarPage() {
     [selectedDayKey, tasksByDay],
   );
 
-  /** The 3 consecutive days (starting at `mobileRangeStart`) shown in the mobile rolling view. */
-  const mobileDays = useMemo(() => {
-    return Array.from({ length: 3 }, (_, index) => {
-      const day = new Date(mobileRangeStart);
-      day.setDate(day.getDate() + index);
-      return day;
-    });
-  }, [mobileRangeStart]);
-
-  /** Human-readable "Mon D – Mon D" label describing the mobile 3-day range. */
-  const mobileRangeLabel = useMemo(() => {
-    const start = mobileDays[0];
-    const end = mobileDays[mobileDays.length - 1];
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-    return `${formatter.format(start)} – ${formatter.format(end)}`;
-  }, [mobileDays]);
+  /**
+   * The days in the phone grid: the whole month, or only the selected day's
+   * week. That week is always inside `monthDays`, because picking a day also
+   * shows its month.
+   */
+  const phoneDays = useMemo(() => {
+    if (!phoneWeekOnly) return monthDays;
+    const start = monthDays.findIndex((day) => formatDayKey(day) === selectedDayKey);
+    const weekStart = start - (start % 7);
+    return start < 0 ? monthDays.slice(0, 7) : monthDays.slice(weekStart, weekStart + 7);
+  }, [monthDays, phoneWeekOnly, selectedDayKey]);
 
   /** Human-readable full date label (e.g. "Monday, January 5, 2025") for `selectedDayKey`. */
   const selectedDayLabel = useMemo(() => {
@@ -430,6 +422,29 @@ export default function EventsCalendarPage() {
   // ---------------------------------------------------------------------
   // Action handlers
   // ---------------------------------------------------------------------
+
+  /** Selects a day and shows its month, as a tap on the phone grid does. */
+  function selectDay(day: Date) {
+    setSelectedDayKey(formatDayKey(day));
+    setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
+  }
+
+  /**
+   * The phone's Previous and Next: a week at a time while the grid shows one
+   * week, otherwise a month, landing on today in this month and on the 1st in
+   * any other.
+   */
+  function movePhoneView(direction: -1 | 1) {
+    if (phoneWeekOnly) {
+      const [year, monthNum, day] = selectedDayKey.split("-").map(Number);
+      selectDay(new Date(year, monthNum - 1, day + 7 * direction));
+      return;
+    }
+    const first = new Date(month.getFullYear(), month.getMonth() + direction, 1);
+    const today = new Date();
+    const isThisMonth = first.getFullYear() === today.getFullYear() && first.getMonth() === today.getMonth();
+    selectDay(isThisMonth ? today : first);
+  }
 
   /**
    * Navigates to the Agenda tab (/events) with a deep-link query param, which
@@ -465,7 +480,6 @@ export default function EventsCalendarPage() {
     const day = getLocalDateOnly(created.startTime);
     setSelectedDayKey(formatDayKey(day));
     setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
-    setMobileRangeStart(day);
     notifyWorkspaceChanged();
     toast.success("Event created", { description: created.title });
     return null;
@@ -560,20 +574,42 @@ export default function EventsCalendarPage() {
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <section className={uiCardClass}>
-          {/* Month heading + project filter + month navigation */}
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-2xl font-semibold">
+        <section className={cn(uiCardClass, "p-3 sm:p-6")}>
+          {/* Month heading + project filter + month navigation. On a phone the month's
+              own row holds Today, Previous and Next, and the filters take the next row. */}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:mb-5">
+            <h2 className="min-w-0 flex-1 text-xl font-semibold sm:flex-none sm:text-2xl">
               {new Intl.DateTimeFormat("en-US", {
                 month: "long",
                 year: "numeric",
               }).format(month)}
             </h2>
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 sm:hidden">
+              <button type="button" onClick={() => selectDay(new Date())} className={cn(uiButtonClass, "rounded-full px-3 py-1.5")}>
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={() => movePhoneView(-1)}
+                aria-label={phoneWeekOnly ? "Previous week" : "Previous month"}
+                className="grid h-11 w-11 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink"
+              >
+                <ChevronLeft aria-hidden="true" className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => movePhoneView(1)}
+                aria-label={phoneWeekOnly ? "Next week" : "Next month"}
+                className="grid h-11 w-11 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink"
+              >
+                <ChevronRight aria-hidden="true" className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
               <select aria-label="Project"
                 value={projectFilter}
                 onChange={(e) => setProjectFilter(e.target.value)}
-                className="min-w-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 sm:flex-none"
               >
                 <option value={ALL_PROJECTS_FILTER}>All projects</option>
                 <option value={NO_PROJECT_FILTER}>No project</option>
@@ -611,7 +647,7 @@ export default function EventsCalendarPage() {
                       new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
                   )
                 }
-                className={uiButtonClass}
+                className={cn(uiButtonClass, "hidden sm:inline-flex")}
               >
                 Previous
               </button>
@@ -622,133 +658,90 @@ export default function EventsCalendarPage() {
                       new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
                   )
                 }
-                className={uiButtonClass}
+                className={cn(uiButtonClass, "hidden sm:inline-flex")}
               >
                 Next
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <div className="grid grid-cols-1 gap-0 sm:gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             <div>
               {/* ------------------------------------------------------
-                  Mobile-only: rolling 3-day view with Previous/Next nav
+                  Phones: the month (or one week) as a grid of days with a
+                  dot per item; the selected day's items are listed below
+                  (DES-16, like Apple Calendar's list view).
               ------------------------------------------------------- */}
-              <div className="mb-4 flex items-center justify-between gap-3 sm:hidden">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setMobileRangeStart((prev) => {
-                      const next = new Date(prev);
-                      next.setDate(next.getDate() - 3);
-                      return next;
-                    })
-                  }
-                  className={uiButtonClass}
-                >
-                  Previous 3 days
-                </button>
-                <p className="text-center text-sm font-semibold text-zinc-600 dark:text-zinc-300">
-                  {mobileRangeLabel}
-                </p>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setMobileRangeStart((prev) => {
-                      const next = new Date(prev);
-                      next.setDate(next.getDate() + 3);
-                      return next;
-                    })
-                  }
-                  className={uiButtonClass}
-                >
-                  Next 3 days
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:hidden">
-                {mobileDays.map((day) => {
-                  const dayKey = formatDayKey(day);
-                  const isToday = dayKey === formatDayKey(new Date());
-                  const isSelected = dayKey === selectedDayKey;
-                  const dayEvents = eventsByDay[dayKey] ?? [];
-                  const dayTasks = tasksByDay[dayKey] ?? [];
-                  const itemCount = dayEvents.length + dayTasks.length;
-                  return (
-                    <button
-                      key={dayKey}
-                      type="button"
-                      onClick={() => {
-                        setSelectedDayKey(dayKey);
-                        // Keep the (hidden, desktop-only) month state in sync
-                        // so switching back to desktop view lands on the
-                        // right month.
-                        setMonth(
-                          new Date(day.getFullYear(), day.getMonth(), 1),
-                        );
-                      }}
-                      className={`w-full rounded-2xl border p-4 text-left transition ${
-                        isSelected
-                          ? "border-black bg-zinc-100 dark:bg-zinc-800"
-                          : "border-zinc-200 bg-white/80 hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900/60"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
-                            {new Intl.DateTimeFormat("en-US", {
-                              weekday: "long",
-                            }).format(day)}
-                          </p>
-                          <p
-                            className={`mt-1 text-2xl font-bold ${isToday ? "text-blue-600 dark:text-blue-300" : ""}`}
-                          >
-                            {new Intl.DateTimeFormat("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            }).format(day)}
-                          </p>
-                        </div>
-                        <span className="rounded-full bg-zinc-950 px-2.5 py-1 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-zinc-950">
-                          {itemCount} {itemCount === 1 ? "item" : "items"}
+              <div className="sm:hidden">
+                <div aria-hidden="true" className="grid grid-cols-7 pb-1 text-center text-2xs font-semibold text-muted">
+                  {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
+                    <span key={index}>{day}</span>
+                  ))}
+                </div>
+                <div id="calendar-phone-grid" className="grid grid-cols-7">
+                  {phoneDays.map((day) => {
+                    const dayKey = formatDayKey(day);
+                    const isToday = dayKey === formatDayKey(new Date());
+                    const isSelected = dayKey === selectedDayKey;
+                    const inMonth = phoneWeekOnly || day.getMonth() === month.getMonth();
+                    const dayEvents = eventsByDay[dayKey] ?? [];
+                    const dayTasks = tasksByDay[dayKey] ?? [];
+                    const itemCount = dayEvents.length + dayTasks.length;
+                    // Events are filled dots and tasks are rings, in their project's color.
+                    const dots = [
+                      ...dayEvents.map((event) => ({ id: event.id, color: event.project ? projectColor(event.project) : "var(--accent)", filled: true })),
+                      ...dayTasks.map((task) => ({ id: task.id, color: task.project ? projectColor(task.project) : "var(--accent)", filled: false })),
+                    ].slice(0, 3);
+                    return (
+                      <button
+                        key={dayKey}
+                        type="button"
+                        onClick={() => selectDay(day)}
+                        aria-pressed={isSelected}
+                        aria-label={`${new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(day)}${isToday ? ", today" : ""}, ${
+                          itemCount ? `${itemCount} item${itemCount === 1 ? "" : "s"}` : "nothing planned"
+                        }`}
+                        className="grid h-12 content-start justify-items-center gap-1 rounded-lg pt-1 outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        <span
+                          className={cn(
+                            "grid h-8 w-8 place-items-center rounded-full text-sm tabular-nums",
+                            isSelected
+                              ? "bg-accent font-semibold text-accent-ink"
+                              : isToday
+                                ? "bg-accent-soft font-semibold text-accent"
+                                : inMonth
+                                  ? "text-ink"
+                                  : "text-muted",
+                          )}
+                        >
+                          {day.getDate()}
                         </span>
-                      </div>
-                      <div className="mt-3 space-y-2">
-                        {/* Preview up to 2 events... */}
-                        {dayEvents.slice(0, 2).map((event) => (
-                          <span
-                            key={event.id}
-                            className="block truncate rounded-xl bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-                          >
-                            {event.hasStartTime
-                              ? formatEventTime(event.startTime)
-                              : "No time"}{" "}
-                            {event.title}
-                          </span>
-                        ))}
-                        {/* ...then fill remaining preview slots (up to 3 total) with tasks */}
-                        {dayTasks
-                          .slice(
-                            0,
-                            Math.max(0, 3 - Math.min(dayEvents.length, 2)),
-                          )
-                          .map((task) => (
-                            <p
-                              key={task.id}
-                              className={`truncate rounded-xl border border-accent/30 bg-accent-soft px-3 py-2 text-sm text-accent ${task.status === "DONE" ? "opacity-60 line-through" : ""}`}
-                            >
-                              □ {task.title}
-                            </p>
+                        <span aria-hidden="true" className="flex h-1.5 gap-0.5">
+                          {dots.map((dot) => (
+                            <span
+                              key={dot.id}
+                              className="h-1.5 w-1.5 rounded-full border-[1.5px]"
+                              style={{ borderColor: dot.color, backgroundColor: dot.filled ? dot.color : "transparent" }}
+                            />
                           ))}
-                        {itemCount === 0 && (
-                          <p className="rounded-xl border border-dashed border-zinc-200 px-3 py-3 text-sm text-zinc-500 dark:border-zinc-700">
-                            No items.
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mb-3 flex justify-center border-b border-line pb-2">
+                  <button
+                    type="button"
+                    onClick={() => setPhoneWeekOnly((weekOnly) => !weekOnly)}
+                    aria-controls="calendar-phone-grid"
+                    aria-expanded={!phoneWeekOnly}
+                    className="inline-flex h-9 items-center gap-1 rounded-full px-3 text-xs font-medium text-muted hover:bg-surface-hover hover:text-ink"
+                  >
+                    {phoneWeekOnly ? <ChevronDown aria-hidden="true" className="h-4 w-4" /> : <ChevronUp aria-hidden="true" className="h-4 w-4" />}
+                    {phoneWeekOnly ? "Show the month" : "Show one week"}
+                  </button>
+                </div>
               </div>
 
               {/* ------------------------------------------------------
@@ -858,14 +851,15 @@ export default function EventsCalendarPage() {
             {/* ----------------------------------------------------------
                 Sidebar: full detail list for the selected day
             ------------------------------------------------------------- */}
+            {/* On a phone the day's list sits right under the grid, without a frame of its own. */}
             <aside
               aria-labelledby="calendar-selected-day"
-              className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700"
+              className="rounded-xl sm:border sm:border-zinc-200 sm:p-4 sm:dark:border-zinc-700"
             >
-              <h3 id="calendar-selected-day" className="text-lg font-semibold">
+              <h3 id="calendar-selected-day" className="text-base font-semibold sm:text-lg">
                 {selectedDayLabel}
               </h3>
-              <p className="mt-1 text-sm text-zinc-500">
+              <p className="mt-0.5 text-sm text-zinc-500 sm:mt-1">
                 {selectedDayEvents.length + selectedDayTasks.length === 0
                   ? showTasks
                     ? "No events or tasks planned for this day."
@@ -873,12 +867,13 @@ export default function EventsCalendarPage() {
                   : `${selectedDayEvents.length + selectedDayTasks.length} item${selectedDayEvents.length + selectedDayTasks.length > 1 ? "s" : ""} scheduled`}
               </p>
 
-              <div className="mt-4 space-y-3">
-                {/* Full event cards: clicking opens the event for editing on the Agenda tab */}
+              <div className="mt-3 space-y-2 sm:mt-4 sm:space-y-3">
+                {/* Full event cards: clicking opens the event for editing on the Agenda tab.
+                    On a phone the time moves to a column on the left and the card loses its extra lines. */}
                 {selectedDayEvents.map((event) => (
                   <article
                     key={event.id}
-                    className="relative rounded-lg border border-zinc-200 p-3 transition hover:border-accent/50 hover:bg-accent-soft/40 dark:border-zinc-700"
+                    className="relative flex items-start gap-3 rounded-lg border border-zinc-200 p-2.5 transition hover:border-accent/50 hover:bg-accent-soft/40 dark:border-zinc-700 sm:block sm:p-3"
                     style={
                       selectedProject && event.projectId === selectedProject.id
                         ? {
@@ -888,6 +883,10 @@ export default function EventsCalendarPage() {
                         : undefined
                     }
                   >
+                    <p className="w-16 shrink-0 pt-px text-right text-[13px] font-medium tabular-nums sm:hidden">
+                      {event.hasStartTime ? formatEventTime(event.startTime) : "All day"}
+                    </p>
+                    <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
                       {/* The title opens the event; its ::after covers the card so the whole card is clickable. */}
                       <button
@@ -906,29 +905,36 @@ export default function EventsCalendarPage() {
                         className="z-10"
                       />
                     </div>
-                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                      {event.hasStartTime
-                        ? formatEventTime(event.startTime)
-                        : "Time not specified"}
-                      {event.endTime && event.hasEndTime
-                        ? ` - ${formatEventTime(event.endTime)}`
-                        : ""}
+                    <p className={cn("mt-1 text-sm text-zinc-600 dark:text-zinc-300", !(event.endTime && event.hasEndTime) && "hidden sm:block")}>
+                      <span className="hidden sm:inline">
+                        {event.hasStartTime
+                          ? formatEventTime(event.startTime)
+                          : "Time not specified"}
+                      </span>
+                      {event.endTime && event.hasEndTime ? (
+                        <>
+                          <span className="hidden sm:inline"> - </span>
+                          <span className="sm:hidden">Until </span>
+                          {formatEventTime(event.endTime)}
+                        </>
+                      ) : null}
                     </p>
                     {event.location && (
                       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
                         {event.location}
                       </p>
                     )}
-                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                    <p className={cn("mt-1 text-sm text-zinc-600 dark:text-zinc-300", normalizeRecurrence(event.recurrence) === "NONE" && "hidden sm:block")}>
                       {normalizeRecurrence(event.recurrence) === "NONE"
                         ? `Repeats: ${formatRecurrenceLabel(event.recurrence)}`
                         : describeRepeat(event.recurrence, event.repeatUntil)}
                     </p>
                     {event.description && (
-                      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                      <p className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-300 sm:line-clamp-none">
                         {event.description}
                       </p>
                     )}
+                    </div>
                   </article>
                 ))}
 
@@ -936,7 +942,7 @@ export default function EventsCalendarPage() {
                 {selectedDayTasks.map((task) => (
                   <article
                     key={task.id}
-                    className={`relative rounded-lg border border-accent/30 bg-accent-soft/60 p-3 transition hover:border-accent/50 hover:bg-accent-soft ${task.status === "DONE" ? "opacity-65" : ""}`}
+                    className={`relative rounded-lg border border-accent/30 bg-accent-soft/60 p-2.5 transition hover:border-accent/50 hover:bg-accent-soft sm:p-3 ${task.status === "DONE" ? "opacity-65" : ""}`}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       {/* The title opens the task; its ::after covers the card so the whole card is clickable. */}
@@ -965,8 +971,9 @@ export default function EventsCalendarPage() {
                       Status: {task.status.replace("_", " ")} · Priority:{" "}
                       {task.priority}
                     </p>
+                    {/* A phone shows the day right above the list, so the date isn't repeated. */}
                     {task.dueDate && (
-                      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                      <p className="mt-1 hidden text-sm text-zinc-600 dark:text-zinc-300 sm:block">
                         Due{" "}
                         {formatTaskDueDate(task.dueDate)}
                       </p>
