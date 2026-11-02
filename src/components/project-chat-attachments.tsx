@@ -1044,7 +1044,7 @@ function ViewerText({ item }: { item: GalleryItem }) {
         // Show invalid JSON as it is.
       }
     }
-    body = <pre className="whitespace-pre-wrap break-words p-5 font-mono text-[13px] leading-6 text-zinc-800">{text}</pre>;
+    body = <pre className="whitespace-pre-wrap break-words p-5 font-mono text-[0.8125rem] leading-6 text-zinc-800">{text}</pre>;
   }
 
   return (
@@ -1113,7 +1113,7 @@ export function ComposerAttachmentTray({
                 </span>
               )}
             </div>
-            <p className="mt-1 truncate text-[11px] font-medium text-zinc-800 dark:text-zinc-100" title={file.name}>
+            <p className="mt-1 truncate text-2xs font-medium text-zinc-800 dark:text-zinc-100" title={file.name}>
               {file.name}
             </p>
             <p className="font-mono text-2xs text-zinc-500">{formatFileSize(file.size)}</p>

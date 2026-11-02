@@ -22,7 +22,7 @@ export function TeamChatList({ chats }: { chats: ChatSummary[] }) {
               />
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="flex items-baseline gap-2">
-                  <span className={cn("min-w-0 flex-1 truncate text-[13px]", unread ? "font-bold" : "font-semibold")}>{chat.name}</span>
+                  <span className={cn("min-w-0 flex-1 truncate text-[0.8125rem]", unread ? "font-bold" : "font-semibold")}>{chat.name}</span>
                   {chat.lastMessage ? (
                     <time dateTime={chat.lastMessage.at} className={cn("shrink-0 text-xs", unread ? "font-bold text-accent" : "text-muted")}>
                       {chat.lastMessage.timeLabel}

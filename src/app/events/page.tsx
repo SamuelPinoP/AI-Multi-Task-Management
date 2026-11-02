@@ -766,7 +766,7 @@ export default function EventsPage() {
                   aria-pressed={selected}
                   aria-label={`${new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(day)}${count ? `, ${count} event${count === 1 ? "" : "s"}` : ""}`}
                   className={cn(
-                    "relative grid h-9 place-items-center rounded-lg text-[13px] tabular-nums transition-colors",
+                    "relative grid h-9 place-items-center rounded-lg text-[0.8125rem] tabular-nums transition-colors",
                     selected ? "bg-accent font-semibold text-accent-ink" : "hover:bg-surface-hover",
                     !selected && key === todayKey && "font-bold text-accent",
                     !selected && !inMonth && "text-muted",
@@ -789,7 +789,7 @@ export default function EventsPage() {
                     <button type="button" onClick={() => openEvent(event)} className="flex w-full items-start gap-2 rounded-lg px-1.5 py-1 text-left hover:bg-surface-hover">
                       <span aria-hidden="true" className="mt-1 h-2 w-2 shrink-0 rounded-[3px]" style={{ backgroundColor: event.project ? projectColor(event.project) : "var(--accent)" }} />
                       <span className="min-w-0">
-                        <span className="block truncate text-[13px] font-medium">{event.title}</span>
+                        <span className="block truncate text-[0.8125rem] font-medium">{event.title}</span>
                         <span className="block text-xs text-muted">{timeRange(event)}</span>
                       </span>
                     </button>

@@ -3,9 +3,11 @@
 import { Moon, Sun } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { ACCENTS, DEFAULT_ACCENT, isAccent, type Accent } from "@/lib/accent";
+import { DEFAULT_TEXT_SIZE, isTextSize, TEXT_SIZES, type TextSize } from "@/lib/text-size";
 
 const STORAGE_KEY = "ai-multi-theme";
 const ACCENT_STORAGE_KEY = "ai-multi-accent";
+const TEXT_SIZE_STORAGE_KEY = "ai-multi-text-size";
 
 type Theme = "light" | "dark";
 
@@ -15,6 +17,8 @@ type ThemeContextValue = {
   toggleTheme: () => void;
   accent: Accent;
   setAccent: (accent: Accent) => void;
+  textSize: TextSize;
+  setTextSize: (textSize: TextSize) => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -46,9 +50,22 @@ function applyAccent(accent: Accent) {
   document.documentElement.dataset.accent = accent;
 }
 
+function getPreferredTextSize(): TextSize {
+  if (typeof window === "undefined") return DEFAULT_TEXT_SIZE;
+
+  const savedTextSize = localStorage.getItem(TEXT_SIZE_STORAGE_KEY);
+  return isTextSize(savedTextSize) ? savedTextSize : DEFAULT_TEXT_SIZE;
+}
+
+/** Picks the root font size in globals.css (DES-19). */
+function applyTextSize(textSize: TextSize) {
+  document.documentElement.dataset.textSize = textSize;
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => getPreferredTheme());
   const [accent, setAccent] = useState<Accent>(() => getPreferredAccent());
+  const [textSize, setTextSize] = useState<TextSize>(() => getPreferredTextSize());
 
   useEffect(() => {
     applyTheme(theme);
@@ -60,6 +77,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(ACCENT_STORAGE_KEY, accent);
   }, [accent]);
 
+  useEffect(() => {
+    applyTextSize(textSize);
+    localStorage.setItem(TEXT_SIZE_STORAGE_KEY, textSize);
+  }, [textSize]);
+
   const value = useMemo<ThemeContextValue>(
     () => ({
       theme,
@@ -69,8 +91,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       },
       accent,
       setAccent,
+      textSize,
+      setTextSize,
     }),
-    [theme, accent],
+    [theme, accent, textSize],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
@@ -115,6 +139,10 @@ export function ThemeInitScript() {
     document.documentElement.dataset.accent = ${JSON.stringify(ACCENTS.map((accent) => accent.id))}.includes(savedAccent)
       ? savedAccent
       : '${DEFAULT_ACCENT}';
+    const savedTextSize = localStorage.getItem('${TEXT_SIZE_STORAGE_KEY}');
+    document.documentElement.dataset.textSize = ${JSON.stringify(TEXT_SIZES.map((size) => size.id))}.includes(savedTextSize)
+      ? savedTextSize
+      : '${DEFAULT_TEXT_SIZE}';
   })();`;
 
   return <script dangerouslySetInnerHTML={{ __html: script }} />;

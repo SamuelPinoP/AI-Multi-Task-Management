@@ -67,7 +67,7 @@ function ChatRow({ chat, selected }: { chat: ChatSummary; selected: boolean }) {
         <span className="flex items-baseline gap-2">
           <span className={cn("min-w-0 flex-1 truncate text-sm", unread ? "font-bold" : "font-semibold")}>{chat.name}</span>
           {chat.accessLevel === "VIEWER" ? (
-            <span className="shrink-0 rounded-full bg-sunken px-1.5 text-[11px] font-semibold text-muted">Viewer</span>
+            <span className="shrink-0 rounded-full bg-sunken px-1.5 text-2xs font-semibold text-muted">Viewer</span>
           ) : null}
           {chat.lastMessage ? (
             <span className={cn("shrink-0 text-xs", unread ? "font-bold text-accent" : "text-muted")}>{chat.lastMessage.timeLabel}</span>
@@ -75,7 +75,7 @@ function ChatRow({ chat, selected }: { chat: ChatSummary; selected: boolean }) {
         </span>
         <span className="flex items-center gap-1.5">
           {chat.lastMessage?.attachmentCount ? <Paperclip aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted" /> : null}
-          <span className={cn("min-w-0 flex-1 truncate text-[13px]", unread ? "text-ink" : "text-muted")}>{chatPreview(chat)}</span>
+          <span className={cn("min-w-0 flex-1 truncate text-[0.8125rem]", unread ? "text-ink" : "text-muted")}>{chatPreview(chat)}</span>
           {unread ? (
             <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 font-mono text-2xs font-bold tabular-nums text-accent-ink">
               {formatUnreadCount(chat.unread)}
@@ -199,7 +199,7 @@ export function ChatsHub({
                 aria-pressed={filter === value}
                 onClick={() => setFilter(value)}
                 className={cn(
-                  "rounded-lg px-3 py-1 text-[13px] font-semibold transition-colors",
+                  "rounded-lg px-3 py-1 text-[0.8125rem] font-semibold transition-colors",
                   filter === value ? "bg-surface text-ink shadow-[0_0_0_1px_var(--line)]" : "text-muted hover:text-ink",
                 )}
               >
@@ -266,7 +266,7 @@ export function ChatsHub({
                 {unreadChats ? (
                   <span
                     aria-hidden="true"
-                    className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 font-mono text-2xs font-bold tabular-nums text-accent-ink"
+                    className="inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-accent px-1.5 font-mono text-2xs font-bold tabular-nums text-accent-ink"
                   >
                     {formatUnreadCount(unreadChats)}
                   </span>

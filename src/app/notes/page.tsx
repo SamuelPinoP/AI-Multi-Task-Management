@@ -480,7 +480,7 @@ export default function NotesPage() {
                     onClick={() => openNote(note, "content")}
                     className="text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent"
                   >
-                    <span className={cn("line-clamp-2 text-[15px] font-semibold", !title && "text-muted")}>{title || "Untitled note"}</span>
+                    <span className={cn("line-clamp-2 text-[0.9375rem] font-semibold", !title && "text-muted")}>{title || "Untitled note"}</span>
                     {!title && body ? <span className="sr-only">: {body.slice(0, 60)}</span> : null}
                   </button>
                   {body ? <span className="mt-1.5 line-clamp-4 whitespace-pre-line text-sm text-muted">{body}</span> : null}

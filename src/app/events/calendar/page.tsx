@@ -827,7 +827,7 @@ export default function EventsCalendarPage() {
                         : undefined
                     }
                   >
-                    <p className="w-16 shrink-0 pt-px text-right text-[13px] font-medium tabular-nums sm:hidden">
+                    <p className="w-16 shrink-0 pt-px text-right text-[0.8125rem] font-medium tabular-nums sm:hidden">
                       {event.hasStartTime ? formatEventTime(event.startTime) : "All day"}
                     </p>
                     <div className="min-w-0 flex-1">
