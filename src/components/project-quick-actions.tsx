@@ -9,6 +9,13 @@ type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Priority = "LOW" | "MEDIUM" | "HIGH";
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
+/** Two fields to a row from 380px; narrower, a date or "In progress" is cut off beside another field. */
+const quickFormGridClass = "mt-4 grid grid-cols-1 gap-3 min-[380px]:grid-cols-2";
+/** A field with its name above it; the control keeps the form's normal text. */
+const quickFieldLabelClass = "grid min-w-0 gap-1.5 text-sm font-medium";
+const quickFieldClass =
+  "w-full min-w-0 rounded-xl border border-zinc-300 px-3 py-2 text-base font-normal dark:border-zinc-700";
+
 export function ProjectQuickActions({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [activeAction, setActiveAction] = useState<QuickAction | null>(null);
@@ -214,48 +221,58 @@ export function ProjectQuickActions({ projectId }: { projectId: string }) {
       {activeAction === "TASK" ? (
         <form
           onSubmit={handleAddTask}
-          className="mt-4 grid gap-3 md:grid-cols-2"
+          className={quickFormGridClass}
         >
           <input
             value={taskTitle}
             onChange={(e) => setTaskTitle(e.target.value)}
             placeholder="Task title"
-            className="rounded-xl border border-zinc-300 px-4 py-2 outline-none focus:border-black dark:border-zinc-700 md:col-span-2"
+            className="col-span-full rounded-xl border border-zinc-300 px-4 py-2 outline-none focus:border-black dark:border-zinc-700"
           />
           <textarea
             value={taskDescription}
             onChange={(e) => setTaskDescription(e.target.value)}
             placeholder="Description (optional)"
             rows={3}
-            className="rounded-xl border border-zinc-300 px-4 py-2 outline-none focus:border-black dark:border-zinc-700 md:col-span-2"
+            className="col-span-full rounded-xl border border-zinc-300 px-4 py-2 outline-none focus:border-black dark:border-zinc-700"
           />
-          <select aria-label="Priority"
-            value={taskPriority}
-            onChange={(e) => setTaskPriority(e.target.value as Priority)}
-            className="rounded-xl border border-zinc-300 px-4 py-2 dark:border-zinc-700"
-          >
-            <option value="LOW">Low</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="HIGH">High</option>
-          </select>
-          <select aria-label="Status"
-            value={taskStatus}
-            onChange={(e) => setTaskStatus(e.target.value as TaskStatus)}
-            className="rounded-xl border border-zinc-300 px-4 py-2 dark:border-zinc-700"
-          >
-            <option value="TODO">To do</option>
-            <option value="IN_PROGRESS">In progress</option>
-            <option value="DONE">Done</option>
-          </select>
-          <input
-            type="date"
-            value={taskDueDate}
-            onChange={(e) => setTaskDueDate(e.target.value)}
-            className="rounded-xl border border-zinc-300 px-4 py-2 dark:border-zinc-700 md:col-span-2"
-          />
+          {/* Date fields show no placeholder (a blank box on Android), so every field gets a visible label. */}
+          <label className={quickFieldLabelClass}>
+            Priority
+            <select
+              value={taskPriority}
+              onChange={(e) => setTaskPriority(e.target.value as Priority)}
+              className={quickFieldClass}
+            >
+              <option value="LOW">Low</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="HIGH">High</option>
+            </select>
+          </label>
+          <label className={quickFieldLabelClass}>
+            Status
+            <select
+              value={taskStatus}
+              onChange={(e) => setTaskStatus(e.target.value as TaskStatus)}
+              className={quickFieldClass}
+            >
+              <option value="TODO">To do</option>
+              <option value="IN_PROGRESS">In progress</option>
+              <option value="DONE">Done</option>
+            </select>
+          </label>
+          <label className={`${quickFieldLabelClass} col-span-full`}>
+            Due date
+            <input
+              type="date"
+              value={taskDueDate}
+              onChange={(e) => setTaskDueDate(e.target.value)}
+              className={quickFieldClass}
+            />
+          </label>
           <button
             disabled={isSubmitting}
-            className="rounded-xl px-4 py-2 text-sm bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-60 md:col-span-2"
+            className="col-span-full rounded-xl px-4 py-2 text-sm bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-60"
           >
             {isSubmitting ? "Saving..." : "Create task"}
           </button>
@@ -265,65 +282,81 @@ export function ProjectQuickActions({ projectId }: { projectId: string }) {
       {activeAction === "EVENT" ? (
         <form
           onSubmit={handleAddEvent}
-          className="mt-4 grid gap-3 md:grid-cols-2"
+          className={quickFormGridClass}
         >
           <input
             value={eventTitle}
             onChange={(e) => setEventTitle(e.target.value)}
             placeholder="Event title"
-            className="rounded-xl border border-zinc-300 px-4 py-2 outline-none focus:border-black dark:border-zinc-700 md:col-span-2"
+            className="col-span-full rounded-xl border border-zinc-300 px-4 py-2 outline-none focus:border-black dark:border-zinc-700"
           />
           <textarea
             value={eventDescription}
             onChange={(e) => setEventDescription(e.target.value)}
             placeholder="Description (optional)"
             rows={3}
-            className="rounded-xl border border-zinc-300 px-4 py-2 outline-none focus:border-black dark:border-zinc-700 md:col-span-2"
+            className="col-span-full rounded-xl border border-zinc-300 px-4 py-2 outline-none focus:border-black dark:border-zinc-700"
           />
           <input
             value={eventLocation}
             onChange={(e) => setEventLocation(e.target.value)}
             placeholder="Location (optional)"
-            className="rounded-xl border border-zinc-300 px-4 py-2 dark:border-zinc-700 md:col-span-2"
+            className="col-span-full rounded-xl border border-zinc-300 px-4 py-2 dark:border-zinc-700"
           />
-          <input
-            type="date"
-            value={eventStartDate}
-            onChange={(e) => setEventStartDate(e.target.value)}
-            className="rounded-xl border border-zinc-300 px-4 py-2 dark:border-zinc-700"
-          />
-          <input
-            type="time"
-            value={eventStartTime}
-            onChange={(e) => setEventStartTime(e.target.value)}
-            className="rounded-xl border border-zinc-300 px-4 py-2 dark:border-zinc-700"
-          />
-          <input
-            type="date"
-            value={eventEndDate}
-            onChange={(e) => setEventEndDate(e.target.value)}
-            className="rounded-xl border border-zinc-300 px-4 py-2 dark:border-zinc-700"
-          />
-          <input
-            type="time"
-            value={eventEndTime}
-            onChange={(e) => setEventEndTime(e.target.value)}
-            className="rounded-xl border border-zinc-300 px-4 py-2 dark:border-zinc-700"
-          />
-          <select aria-label="Repeats"
-            value={eventRecurrence}
-            onChange={(e) => setEventRecurrence(e.target.value as Recurrence)}
-            className="rounded-xl border border-zinc-300 px-4 py-2 dark:border-zinc-700 md:col-span-2"
-          >
-            <option value="NONE">No recurrence</option>
-            <option value="DAILY">Daily</option>
-            <option value="WEEKLY">Weekly</option>
-            <option value="BIWEEKLY">Biweekly</option>
-            <option value="MONTHLY">Monthly</option>
-          </select>
+          {/* The same labels as the New event sheet. */}
+          <label className={quickFieldLabelClass}>
+            Starts
+            <input
+              type="date"
+              value={eventStartDate}
+              onChange={(e) => setEventStartDate(e.target.value)}
+              className={quickFieldClass}
+            />
+          </label>
+          <label className={quickFieldLabelClass}>
+            Start time
+            <input
+              type="time"
+              value={eventStartTime}
+              onChange={(e) => setEventStartTime(e.target.value)}
+              className={quickFieldClass}
+            />
+          </label>
+          <label className={quickFieldLabelClass}>
+            Ends
+            <input
+              type="date"
+              value={eventEndDate}
+              onChange={(e) => setEventEndDate(e.target.value)}
+              className={quickFieldClass}
+            />
+          </label>
+          <label className={quickFieldLabelClass}>
+            End time
+            <input
+              type="time"
+              value={eventEndTime}
+              onChange={(e) => setEventEndTime(e.target.value)}
+              className={quickFieldClass}
+            />
+          </label>
+          <label className={`${quickFieldLabelClass} col-span-full`}>
+            Repeats
+            <select
+              value={eventRecurrence}
+              onChange={(e) => setEventRecurrence(e.target.value as Recurrence)}
+              className={quickFieldClass}
+            >
+              <option value="NONE">No recurrence</option>
+              <option value="DAILY">Daily</option>
+              <option value="WEEKLY">Weekly</option>
+              <option value="BIWEEKLY">Biweekly</option>
+              <option value="MONTHLY">Monthly</option>
+            </select>
+          </label>
           <button
             disabled={isSubmitting}
-            className="rounded-xl px-4 py-2 text-sm bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-60 md:col-span-2"
+            className="col-span-full rounded-xl px-4 py-2 text-sm bg-accent font-medium text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-60"
           >
             {isSubmitting ? "Saving..." : "Create event"}
           </button>
