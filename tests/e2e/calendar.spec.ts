@@ -118,7 +118,7 @@ test("calendar: delete one day of a repeating event, undo it, then that day and 
 
   // The same from the Events page, with the toast's Undo: two days ahead and every day after.
   await page.goto("/events");
-  const later = page.getByRole("region", { name: new RegExp(`^${agendaLabel(2)}`) });
+  const later = page.getByRole("region", { name: new RegExp(`^${agendaLabel(2)}\\b`) });
   await later.getByRole("button", { name: `More actions for ${standup}` }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await dialog.getByText(/and every day after/).click();

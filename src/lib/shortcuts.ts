@@ -14,8 +14,9 @@ export const goTargets: Record<string, { href: string; label: string }> = {
   d: { href: "/today", label: "My day" },
   m: { href: "/chats", label: "Chats" },
   t: { href: "/tasks", label: "Tasks" },
-  e: { href: "/events", label: "Events" },
-  c: { href: "/events/calendar", label: "Calendar" },
+  // The Calendar's two tabs (DES-13) keep the keys of the old Events and Calendar items.
+  e: { href: "/events", label: "Calendar: Agenda" },
+  c: { href: "/events/calendar", label: "Calendar: Month" },
   n: { href: "/notes", label: "Notes" },
   b: { href: "/board", label: "Boards" },
   p: { href: "/projects", label: "Projects" },
@@ -40,4 +41,20 @@ export function isTypingTarget(target: EventTarget | null) {
   if (!target || typeof (target as Element).closest !== "function") return false;
   const element = target as HTMLElement;
   return Boolean(element.closest("input, textarea, select, [contenteditable=''], [contenteditable='true']"));
+}
+
+type ChatKeyPress = Pick<KeyboardEvent, "key" | "shiftKey" | "altKey" | "ctrlKey" | "metaKey" | "isComposing" | "keyCode">;
+
+/**
+ * Whether a key press in a chat message box sends the message (#303). Like most
+ * chat apps, Enter sends and Shift+Enter starts a new line. On-screen keyboards
+ * have no Shift, so on a touch screen Enter starts a new line and the Send button
+ * sends. Ctrl+Enter and ⌘+Enter send everywhere.
+ */
+export function sendsChatMessage(press: ChatKeyPress, touchScreen: boolean) {
+  // An Enter that picks a word in an input method (Japanese, Chinese, Korean…) only picks it.
+  // Safari reports that press with isComposing already false, but with keyCode 229.
+  if (press.key !== "Enter" || press.isComposing || press.keyCode === 229) return false;
+  if (press.shiftKey || press.altKey) return false;
+  return press.ctrlKey || press.metaKey || !touchScreen;
 }

@@ -75,7 +75,7 @@ export default async function LoginPage({
             <p
               className={`mt-4 rounded-xl px-3 py-2 text-sm ${
                 isSuccessMessage
-                  ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"
+                  ? "bg-success-soft text-success ring-1 ring-success/25"
                   : "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900"
               }`}
             >
@@ -183,10 +183,10 @@ export default async function LoginPage({
             </div>
           </aside>
         ) : signupEnabled ? (
-          <aside className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-emerald-950 shadow-sm dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-100">
+          <aside className="rounded-2xl border border-accent/30 bg-accent-soft p-6 text-ink shadow-sm">
             <div className="flex h-full flex-col justify-between gap-8">
               <div className="space-y-3">
-                <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-100 dark:ring-emerald-800">
+                <span className="inline-flex rounded-full bg-surface px-3 py-1 text-xs font-semibold text-accent ring-1 ring-accent/30">
                   Signup available
                 </span>
                 <h2 className="text-3xl font-semibold tracking-tight">
@@ -200,7 +200,7 @@ export default async function LoginPage({
               </div>
               <Link
                 href={signupHref}
-                className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 dark:bg-emerald-300 dark:text-emerald-950 dark:hover:bg-emerald-200"
+                className="inline-flex w-full items-center justify-center rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink transition hover:-translate-y-0.5 hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 Create an account
               </Link>

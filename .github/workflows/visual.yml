@@ -65,9 +65,11 @@ jobs:
       - name: Compare the screenshots with the reference images
         if: ${{ !inputs.update }}
         run: npm run test:visual
+      # Every image is rewritten, not only those past the comparison's
+      # tolerance, so small changes don't build up in the references unseen.
       - name: Write new reference images
         if: ${{ inputs.update }}
-        run: npm run test:visual -- --update-snapshots
+        run: npm run test:visual -- --update-snapshots=all
       # The reference images as this run left them: new ones are written when
       # missing, or for every page with "update" ticked.
       - name: Upload the screenshots

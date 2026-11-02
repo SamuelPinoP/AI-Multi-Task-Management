@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isNavItemActive, pageTitleFor } from "./app-nav";
+import { isFullHeightPage, isNavItemActive, pageTitleFor } from "./app-nav";
 
 test("Home is active only on /", () => {
   assert.equal(isNavItemActive("/", { href: "/" }), true);
@@ -25,12 +25,23 @@ test("extra paths count as the item", () => {
   assert.equal(isNavItemActive("/tasks", boards), false);
 });
 
+test("only the chat views are full-height pages", () => {
+  assert.equal(isFullHeightPage("/chats"), true);
+  assert.equal(isFullHeightPage("/projects/p1/chat"), true);
+  assert.equal(isFullHeightPage("/projects/p1"), false);
+  assert.equal(isFullHeightPage("/projects/p1/board"), false);
+  assert.equal(isFullHeightPage("/projects/p1/chat/extra"), false);
+  assert.equal(isFullHeightPage("/chatsx"), false);
+  assert.equal(isFullHeightPage("/tasks"), false);
+});
+
 test("page titles prefer the longest matching prefix", () => {
   assert.deepEqual(pageTitleFor("/", []), { title: "Home" });
   assert.deepEqual(pageTitleFor("/tasks", []), { title: "Tasks" });
   assert.deepEqual(pageTitleFor("/tasks/board", []), { title: "Boards" });
   assert.deepEqual(pageTitleFor("/tree", []), { title: "Tree view" });
   assert.deepEqual(pageTitleFor("/tree/page-1", []), { title: "Tree view" });
+  assert.deepEqual(pageTitleFor("/events", []), { title: "Calendar" });
   assert.deepEqual(pageTitleFor("/events/calendar", []), { title: "Calendar" });
   assert.deepEqual(pageTitleFor("/today", []), { title: "My day" });
   assert.deepEqual(pageTitleFor("/chats", []), { title: "Chats" });

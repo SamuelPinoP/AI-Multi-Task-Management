@@ -105,9 +105,19 @@ test("no updates for a week makes a project stale; old open tasks are listed", (
   );
 });
 
+test("a project with nothing done or in progress hasn't started; one task in progress starts it", () => {
+  const waiting = [task({ id: "a", dueDate: dueDate(2) }), task({ id: "b" })];
+  const insights = projectInsights(waiting, { updatedAt: day(0) }, now);
+  assert.equal(insights.status, "NOT_STARTED");
+  assert.equal(insights.reason, "No task done or in progress yet");
+  assert.equal(projectInsights([...waiting, task({ id: "c", status: "IN_PROGRESS" })], { updatedAt: day(0) }, now).status, "ON_TRACK");
+  // Overdue work still comes first.
+  assert.equal(projectInsights([task({ id: "late", dueDate: dueDate(-1) })], { updatedAt: day(0) }, now).status, "AT_RISK");
+});
+
 test("an empty project", () => {
   const insights = projectInsights([], { updatedAt: day(0) }, now);
-  assert.equal(insights.status, "ON_TRACK");
+  assert.equal(insights.status, "NOT_STARTED");
   assert.equal(insights.reason, "No tasks yet");
   assert.equal(insights.percentDone, 0);
   assert.equal(insights.burnUp.length, 8);

@@ -357,7 +357,7 @@ export function TreeBoard({ initialPages }: { initialPages: TreePage[] }) {
         )}
       </div>
       <div
-        className={`${isFullScreen ? "h-[calc(100vh-7rem)] p-3 sm:p-4" : "p-4 sm:p-5"} overflow-hidden rounded-2xl border border-line bg-surface shadow-sm shadow-zinc-200/70 dark:shadow-none`}
+        className={`${isFullScreen ? "h-[calc(100vh-7rem)] p-3 sm:p-4" : "p-4 sm:p-5"} overflow-hidden rounded-2xl border border-line bg-surface shadow-card`}
       >
         {!activePage ? (
           <div className="rounded-2xl border border-dashed border-zinc-300 p-10 text-center dark:border-zinc-700">

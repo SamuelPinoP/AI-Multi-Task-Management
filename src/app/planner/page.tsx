@@ -10,9 +10,9 @@ import { generateSmartPlanner, type PlannerPriority, type PlannerSuggestion } fr
 import { getUserNow } from "@/lib/user-time-server";
 
 function priorityClass(priority: PlannerPriority) {
-  if (priority === "HIGH") return "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-200";
-  if (priority === "MEDIUM") return "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-200";
-  return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200";
+  if (priority === "HIGH") return "bg-danger-soft text-danger";
+  if (priority === "MEDIUM") return "bg-warning-soft text-warning";
+  return "bg-success-soft text-success";
 }
 
 async function createTaskFromSuggestion(formData: FormData) {
@@ -43,7 +43,7 @@ async function createTaskFromSuggestion(formData: FormData) {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white/80 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
+    <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
       <p className="text-2xl font-bold">{value}</p>
       <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">{label}</p>
     </div>
@@ -52,7 +52,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
 
 function SuggestionCard({ suggestion }: { suggestion: PlannerSuggestion }) {
   return (
-    <article className="rounded-2xl border border-zinc-200 bg-white/75 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-950/35">
+    <article className="rounded-2xl border border-line bg-surface p-4 shadow-card transition hover:-translate-y-0.5 hover:shadow-raised">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -95,7 +95,7 @@ export default async function PlannerPage() {
               <h1 className="mt-3 text-title">Smart Daily Planner</h1>
               <p className="mt-3 text-base leading-7 text-zinc-600 dark:text-zinc-300">A deterministic planning engine analyzes your accessible tasks, events, active projects, recent notes, project chat, and activity—without sending data to a paid external AI service.</p>
             </div>
-            <div className="rounded-2xl border border-zinc-200 bg-white/75 p-4 text-sm text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300">
+            <div className="rounded-2xl border border-line bg-surface p-4 text-sm text-zinc-600 shadow-card dark:text-zinc-300">
               Generated {planner.generatedAt.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
             </div>
           </div>

@@ -102,8 +102,9 @@ export function projectInsights(tasks: InsightTask[], project: { updatedAt: Date
     .filter((task) => task.idleDays >= STALE_TASK_DAYS)
     .sort((a, b) => b.idleDays - a.idleDays);
 
+  const inProgress = openTasks.filter((task) => task.status === "IN_PROGRESS").length;
   const lastUpdate = tasks.reduce((latest, task) => (task.updatedAt > latest ? task.updatedAt : latest), project.updatedAt);
-  const health = projectHealth({ totalTasks: tasks.length, doneTasks: done, overdueTasks: overdue, lastUpdate }, now);
+  const health = projectHealth({ totalTasks: tasks.length, doneTasks: done, inProgressTasks: inProgress, overdueTasks: overdue, lastUpdate }, now);
   const reason =
     health.status === "AT_RISK"
       ? `${plural(overdue, "task")} past due`
@@ -111,9 +112,11 @@ export function projectInsights(tasks: InsightTask[], project: { updatedAt: Date
         ? `No updates in ${plural(health.idleDays, "day")}`
         : tasks.length === 0
           ? "No tasks yet"
-          : openTasks.length === 0
-            ? "Every task is done"
-            : "Nothing is overdue";
+          : health.status === "NOT_STARTED"
+            ? "No task done or in progress yet"
+            : openTasks.length === 0
+              ? "Every task is done"
+              : "Nothing is overdue";
 
   return {
     total: tasks.length,

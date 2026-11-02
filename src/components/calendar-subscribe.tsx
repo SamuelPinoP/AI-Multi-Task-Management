@@ -5,11 +5,12 @@ import { useState, useSyncExternalStore } from "react";
 import { uiButtonClass, uiDangerButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toaster";
+import { cn } from "@/lib/cn";
 
 const subscribeNever = () => () => {};
 
 /**
- * "Subscribe" on the calendar page (SMART-09): a private link that Google,
+ * "Subscribe" in the Calendar's header (SMART-09): a private link that Google,
  * Apple and Outlook calendars can subscribe to, showing events and due tasks.
  */
 export function CalendarSubscribe() {
@@ -67,10 +68,11 @@ export function CalendarSubscribe() {
           setOpen(true);
           if (path === undefined) void load();
         }}
-        className={uiButtonClass}
+        // The Calendar header's button size; on a phone only the icon shows, so the header keeps to one line.
+        className={cn(uiButtonClass, "px-3 py-1.5")}
       >
         <CalendarPlus aria-hidden="true" className="h-4 w-4" />
-        Subscribe
+        <span className="sr-only sm:not-sr-only">Subscribe</span>
       </button>
       <Dialog
         open={open}

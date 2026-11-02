@@ -305,7 +305,7 @@ export default function ProjectsPage() {
           {visible.map((project) => {
             const owner = project.accessLevel === "OWNER";
             return (
-              <li key={project.id} className="group relative flex flex-col rounded-xl border border-line bg-surface p-4 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700">
+              <li key={project.id} className="group relative flex flex-col rounded-xl border border-line bg-surface p-4 shadow-card transition-colors hover:border-zinc-300 dark:hover:border-zinc-700">
                 <div className="flex items-start gap-2">
                   <span aria-hidden="true" className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: projectColor(project) }} />
                   <h2 className="min-w-0 flex-1 text-[15px] font-semibold">

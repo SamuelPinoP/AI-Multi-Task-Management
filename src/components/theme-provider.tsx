@@ -2,8 +2,10 @@
 
 import { Moon, Sun } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { ACCENTS, DEFAULT_ACCENT, isAccent, type Accent } from "@/lib/accent";
 
 const STORAGE_KEY = "ai-multi-theme";
+const ACCENT_STORAGE_KEY = "ai-multi-accent";
 
 type Theme = "light" | "dark";
 
@@ -11,6 +13,8 @@ type ThemeContextValue = {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
+  accent: Accent;
+  setAccent: (accent: Accent) => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -30,13 +34,31 @@ function applyTheme(theme: Theme) {
   document.documentElement.classList.toggle("dark", theme === "dark");
 }
 
+function getPreferredAccent(): Accent {
+  if (typeof window === "undefined") return DEFAULT_ACCENT;
+
+  const savedAccent = localStorage.getItem(ACCENT_STORAGE_KEY);
+  return isAccent(savedAccent) ? savedAccent : DEFAULT_ACCENT;
+}
+
+/** Picks the accent palette in globals.css (DES-15). */
+function applyAccent(accent: Accent) {
+  document.documentElement.dataset.accent = accent;
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => getPreferredTheme());
+  const [accent, setAccent] = useState<Accent>(() => getPreferredAccent());
 
   useEffect(() => {
     applyTheme(theme);
     localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    applyAccent(accent);
+    localStorage.setItem(ACCENT_STORAGE_KEY, accent);
+  }, [accent]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
@@ -45,8 +67,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       toggleTheme: () => {
         setTheme((current) => (current === "dark" ? "light" : "dark"));
       },
+      accent,
+      setAccent,
     }),
-    [theme],
+    [theme, accent],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
@@ -87,6 +111,10 @@ export function ThemeInitScript() {
       ? savedTheme
       : (prefersDark ? 'dark' : 'light');
     document.documentElement.classList.toggle('dark', theme === 'dark');
+    const savedAccent = localStorage.getItem('${ACCENT_STORAGE_KEY}');
+    document.documentElement.dataset.accent = ${JSON.stringify(ACCENTS.map((accent) => accent.id))}.includes(savedAccent)
+      ? savedAccent
+      : '${DEFAULT_ACCENT}';
   })();`;
 
   return <script dangerouslySetInnerHTML={{ __html: script }} />;

@@ -209,7 +209,7 @@ function GoalCard({
 function ReviewColumn({ title, count, empty, children }: { title: string; count: number; empty: string; children: ReactNode }) {
   const id = `review-${title.toLowerCase().replace(/\s+/g, "-")}`;
   return (
-    <section aria-labelledby={id} className="rounded-xl border border-line bg-surface p-4">
+    <section aria-labelledby={id} className="rounded-xl border border-line bg-surface p-4 shadow-card">
       <h3 id={id} className="flex items-center gap-2 text-sm font-semibold">
         {title}
         <span className="text-xs font-normal text-muted">{count}</span>

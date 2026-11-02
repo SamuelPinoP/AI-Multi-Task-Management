@@ -33,6 +33,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { ACCENTS } from "@/lib/accent";
 import { projectColor } from "@/lib/project-color";
 import { formatTaskDueDate } from "@/lib/task-date-buckets";
 
@@ -51,8 +52,8 @@ const pages: Array<{ href: string; label: string; icon: LucideIcon; keywords?: s
   { href: "/today", label: "My day", icon: Sun, keywords: "today focus" },
   { href: "/chats", label: "Chats", icon: MessagesSquare, keywords: "messages discussion unread" },
   { href: "/tasks", label: "Tasks", icon: SquareCheckBig },
-  { href: "/events", label: "Events", icon: CalendarClock },
-  { href: "/events/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/events", label: "Calendar: Agenda", icon: CalendarClock, keywords: "events upcoming schedule" },
+  { href: "/events/calendar", label: "Calendar: Month", icon: CalendarDays, keywords: "events month grid" },
   { href: "/notes", label: "Notes", icon: NotebookPen },
   { href: "/board", label: "Boards", icon: SquareKanban, keywords: "kanban task board" },
   { href: "/tree", label: "Tree view", icon: ListTree, keywords: "tree pages hierarchy outline mind map" },
@@ -91,7 +92,7 @@ export function CommandPalette({
   onShowShortcuts: () => void;
 }) {
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, accent, setAccent } = useTheme();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchData>(emptyResults);
 
@@ -119,6 +120,10 @@ export function CommandPalette({
   const visiblePages = pages.filter((page) => matches(query, page.label, page.keywords));
   const showNewTask = matches(query, "new task", "add task", "create task");
   const showTheme = matches(query, "theme", "dark", "light", "appearance");
+  // Only when searched for, so five colors don't crowd the empty palette.
+  const accentOptions = query.trim()
+    ? ACCENTS.filter((option) => option.id !== accent && matches(query, `${option.name} accent color`, "colour theme appearance"))
+    : [];
   const showShortcuts = matches(query, "keyboard shortcuts", "keys", "help");
 
   function close() {
@@ -142,7 +147,7 @@ export function CommandPalette({
           <CommandList>
             <CommandEmpty>No results for “{query.trim()}”.</CommandEmpty>
 
-            {showNewTask || showTheme || showShortcuts ? (
+            {showNewTask || showTheme || accentOptions.length > 0 || showShortcuts ? (
               <CommandGroup heading="Actions">
                 {showNewTask ? (
                   <CommandItem value="action-new-task" onSelect={() => { close(); onNewTask(); }}>
@@ -157,6 +162,12 @@ export function CommandPalette({
                     Switch to {theme === "dark" ? "light" : "dark"} theme
                   </CommandItem>
                 ) : null}
+                {accentOptions.map((option) => (
+                  <CommandItem key={option.id} value={`action-accent-${option.id}`} onSelect={() => { setAccent(option.id); close(); }}>
+                    <span data-accent={option.id} aria-hidden="true" className="h-4 w-4 shrink-0 rounded-full bg-accent" />
+                    Switch to {option.name} accent
+                  </CommandItem>
+                ))}
                 {showShortcuts ? (
                   <CommandItem value="action-shortcuts" onSelect={() => { close(); onShowShortcuts(); }}>
                     <Keyboard />

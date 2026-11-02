@@ -50,7 +50,7 @@ function formatEventDate(event: { startTime: string; hasStartTime: boolean }) {
 
 function Tile({ label, value, detail }: { label: string; value: ReactNode; detail: string }) {
   return (
-    <div className="rounded-xl border border-line bg-surface p-4" role="group" aria-label={label}>
+    <div className="rounded-xl border border-line bg-surface p-4 shadow-card" role="group" aria-label={label}>
       <p className="text-xs font-medium text-muted">{label}</p>
       <p className="mt-1 text-2xl font-semibold">{value}</p>
       <p className="mt-1 text-xs text-muted">{detail}</p>
