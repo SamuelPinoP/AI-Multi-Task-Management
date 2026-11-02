@@ -578,7 +578,7 @@ export default function EventsCalendarPage() {
           {/* Month heading + project filter + month navigation. On a phone the month's
               own row holds Today, Previous and Next, and the filters take the next row. */}
           <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:mb-5">
-            <h2 className="min-w-0 flex-1 text-xl font-semibold sm:flex-none sm:text-2xl">
+            <h2 className="min-w-0 flex-1 truncate text-lg font-semibold sm:flex-none sm:text-2xl">
               {new Intl.DateTimeFormat("en-US", {
                 month: "long",
                 year: "numeric",
