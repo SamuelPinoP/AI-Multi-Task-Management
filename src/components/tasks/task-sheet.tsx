@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { DeleteButton } from "@/components/ui/delete-button";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, type SheetSide } from "@/components/ui/sheet";
 import { formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { loadProjectMembers } from "./load-members";
 import { TaskRelationsPanel, type TaskRelations } from "./task-relations-panel";
@@ -49,6 +49,19 @@ function inputFromTask(task: Task): TaskInput {
   };
 }
 
+/** The body the task API takes from the form: no due date is null, and an assignee needs a project. */
+export function taskRequestBody(input: TaskInput) {
+  return {
+    title: input.title,
+    description: input.description,
+    status: input.status,
+    priority: input.priority,
+    dueDate: input.dueDate || null,
+    recurrence: input.recurrence,
+    projectId: input.projectId,
+    assigneeId: input.projectId ? input.assigneeId : "",
+  };
+}
 
 /**
  * The full create and edit form for a task, in a side sheet. The list page
@@ -58,6 +71,8 @@ export function TaskSheet({
   open,
   onOpenChange,
   task,
+  draft,
+  side,
   projects,
   onSubmit,
   onDelete,
@@ -67,6 +82,9 @@ export function TaskSheet({
   onOpenChange: (open: boolean) => void;
   /** The task to edit; leave it out to create one. */
   task?: Task | null;
+  /** Starting values for a new task, such as the project it's added from. */
+  draft?: Partial<TaskInput>;
+  side?: SheetSide;
   projects: Project[];
   onSubmit: (input: TaskInput) => Promise<string | null>;
   onDelete?: (task: Task) => void;
@@ -83,7 +101,7 @@ export function TaskSheet({
   const formKey = open ? (task?.id ?? "new") : null;
   if (formKey !== loadedFor) {
     setLoadedFor(formKey);
-    setInput(task ? inputFromTask(task) : emptyInput);
+    setInput(task ? inputFromTask(task) : { ...emptyInput, ...draft });
     setError(null);
   }
 
@@ -116,7 +134,7 @@ export function TaskSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent>
+      <SheetContent side={side}>
         <SheetHeader>
           <SheetTitle>{task ? "Edit task" : "New task"}</SheetTitle>
           <SheetDescription>{task ? "Change any detail, then save." : "Add the details now or later."}</SheetDescription>

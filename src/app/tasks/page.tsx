@@ -20,7 +20,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { QuickAdd } from "@/components/home/quick-add";
 import { TaskRow } from "@/components/tasks/task-row";
 import type { TaskRelations } from "@/components/tasks/task-relations-panel";
-import { TaskSheet } from "@/components/tasks/task-sheet";
+import { TaskSheet, taskRequestBody } from "@/components/tasks/task-sheet";
 import type { Priority, Project, Task, TaskInput, TaskStatus } from "@/components/tasks/types";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { toast } from "@/components/ui/toaster";
@@ -53,19 +53,6 @@ function sectionFor(task: Task, now: Date): SectionKey {
   return diff < 0 ? "OVERDUE" : diff === 0 ? "TODAY" : "UPCOMING";
 }
 
-/** The body the task API expects; it replaces every field. */
-function taskBody(input: TaskInput) {
-  return {
-    title: input.title,
-    description: input.description,
-    status: input.status,
-    priority: input.priority,
-    dueDate: input.dueDate || null,
-    recurrence: input.recurrence,
-    projectId: input.projectId,
-    assigneeId: input.projectId ? input.assigneeId : "",
-  };
-}
 
 function inputFromTask(task: Task, overrides: Partial<TaskInput> = {}): TaskInput {
   return {
@@ -251,7 +238,7 @@ export default function TasksPage() {
     const response = await fetch(editing ? `/api/tasks/${editing.id}` : "/api/tasks", {
       method: editing ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(taskBody(input)),
+      body: JSON.stringify(taskRequestBody(input)),
     });
     if (!response.ok) return errorMessage(response, editing ? "Could not save the task." : "Could not create the task.");
     notifyWorkspaceChanged();
@@ -267,7 +254,7 @@ export default function TasksPage() {
       const response = await fetch(`/api/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(taskBody(inputFromTask(task, { status }))),
+        body: JSON.stringify(taskRequestBody(inputFromTask(task, { status }))),
       });
       if (!response.ok) throw new Error(await errorMessage(response, "Could not update the task."));
       await response.json();
