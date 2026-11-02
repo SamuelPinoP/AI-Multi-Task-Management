@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { DeleteButton } from "@/components/ui/delete-button";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, type SheetSide } from "@/components/ui/sheet";
 import { eventTimeInputValue } from "@/lib/event-time";
 import { firstOccurrenceEnd, normalizeRecurrence } from "@/lib/recurrence";
 import { formatTaskDayKey } from "@/lib/task-date-buckets";
@@ -120,6 +120,7 @@ export function EventSheet({
   onOpenChange,
   event,
   draft,
+  side,
   projects,
   onSubmit,
   onDelete,
@@ -131,6 +132,7 @@ export function EventSheet({
   onWriteNotes?: (event: EventItem) => void;
   event?: EventItem | null;
   draft?: Partial<EventInput>;
+  side?: SheetSide;
   projects: EventProject[];
   onSubmit: (input: EventInput) => Promise<string | null>;
   onDelete?: (event: EventItem) => void;
@@ -178,7 +180,7 @@ export function EventSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent>
+      <SheetContent side={side}>
         <SheetHeader>
           <SheetTitle>{event ? "Edit event" : "New event"}</SheetTitle>
           <SheetDescription>
