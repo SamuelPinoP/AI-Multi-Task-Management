@@ -90,10 +90,13 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto(`/projects/${projectId}`);
     await page.waitForLoadState("networkidle");
     found.push(...(await violations(page, "project page at 320px")));
-    // The Quick Actions forms only render after a click; the due date once had no label (#305).
-    for (const action of ["Add Note", "Add Task", "Add Event"]) {
-      await page.getByRole("button", { name: action, exact: true }).click();
-      found.push(...(await violations(page, `project page's ${action} form at 320px`)));
+    // Quick Actions' sheets only render after a click (#305, DES-18).
+    for (const action of ["New task", "New note", "New event"]) {
+      await page.locator("#main-content").getByRole("button", { name: action, exact: true }).click();
+      await expect(page.getByRole("dialog", { name: action })).toBeVisible();
+      found.push(...(await violations(page, `project page's ${action} sheet at 320px`)));
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog", { name: action })).toBeHidden();
     }
     if (viewport) await page.setViewportSize(viewport);
 

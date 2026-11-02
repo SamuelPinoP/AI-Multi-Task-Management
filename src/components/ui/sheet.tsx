@@ -15,7 +15,12 @@ const sideClass = {
   right: "inset-y-0 right-0 h-full w-full max-w-md border-l data-[state=open]:animate-[ui-slide-in-right_200ms_ease-out]",
   left: "inset-y-0 left-0 h-full w-72 max-w-[85vw] border-r data-[state=open]:animate-[ui-slide-in-left_200ms_ease-out]",
   bottom: "inset-x-0 bottom-0 max-h-[85dvh] w-full rounded-t-2xl border-t data-[state=open]:animate-[ui-slide-in-bottom_200ms_ease-out]",
+  /** Up from the bottom on a phone, where a thumb reaches it; from the right on wider screens (DES-18). */
+  bottomOnPhone:
+    "inset-x-0 bottom-0 max-h-[85dvh] w-full rounded-t-2xl border-t data-[state=open]:animate-[ui-slide-in-bottom_200ms_ease-out] sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:h-full sm:max-h-none sm:max-w-md sm:rounded-none sm:border-t-0 sm:border-l sm:data-[state=open]:animate-[ui-slide-in-right_200ms_ease-out]",
 } as const;
+
+export type SheetSide = keyof typeof sideClass;
 
 export function SheetContent({
   side = "right",
@@ -23,7 +28,7 @@ export function SheetContent({
   children,
   hideClose = false,
   ...props
-}: ComponentProps<typeof DialogPrimitive.Content> & { side?: keyof typeof sideClass; hideClose?: boolean }) {
+}: ComponentProps<typeof DialogPrimitive.Content> & { side?: SheetSide; hideClose?: boolean }) {
   return (
     <DialogPrimitive.Portal>
       <DialogOverlay />
