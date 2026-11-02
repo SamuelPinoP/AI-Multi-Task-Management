@@ -74,7 +74,7 @@ test("a saved text size applies before the app's JavaScript runs, and an unknown
   expect(await rootFontSize(page)).toBe(16);
 });
 
-test("Small shrinks the text but keeps the smallest text at 11px", async ({ page }) => {
+test("Small shrinks the text but keeps the smallest text at 11px, and phone fields at 16px", async ({ page, isMobile }) => {
   await continueAsGuest(page);
   await page.getByRole("button", { name: "Account menu" }).click();
   await page.getByRole("menuitemradio", { name: "Small", exact: true }).click();
@@ -83,6 +83,11 @@ test("Small shrinks the text but keeps the smallest text at 11px", async ({ page
   expect(await rootFontSize(page)).toBe(15);
   expect(await classFontSize(page, "text-sm")).toBe(13.125);
   expect(await classFontSize(page, "text-2xs")).toBe(11);
+
+  // iOS Safari zooms into fields under 16px (#337), so on phones they stay 16px at Small too.
+  await page.goto("/tasks");
+  const search = page.getByPlaceholder("Search tasks");
+  expect(await search.evaluate((field) => parseFloat(getComputedStyle(field).fontSize))).toBe(isMobile ? 16 : 13.125);
 });
 
 test("at Larger the main pages still fit the screen without scrolling sideways", async ({ page }) => {
