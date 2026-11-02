@@ -64,3 +64,26 @@ test("every visible field on the main pages uses at least 16px text on phones", 
   // Guards against a page change that leaves nothing to check.
   expect(checked).toBeGreaterThan(5);
 });
+
+test("the Tasks filters have room for their 16px labels on phones", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "Wider screens size the filters to their labels.");
+  await continueAsGuest(page);
+  await page.goto("/tasks");
+
+  const filters = page.getByRole("search", { name: "Filter tasks" }).locator("select");
+  await expect(filters).toHaveCount(3);
+  const cramped = await filters.evaluateAll((selects) => {
+    const context = document.createElement("canvas").getContext("2d")!;
+    return selects.flatMap((element) => {
+      const select = element as HTMLSelectElement;
+      const style = getComputedStyle(select);
+      context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      const label = select.selectedOptions[0]?.text ?? "";
+      // The label, the side padding and about 24px for the arrow.
+      const needed = context.measureText(label).width + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + 24;
+      const width = select.getBoundingClientRect().width;
+      return needed > width ? [`"${label}" needs ${Math.ceil(needed)}px and has ${Math.round(width)}px`] : [];
+    });
+  });
+  expect(cramped).toEqual([]);
+});
