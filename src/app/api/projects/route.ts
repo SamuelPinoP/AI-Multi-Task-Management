@@ -26,8 +26,6 @@ export async function GET(req: Request) {
     const statusFilter = parseProjectStatus(searchParams.get("status"));
 
     const projects = await prisma.project.findMany({
-      // Share links are gone (#342); their old tokens stay out of answers until #343 drops the column.
-      omit: { shareToken: true },
       where: {
         AND: [
           projectAccessWhere(user.id),

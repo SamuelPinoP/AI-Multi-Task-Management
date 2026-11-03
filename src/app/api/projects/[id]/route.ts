@@ -29,8 +29,6 @@ export async function GET(_req: Request, context: RouteContext) {
 
     const project = await prisma.project.findFirst({
       where: projectAccessWhereForProject(id, user.id),
-      // Share links are gone (#342); their old tokens stay out of answers until #343 drops the column.
-      omit: { shareToken: true },
       include: {
         notes: {
           where: { deletedAt: null },
@@ -120,7 +118,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     const updated = await prisma.project.updateMany({ where: { id, userId: user.id }, data });
     if (updated.count === 0) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-    const project = await prisma.project.findUnique({ where: { id }, omit: { shareToken: true } });
+    const project = await prisma.project.findUnique({ where: { id } });
     return NextResponse.json(project);
   } catch (error) {
     console.error("PATCH /api/projects/[id] error:", error);
