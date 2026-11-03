@@ -159,11 +159,13 @@ images for 14 days, linked from the run summary, but merging isn't blocked.
 
 `.github/workflows/preview-smoke.yml` runs the Playwright tests tagged
 `@smoke` (`tests/e2e/smoke.spec.ts`) against each Vercel preview once it is
-deployed. Previews share the production database, so smoke tests must stay
-read-only: no sign-ups, sign-ins or writes. Preview URLs are behind Vercel
-Deployment Protection; the workflow sends the `VERCEL_AUTOMATION_BYPASS_SECRET`
-repository secret as the `x-vercel-protection-bypass` header and skips itself
-when the secret isn't set. Run them locally with
+deployed. Previews use their own database (`PREVIEW_DATABASE_URL`, #166), and
+their builds apply pending migrations to it; every preview shares that one
+database, so smoke tests stay read-only: no sign-ups, sign-ins or writes.
+Preview URLs are behind Vercel Deployment Protection; the workflow sends the
+`VERCEL_AUTOMATION_BYPASS_SECRET` repository secret as the
+`x-vercel-protection-bypass` header and skips itself when the secret isn't
+set. Run them locally with
 `npm run test:e2e -- --grep @smoke`.
 
 Dependabot (`.github/dependabot.yml`) opens weekly update PRs for npm packages,
