@@ -266,10 +266,6 @@ model Project {
   updatedAt   DateTime      @updatedAt
   /// "owner/name" of a public GitHub repository shown on the project (SMART-12).
   githubRepo  String?
-  /// Unused since share links were removed (#342). @ignore keeps both columns out of Prisma
-  /// Client's queries, so the next deploy can drop them (#343) without breaking this one.
-  shareToken  String?       @unique @ignore
-  sharedAt    DateTime?     @ignore
 
   userId            String
   user              User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
