@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     const statusFilter = parseProjectStatus(searchParams.get("status"));
 
     const projects = await prisma.project.findMany({
-      // The share token is the owner's to hand out (SMART-12); the share API returns it.
+      // Share links are gone (#342); their old tokens stay out of answers until #343 drops the column.
       omit: { shareToken: true },
       where: {
         AND: [

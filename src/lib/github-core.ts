@@ -1,7 +1,7 @@
 /**
  * A project's linked GitHub repository (SMART-12): reading what the owner
- * typed, and shaping GitHub's public REST API answers for the project page
- * and its share page. No server-only imports; src/lib/github.ts fetches.
+ * typed, and shaping GitHub's public REST API answers for the project page.
+ * No server-only imports; src/lib/github.ts fetches.
  */
 
 const OWNER = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;

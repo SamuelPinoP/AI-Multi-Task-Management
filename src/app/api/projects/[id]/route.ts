@@ -29,7 +29,7 @@ export async function GET(_req: Request, context: RouteContext) {
 
     const project = await prisma.project.findFirst({
       where: projectAccessWhereForProject(id, user.id),
-      // Members see everything but the share token (SMART-12).
+      // Share links are gone (#342); their old tokens stay out of answers until #343 drops the column.
       omit: { shareToken: true },
       include: {
         notes: {

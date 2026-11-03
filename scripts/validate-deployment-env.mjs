@@ -119,7 +119,7 @@ if (emailProvider !== undefined && !ALLOWED_EMAIL_PROVIDERS.has(emailProvider)) 
   }
 }
 
-// GitHub data on public share pages must come from GitHub itself (SMART-12).
+// GitHub data on project pages must come from GitHub itself (SMART-12).
 if (isVercelProductionEnvironment() && cleanEnvValue("GITHUB_API_URL")) {
   errors.push("GITHUB_API_URL is only for tests. Remove it from Production; the app talks to api.github.com.");
 }

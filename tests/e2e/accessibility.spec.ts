@@ -48,15 +48,14 @@ async function seedWorkspace(page: Page) {
     projectId: project.id,
   });
   await post("/api/notes", { title: "A note", content: "Some text", projectId: project.id });
-  // Phase 6 sections on the project page: an automation, a linked repository (the GitHub
-  // stand-in from github-stub.ts) and a share link, whose public page is scanned too.
+  // Phase 6 sections on the project page: an automation and a linked repository (the GitHub
+  // stand-in from github-stub.ts).
   await post(`/api/projects/${project.id}/automations`, { trigger: "TASK_COMPLETED", action: "EMAIL_OWNER" });
   await page.request.put(`/api/projects/${project.id}/github`, { data: { repo: "ai-multi-demo/roadmap" } });
-  const share = (await post(`/api/projects/${project.id}/share`, {})) as { path: string };
   // A tree page with a child, so the tree view shows a filled root card and a plain one.
   const tree = (await post("/api/tree-pages", { title: "A11y tree" })) as { id: string; nodes: { id: string }[] };
   await post(`/api/tree-pages/${tree.id}/nodes`, { title: "Child idea", parentId: tree.nodes[0].id, color: "amber" });
-  return { projectId: project.id, sharePath: share.path, treePath: `/tree/${tree.id}` };
+  return { projectId: project.id, treePath: `/tree/${tree.id}` };
 }
 
 test("public pages have no WCAG A/AA violations", async ({ page }) => {
@@ -73,12 +72,12 @@ for (const theme of ["light", "dark"] as const) {
   test(`every signed-in page has no WCAG A/AA violations (${theme})`, async ({ page }) => {
     test.setTimeout(120_000);
     await continueAsGuest(page);
-    const { projectId, sharePath, treePath } = await seedWorkspace(page);
+    const { projectId, treePath } = await seedWorkspace(page);
     await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
 
     const found: string[] = [];
     // "/login?email=…" for another address shows "Switch accounts?".
-    for (const path of ["/", "/today", "/login?email=a11y-other%40example.test", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/tree", treePath, "/planner", "/goals", "/roadmap", "/trash", sharePath]) {
+    for (const path of ["/", "/today", "/login?email=a11y-other%40example.test", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/tree", treePath, "/planner", "/goals", "/roadmap", "/trash"]) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
       found.push(...(await violations(page, path)));

@@ -266,7 +266,8 @@ model Project {
   updatedAt   DateTime      @updatedAt
   /// "owner/name" of a public GitHub repository shown on the project (SMART-12).
   githubRepo  String?
-  /// The read-only share link's token (/share/<token>); null when sharing is off (SMART-12).
+  /// Unused since share links were removed (#342). #343 drops this and `sharedAt` in a later
+  /// migration, so the deploy that removes the code never meets a missing column.
   shareToken  String?       @unique
   sharedAt    DateTime?
 

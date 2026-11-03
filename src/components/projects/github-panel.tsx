@@ -52,12 +52,12 @@ function ItemList({ title, icon: Icon, items, empty }: { title: string; icon: ty
 }
 
 /**
- * The linked GitHub repository's open pull requests and issues (SMART-12).
- * `endpoint` serves the data: the project's API for members, the share
- * link's for the public page. With `manageProjectId` the owner can link,
- * change or unlink the repository.
+ * The linked GitHub repository's open pull requests and issues (SMART-12),
+ * on the project page. With `canManage` (owners) it can link, change or
+ * unlink the repository.
  */
-export function GithubPanel({ endpoint, repo: initialRepo, manageProjectId }: { endpoint: string; repo: string | null; manageProjectId?: string }) {
+export function GithubPanel({ projectId, repo: initialRepo, canManage }: { projectId: string; repo: string | null; canManage: boolean }) {
+  const endpoint = `/api/projects/${projectId}/github`;
   const [repo, setRepo] = useState(initialRepo);
   const [data, setData] = useState<PanelData | null>(null);
   const [input, setInput] = useState("");
@@ -83,11 +83,11 @@ export function GithubPanel({ endpoint, repo: initialRepo, manageProjectId }: { 
 
   async function link(event: FormEvent) {
     event.preventDefault();
-    if (!manageProjectId) return;
+    if (!canManage) return;
     setSaving(true);
     setError(null);
     try {
-      const response = await fetch(`/api/projects/${manageProjectId}/github`, {
+      const response = await fetch(endpoint, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ repo: input }),
@@ -108,10 +108,10 @@ export function GithubPanel({ endpoint, repo: initialRepo, manageProjectId }: { 
   }
 
   async function unlink() {
-    if (!manageProjectId) return;
+    if (!canManage) return;
     setSaving(true);
     try {
-      const response = await fetch(`/api/projects/${manageProjectId}/github`, { method: "DELETE" });
+      const response = await fetch(endpoint, { method: "DELETE" });
       if (!response.ok) throw new Error();
       setRepo(null);
       setData(null);
@@ -123,7 +123,7 @@ export function GithubPanel({ endpoint, repo: initialRepo, manageProjectId }: { 
     }
   }
 
-  if (!repo && !manageProjectId) return null;
+  if (!repo && !canManage) return null;
 
   const summary = data?.summary;
   return (
@@ -135,7 +135,7 @@ export function GithubPanel({ endpoint, repo: initialRepo, manageProjectId }: { 
         {!repo ? (
           <form onSubmit={link} className="grid gap-3">
             <p className="text-sm text-muted">
-              Link a public repository to show its open pull requests and issues here and on the share page.
+              Link a public repository to show its open pull requests and issues here.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <label className="sr-only" htmlFor="github-repo">
@@ -188,7 +188,7 @@ export function GithubPanel({ endpoint, repo: initialRepo, manageProjectId }: { 
                   </p>
                 ) : null}
               </div>
-              {manageProjectId ? (
+              {canManage ? (
                 <button type="button" onClick={() => void unlink()} disabled={saving} className={uiButtonClass}>
                   Unlink
                 </button>

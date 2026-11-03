@@ -43,7 +43,8 @@ async function getJson(path: string, cached: boolean): Promise<{ data: unknown }
 /**
  * Checks that `repo` is a public repository before a project links it, and
  * returns GitHub's spelling of its name. A token could see private ones; those
- * are refused, because the share page would show them to anyone.
+ * are refused, because every project member would see them, whatever their
+ * own access on GitHub.
  */
 export async function lookUpGithubRepo(repo: string): Promise<{ repo: string } | { problem: GithubProblem }> {
   try {
