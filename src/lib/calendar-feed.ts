@@ -7,7 +7,7 @@ import { visibleTaskWhere } from "@/lib/task-include";
 
 /**
  * Calendar subscription links (SMART-09): /api/calendar/<token>.ics. The token
- * is 24 random bytes (base64url, 32 characters), like project share links.
+ * is 24 random bytes (base64url, 32 characters), so links can't be guessed.
  */
 export function newCalendarFeedToken() {
   return randomBytes(24).toString("base64url");

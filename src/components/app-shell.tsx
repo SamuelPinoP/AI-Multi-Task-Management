@@ -651,8 +651,7 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const isLoggedOutLanding = !currentUser && pathname === "/";
-  // Share pages (SMART-12) look the same to everyone, signed in or not.
-  const isPublicPage = publicPaths.has(pathname) || isLoggedOutLanding || pathname.startsWith("/share/");
+  const isPublicPage = publicPaths.has(pathname) || isLoggedOutLanding;
   const showWorkspaceShell = Boolean(currentUser && initialNav && !isPublicPage);
   const fullHeight = isFullHeightPage(pathname);
 

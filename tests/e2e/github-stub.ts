@@ -29,7 +29,7 @@ const routes: Record<string, { status: number; body: unknown }> = {
     body: {
       full_name: STUB_REPO,
       html_url: `https://github.com/${STUB_REPO}`,
-      description: "Demo repository for the share page",
+      description: "Demo repository for the project page",
       stargazers_count: 42,
       forks_count: 3,
       open_issues_count: 3,
@@ -38,11 +38,11 @@ const routes: Record<string, { status: number; body: unknown }> = {
       private: false,
     },
   },
-  [`/repos/${STUB_REPO}/pulls`]: { status: 200, body: [item(12, "Add the share page", { draft: false, pull_request: {} })] },
+  [`/repos/${STUB_REPO}/pulls`]: { status: 200, body: [item(12, "Add a weekly summary email", { draft: false, pull_request: {} })] },
   [`/repos/${STUB_REPO}/issues`]: {
     status: 200,
     // GitHub's issue list includes pull requests; the app must drop them.
-    body: [item(12, "Add the share page", { pull_request: {} }), item(7, "Export the calendar"), item(5, "Dark mode for charts")],
+    body: [item(12, "Add a weekly summary email", { pull_request: {} }), item(7, "Export the calendar"), item(5, "Dark mode for charts")],
   },
   "/repos/ai-multi-demo/hidden": { status: 200, body: { full_name: "ai-multi-demo/hidden", private: true } },
   "/repos/ai-multi-demo/busy": { status: 403, body: { message: "API rate limit exceeded" } },
