@@ -34,12 +34,12 @@ export async function POST(request: Request) {
   }
 
   const user = await createGuestUser();
-  const { token, expiresAt } = await createSessionRecord(user.id);
+  const { token, cookieExpiresAt } = await createSessionRecord(user.id);
   const response = redirectTo(request, nextPath);
   response.cookies.set(
     SESSION_COOKIE_NAME,
     token,
-    getSessionCookieOptions(expiresAt),
+    getSessionCookieOptions(cookieExpiresAt),
   );
 
   return response;

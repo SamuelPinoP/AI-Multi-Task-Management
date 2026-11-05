@@ -1,15 +1,17 @@
 import "server-only";
 
 import crypto from "node:crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { authPageHref } from "@/lib/auth-links";
 import { prisma } from "@/lib/prisma";
+import { getSafeRedirectPath } from "@/lib/safe-redirect";
+import { renewedSessionEnd, sessionEndsAt, sessionLimit } from "@/lib/session-lifetime";
 
-import { DEMO_USER_EMAIL, GUEST_USER_EMAIL_DOMAIN, SESSION_COOKIE_NAME } from "@/lib/auth-constants";
+import { DEMO_USER_EMAIL, GUEST_USER_EMAIL_DOMAIN, REQUEST_PATH_HEADER, SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 
 export { DEMO_USER_EMAIL, GUEST_USER_EMAIL_DOMAIN, SESSION_COOKIE_NAME };
-export { getSafeRedirectPath } from "@/lib/safe-redirect";
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+export { getSafeRedirectPath };
 const PASSWORD_KEYLEN = 64;
 
 type SessionCookieOptions = {
@@ -80,18 +82,19 @@ export function verifyPassword(password: string, storedHash: string | null | und
   return timingSafeEqual(candidate, hash);
 }
 
-function getSessionExpiresAt() {
-  return new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
-}
-
-export function getSessionCookieOptions(expiresAt: Date): SessionCookieOptions {
+/**
+ * The session cookie lasts as long as its session can, a year (#354). The
+ * server ends the session sooner: after 30 days without use, or when it's
+ * logged out. See src/lib/session-lifetime.ts.
+ */
+export function getSessionCookieOptions(cookieExpiresAt: Date): SessionCookieOptions {
   return {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: SESSION_MAX_AGE_SECONDS,
-    expires: expiresAt,
+    maxAge: Math.max(0, Math.floor((cookieExpiresAt.getTime() - Date.now()) / 1000)),
+    expires: cookieExpiresAt,
   };
 }
 
@@ -100,27 +103,28 @@ export function getSessionCookieOptions(expiresAt: Date): SessionCookieOptions {
 // can't be used to log in as anyone.
 export async function createSessionRecord(userId: string) {
   const token = crypto.randomBytes(32).toString("hex");
-  const expiresAt = getSessionExpiresAt();
+  const now = new Date();
 
   await prisma.session.create({
     data: {
       token: hashSecureToken(token),
       userId,
-      expiresAt,
+      createdAt: now,
+      expiresAt: sessionEndsAt(now, now),
     },
   });
 
-  return { token, expiresAt };
+  return { token, cookieExpiresAt: sessionLimit(now) };
 }
 
 export async function createSession(userId: string) {
-  const { token, expiresAt } = await createSessionRecord(userId);
+  const { token, cookieExpiresAt } = await createSessionRecord(userId);
 
   const cookieStore = await cookies();
   cookieStore.set(
     SESSION_COOKIE_NAME,
     token,
-    getSessionCookieOptions(expiresAt),
+    getSessionCookieOptions(cookieExpiresAt),
   );
 }
 
@@ -159,26 +163,64 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
 
-  const tokenHash = hashSecureToken(token);
   const session = await prisma.session.findUnique({
-    where: { token: tokenHash },
-    include: { user: { select: { id: true, name: true, email: true, isGuest: true, emailVerifiedAt: true } } },
+    where: { token: hashSecureToken(token) },
+    select: {
+      id: true,
+      createdAt: true,
+      expiresAt: true,
+      user: { select: { id: true, name: true, email: true, isGuest: true, emailVerifiedAt: true } },
+    },
   });
 
   if (!session) return null;
 
-  if (session.expiresAt <= new Date()) {
-    await prisma.session.deleteMany({ where: { token: tokenHash } });
+  const now = new Date();
+  if (session.expiresAt <= now) {
+    await prisma.session.deleteMany({ where: { id: session.id } });
     return null;
+  }
+
+  // Using the app keeps the session going (#354), with at most one write a day. Matching
+  // the old end makes simultaneous requests write it once.
+  const renewedEnd = renewedSessionEnd(session, now);
+  if (renewedEnd) {
+    await prisma.session.updateMany({
+      where: { id: session.id, expiresAt: session.expiresAt },
+      data: { expiresAt: renewedEnd },
+    });
   }
 
   return session.user;
 }
 
+/**
+ * The signed-in user, or off to log in. A session that has ended (unused for a
+ * month, or logged out from another device) comes back to this page after
+ * logging in: src/proxy.ts passes on the address that was asked for.
+ */
 export async function requirePageUser() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) {
+    const next = getSafeRedirectPath((await headers()).get(REQUEST_PATH_HEADER));
+    redirect(authPageHref("login", { next }));
+  }
   return user;
+}
+
+/** How many devices the user is signed in on, this one included (#354). */
+export async function countActiveSessions(userId: string) {
+  return prisma.session.count({ where: { userId, expiresAt: { gt: new Date() } } });
+}
+
+/** Logs the user out of every other device at once; returns how many were signed in. */
+export async function endOtherSessions(userId: string) {
+  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  if (!token) return 0;
+  const { count } = await prisma.session.deleteMany({
+    where: { userId, token: { not: hashSecureToken(token) }, expiresAt: { gt: new Date() } },
+  });
+  return count;
 }
 
 export async function requireApiUser() {

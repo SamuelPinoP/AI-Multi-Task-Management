@@ -6,7 +6,7 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 
 ## Key Features
 
-- Secure authentication with signup, email confirmation, login with a username or email, logout, sessions, and password reset, in forms that browsers' password managers save and fill in
+- Secure authentication with signup, email confirmation, login with a username or email, logout, and password reset, in forms that browsers' password managers save and fill in. Sessions stay signed in while used, up to a year, and can be ended on other devices
 - Notes, tasks, events, projects, calendars, a rule-based Smart Daily Planner, and trash recovery
 - Project-specific Kanban boards for organizing tasks by status with read-only Viewer access and Owner/Editor task creation and movement
 - Project collaboration with invitations and role-based Owner, Editor, and Viewer access enforced server-side
@@ -209,6 +209,19 @@ per project per hour (past that, they're skipped). Forms show "Too many …
 Try again in N minutes"; API routes answer 429 with a `Retry-After` header.
 The client IP is the first `x-forwarded-for` entry, which Vercel overwrites;
 requests without one (local development, CI) skip the per-network limits.
+
+## Sessions
+
+A login stays signed in while it's used, the way GitHub, Google and Slack
+work (`src/lib/session-lifetime.ts`): a session ends 30 days after it was last
+used, and a year after logging in at the latest. Each day of use pushes the
+end back, with at most one database write a day per session, made inside a
+request that already reads it, so staying signed in adds no requests and never
+wakes the database on its own. The cookie lasts the full year; the server
+decides when a session really ends. Logging out ends that session, resetting
+the password ends all of them, and **Log out of other devices** on the Account
+page ends all but the current one. When a session has ended, any page sends
+the visitor to log in and back to that page afterwards.
 
 ## Installable app and offline reading
 
