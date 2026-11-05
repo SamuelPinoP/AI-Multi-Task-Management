@@ -6,7 +6,7 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 
 ## Key Features
 
-- Secure authentication with signup, email confirmation, login, logout, sessions, and password reset
+- Secure authentication with signup, email confirmation, login with a username or email, logout, sessions, and password reset, in forms that browsers' password managers save and fill in
 - Notes, tasks, events, projects, calendars, a rule-based Smart Daily Planner, and trash recovery
 - Project-specific Kanban boards for organizing tasks by status with read-only Viewer access and Owner/Editor task creation and movement
 - Project collaboration with invitations and role-based Owner, Editor, and Viewer access enforced server-side
@@ -200,8 +200,8 @@ database, so they don't use Neon's free compute hours.
 sliding window per rule, keyed by a SHA-256 fingerprint of the IP address,
 email or user, so none are stored in readable form). Limits, in
 `src/lib/rate-limit-core.ts`: 30 login attempts per network and 5 failed
-logins per account per 15 minutes (a successful login clears the account
-count), 5 sign-ups and 5 password reset requests per network per hour, 3 reset
+logins per account per 15 minutes, whether its email or its username was typed
+(a successful login clears the account count), 5 sign-ups and 5 password reset requests per network per hour, 3 reset
 requests per account per hour, 10 reset submissions per network per 15
 minutes, 10 guest workspaces per network per hour, 30 invitations per user per
 hour, 60 upload requests per user per 10 minutes and 30 automation emails

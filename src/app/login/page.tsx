@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { tooManyAttemptsMessage } from "@/lib/rate-limit-core";
 import { redirect } from "next/navigation";
 import {
@@ -8,16 +9,18 @@ import {
   isPublicSignupEnabled,
   normalizeAuthEmail,
 } from "@/lib/auth";
+import { LOGIN_IDENTIFIER_COOKIE, LOGIN_IDENTIFIER_MAX_LENGTH } from "@/lib/auth-constants";
 import { authPageHref } from "@/lib/auth-links";
 import { SignedInAsOtherAccount } from "@/components/signed-in-as-other-account";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 
 function getErrorMessage(error: string | undefined, signupEnabled: boolean, retry: string | undefined) {
   if (error === "rate-limited") return tooManyAttemptsMessage("sign-in attempts", Number(retry) || 60);
-  if (error === "missing") return "Enter your email and password.";
-  if (error === "created") return "Account created. Please sign in. We also emailed you a link to confirm your address.";
+  if (error === "missing") return "Enter your email or username, and your password.";
+  if (error === "created") return "Account created. Log in with your email or username. We also emailed you a link to confirm your address.";
   if (error === "logged-out") return "You have been logged out.";
-  if (error === "invalid") return "Invalid email or password.";
+  // One message whichever part was wrong, so it doesn't tell anyone which accounts exist.
+  if (error === "invalid") return "Incorrect email, username or password.";
   if (error === "reset") return "Password reset. Please sign in with your new password.";
   if (error === "guest-disabled") {
     return signupEnabled
@@ -51,6 +54,8 @@ export default async function LoginPage({
   }
 
   const signupHref = authPageHref("signup", { email, next: nextPath });
+  // After a failed attempt, what was typed comes back (see /api/auth/login).
+  const identifier = email || (await cookies()).get(LOGIN_IDENTIFIER_COOKIE)?.value || "";
   const guestLoginEnabled = isGuestLoginEnabled();
   const signupEnabled = isPublicSignupEnabled();
   const errorMessage = getErrorMessage(error, signupEnabled, retry);
@@ -83,6 +88,8 @@ export default async function LoginPage({
             </p>
           ) : null}
 
+          {/* Marked up the way password managers look for a login (#351): "username" names the
+              account whether an email or a username is typed, so a saved login fills both fields. */}
           <form
             action="/api/auth/login"
             method="post"
@@ -90,15 +97,20 @@ export default async function LoginPage({
           >
             <input type="hidden" name="next" value={nextPath} />
             <div>
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
+              <label htmlFor="login" className="text-sm font-medium">
+                Email or username
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                defaultValue={email}
+                id="login"
+                name="login"
+                type="text"
+                inputMode="email"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                maxLength={LOGIN_IDENTIFIER_MAX_LENGTH}
+                defaultValue={identifier}
                 required
                 className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600"
               />

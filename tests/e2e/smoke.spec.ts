@@ -12,7 +12,7 @@ test("landing page loads", { tag: "@smoke" }, async ({ page }) => {
 test("login page loads", { tag: "@smoke" }, async ({ page }) => {
   const response = await page.goto("/login");
   expect(response?.status()).toBe(200);
-  await expect(page.getByLabel("Email")).toBeVisible();
+  await expect(page.getByLabel("Email or username")).toBeVisible();
   await expect(page.getByLabel("Password")).toBeVisible();
   await expect(page.getByRole("button", { name: "Log in" })).toBeVisible();
 });
