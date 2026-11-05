@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { invitationHref } from "../../src/lib/auth-links";
-import { queryDatabase, signUpAndLogIn, uniqueName } from "./helpers";
+import { confirmationLink, signUpAndLogIn, uniqueName } from "./helpers";
 
 async function inviteToNewProject(owner: APIRequestContext, email: string) {
   const projectName = uniqueName("Invite link project");
@@ -87,14 +87,11 @@ test("a new invitee signs up from the email's link and is brought back to the in
     await page.getByLabel("Confirm password").fill(password);
     await page.getByRole("button", { name: "Create account" }).click();
 
-    await expect(page).toHaveURL(/\/login\?error=created&/);
-    await expect(page.getByText("Account created.")).toBeVisible();
-    await expect(page.getByLabel("Email")).toHaveValue(email);
-    // As if the confirmation email's link was opened: unconfirmed addresses can't see invitations (#221).
-    await queryDatabase(`UPDATE "User" SET "emailVerifiedAt" = now() AT TIME ZONE 'utc' WHERE email = $1`, [email]);
-
-    await page.getByLabel("Password").fill(password);
-    await page.getByRole("button", { name: "Log in" }).click();
+    // The account waits for its email to be confirmed (#350), and keeps the way back to the invitation.
+    await expect(page).toHaveURL(/\/verify-email\?next=%2Fprojects$/);
+    await expect(page.getByText(`We sent a link to ${email}.`)).toBeVisible();
+    // The emailed link carries that on too: opened here, it confirms the address and goes to the invitation.
+    await page.goto(await confirmationLink(email, { next: "/projects" }));
     await expectInvitation(page, projectName);
   } finally {
     await Promise.all([ownerContext.close(), visitor.close()]);

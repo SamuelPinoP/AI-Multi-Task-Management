@@ -17,7 +17,6 @@ import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 function getErrorMessage(error: string | undefined, signupEnabled: boolean, retry: string | undefined) {
   if (error === "rate-limited") return tooManyAttemptsMessage("sign-in attempts", Number(retry) || 60);
   if (error === "missing") return "Enter your email or username, and your password.";
-  if (error === "created") return "Account created. Log in with your email or username. We also emailed you a link to confirm your address.";
   if (error === "logged-out") return "You have been logged out.";
   // One message whichever part was wrong, so it doesn't tell anyone which accounts exist.
   if (error === "invalid") return "Incorrect email, username or password.";
@@ -59,7 +58,7 @@ export default async function LoginPage({
   const guestLoginEnabled = isGuestLoginEnabled();
   const signupEnabled = isPublicSignupEnabled();
   const errorMessage = getErrorMessage(error, signupEnabled, retry);
-  const isSuccessMessage = error === "created" || error === "logged-out" || error === "reset";
+  const isSuccessMessage = error === "logged-out" || error === "reset";
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 items-center px-4 py-12">

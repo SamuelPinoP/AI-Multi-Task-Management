@@ -26,6 +26,21 @@ export function authPageHref(page: "login" | "signup", { error, retry, email, ne
   return query ? `/${page}?${query}` : `/${page}`;
 }
 
+/** The page that waits for the email to be confirmed (#350); `next` is where it continues after. */
+export const CONFIRM_EMAIL_PATH = "/verify-email";
+
+/**
+ * Links to the "Check your email" page. `status` says how a confirmation link
+ * went, for a browser that isn't signed in to that account.
+ */
+export function confirmEmailHref({ next, status }: { next?: string; status?: "confirmed" | "invalid" } = {}) {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (next && next !== "/") params.set("next", next);
+  const query = params.toString();
+  return query ? `${CONFIRM_EMAIL_PATH}?${query}` : CONFIRM_EMAIL_PATH;
+}
+
 /**
  * Where a project invitation email points: log in when the address already has
  * an account, sign up when it doesn't, then on to the invitations either way.

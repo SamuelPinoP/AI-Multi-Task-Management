@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { authPageHref, invitationHref } from "./auth-links";
+import { authPageHref, confirmEmailHref, invitationHref } from "./auth-links";
 
 test("links to the bare page when there is nothing to keep", () => {
   assert.equal(authPageHref("login"), "/login");
@@ -20,6 +20,14 @@ test("puts the error first, so the page reads it like before", () => {
 test("sends existing accounts to log in and new addresses to sign up, then to the invitations", () => {
   assert.equal(invitationHref("sam@example.com", true), "/login?email=sam%40example.com&next=%2Fprojects");
   assert.equal(invitationHref("new@example.com", false), "/signup?email=new%40example.com&next=%2Fprojects");
+});
+
+test("the Check your email page keeps where to continue, and says how a link went (#350)", () => {
+  assert.equal(confirmEmailHref(), "/verify-email");
+  assert.equal(confirmEmailHref({ next: "/" }), "/verify-email");
+  assert.equal(confirmEmailHref({ next: "/projects" }), "/verify-email?next=%2Fprojects");
+  assert.equal(confirmEmailHref({ status: "confirmed" }), "/verify-email?status=confirmed");
+  assert.equal(confirmEmailHref({ status: "invalid", next: "/tasks?view=board" }), "/verify-email?status=invalid&next=%2Ftasks%3Fview%3Dboard");
 });
 
 test("round-trips through the URL parser", () => {

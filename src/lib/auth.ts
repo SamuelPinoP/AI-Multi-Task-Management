@@ -3,7 +3,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { authPageHref } from "@/lib/auth-links";
+import { authPageHref, confirmEmailHref } from "@/lib/auth-links";
 import { prisma } from "@/lib/prisma";
 import { getSafeRedirectPath } from "@/lib/safe-redirect";
 import { renewedSessionEnd, sessionEndsAt, sessionLimit } from "@/lib/session-lifetime";
@@ -158,7 +158,20 @@ export async function clearSession() {
   cookieStore.delete(SESSION_COOKIE_NAME);
 }
 
-export async function getCurrentUser(): Promise<AuthUser | null> {
+/**
+ * Whether the account has to confirm its email before it may use the app (#350).
+ * Guest workspaces have no email to confirm.
+ */
+export function mustConfirmEmail(user: Pick<AuthUser, "isGuest" | "emailVerifiedAt">) {
+  return !user.isGuest && !user.emailVerifiedAt;
+}
+
+/**
+ * Whoever the session cookie belongs to, whether or not their email is
+ * confirmed. Only the "Check your email" page and its routes need the
+ * unconfirmed ones; everything else calls getCurrentUser().
+ */
+export async function getSessionUser(): Promise<AuthUser | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
@@ -195,17 +208,26 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 }
 
 /**
+ * The signed-in user. An account whose email isn't confirmed yet counts as
+ * signed out, in every page and API route, until it is (#350).
+ */
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  const user = await getSessionUser();
+  return user && !mustConfirmEmail(user) ? user : null;
+}
+
+/**
  * The signed-in user, or off to log in. A session that has ended (unused for a
  * month, or logged out from another device) comes back to this page after
- * logging in: src/proxy.ts passes on the address that was asked for.
+ * logging in: src/proxy.ts passes on the address that was asked for. An
+ * account waiting for its email to be confirmed goes to "Check your email",
+ * which continues here once it is (#350).
  */
 export async function requirePageUser() {
-  const user = await getCurrentUser();
-  if (!user) {
-    const next = getSafeRedirectPath((await headers()).get(REQUEST_PATH_HEADER));
-    redirect(authPageHref("login", { next }));
-  }
-  return user;
+  const user = await getSessionUser();
+  if (user && !mustConfirmEmail(user)) return user;
+  const next = getSafeRedirectPath((await headers()).get(REQUEST_PATH_HEADER));
+  redirect(user ? confirmEmailHref({ next }) : authPageHref("login", { next }));
 }
 
 /** How many devices the user is signed in on, this one included (#354). */

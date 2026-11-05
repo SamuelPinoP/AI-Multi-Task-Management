@@ -1,27 +1,72 @@
 import { NextResponse } from "next/server";
-import { requireApiUser } from "@/lib/auth";
-import { confirmEmailWithToken, sendEmailVerification } from "@/lib/email-verification";
-import { consumeRateLimit, rateLimitedResponse } from "@/lib/rate-limit";
-import { RATE_LIMITS } from "@/lib/rate-limit-core";
+import { type AuthUser, getSafeRedirectPath, getSessionUser, mustConfirmEmail } from "@/lib/auth";
+import { confirmEmailHref } from "@/lib/auth-links";
+import {
+  ALREADY_CONFIRMED_MESSAGE,
+  changeConfirmationEmail,
+  type ConfirmationEmailResult,
+  confirmEmailWithToken,
+  sendConfirmationEmail,
+} from "@/lib/email-verification";
 
-/** The link in the confirmation email. Works signed out, so it can be opened on any device. */
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const confirmed = await confirmEmailWithToken(url.searchParams.get("token") ?? "");
-  return NextResponse.redirect(new URL(`/verify-email?status=${confirmed ? "confirmed" : "invalid"}`, url), 303);
+/**
+ * The link in the confirmation email. Works signed out, so it can be opened on
+ * any device. In the browser that signed up, the account is ready to use, so
+ * it carries on to where it was going (#350); elsewhere the page says how it went.
+ */
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const next = getSafeRedirectPath(url.searchParams.get("next"));
+  const userId = await confirmEmailWithToken(url.searchParams.get("token") ?? "");
+  if (userId && (await getSessionUser())?.id === userId) return NextResponse.redirect(new URL(next, url), 303);
+  return NextResponse.redirect(new URL(confirmEmailHref({ status: userId ? "confirmed" : "invalid", next }), url), 303);
 }
 
-/** Sends a new confirmation link to the signed-in user. */
-export async function POST(req: Request) {
-  const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  if (user.isGuest) return NextResponse.json({ error: "Guest workspaces have no email to confirm." }, { status: 400 });
-  if (user.emailVerifiedAt) return NextResponse.json({ error: "Your email is already confirmed." }, { status: 409 });
+type Waiting = { user: AuthUser; refusal?: undefined } | { user?: undefined; refusal: NextResponse };
 
-  const limit = await consumeRateLimit(RATE_LIMITS.verifyEmailResendUser, user.id);
-  if (!limit.allowed) return rateLimitedResponse("confirmation emails", limit);
+/** The signed-in account that's waiting for its email to be confirmed, or why there isn't one. */
+async function waitingAccount(): Promise<Waiting> {
+  const user = await getSessionUser();
+  if (!user) return { refusal: NextResponse.json({ error: "Authentication required" }, { status: 401 }) };
+  if (user.isGuest) return { refusal: NextResponse.json({ error: "Guest workspaces have no email to confirm." }, { status: 400 }) };
+  // Confirmed from another tab or device: `code` tells the page to move on.
+  if (!mustConfirmEmail(user)) return { refusal: NextResponse.json({ error: ALREADY_CONFIRMED_MESSAGE, code: "confirmed" }, { status: 409 }) };
+  return { user };
+}
 
-  const result = await sendEmailVerification(user, new URL(req.url).origin);
-  if (result.status === "failed") return NextResponse.json({ error: result.message }, { status: 502 });
-  return NextResponse.json({ message: result.status === "sent" ? `We sent a link to ${user.email}. It expires in 24 hours.` : result.message });
+async function readBody(request: Request) {
+  const body = (await request.json().catch(() => null)) as { email?: unknown; next?: unknown } | null;
+  return {
+    email: typeof body?.email === "string" ? body.email : "",
+    next: getSafeRedirectPath(typeof body?.next === "string" ? body.next : null),
+    origin: new URL(request.url).origin,
+  };
+}
+
+/** 200 when the email went out, 429 with Retry-After while the account must wait, 502 when it couldn't be sent. */
+function emailResponse(result: ConfirmationEmailResult, extra: Record<string, unknown> = {}) {
+  const { status, message, retryAfterSeconds } = result;
+  if (status === "sent" || status === "disabled") return NextResponse.json({ message, retryAfterSeconds, ...extra });
+  return NextResponse.json(
+    { error: message, retryAfterSeconds, ...extra },
+    status === "limited" ? { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } } : { status: 502 },
+  );
+}
+
+/** "Resend email": another link, a minute after the last, at most 5 an hour and 10 a day. */
+export async function POST(request: Request) {
+  const waiting = await waitingAccount();
+  if (waiting.refusal) return waiting.refusal;
+  const { next, origin } = await readBody(request);
+  return emailResponse(await sendConfirmationEmail(waiting.user, { next, origin }));
+}
+
+/** "Wrong address?": moves the unconfirmed account to another address and sends a link there. */
+export async function PATCH(request: Request) {
+  const waiting = await waitingAccount();
+  if (waiting.refusal) return waiting.refusal;
+  const { email, next, origin } = await readBody(request);
+  const result = await changeConfirmationEmail(waiting.user, email, { next, origin });
+  if ("error" in result) return NextResponse.json({ error: result.error, code: result.code }, { status: result.httpStatus });
+  return emailResponse(result, { email: result.email });
 }
