@@ -23,6 +23,11 @@ const e2eEnv = {
   // The GitHub stand-in from tests/e2e/github-stub.ts (Playwright's global setup).
   GITHUB_API_URL: `http://127.0.0.1:${Number(e2ePort) + 1000}`,
   GITHUB_TOKEN: "",
+  // The Google sign-in stand-in from tests/e2e/google-stub.ts, and the OAuth client
+  // it accepts (#356). Test values, not secrets.
+  GOOGLE_CLIENT_ID: "e2e-client.apps.googleusercontent.com",
+  GOOGLE_CLIENT_SECRET: "e2e-client-secret",
+  GOOGLE_OAUTH_URL: `http://127.0.0.1:${Number(e2ePort) + 1001}`,
 };
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

@@ -124,6 +124,18 @@ if (isVercelProductionEnvironment() && cleanEnvValue("GITHUB_API_URL")) {
   errors.push("GITHUB_API_URL is only for tests. Remove it from Production; the app talks to api.github.com.");
 }
 
+// Sign in with Google (#356) needs both halves of the OAuth client; with neither, the button is hidden.
+const googleClientId = cleanEnvValue("GOOGLE_CLIENT_ID");
+const googleClientSecret = cleanEnvValue("GOOGLE_CLIENT_SECRET");
+if (Boolean(googleClientId) !== Boolean(googleClientSecret)) {
+  errors.push("Set both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (from the Google Cloud OAuth client), or neither to leave Google sign-in off.");
+} else if (googleClientId && !googleClientId.endsWith(".apps.googleusercontent.com")) {
+  errors.push("GOOGLE_CLIENT_ID should end in .apps.googleusercontent.com. Copy the Client ID again from the Google Cloud OAuth client.");
+}
+if (isVercelProductionEnvironment() && cleanEnvValue("GOOGLE_OAUTH_URL")) {
+  errors.push("GOOGLE_OAUTH_URL is only for tests. Remove it from Production; the app talks to Google itself.");
+}
+
 const cronSecret = cleanEnvValue("CRON_SECRET");
 if (cronSecret !== undefined && cronSecret.length > 0 && cronSecret.length < 16) {
   errors.push("CRON_SECRET is too short. Use at least 16 random characters, or remove it.");

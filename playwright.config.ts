@@ -1,8 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const e2ePort = process.env.E2E_PORT || "3100";
-// tests/e2e/github-stub.ts answers for GitHub's API on this port (SMART-12).
+// tests/e2e/github-stub.ts answers for GitHub's API on this port (SMART-12),
+// and tests/e2e/google-stub.ts for Google's sign-in on the next one (#356).
 const githubStubUrl = `http://127.0.0.1:${Number(e2ePort) + 1000}`;
+const googleStubUrl = `http://127.0.0.1:${Number(e2ePort) + 1001}`;
 const baseURL =
   process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${e2ePort}`;
 const isCI = Boolean(process.env.CI);
@@ -20,7 +22,7 @@ const vercelBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  globalSetup: "./tests/e2e/github-stub.ts",
+  globalSetup: ["./tests/e2e/github-stub.ts", "./tests/e2e/google-stub.ts"],
   timeout: 60_000,
   // One worker: a cold dev server compiling routes for two workers at once
   // aborts navigations, and the suite is small.
@@ -67,6 +69,10 @@ export default defineConfig({
           SIGNUP_ENABLED: "true",
           GITHUB_API_URL: githubStubUrl,
           GITHUB_TOKEN: "",
+          // The OAuth client tests/e2e/google-stub.ts accepts; test values, not secrets.
+          GOOGLE_CLIENT_ID: "e2e-client.apps.googleusercontent.com",
+          GOOGLE_CLIENT_SECRET: "e2e-client-secret",
+          GOOGLE_OAUTH_URL: googleStubUrl,
         },
         reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "true",
         // The production build runs inside this timeout too.
