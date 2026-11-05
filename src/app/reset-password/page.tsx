@@ -53,20 +53,33 @@ function getErrorMessage(error: string | undefined, retry?: string) {
   return null;
 }
 
+/** The account a reset link is for, or null when the link is unknown, used or expired. */
+async function findResetAccount(token: string) {
+  const resetToken = await prisma.passwordResetToken.findUnique({
+    where: { tokenHash: hashSecureToken(token) },
+    select: { expiresAt: true, usedAt: true, user: { select: { email: true } } },
+  });
+  if (!resetToken || resetToken.usedAt || resetToken.expiresAt <= new Date()) return null;
+  return resetToken.user;
+}
+
 export default async function ResetPasswordPage({ searchParams }: { searchParams: Promise<{ token?: string; error?: string; retry?: string }> }) {
   const currentUser = await getCurrentUser();
   if (currentUser) redirect("/");
   const { token = "", error, retry } = await searchParams;
-  const errorMessage = getErrorMessage(error || (!token ? "invalid" : undefined), retry);
+  const account = token ? await findResetAccount(token) : null;
+  const errorMessage = getErrorMessage(error || (!account ? "invalid" : undefined), retry);
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 items-center px-4 py-12">
       <section className={`${uiCardClass} w-full p-6`}>
         <h1 className="text-2xl font-semibold">Choose a new password</h1>
         {errorMessage ? <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900">{errorMessage}</p> : null}
-        {token ? (
+        {account ? (
           <form action={resetPasswordAction} className="mt-6 space-y-4">
             <input type="hidden" name="token" value={token} />
+            {/* Names the login whose password this replaces, so password managers update it (#351). */}
+            <input type="text" name="username" autoComplete="username" value={account.email} readOnly hidden />
             <div>
               <label htmlFor="password" className="text-sm font-medium">New password</label>
               <input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-600" />

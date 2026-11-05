@@ -3,6 +3,7 @@
 import {
   CalendarDays,
   CalendarClock,
+  CircleUserRound,
   SquareCheckBig,
   FolderKanban,
   House,
@@ -62,6 +63,7 @@ const pages: Array<{ href: string; label: string; icon: LucideIcon; keywords?: s
   { href: "/goals", label: "Goals", icon: Target, keywords: "weekly review week" },
   { href: "/roadmap", label: "Roadmap", icon: MapIcon },
   { href: "/trash", label: "Trash", icon: Trash2, keywords: "deleted restore" },
+  { href: "/account", label: "Account settings", icon: CircleUserRound, keywords: "username email log in sign in profile" },
 ];
 
 function matches(query: string, ...texts: Array<string | undefined>) {

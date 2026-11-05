@@ -30,6 +30,7 @@ const pageTitles: Array<[prefix: string, title: string]> = [
   ["/goals", "Goals"],
   ["/roadmap", "Roadmap"],
   ["/trash", "Trash"],
+  ["/account", "Account"],
 ];
 
 /** Pages that fill the screen and scroll inside, like the chats: on phones the bottom tabs sit under them, not over them. */

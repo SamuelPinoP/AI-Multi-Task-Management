@@ -58,13 +58,28 @@ async function seedWorkspace(page: Page) {
   return { projectId: project.id, treePath: `/tree/${tree.id}` };
 }
 
-test("public pages have no WCAG A/AA violations", async ({ page }) => {
+test("public pages have no WCAG A/AA violations", async ({ page, browser }) => {
   const found: string[] = [];
-  for (const path of ["/login", "/signup", "/signup?error=exists&email=a11y%40example.test", "/forgot-password", "/verify-email", "/verify-email?status=invalid"]) {
+  for (const path of ["/login", "/login?error=invalid", "/signup", "/forgot-password", "/verify-email", "/verify-email?status=invalid"]) {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
     found.push(...(await violations(page, path)));
   }
+
+  // Sign-up errors show on the form (#351); this one has a "Log in instead" link.
+  const other = await browser.newContext();
+  const existing = await signUpAndLogIn(await other.newPage(), "A11y existing");
+  await other.close();
+  await page.goto("/signup");
+  await page.getByLabel("Name", { exact: true }).fill("A11y visitor");
+  await page.getByLabel("Username").fill(uniqueName("a11y").replace(" ", "_"));
+  await page.getByLabel("Email").fill(existing.email);
+  await page.getByLabel("Password", { exact: true }).fill(existing.password);
+  await page.getByLabel("Confirm password").fill(existing.password);
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByRole("link", { name: "Log in instead" })).toBeVisible();
+  found.push(...(await violations(page, "sign-up with an email that has an account")));
+
   expect(found).toEqual([]);
 });
 
@@ -77,7 +92,7 @@ for (const theme of ["light", "dark"] as const) {
 
     const found: string[] = [];
     // "/login?email=…" for another address shows "Switch accounts?".
-    for (const path of ["/", "/today", "/login?email=a11y-other%40example.test", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/tree", treePath, "/planner", "/goals", "/roadmap", "/trash"]) {
+    for (const path of ["/", "/today", "/login?email=a11y-other%40example.test", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/tree", treePath, "/planner", "/goals", "/roadmap", "/trash", "/account"]) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
       found.push(...(await violations(page, path)));
@@ -156,6 +171,23 @@ test("every accent palette has no WCAG A/AA violations", async ({ page, isMobile
       found.push(...(await violations(page, `account menu (${id}, ${theme})`, '[role="menu"]')));
       await page.keyboard.press("Escape");
     }
+  }
+  expect(found).toEqual([]);
+});
+
+// Guests see the Account page without its form (#351), so an account checks it, with an error showing.
+test("the Account page has no WCAG A/AA violations", async ({ page }) => {
+  await signUpAndLogIn(page, "A11y account");
+  const found: string[] = [];
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
+    await page.goto("/account");
+    await page.waitForLoadState("networkidle");
+    found.push(...(await violations(page, `Account page (${theme})`)));
+    await page.getByLabel("Username").fill("admin");
+    await page.getByRole("button", { name: "Change username" }).click();
+    await expect(page.getByText("That username is reserved. Try another one.")).toBeVisible();
+    found.push(...(await violations(page, `Account page with an error (${theme})`)));
   }
   expect(found).toEqual([]);
 });

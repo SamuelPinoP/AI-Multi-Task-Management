@@ -47,7 +47,8 @@ test("an invitee with an account logs in from the email's link and lands on the 
       await expect(page.getByLabel("Email")).toHaveValue(invitee.email);
 
       // Older emails always opened sign up: it now offers to log in instead.
-      await page.getByLabel("Name").fill("Already here");
+      await page.getByLabel("Name", { exact: true }).fill("Already here");
+      await page.getByLabel("Username").fill(`e2e_${randomUUID().slice(0, 8)}`);
       await page.getByLabel("Password", { exact: true }).fill(invitee.password);
       await page.getByLabel("Confirm password").fill(invitee.password);
       await page.getByRole("button", { name: "Create account" }).click();
@@ -80,7 +81,8 @@ test("a new invitee signs up from the email's link and is brought back to the in
     const page = await visitor.newPage();
     await page.goto(invitationHref(email, false));
     await expect(page.getByLabel("Email")).toHaveValue(email);
-    await page.getByLabel("Name").fill("New invitee");
+    await page.getByLabel("Name", { exact: true }).fill("New invitee");
+    await page.getByLabel("Username").fill(`e2e_${randomUUID().slice(0, 8)}`);
     await page.getByLabel("Password", { exact: true }).fill(password);
     await page.getByLabel("Confirm password").fill(password);
     await page.getByRole("button", { name: "Create account" }).click();

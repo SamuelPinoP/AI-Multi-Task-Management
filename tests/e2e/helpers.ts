@@ -49,11 +49,13 @@ export async function queryDatabase<T extends Record<string, unknown> = Record<s
 export async function signUpAndLogIn(page: Page, label = "E2E user", { confirmEmail = true } = {}) {
   const id = randomUUID().slice(0, 8);
   const name = `${label} ${id}`;
+  const username = `e2e_${id}`;
   const email = `e2e-${id}@example.test`;
   const password = `e2e-${randomUUID()}`;
 
   await page.goto("/signup");
-  await page.getByLabel("Name").fill(name);
+  await page.getByLabel("Name", { exact: true }).fill(name);
+  await page.getByLabel("Username").fill(username);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByLabel("Confirm password").fill(password);
@@ -63,10 +65,10 @@ export async function signUpAndLogIn(page: Page, label = "E2E user", { confirmEm
     await queryDatabase(`UPDATE "User" SET "emailVerifiedAt" = now() AT TIME ZONE 'utc' WHERE email = $1`, [email]);
   }
 
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Email or username").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Log in" }).click();
   await expectHome(page);
 
-  return { name, email, password };
+  return { name, username, email, password };
 }

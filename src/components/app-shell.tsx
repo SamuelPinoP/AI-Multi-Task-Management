@@ -3,6 +3,7 @@
 import {
   CalendarDays,
   ChevronRight,
+  CircleUserRound,
   Download,
   FolderKanban,
   House,
@@ -486,6 +487,14 @@ function UserMenu({ user, onShowShortcuts }: { user: NonNullable<ShellUser>; onS
               <span className="mt-0.5 block truncate text-xs font-normal text-muted">{user.email}</span>
             )}
           </DropdownMenuLabel>
+          {user.isGuest ? null : (
+            <DropdownMenuItem asChild>
+              <Link href="/account">
+                <CircleUserRound />
+                Account settings
+              </Link>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuLabel>Theme</DropdownMenuLabel>
           <DropdownMenuItem onSelect={() => setTheme("light")} aria-checked={theme === "light"} role="menuitemradio">

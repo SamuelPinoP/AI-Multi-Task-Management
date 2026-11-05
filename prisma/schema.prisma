@@ -15,6 +15,9 @@ datasource db {
 model User {
   id                           String                        @id @default(cuid())
   email                        String                        @unique
+  /// Another way to log in besides `email` (#351). Always lowercase, so it's unique regardless of case; see src/lib/username.ts.
+  /// Null for guests and for accounts made before usernames, until they choose one on the Account page.
+  username                     String?                       @unique
   name                         String?
   isGuest                      Boolean                       @default(false)
   createdAt                    DateTime                      @default(now())

@@ -9,8 +9,9 @@ function testIp() {
   return `198.18.${part()}.${part()}`;
 }
 
-async function attemptLogin(client: APIRequestContext, email: string, password: string) {
-  const response = await client.post("/api/auth/login", { form: { email, password, next: "/" }, maxRedirects: 0 });
+/** `login` is what the form's "Email or username" field sends. */
+async function attemptLogin(client: APIRequestContext, login: string, password: string) {
+  const response = await client.post("/api/auth/login", { form: { login, password, next: "/" }, maxRedirects: 0 });
   return response.headers().location ?? "";
 }
 
@@ -30,6 +31,19 @@ test("five wrong passwords lock the account for a while", async ({ page, browser
   await visitor.goto("/login?error=rate-limited&retry=600");
   await expect(visitor.getByText("Too many sign-in attempts. Try again in 10 minutes.")).toBeVisible();
   await visitor.close();
+});
+
+// #351: one count per account, so switching between its email and username doesn't get around it.
+test("failed logins count against the account, whichever of its email or username was typed", async ({ page, baseURL }) => {
+  const { email, username, password } = await signUpAndLogIn(page, "E2E lockout both ways");
+  const client = await playwrightRequest.newContext({ baseURL, extraHTTPHeaders: { "x-forwarded-for": testIp() } });
+
+  for (const login of [email, username.toUpperCase(), email.toUpperCase(), username, email]) {
+    expect(await attemptLogin(client, login, "wrong-password"), login).toContain("error=invalid");
+  }
+  expect(await attemptLogin(client, username, password)).toContain("error=rate-limited");
+  expect(await attemptLogin(client, email, password)).toContain("error=rate-limited");
+  await client.dispose();
 });
 
 test("a successful login clears the failed-attempt count", async ({ page, baseURL }) => {
