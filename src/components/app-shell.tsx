@@ -52,7 +52,9 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "@/components/ui/toaster";
 import { isFullHeightPage, isNavItemActive, pageTitleFor, type NavMatch } from "@/lib/app-nav";
+import { authPageHref } from "@/lib/auth-links";
 import { cn } from "@/lib/cn";
+import { getSafeRedirectPath } from "@/lib/safe-redirect";
 import { isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
 import { calendarNavItem } from "@/lib/calendar-view";
 import { formatUnreadCount } from "@/lib/chats";
@@ -675,7 +677,9 @@ export function AppShell({
 
   useEffect(() => {
     if (!currentUser && !isPublicPage) {
-      router.replace("/login");
+      // The session ended (unused for a month, or logged out from another device): log in, then come back here.
+      const here = getSafeRedirectPath(`${window.location.pathname}${window.location.search}`);
+      router.replace(authPageHref("login", { next: here }));
     }
   }, [currentUser, isPublicPage, router]);
 

@@ -76,12 +76,12 @@ export async function POST(request: Request) {
 
   await resetRateLimit(RATE_LIMITS.loginAccount, accountKey);
 
-  const { token, expiresAt } = await createSessionRecord(user.id);
+  const { token, cookieExpiresAt } = await createSessionRecord(user.id);
   const response = redirectTo(request, nextPath);
   response.cookies.set(
     SESSION_COOKIE_NAME,
     token,
-    getSessionCookieOptions(expiresAt),
+    getSessionCookieOptions(cookieExpiresAt),
   );
   response.cookies.set(LOGIN_IDENTIFIER_COOKIE, "", { path: "/login", maxAge: 0 });
 
