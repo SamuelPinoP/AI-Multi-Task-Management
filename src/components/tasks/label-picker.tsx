@@ -83,7 +83,15 @@ export function LabelPicker({
               className="h-10"
             />
             <CommandList className="max-h-64 p-1">
-              <CommandEmpty className="py-4">{all === null ? "Loading labels…" : canEdit ? "No labels yet. Type a name to create one." : "No labels here yet."}</CommandEmpty>
+              <CommandEmpty className="py-4">
+                {all === null
+                  ? "Loading labels…"
+                  : labels.length
+                    ? "No label matches."
+                    : canEdit
+                      ? "No labels yet. Type a name to create one."
+                      : "No labels here yet."}
+              </CommandEmpty>
               {labels.length ? (
                 <CommandGroup>
                   {labels.map((label) => {
