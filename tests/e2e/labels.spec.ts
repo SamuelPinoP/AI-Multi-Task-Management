@@ -31,8 +31,9 @@ test("labels: create from a task, filter by it, rename and delete", async ({ pag
   const row = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: labeled, exact: true }) });
   await expect(row).toContainText(label);
 
-  // Filter: only the labeled task stays.
-  await page.getByRole("button", { name: "Labels", exact: true }).click();
+  // Filter: only the labeled task stays. (The quick add has a Labels button too.)
+  const filters = page.getByRole("search", { name: "Filter tasks" });
+  await filters.getByRole("button", { name: "Labels", exact: true }).click();
   await page.getByRole("option", { name: new RegExp(`^${label}`) }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Labels: 1" })).toBeVisible();
@@ -41,7 +42,7 @@ test("labels: create from a task, filter by it, rename and delete", async ({ pag
   await page.getByRole("button", { name: "Labels: 1" }).click();
   await page.getByRole("button", { name: "Clear label filter" }).click();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Labels", exact: true })).toBeVisible();
+  await expect(filters.getByRole("button", { name: "Labels", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: other, exact: true })).toBeVisible();
 
   // Rename it from Edit labels; every task shows the new name.

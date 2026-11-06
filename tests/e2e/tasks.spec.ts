@@ -13,13 +13,16 @@ test("tasks: create in the sheet, edit, complete, filter and delete", async ({ p
   await page.goto("/tasks");
   await expect(page.getByRole("heading", { name: "No tasks yet." })).toBeVisible();
 
-  // Create with full details.
+  // Create with full details in the pop-up (#362); a past date goes through the date field.
   await page.getByRole("main").getByRole("button", { name: "New task", exact: true }).click();
   const create = page.getByRole("dialog", { name: "New task" });
   await create.getByLabel("Title").fill(title);
   await create.getByLabel("Description").fill("Made by Playwright.");
-  await create.getByLabel("Priority").selectOption("HIGH");
-  await create.getByLabel("Due date").fill(dateInputValue(-1));
+  await create.getByRole("button", { name: "Priority: No priority" }).click();
+  await page.getByRole("option", { name: "High" }).click();
+  await create.getByRole("button", { name: "Due date: none" }).click();
+  await page.getByLabel("Pick a date").fill(dateInputValue(-1));
+  await page.getByRole("button", { name: "Set" }).click();
   await create.getByRole("button", { name: "Create task" }).click();
   await expect(create).toBeHidden();
   const overdue = page.getByRole("region", { name: /^Overdue/ });
@@ -70,11 +73,12 @@ test("tasks: five priorities, No priority by default, and a filter for each (#36
   // No priority shows no badge at all.
   await expect(page.getByRole("listitem").filter({ hasText: plain }).getByText(/priority$/)).toHaveCount(0);
 
-  // The form starts at No priority and offers all five, No priority first.
+  // The pop-up starts at No priority and offers all five, No priority first.
   await page.getByRole("main").getByRole("button", { name: "New task", exact: true }).click();
   const create = page.getByRole("dialog", { name: "New task" });
-  await expect(create.getByLabel("Priority")).toHaveValue("NONE");
-  await expect(create.getByLabel("Priority").locator("option")).toHaveText(["No priority", "Urgent", "High", "Medium", "Low"]);
+  await create.getByRole("button", { name: "Priority: No priority" }).click();
+  await expect(page.getByRole("option")).toHaveText(["No priority, current", "Urgent", "High", "Medium", "Low"]);
+  await page.keyboard.press("Escape");
   await create.getByRole("button", { name: "Cancel" }).click();
 
   await page.getByRole("combobox", { name: "Priority" }).selectOption("URGENT");

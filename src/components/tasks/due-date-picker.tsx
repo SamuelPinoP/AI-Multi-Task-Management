@@ -27,12 +27,15 @@ export function DueDatePicker({
   value,
   onChange,
   disabled = false,
+  modal = false,
   children,
 }: {
   /** `YYYY-MM-DD` or "". */
   value: string;
   onChange: (key: string | null) => void;
   disabled?: boolean;
+  /** Inside a dialog: a click outside closes only this menu, not the dialog too (#362). */
+  modal?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -45,6 +48,7 @@ export function DueDatePicker({
 
   return (
     <Popover
+      modal={modal}
       open={open}
       onOpenChange={(next) => {
         setOpen(next);

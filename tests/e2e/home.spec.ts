@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
 
-test("a new workspace shows one next step in every empty card", async ({ page, isMobile }) => {
+test("a new workspace shows one next step in every empty card", async ({ page }) => {
   await continueAsGuest(page);
 
   await expect(page.getByText("Nothing is due today.")).toBeVisible();
@@ -19,11 +19,11 @@ test("a new workspace shows one next step in every empty card", async ({ page, i
   await expect(band).toHaveText(/^No events today and no open tasks\.\s*Add a task$/);
   await band.getByRole("button", { name: "Add a task" }).click();
   await expect(page.getByLabel("Add a task", { exact: true })).toBeFocused();
-  // Wider screens show the quick add's shortcuts; phones keep the placeholder only.
-  const hints = page.locator("#quick-add-hints");
-  await expect(hints).toContainText("#project");
-  if (isMobile) await expect(hints).toBeHidden();
-  else await expect(hints).toBeVisible();
+  // The quick add has buttons for each detail (#362); typed codes still work.
+  const details = page.getByRole("group", { name: "Task details" });
+  for (const name of ["Due date", "Project", "Priority", "Assignee", "Labels"]) {
+    await expect(details.getByRole("button", { name, exact: true })).toBeVisible();
+  }
 });
 
 test("quick add puts a task in Focus; completing it can be undone", async ({ page }) => {

@@ -21,6 +21,7 @@ export function LabelPicker({
   selectedIds,
   onChange,
   canEdit = true,
+  modal = false,
   children,
 }: {
   /** The project id the task is in, or "none" for a personal task. */
@@ -31,6 +32,8 @@ export function LabelPicker({
   onChange: (ids: string[]) => void;
   /** Viewers see the labels but can't create or edit them. */
   canEdit?: boolean;
+  /** Inside a dialog: a click outside closes only this menu, not the dialog too (#362). */
+  modal?: boolean;
   /** The trigger button. */
   children: ReactNode;
 }) {
@@ -65,6 +68,7 @@ export function LabelPicker({
   return (
     <>
       <Popover
+        modal={modal}
         open={open}
         onOpenChange={(next) => {
           setOpen(next);

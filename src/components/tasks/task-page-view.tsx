@@ -32,7 +32,7 @@ import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import { labelsOfTask } from "@/lib/labels";
 import { PRIORITY_MENU_ORDER, priorityLabels } from "@/lib/priority";
-import { paletteColor, projectColor } from "@/lib/project-color";
+import { projectColor } from "@/lib/project-color";
 import { formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { TASK_TITLE_MAX } from "@/lib/task-history";
 import { openBlockers, subtaskProgress } from "@/lib/task-relations";
@@ -42,6 +42,7 @@ import { LabelChip } from "./label-chip";
 import { LabelPicker } from "./label-picker";
 import { currentLabels, loadLabels, scopeKeyFor, useLabels } from "./label-store";
 import { loadProjectMembers } from "./load-members";
+import { MemberAvatar } from "./member-avatar";
 import { PriorityBadge } from "./priority-badge";
 import { PropertyPicker } from "./property-picker";
 import { ProgressRing } from "./task-badges";
@@ -86,14 +87,6 @@ function StatusIcon({ status, className }: { status: TaskStatus; className?: str
       )}
     >
       {status === "DONE" ? <Check className="h-2.5 w-2.5" strokeWidth={3.5} /> : status === "IN_PROGRESS" ? <span className="h-1.5 w-1.5 rounded-full bg-warning" /> : null}
-    </span>
-  );
-}
-
-function MemberAvatar({ id, name }: { id: string; name: string }) {
-  return (
-    <span aria-hidden="true" className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-2xs font-bold text-white" style={{ backgroundColor: paletteColor(id) }}>
-      {name.charAt(0).toUpperCase()}
     </span>
   );
 }
