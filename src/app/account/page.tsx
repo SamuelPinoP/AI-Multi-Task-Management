@@ -1,5 +1,6 @@
 import { AccountSessions } from "@/components/account-sessions";
 import { AccountUsernameForm } from "@/components/account-username-form";
+import { ContactLink, LegalLinks } from "@/components/legal";
 import { uiCardClass } from "@/components/ui";
 import { countActiveSessions, requirePageUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -51,6 +52,15 @@ export default async function AccountPage() {
           <AccountSessions otherDevices={Math.max(0, activeSessions - 1)} />
         </section>
       )}
+
+      <footer className="space-y-2 text-sm text-muted">
+        {user.isGuest ? null : (
+          <p>
+            To get a copy of your data or delete your account, email <ContactLink /> from the address on your account.
+          </p>
+        )}
+        <LegalLinks />
+      </footer>
     </div>
   );
 }

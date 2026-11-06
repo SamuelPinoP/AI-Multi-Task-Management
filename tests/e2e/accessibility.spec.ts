@@ -60,7 +60,7 @@ async function seedWorkspace(page: Page) {
 
 test("public pages have no WCAG A/AA violations", async ({ page, browser }) => {
   const found: string[] = [];
-  for (const path of ["/login", "/login?error=invalid", "/signup", "/forgot-password", "/verify-email", "/verify-email?status=invalid"]) {
+  for (const path of ["/", "/login", "/login?error=invalid", "/signup", "/forgot-password", "/verify-email", "/verify-email?status=invalid", "/privacy", "/terms"]) {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
     found.push(...(await violations(page, path)));

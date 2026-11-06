@@ -4,6 +4,8 @@ import { getCurrentUser, getSafeRedirectPath, isPublicSignupEnabled, normalizeAu
 import { authPageHref } from "@/lib/auth-links";
 import { isGoogleSignInEnabled } from "@/lib/google-auth";
 import { GoogleSignIn } from "@/components/google-sign-in-button";
+import { AgreementNotice } from "@/components/legal";
+import { MINIMUM_AGE } from "@/lib/legal";
 import { SignedInAsOtherAccount } from "@/components/signed-in-as-other-account";
 import { SignupForm } from "@/components/signup-form";
 import { uiCardClass } from "@/components/ui";
@@ -57,6 +59,11 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
         <p className="mt-5 text-center text-sm text-zinc-600 dark:text-zinc-400">
           Already have an account? <Link href={loginHref} className="font-medium text-zinc-950 underline underline-offset-4 dark:text-zinc-50">Log in</Link>
         </p>
+        {signupEnabled ? (
+          <AgreementNotice className="mt-4 text-center">
+            You must be {MINIMUM_AGE} or older. By creating an account{googleEnabled ? " or continuing with Google" : ""},
+          </AgreementNotice>
+        ) : null}
       </section>
     </main>
   );

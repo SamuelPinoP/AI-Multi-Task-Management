@@ -135,6 +135,11 @@ if (Boolean(googleClientId) !== Boolean(googleClientSecret)) {
 if (isVercelProductionEnvironment() && cleanEnvValue("GOOGLE_OAUTH_URL")) {
   errors.push("GOOGLE_OAUTH_URL is only for tests. Remove it from Production; the app talks to Google itself.");
 }
+// Search Console's HTML tag (#358): only the code inside content="…", not the whole tag.
+const siteVerificationCode = cleanEnvValue("GOOGLE_SITE_VERIFICATION");
+if (siteVerificationCode && !/^[A-Za-z0-9_-]{20,100}$/.test(siteVerificationCode)) {
+  errors.push('GOOGLE_SITE_VERIFICATION should be only the code from Search Console\'s HTML tag, the part inside content="…".');
+}
 
 const cronSecret = cleanEnvValue("CRON_SECRET");
 if (cronSecret !== undefined && cronSecret.length > 0 && cronSecret.length < 16) {

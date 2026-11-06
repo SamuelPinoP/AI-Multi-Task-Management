@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LegalLinks } from "@/components/legal";
 import { uiPrimaryButtonClass } from "@/components/ui";
 
 const landingFeatures = [
@@ -159,6 +160,12 @@ export function LandingPage({
             </article>
           ))}
         </section>
+
+        {/* Google's review of Sign in with Google looks for the privacy policy on the home page (#358). */}
+        <footer className="flex flex-col gap-3 border-t border-line pt-6 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+          <p>AI Multi, a free app by Samuel Pino.</p>
+          <LegalLinks />
+        </footer>
       </div>
     </main>
   );
