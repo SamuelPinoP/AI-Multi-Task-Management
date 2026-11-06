@@ -8,6 +8,7 @@ import { ThemeInitScript, ThemeProvider } from "@/components/theme-provider";
 import { TimeZoneCookie } from "@/components/time-zone-cookie";
 import { Toaster } from "@/components/ui/toaster";
 import { getSessionUser, mustConfirmEmail } from "@/lib/auth";
+import { siteVerification } from "@/lib/legal";
 import { parseSidebarProjects, SIDEBAR_COLLAPSED_COOKIE, SIDEBAR_PROJECTS_COOKIE } from "@/lib/sidebar-state";
 import { getWorkspaceNav } from "@/lib/workspace-nav";
 
@@ -18,6 +19,8 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "AI Multi", statusBarStyle: "default" },
   // The Spark mark (DES-07): an SVG for the browser tab, with app/favicon.ico as the fallback.
   icons: { icon: { url: "/icons/icon.svg", type: "image/svg+xml" }, apple: "/icons/apple-touch-icon.png" },
+  // Google Search Console's tag, once GOOGLE_SITE_VERIFICATION is set (#358).
+  verification: siteVerification(process.env),
 };
 
 // Geist for the interface and Geist Mono for counts, times and keyboard hints (DES-08).

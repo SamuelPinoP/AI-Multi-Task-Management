@@ -14,6 +14,7 @@ import { authPageHref } from "@/lib/auth-links";
 import { isGoogleSignInEnabled } from "@/lib/google-auth";
 import { googleSignInErrorMessage } from "@/lib/google-auth-core";
 import { GoogleSignIn } from "@/components/google-sign-in-button";
+import { AgreementNotice } from "@/components/legal";
 import { SignedInAsOtherAccount } from "@/components/signed-in-as-other-account";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 
@@ -160,6 +161,8 @@ export default async function LoginPage({
               "Public signup is restricted on this deployment. Use a provided account to log in."
             )}
           </p>
+          {/* Continuing with Google can create an account from here too (#356). */}
+          <AgreementNotice className="mt-4 text-center">By continuing,</AgreementNotice>
         </div>
 
         {guestLoginEnabled ? (

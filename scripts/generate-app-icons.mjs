@@ -62,6 +62,8 @@ const outputs = [
   ["public/icons/icon-512.png", await png(rounded, 512)],
   ["public/icons/maskable-512.png", await png(maskable, 512)],
   ["public/icons/apple-touch-icon.png", await png(square, 180)],
+  // The app logo for Google's sign-in Branding page (#358): square, 120 x 120, under 1 MB.
+  ["public/icons/logo-120.png", await png(square, 120)],
   // Next.js links app/favicon.ico from every page. (The sign-in redirect in
   // src/proxy.ts skips /favicon.ico and /icons/, so both load when signed out.)
   ["src/app/favicon.ico", ico(await Promise.all([16, 32, 48].map(async (size) => ({ size, data: await png(rounded, size) }))))],

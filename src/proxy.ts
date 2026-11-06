@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { REQUEST_PATH_HEADER, SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 
-const publicPaths = new Set(["/", "/login", "/signup", "/forgot-password", "/reset-password", "/verify-email"]);
+// The Privacy Policy and Terms of Service must open signed out: Google's reviewers and new visitors read them (#358).
+const publicPaths = new Set(["/", "/login", "/signup", "/forgot-password", "/reset-password", "/verify-email", "/privacy", "/terms"]);
 
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;

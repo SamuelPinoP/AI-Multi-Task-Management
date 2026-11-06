@@ -84,7 +84,7 @@ type NavItem = NavMatch & {
   badge?: { value: number; label: string };
 };
 
-const publicPaths = new Set(["/login", "/signup", "/forgot-password", "/reset-password", "/verify-email"]);
+const publicPaths = new Set(["/login", "/signup", "/forgot-password", "/reset-password", "/verify-email", "/privacy", "/terms"]);
 
 function firstName(user: NonNullable<ShellUser>) {
   if (user.isGuest) return "Guest";
