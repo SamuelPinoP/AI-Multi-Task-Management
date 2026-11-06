@@ -43,6 +43,8 @@
   /* Done, on track. */
   --success: #26733f;
   --success-soft: #d9eddf;
+  /* Text on solid success, such as a task row's Done button (#281). */
+  --success-ink: #ffffff;
 
   /* Project colors. */
   --project-1: #0f9488;
@@ -99,6 +101,7 @@
   --caution-soft: #332e14;
   --success: #74cf90;
   --success-soft: #163020;
+  --success-ink: #0b2414;
 
   --chart-done: #1fa596;
   --chart-scope: #d95926;
@@ -127,6 +130,7 @@
   --color-caution-soft: var(--caution-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
+  --color-success-ink: var(--success-ink);
   --color-project-1: var(--project-1);
   --color-project-2: var(--project-2);
   --color-project-3: var(--project-3);

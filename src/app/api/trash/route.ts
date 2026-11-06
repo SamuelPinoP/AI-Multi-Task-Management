@@ -3,6 +3,7 @@ import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 import { projectEditWhere } from "@/lib/project-access";
+import { parseBulkIds } from "@/lib/task-bulk";
 
 const TRASH_TYPES = ["note", "task", "event"] as const;
 type TrashType = (typeof TRASH_TYPES)[number];
@@ -60,8 +61,32 @@ export async function PATCH(req: Request) {
   const user = await requireApiUser();
   if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
-  const body = (await req.json().catch(() => null)) as { type?: unknown; id?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { type?: unknown; id?: unknown; ids?: unknown } | null;
   const type = TRASH_TYPES.find((value) => value === body?.type);
+
+  // Several tasks at once: Undo after moving a selection to the Trash (#281).
+  if (type === "task" && body?.ids !== undefined) {
+    const parsed = parseBulkIds(body.ids);
+    if (!parsed.ids) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const where = { id: { in: parsed.ids }, ...trashWhere(user.id) };
+    const tasks = await prisma.task.findMany({ where, select: { id: true, title: true, projectId: true } });
+    if (!tasks.length) return NextResponse.json({ error: "Items not found" }, { status: 404 });
+    await prisma.$transaction([
+      prisma.task.updateMany({ where, data: { deletedAt: null, deletedById: null } }),
+      prisma.activity.createMany({
+        data: tasks.map((task) => ({
+          userId: user.id,
+          action: "RESTORED_ITEM" as const,
+          message: `Restored task: “${task.title}”`,
+          entityType: "TASK" as const,
+          entityId: task.id,
+          projectId: task.projectId,
+        })),
+      }),
+    ]);
+    return NextResponse.json({ restored: tasks.length }, { status: 200 });
+  }
+
   const id = typeof body?.id === "string" ? body.id : "";
 
   if (!id || !type) return NextResponse.json({ error: "Type (note, task or event) and id are required" }, { status: 400 });
