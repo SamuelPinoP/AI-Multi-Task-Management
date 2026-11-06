@@ -18,6 +18,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { QuickAdd } from "@/components/home/quick-add";
+import { BulkBar, type BulkNames } from "@/components/tasks/bulk-bar";
 import { LabelFilter } from "@/components/tasks/label-filter";
 import { loadLabels, useLabels } from "@/components/tasks/label-store";
 import { TaskRow } from "@/components/tasks/task-row";
@@ -30,10 +31,14 @@ import { cn } from "@/lib/cn";
 import { daysFrom } from "@/lib/home-summary";
 import { labelsOfTask, matchesLabelFilter } from "@/lib/labels";
 import { PRIORITIES, priorityLabels } from "@/lib/priority";
+import { describeBulkChange, type BulkTaskChange, type TaskSnapshot } from "@/lib/task-bulk";
 import { compareTaskDueDates, formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { topLevelTasks } from "@/lib/task-relations";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged, TASK_CREATED_EVENT } from "@/lib/workspace-events";
+
+/** A project from /api/projects, with the caller's access. */
+type ProjectItem = Project & { accessLevel?: "OWNER" | "EDITOR" | "VIEWER"; status?: string };
 
 type StatusFilter = "ALL" | "OPEN" | "DONE";
 type SortOption = "DUE_DATE_ASC" | "DUE_DATE_DESC" | "NEWEST" | "OLDEST";
@@ -87,7 +92,7 @@ export default function TasksPage() {
   const linkedTaskId = searchParams.get("task");
 
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [fetching, setFetching] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [busyIds, setBusyIds] = useState<string[]>([]);
@@ -102,6 +107,11 @@ export default function TasksPage() {
 
   const [sheet, setSheet] = useState<{ open: boolean; task: Task | null }>({ open: false, task: null });
   const [confirmDelete, setConfirmDelete] = useState<Task | null>(null);
+  // Selection for bulk changes (#281): ids, plus the last clicked row for Shift+click ranges.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [anchorId, setAnchorId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const linkedRowRef = useRef<HTMLLIElement | null>(null);
 
@@ -122,7 +132,7 @@ export default function TasksPage() {
   async function fetchProjects() {
     try {
       const response = await fetch("/api/projects");
-      if (response.ok) setProjects((await response.json()) as Project[]);
+      if (response.ok) setProjects((await response.json()) as ProjectItem[]);
     } catch {
       // The project selects stay empty; tasks still load.
     }
@@ -195,6 +205,11 @@ export default function TasksPage() {
     .map((key) => ({ key, tasks: groups[key] }))
     .filter((section) => section.tasks.length);
 
+  // Bulk changes apply to the selected tasks still on screen, in the order shown.
+  const shownIds = sections.flatMap((section) => section.tasks.map((task) => task.id));
+  const selectedTasks = sections.flatMap((section) => section.tasks).filter((task) => selected.has(task.id));
+  const bulkProjects = projects.filter((project) => project.accessLevel !== "VIEWER" && project.status !== "ARCHIVED");
+
   const openCount = tasks.filter((task) => task.status !== "DONE").length;
   const doneCount = tasks.length - openCount;
   const filtersActive =
@@ -202,6 +217,113 @@ export default function TasksPage() {
 
   // The sheet follows the latest copy of its task, so subtasks and blockers update in place.
   const sheetTask = sheet.task ? (tasks.find((task) => task.id === sheet.task?.id) ?? sheet.task) : null;
+
+  function selectTask(task: Task, range: boolean) {
+    setSelected((current) => {
+      const next = new Set(current);
+      const from = anchorId ? shownIds.indexOf(anchorId) : -1;
+      const to = shownIds.indexOf(task.id);
+      if (range && from >= 0 && to >= 0) {
+        for (const id of shownIds.slice(Math.min(from, to), Math.max(from, to) + 1)) next.add(id);
+      } else if (next.has(task.id)) next.delete(task.id);
+      else next.add(task.id);
+      return next;
+    });
+    setAnchorId(task.id);
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+    setAnchorId(null);
+  }
+
+  // Ctrl+A (Cmd+A on a Mac) selects every task shown; Escape clears the selection.
+  const onSelectionKey = useEffectEvent((event: KeyboardEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("input, textarea, select, [contenteditable=true]") || document.querySelector('[role="dialog"], [role="menu"]')) return;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a" && shownIds.length) {
+      event.preventDefault();
+      setSelected(new Set(shownIds));
+    } else if (event.key === "Escape" && selected.size) {
+      clearSelection();
+    }
+  });
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => onSelectionKey(event);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
+
+  async function sendBulk(body: unknown, method = "PATCH") {
+    const response = await fetch("/api/tasks/bulk", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!response.ok) throw new Error(await errorMessage(response, "Could not change the tasks."));
+    return response.json();
+  }
+
+  async function undoBulk(previous: TaskSnapshot[]) {
+    try {
+      await sendBulk({ restore: previous });
+      notifyWorkspaceChanged();
+      await fetchTasks(false);
+      toast.success("Change undone");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not undo the change.");
+    }
+  }
+
+  async function applyBulk(change: BulkTaskChange, names: BulkNames = {}) {
+    const ids = selectedTasks.map((task) => task.id);
+    if (!ids.length || bulkBusy) return;
+    setBulkBusy(true);
+    try {
+      const result = (await sendBulk({ ids, change })) as { previous: TaskSnapshot[] };
+      notifyWorkspaceChanged();
+      await fetchTasks(false);
+      toast.success(describeBulkChange(change, ids.length, names), {
+        action: { label: "Undo", onClick: () => void undoBulk(result.previous) },
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not change the tasks.");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function deleteSelected() {
+    const ids = selectedTasks.map((task) => task.id);
+    setBulkBusy(true);
+    try {
+      await sendBulk({ ids }, "DELETE");
+      setTasks((current) => current.filter((task) => !ids.includes(task.id)));
+      clearSelection();
+      notifyWorkspaceChanged();
+      toast.success(`${ids.length} task${ids.length === 1 ? "" : "s"} moved to Trash`, {
+        action: {
+          label: "Undo",
+          onClick: () =>
+            void (async () => {
+              const response = await fetch("/api/trash", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type: "task", ids }),
+              });
+              if (!response.ok) {
+                toast.error(await errorMessage(response, "Could not restore the tasks."));
+                return;
+              }
+              notifyWorkspaceChanged();
+              await fetchTasks(false);
+              toast.success("Tasks restored");
+            })(),
+        },
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete the tasks.");
+    } finally {
+      setBulkBusy(false);
+      setConfirmBulkDelete(false);
+    }
+  }
 
   async function request(url: string, init: RequestInit, fallback: string) {
     try {
@@ -324,6 +446,17 @@ export default function TasksPage() {
 
       <QuickAdd onAdded={() => void fetchTasks(false)} />
 
+      {selectedTasks.length ? (
+        <BulkBar
+          tasks={selectedTasks}
+          projects={bulkProjects}
+          labels={labels ?? []}
+          busy={bulkBusy}
+          onClear={clearSelection}
+          onChange={(change, names) => void applyBulk(change, names)}
+          onDelete={() => setConfirmBulkDelete(true)}
+        />
+      ) : (
       <div className="flex flex-wrap items-center gap-2" role="search" aria-label="Filter tasks">
         <label className="relative flex min-w-48 flex-1 items-center">
           <span className="sr-only">Search tasks</span>
@@ -376,6 +509,7 @@ export default function TasksPage() {
           </select>
         </div>
       </div>
+      )}
 
       {loadError ? (
         <p role="alert" className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
@@ -433,6 +567,8 @@ export default function TasksPage() {
                   onToggle={(item) => void toggleTask(item)}
                   onOpen={(item) => setSheet({ open: true, task: item })}
                   onDelete={setConfirmDelete}
+                  selected={selected.has(task.id)}
+                  onSelect={selectTask}
                 />
               ))}
             </ul>
@@ -448,6 +584,15 @@ export default function TasksPage() {
         onSubmit={saveTask}
         onDelete={setConfirmDelete}
         relations={sheetTask ? relationsFor(sheetTask) : undefined}
+      />
+
+      <ConfirmDialog
+        open={confirmBulkDelete}
+        title={`Delete ${selectedTasks.length} task${selectedTasks.length === 1 ? "" : "s"}?`}
+        message="They move to Trash, where you can restore them. Undo in the next message puts them all back."
+        loading={bulkBusy}
+        onCancel={() => setConfirmBulkDelete(false)}
+        onConfirm={() => void deleteSelected()}
       />
 
       <ConfirmDialog

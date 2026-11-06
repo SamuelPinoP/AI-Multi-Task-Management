@@ -352,6 +352,31 @@ test("editors manage project labels, viewers only see them, outsiders see nothin
   expect(tasks.find((item) => item.id === task.id)?.labels).toEqual([]);
 });
 
+test("bulk changes are all or nothing, with the same rules as one task (#281)", async () => {
+  const bulk = (ids: string[], change: Record<string, unknown>) => ({ data: { ids, change } });
+  await expectStatuses(
+    "PATCH bulk project task",
+    (client) => client.patch("/api/tasks/bulk", bulk([projectTaskId], { priority: "LOW" })),
+    { owner: 200, editor: 200, viewer: 403, outsider: 404 },
+  );
+  // The owner's personal task is invisible to the editor, so the whole request fails and nothing changes.
+  const personal = await json<{ id: string }>(await api.owner.post("/api/tasks", { data: { title: uniqueName("Owner personal") } }));
+  const mixed = await api.editor.patch("/api/tasks/bulk", bulk([projectTaskId, personal.id], { priority: "URGENT" }));
+  expect(mixed.status()).toBe(404);
+  const tasks = await json<{ id: string; priority: string }[]>(await api.owner.get("/api/tasks"));
+  expect(tasks.find((task) => task.id === projectTaskId)?.priority).toBe("LOW");
+  expect(tasks.find((task) => task.id === personal.id)?.priority).toBe("NONE");
+  // A viewer's refusal names the tasks, and a bad change is refused before anything is read.
+  const refused = await api.viewer.patch("/api/tasks/bulk", bulk([projectTaskId], { status: "DONE" }));
+  expect(((await refused.json()) as { refused: string[] }).refused).toEqual([projectTaskId]);
+  expect((await api.owner.patch("/api/tasks/bulk", bulk([projectTaskId], { priority: "CRITICAL" }))).status()).toBe(400);
+  await expectStatuses(
+    "DELETE bulk project task",
+    (client) => client.delete("/api/tasks/bulk", { data: { ids: [projectTaskId] } }),
+    { viewer: 403, outsider: 404 },
+  );
+});
+
 test("editors change project tasks, viewers only read them", async () => {
   await expectStatuses(
     "POST project task",
