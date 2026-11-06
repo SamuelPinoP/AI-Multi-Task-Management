@@ -11,6 +11,9 @@ import {
 } from "@/lib/auth";
 import { LOGIN_IDENTIFIER_COOKIE, LOGIN_IDENTIFIER_MAX_LENGTH } from "@/lib/auth-constants";
 import { authPageHref } from "@/lib/auth-links";
+import { isGoogleSignInEnabled } from "@/lib/google-auth";
+import { googleSignInErrorMessage } from "@/lib/google-auth-core";
+import { GoogleSignIn } from "@/components/google-sign-in-button";
 import { SignedInAsOtherAccount } from "@/components/signed-in-as-other-account";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 
@@ -26,7 +29,7 @@ function getErrorMessage(error: string | undefined, signupEnabled: boolean, retr
       ? "Guest access is disabled. Create an account or sign in instead."
       : "Guest access is disabled for this deployment.";
   }
-  return null;
+  return googleSignInErrorMessage(error);
 }
 
 export default async function LoginPage({
@@ -86,6 +89,8 @@ export default async function LoginPage({
               {errorMessage}
             </p>
           ) : null}
+
+          {isGoogleSignInEnabled() ? <GoogleSignIn next={nextPath} className="mt-6" /> : null}
 
           {/* Marked up the way password managers look for a login (#351): "username" names the
               account whether an email or a username is typed, so a saved login fills both fields. */}

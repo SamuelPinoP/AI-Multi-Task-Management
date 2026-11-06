@@ -66,12 +66,13 @@ export async function confirmationLink(
  * Signs up a throwaway account on the local server. Sign-up ends on "Check
  * your email" (#350); unless `confirmEmail` is false, the account's link is
  * then opened in the same browser, which signs it in, as a person would.
+ * `email` picks the address, such as a Gmail one for Google sign-in tests.
  */
-export async function signUpAndLogIn(page: Page, label = "E2E user", { confirmEmail = true } = {}) {
+export async function signUpAndLogIn(page: Page, label = "E2E user", { confirmEmail = true, email: chosenEmail }: { confirmEmail?: boolean; email?: string } = {}) {
   const id = randomUUID().slice(0, 8);
   const name = `${label} ${id}`;
   const username = `e2e_${id}`;
-  const email = `e2e-${id}@example.test`;
+  const email = chosenEmail ?? `e2e-${id}@example.test`;
   const password = `e2e-${randomUUID()}`;
 
   await page.goto("/signup");

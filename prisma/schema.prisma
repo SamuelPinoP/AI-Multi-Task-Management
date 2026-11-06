@@ -29,6 +29,7 @@ model User {
   /// Stored as is so the link can be copied again; "New link" replaces it.
   calendarFeedToken            String?                       @unique
   sessions                     Session[]
+  oauthAccounts                OAuthAccount[]
   passwordResetTokens          PasswordResetToken[]
   emailVerificationTokens      EmailVerificationToken[]
   notifications                Notification[]
@@ -62,6 +63,24 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+/// An account at a sign-in provider that logs in as a user (#356), such as their Google account.
+model OAuthAccount {
+  id                String   @id @default(cuid())
+  userId            String
+  /// "google".
+  provider          String
+  /// The provider's id for the person (Google's `sub`). It never changes, unlike their email.
+  providerAccountId String
+  /// The address the provider gave at the last sign-in. Sign-ins match on providerAccountId, never this.
+  email             String
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
 }
 
 model PasswordResetToken {

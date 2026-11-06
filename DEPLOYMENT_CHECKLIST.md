@@ -88,6 +88,18 @@ Every email is a complete HTML document with a matching plain-text part, the sam
 
 In Gmail, "Show original" on a received email should report `SPF: PASS`, `DKIM: PASS` and `DMARC: PASS`. If emails still land in junk, marking a few as "Not spam" teaches the filter. The strongest fix is sending from your own domain with SPF, DKIM and DMARC through Brevo's free plan, but a domain costs money.
 
+### Sign in with Google (optional, free)
+
+"Continue with Google" shows on the log in and sign up pages once `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set (#356). The first sign-in creates the account, already confirmed; later ones log in to it. Google doesn't charge for it and needs no billing account.
+
+1. In the [Google Cloud console](https://console.cloud.google.com), create a project, such as "AI Multi".
+2. Open **Google Auth Platform**, choose **Get started**, and fill in the app name, a support email and, for **Audience**, **External**.
+3. Under **Clients**, choose **Create client**, then **Web application**. Add the authorized redirect URI `<APP_BASE_URL>/api/auth/google/callback`, for example `https://ai-multi-task-management-vercel.vercel.app/api/auth/google/callback`. Add `http://localhost:3000/api/auth/google/callback` too, to try it locally. Create it, then copy the **Client ID** and **Client secret**.
+4. Under **Audience**, choose **Publish app**. While it says "Testing", only the test users listed there can sign in. The app asks only for the basic scopes (`openid`, `email`, `profile`), so it needs no review to publish.
+5. In the checkout linked to Vercel, run `npx -y vercel@latest env add GOOGLE_CLIENT_ID production`, then the same for `GOOGLE_CLIENT_SECRET`, and paste each value when asked. They take effect with the next deploy.
+
+Until the brand is verified (free, under **Branding**, but it takes a few days and needs a privacy policy link), Google's screen names the site's address instead of "AI Multi". Sign-in works either way. Google sign-in stays off on previews: their addresses change, and Google only sends people back to the redirect URIs listed in step 3.
+
 ## Deployment environment validation
 
 Run the deployment validator before the first Vercel deploy and after changing environment variables:
