@@ -97,13 +97,10 @@ test("assignments and @mentions reach the teammate's inbox", async ({ browser })
     await expect(menu.getByText(/browser notifications/)).toHaveCount(0);
 
     await menu.getByRole("menuitem", { name: new RegExp(`${ownerAccount.name} assigned you a task`) }).click();
-    await expect(page).toHaveURL(new RegExp(`/tasks\\?task=${task.id}`));
-    // The link opens that task's sheet; close it to get back to the bell.
-    const sheet = page.getByRole("dialog", { name: "Edit task" });
-    await expect(sheet).toBeVisible();
+    // The link opens that task's page (#352).
+    await expect(page).toHaveURL(new RegExp(`/tasks/${task.id}$`));
+    await expect(page.getByLabel("Title")).toBeVisible();
     await expect.poll(async () => (await json<Inbox>(await teammate.get("/api/notifications"))).unread).toBe(1);
-    await page.keyboard.press("Escape");
-    await expect(sheet).toHaveCount(0);
 
     await page.getByRole("button", { name: "Notifications, 1 new" }).click();
     await page.getByRole("menuitem", { name: "Mark all as read" }).click();

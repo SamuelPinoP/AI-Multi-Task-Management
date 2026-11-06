@@ -25,13 +25,19 @@ test("tasks: create in the sheet, edit, complete, filter and delete", async ({ p
   const overdue = page.getByRole("region", { name: /^Overdue/ });
   await expect(overdue.getByRole("button", { name: title, exact: true })).toBeVisible();
 
-  // Edit: move it to today.
+  // Open it as a page (#352) and move it to today; changes save at once.
   await overdue.getByRole("button", { name: title, exact: true }).click();
-  const edit = page.getByRole("dialog", { name: "Edit task" });
-  await expect(edit.getByLabel("Description")).toHaveValue("Made by Playwright.");
-  await edit.getByLabel("Due date").fill(dateInputValue(0));
-  await edit.getByRole("button", { name: "Save changes" }).click();
-  await expect(edit).toBeHidden();
+  await expect(page).toHaveURL(/\/tasks\/[^/?]+$/);
+  await expect(page.getByLabel("Description")).toHaveValue("Made by Playwright.");
+  await page.getByRole("button", { name: /^Due date:/ }).click();
+  await page.getByRole("button", { name: /^Today/ }).click();
+  const todayName = await page.evaluate(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 0);
+    return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  });
+  await expect(page.getByRole("button", { name: `Due date: ${todayName}` })).toBeVisible();
+  await page.getByRole("link", { name: "Back to Tasks" }).click();
   const today = page.getByRole("region", { name: /^Today/ });
   await expect(today.getByRole("button", { name: title, exact: true })).toBeVisible();
 

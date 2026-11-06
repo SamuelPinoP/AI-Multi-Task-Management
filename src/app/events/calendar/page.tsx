@@ -164,6 +164,19 @@ export default function EventsCalendarPage() {
   /** Phones only: the grid shows just the selected day's week, so the day's list gets more room (DES-16). */
   const [phoneWeekOnly, setPhoneWeekOnly] = useState(false);
 
+  // `?task=<id>`, from a task page's "Show in calendar" (#352): open on its due day once tasks load.
+  const linkedTaskId = searchParams.get("task");
+  const [jumpedTo, setJumpedTo] = useState<string | null>(null);
+  if (linkedTaskId && jumpedTo !== linkedTaskId && tasks.length) {
+    setJumpedTo(linkedTaskId);
+    const linked = tasks.find((task) => task.id === linkedTaskId);
+    if (linked?.dueDate) {
+      const day = getLocalDateOnly(linked.dueDate);
+      setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
+      setSelectedDayKey(formatDayKey(day));
+    }
+  }
+
   // ---------------------------------------------------------------------
   // Action state (delete event / complete task)
   // ---------------------------------------------------------------------

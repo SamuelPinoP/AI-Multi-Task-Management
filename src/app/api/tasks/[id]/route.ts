@@ -9,7 +9,7 @@ import { nextCompletedAt } from "@/lib/task-completion";
 import { TASK_TITLE_MAX } from "@/lib/task-history";
 import { loadHistoryStates, recordTaskChanges } from "@/lib/task-history-server";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
-import { taskInclude } from "@/lib/task-include";
+import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
 import { runOwnerEmailAutomation } from "@/lib/project-automations";
 import { notifyTaskAssigned } from "@/lib/notifications";
 
@@ -37,6 +37,21 @@ function parseId(input: unknown): string | null {
 
   const trimmed = input.trim();
   return trimmed || null;
+}
+
+/** One task, as the list returns it: for the task page to refresh (#352). */
+export async function GET(_req: Request, context: RouteContext) {
+  try {
+    const user = await requireApiUser();
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    const { id } = await context.params;
+    const task = await prisma.task.findFirst({ where: { id, ...visibleTaskWhere(user.id) }, include: taskInclude(user.id) });
+    if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    return NextResponse.json(task);
+  } catch (error) {
+    console.error("GET /api/tasks/[id] error:", error);
+    return NextResponse.json({ error: "Failed to fetch the task" }, { status: 500 });
+  }
 }
 
 export async function PATCH(req: Request, context: RouteContext) {

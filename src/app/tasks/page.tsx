@@ -29,6 +29,7 @@ import { LabelFilter } from "@/components/tasks/label-filter";
 import { loadLabels, useLabels } from "@/components/tasks/label-store";
 import { TaskRow } from "@/components/tasks/task-row";
 import type { TaskRelations } from "@/components/tasks/task-relations-panel";
+import { TASK_ORDER_KEY } from "@/components/tasks/task-page-view";
 import { TaskSheet, taskRequestBody } from "@/components/tasks/task-sheet";
 import type { Priority, Project, Task, TaskInput, TaskStatus } from "@/components/tasks/types";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
@@ -177,26 +178,10 @@ export default function TasksPage() {
     void Promise.all([fetchTasks(false), fetchProjects(), loadLabels(true)]);
   });
 
-  /** `?task=<id>`: clear the filters so the task is visible and open it. */
-  const openLinkedTask = useEffectEvent((task: Task) => {
-    setStatusFilter("ALL");
-    setPriorityFilter("ALL");
-    setProjectFilter("");
-    setLabelFilter(new Set());
-    setSearchQuery("");
-    setSheet({ open: true, task });
-  });
-
+  // Old links (`?task=<id>` from search, Home, emails and notifications) open the task's page (#352).
   useEffect(() => {
-    if (!linkedTaskId || fetching) return;
-    const task = tasks.find((item) => item.id === linkedTaskId);
-    if (!task) return;
-    const timer = window.setTimeout(() => {
-      openLinkedTask(task);
-      linkedRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [fetching, linkedTaskId, tasks]);
+    if (linkedTaskId) router.replace(`/tasks/${encodeURIComponent(linkedTaskId)}`);
+  }, [linkedTaskId, router]);
 
   const visibleTasks = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -399,6 +384,16 @@ export default function TasksPage() {
         request(`/api/tasks/${task.id}/dependencies`, { method: "POST", body: JSON.stringify({ blockedById: id }) }, "Could not add it."),
       onRemoveBlocker: (id) => request(`/api/tasks/${task.id}/dependencies/${id}`, { method: "DELETE" }, "Could not remove it."),
     };
+  }
+
+  /** Opens a task as its page, remembering the order shown for its previous and next buttons. */
+  function openTask(task: Task) {
+    try {
+      window.sessionStorage.setItem(TASK_ORDER_KEY, JSON.stringify(shownIds));
+    } catch {
+      // Private windows can refuse storage; the page then hides previous and next.
+    }
+    router.push(`/tasks/${task.id}`);
   }
 
   function closeSheet(open: boolean) {
@@ -702,7 +697,7 @@ export default function TasksPage() {
                           busy={busyIds.includes(task.id)}
                           showProject={false}
                           onToggle={(item) => void toggleTask(item)}
-                          onOpen={(item) => setSheet({ open: true, task: item })}
+                          onOpen={openTask}
                           onDelete={setConfirmDelete}
                           selected={selected.has(task.id)}
                           onSelect={selectTask}
