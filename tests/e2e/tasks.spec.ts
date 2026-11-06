@@ -14,7 +14,7 @@ test("tasks: create in the sheet, edit, complete, filter and delete", async ({ p
   await expect(page.getByRole("heading", { name: "No tasks yet." })).toBeVisible();
 
   // Create with full details.
-  await page.getByRole("main").getByRole("button", { name: "New task" }).click();
+  await page.getByRole("main").getByRole("button", { name: "New task", exact: true }).click();
   const create = page.getByRole("dialog", { name: "New task" });
   await create.getByLabel("Title").fill(title);
   await create.getByLabel("Description").fill("Made by Playwright.");
@@ -65,7 +65,7 @@ test("tasks: five priorities, No priority by default, and a filter for each (#36
   await expect(page.getByRole("listitem").filter({ hasText: plain }).getByText(/priority$/)).toHaveCount(0);
 
   // The form starts at No priority and offers all five, No priority first.
-  await page.getByRole("main").getByRole("button", { name: "New task" }).click();
+  await page.getByRole("main").getByRole("button", { name: "New task", exact: true }).click();
   const create = page.getByRole("dialog", { name: "New task" });
   await expect(create.getByLabel("Priority")).toHaveValue("NONE");
   await expect(create.getByLabel("Priority").locator("option")).toHaveText(["No priority", "Urgent", "High", "Medium", "Low"]);
