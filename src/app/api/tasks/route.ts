@@ -109,7 +109,8 @@ export async function POST(req: Request) {
         title,
         description: descriptionInput || null,
         status,
-        priority: isValidPriority(body.priority) ? body.priority : Priority.MEDIUM,
+        // No priority unless one is picked (#361).
+        priority: isValidPriority(body.priority) ? body.priority : Priority.NONE,
         dueDate,
         completedAt: status === TaskStatus.DONE ? new Date() : null,
         recurrence: isValidRecurrence(body.recurrence) ? body.recurrence : Recurrence.NONE,

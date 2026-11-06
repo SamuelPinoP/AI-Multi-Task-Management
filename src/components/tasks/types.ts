@@ -1,9 +1,14 @@
-/** Shapes returned by the /api/tasks and /api/projects endpoints, as the Tasks page uses them. */
+import type { Priority } from "@/lib/priority";
+
+export type { Priority } from "@/lib/priority";
+export { priorityLabels } from "@/lib/priority";
+
+/* Shapes returned by the /api/tasks and /api/projects endpoints, as the Tasks page uses them. */
 export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
-export type Priority = "LOW" | "MEDIUM" | "HIGH";
 export type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
-export type Project = { id: string; name: string; color: string | null };
+/** `priority` comes with /api/projects (#361); a task's own `project` only has the first three. */
+export type Project = { id: string; name: string; color: string | null; priority?: Priority };
 
 export type Member = { id: string; name: string; email: string | null; role: "OWNER" | "EDITOR" | "VIEWER" };
 
@@ -44,7 +49,6 @@ export type TaskInput = {
 };
 
 export const statusLabels: Record<TaskStatus, string> = { TODO: "To do", IN_PROGRESS: "In progress", DONE: "Done" };
-export const priorityLabels: Record<Priority, string> = { HIGH: "High", MEDIUM: "Medium", LOW: "Low" };
 export const recurrenceLabels: Record<Recurrence, string> = {
   NONE: "Does not repeat",
   DAILY: "Daily",

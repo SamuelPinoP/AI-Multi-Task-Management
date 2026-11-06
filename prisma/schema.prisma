@@ -186,7 +186,7 @@ model Task {
   noteId      String?
   note        Note?       @relation(fields: [noteId], references: [id], onDelete: SetNull)
   status      TaskStatus  @default(TODO)
-  priority    Priority    @default(MEDIUM)
+  priority    Priority    @default(NONE)
   dueDate     DateTime?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
@@ -284,6 +284,8 @@ model Project {
   description String?
   color       String?
   status      ProjectStatus @default(ACTIVE)
+  /// Orders the project's group on the Tasks page (#361).
+  priority    Priority      @default(NONE)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   /// "owner/name" of a public GitHub repository shown on the project (SMART-12).
@@ -583,10 +585,16 @@ enum TaskStatus {
   DONE
 }
 
+/// Task and project priorities, lowest first (#361). Postgres sorts enum
+/// values in this order, so `orderBy: { priority: "desc" }` puts Urgent first
+/// and No priority last.
 enum Priority {
+  /// No priority set: new tasks and projects start here.
+  NONE
   LOW
   MEDIUM
   HIGH
+  URGENT
 }
 
 enum ProjectStatus {

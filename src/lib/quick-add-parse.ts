@@ -6,7 +6,8 @@
  *   ignored and "fri 3pm" keeps only the day.
  * - `#project` matches a project name, ignoring case, spaces and punctuation;
  *   a unique prefix is enough ("#cap" for "Capstone Project").
- * - `!high`, `!medium` and `!low` (or `!h`, `!m`, `!l`, `!1` to `!3`) set the priority.
+ * - `!urgent`, `!high`, `!medium` and `!low` (or `!u`, `!h`, `!m`, `!l`, `!1` to `!3`)
+ *   set the priority (#361). Without one the task has no priority.
  * - `@person` matches a member of the chosen project by name or email.
  *
  * Anything that doesn't resolve stays in the title. `ignore` lets the user keep
@@ -14,8 +15,9 @@
  */
 
 import * as chrono from "chrono-node";
+import type { Priority } from "@/lib/priority";
 
-export type QuickAddPriority = "LOW" | "MEDIUM" | "HIGH";
+export type QuickAddPriority = Exclude<Priority, "NONE">;
 export type QuickAddKind = "date" | "project" | "priority" | "assignee";
 
 export type QuickAddProject = { id: string; name: string };
@@ -53,7 +55,8 @@ export type QuickAddOptions = {
 };
 
 const PRIORITY_WORDS: Record<string, QuickAddPriority> = {
-  high: "HIGH", hi: "HIGH", h: "HIGH", urgent: "HIGH", "1": "HIGH",
+  urgent: "URGENT", u: "URGENT",
+  high: "HIGH", hi: "HIGH", h: "HIGH", "1": "HIGH",
   medium: "MEDIUM", med: "MEDIUM", m: "MEDIUM", normal: "MEDIUM", "2": "MEDIUM",
   low: "LOW", lo: "LOW", l: "LOW", "3": "LOW",
 };

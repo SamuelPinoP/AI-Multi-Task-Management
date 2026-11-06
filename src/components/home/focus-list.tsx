@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { saveTaskStatus } from "@/components/home/save-task-status";
+import { PriorityBadge } from "@/components/tasks/priority-badge";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import type { HomeFocusTask } from "@/lib/home-data";
@@ -12,8 +13,6 @@ import { paletteColor, projectColor } from "@/lib/project-color";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 export type FocusRow = HomeFocusTask & { dueLabel: string | null; late: boolean };
-
-const priorityLabel = { HIGH: "High", MEDIUM: "Med", LOW: "Low" } as const;
 
 /** The Focus card's rows: complete a task in place, with Undo. */
 export function FocusList({ tasks }: { tasks: FocusRow[] }) {
@@ -68,14 +67,7 @@ export function FocusList({ tasks }: { tasks: FocusRow[] }) {
           <Link href={`/tasks?task=${task.id}`} className="min-w-0 flex-1 truncate text-sm hover:text-accent">
             {task.title}
           </Link>
-          <span
-            className={cn(
-              "shrink-0 rounded border px-1.5 text-2xs font-bold",
-              task.priority === "HIGH" ? "border-danger/35 text-danger" : "border-line bg-canvas text-muted",
-            )}
-          >
-            {priorityLabel[task.priority]}
-          </span>
+          <PriorityBadge priority={task.priority} />
           {task.project ? (
             <span className="hidden max-w-28 shrink-0 items-center gap-1.5 truncate text-xs text-muted sm:inline-flex">
               <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-[3px]" style={{ backgroundColor: projectColor(task.project) }} />

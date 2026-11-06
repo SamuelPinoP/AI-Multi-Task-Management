@@ -38,10 +38,13 @@ test("focus order: overdue, today, upcoming, no date; then date and priority", (
     { id: "today-low", dueDate: due(0), priority: "LOW" as const },
     { id: "today-high", dueDate: due(0), priority: "HIGH" as const },
     { id: "late", dueDate: due(-2), priority: "LOW" as const },
+    // Urgent beats High on the same day, and No priority comes after Low (#361).
+    { id: "today-urgent", dueDate: due(0), priority: "URGENT" as const },
+    { id: "today-none", dueDate: due(0), priority: "NONE" as const },
   ];
   assert.deepEqual(
     sortFocusTasks(tasks, now).map((task) => task.id),
-    ["late", "today-high", "today-low", "later", "none"],
+    ["late", "today-urgent", "today-high", "today-low", "today-none", "later", "none"],
   );
 });
 

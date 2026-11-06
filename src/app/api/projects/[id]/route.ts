@@ -2,7 +2,14 @@ import { ProjectStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
-import { getProjectAccessForUser, projectAccessWhereForProject } from "@/lib/project-access";
+import { isPriority, type Priority } from "@/lib/priority";
+import {
+  canEditProjectContent,
+  getProjectAccess,
+  getProjectAccessForUser,
+  projectAccessWhereForProject,
+  unauthorizedProjectResponse,
+} from "@/lib/project-access";
 import { OWNER_INVITATION_SELECT } from "@/lib/project-invitations";
 import { deleteProjectChatAttachments } from "@/lib/project-chat-storage";
 
@@ -100,6 +107,25 @@ export async function PATCH(req: Request, context: RouteContext) {
     if (!id) return NextResponse.json({ error: "Project id is required" }, { status: 400 });
 
     const body = await req.json();
+    if (!body || typeof body !== "object") return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    if (body.priority !== undefined && !isPriority(body.priority)) {
+      return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
+    }
+
+    // The priority alone (#361) is planning, like editing tasks: Owners and Editors may change it.
+    const details = ["name", "description", "color", "status"].some((key) => key in body);
+    if (!details) {
+      if (!isPriority(body.priority)) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+      const access = await getProjectAccess(id, user.id);
+      if (!access) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      if (!canEditProjectContent(access)) {
+        return NextResponse.json(unauthorizedProjectResponse("change the priority"), { status: 403 });
+      }
+      const project = await prisma.project.update({ where: { id }, data: { priority: body.priority } });
+      return NextResponse.json(project);
+    }
+
+    // Name, description, color and status stay the owner's.
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const descriptionInput = typeof body.description === "string" ? body.description.trim() : "";
     const colorInput = typeof body.color === "string" ? body.color.trim() : "";
@@ -107,13 +133,14 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
-    const data: { name: string; description: string | null; color: string | null; status?: ProjectStatus } = {
+    const data: { name: string; description: string | null; color: string | null; status?: ProjectStatus; priority?: Priority } = {
       name,
       description: descriptionInput || null,
       color: colorInput || null,
     };
 
     if (statusInput) data.status = statusInput;
+    if (isPriority(body.priority)) data.priority = body.priority;
 
     const updated = await prisma.project.updateMany({ where: { id, userId: user.id }, data });
     if (updated.count === 0) return NextResponse.json({ error: "Project not found" }, { status: 404 });

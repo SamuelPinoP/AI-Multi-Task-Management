@@ -4,16 +4,15 @@
  * due date (a date without a time) or a wall-clock time already converted
  * with `toWallClock`.
  */
+import { comparePriority, type Priority } from "@/lib/priority";
 import { getLocalDateOnly } from "@/lib/task-date-buckets";
 
-export type HomePriority = "HIGH" | "MEDIUM" | "LOW";
+export type HomePriority = Priority;
 export type ProjectHealthStatus = "ON_TRACK" | "AT_RISK" | "STALE" | "NOT_STARTED";
 
 const DAY_MS = 86_400_000;
 /** Days without an update before an active project counts as stale. */
 export const STALE_AFTER_DAYS = 7;
-
-const priorityRank: Record<HomePriority, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 
 /** Whole days from `now`'s date to `date`'s date (negative = in the past). */
 export function daysFrom(date: Date | string, now: Date) {
@@ -30,7 +29,7 @@ export function sortFocusTasks<T extends { dueDate: Date | string | null; priori
   const time = (task: T) => (task.dueDate ? getLocalDateOnly(task.dueDate).getTime() : Number.POSITIVE_INFINITY);
 
   return [...tasks].sort(
-    (a, b) => bucket(a) - bucket(b) || time(a) - time(b) || priorityRank[a.priority] - priorityRank[b.priority],
+    (a, b) => bucket(a) - bucket(b) || time(a) - time(b) || comparePriority(a.priority, b.priority),
   );
 }
 

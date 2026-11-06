@@ -12,11 +12,11 @@ import { getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
 import { eventWallTime, formatEventTime } from "@/lib/event-time";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 import { projectColor } from "@/lib/project-color";
+import type { Priority } from "@/lib/priority";
 import { calendarViews } from "@/lib/calendar-view";
 import { useCalendarView } from "@/lib/use-calendar-view";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
-type Priority = "LOW" | "MEDIUM" | "HIGH";
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 type Project = { id: string; name: string; color: string | null };
 type Task = {

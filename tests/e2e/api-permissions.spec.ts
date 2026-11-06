@@ -179,6 +179,19 @@ test("only the owner can rename or delete the project", async () => {
   });
 });
 
+test("editors set the project's priority, viewers only see it (#361)", async () => {
+  await expectStatuses(
+    "PATCH project priority",
+    (client) => client.patch(`/api/projects/${projectId}`, { data: { priority: "HIGH" } }),
+    { owner: 200, editor: 200, viewer: 403, outsider: 404 },
+  );
+  const project = await json<{ priority: string }>(await api.viewer.get(`/api/projects/${projectId}`));
+  expect(project.priority).toBe("HIGH");
+  expect((await api.owner.patch(`/api/projects/${projectId}`, { data: { priority: "CRITICAL" } })).status()).toBe(400);
+  // Renaming stays the owner's, even with a priority in the same request.
+  expect((await api.editor.patch(`/api/projects/${projectId}`, { data: { name: "Renamed", priority: "LOW" } })).status()).toBe(404);
+});
+
 test("only the owner sees and sends invitations", async () => {
   const pendingEmail = `e2e-pending-${Date.now()}@example.test`;
   await expectStatuses(
