@@ -21,5 +21,7 @@ export function taskInclude(userId: string) {
       orderBy: { createdAt: "asc" },
       select: { blockedBy: { select: { id: true, title: true, status: true } } },
     },
+    // Labels (#276), as `{ label }` rows like `blockedBy`; `labelsOfTask` flattens them.
+    labels: { orderBy: { label: { name: "asc" } }, select: { label: { select: { id: true, name: true, color: true, projectId: true } } } },
   } satisfies Prisma.TaskInclude;
 }

@@ -1,13 +1,17 @@
 "use client";
 
-import { FileText } from "lucide-react";
+import { FileText, Tag } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, type SheetSide } from "@/components/ui/sheet";
+import { labelsOfTask } from "@/lib/labels";
 import { PRIORITY_MENU_ORDER } from "@/lib/priority";
 import { formatTaskDueDateInput } from "@/lib/task-date-buckets";
+import { LabelChip } from "./label-chip";
+import { LabelPicker } from "./label-picker";
+import { scopeKeyFor, useLabels } from "./label-store";
 import { loadProjectMembers } from "./load-members";
 import { TaskRelationsPanel, type TaskRelations } from "./task-relations-panel";
 import {
@@ -35,6 +39,7 @@ const emptyInput: TaskInput = {
   recurrence: "NONE",
   projectId: "",
   assigneeId: "",
+  labelIds: [],
 };
 
 function inputFromTask(task: Task): TaskInput {
@@ -47,6 +52,7 @@ function inputFromTask(task: Task): TaskInput {
     recurrence: task.recurrence,
     projectId: task.projectId ?? "",
     assigneeId: task.assignee?.id ?? task.assigneeId ?? "",
+    labelIds: labelsOfTask(task).map((label) => label.id),
   };
 }
 
@@ -61,6 +67,7 @@ export function taskRequestBody(input: TaskInput) {
     recurrence: input.recurrence,
     projectId: input.projectId,
     assigneeId: input.projectId ? input.assigneeId : "",
+    ...(input.labelIds ? { labelIds: input.labelIds } : {}),
   };
 }
 
@@ -119,6 +126,10 @@ export function TaskSheet({
 
   const set = <K extends keyof TaskInput>(key: K, value: TaskInput[K]) => setInput((current) => ({ ...current, [key]: value }));
 
+  // The chosen labels in the picker's order; a label deleted meanwhile drops out.
+  const allLabels = useLabels();
+  const selectedLabels = (allLabels ?? []).filter((label) => input.labelIds?.includes(label.id));
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!input.title.trim()) {
@@ -127,7 +138,9 @@ export function TaskSheet({
     }
     setSaving(true);
     setError(null);
-    const message = await onSubmit({ ...input, title: input.title.trim() });
+    // A label deleted while the form was open is left out rather than refused.
+    const labelIds = allLabels && input.labelIds ? input.labelIds.filter((id) => allLabels.some((label) => label.id === id)) : input.labelIds;
+    const message = await onSubmit({ ...input, title: input.title.trim(), labelIds });
     setSaving(false);
     if (message) setError(message);
     else onOpenChange(false);
@@ -194,7 +207,7 @@ export function TaskSheet({
               Project
               <select
                 value={input.projectId}
-                onChange={(event) => setInput((current) => ({ ...current, projectId: event.target.value, assigneeId: "" }))}
+                onChange={(event) => setInput((current) => ({ ...current, projectId: event.target.value, assigneeId: "", labelIds: [] }))}
                 // A subtask stays in its parent's project.
                 disabled={Boolean(task?.parentId)}
                 title={task?.parentId ? "A subtask stays in its parent's project" : undefined}
@@ -220,6 +233,28 @@ export function TaskSheet({
                 ))}
               </select>
             </label>
+          </div>
+          <div className="grid gap-1.5 text-sm font-medium">
+            <span id="task-labels-heading">Labels</span>
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-labelledby="task-labels-heading">
+              {selectedLabels.map((label) => (
+                <LabelChip key={label.id} label={label} />
+              ))}
+              <LabelPicker
+                scope={scopeKeyFor(input.projectId)}
+                scopeName={projects.find((project) => project.id === input.projectId)?.name ?? "Personal"}
+                selectedIds={input.labelIds ?? []}
+                onChange={(ids) => set("labelIds", ids)}
+              >
+                <button
+                  type="button"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-full border border-dashed border-line px-2.5 text-xs font-medium text-muted outline-none transition-colors hover:border-accent hover:text-accent focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  <Tag aria-hidden="true" className="h-3.5 w-3.5" />
+                  {selectedLabels.length ? "Change labels" : "Add labels"}
+                </button>
+              </LabelPicker>
+            </div>
           </div>
           {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
           <div className="flex flex-wrap items-center gap-2 pt-1">

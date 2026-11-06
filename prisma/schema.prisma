@@ -50,6 +50,7 @@ model User {
   treePages                    TreePage[]
   recentShortcut               RecentShortcut?
   projectChatReads             ProjectChatRead[]
+  labels                       Label[]
 }
 
 model Session {
@@ -213,9 +214,45 @@ model Task {
   // Dependencies (SMART-02): tasks that must finish before this one, and tasks waiting on this one.
   blockedBy TaskDependency[] @relation("DependencyTask")
   blocking  TaskDependency[] @relation("DependencyBlocker")
+  labels    TaskLabel[]
 
   @@index([parentId])
   @@index([deletedById])
+}
+
+/// A colored tag on tasks (#276). A personal label belongs to a user and goes
+/// on their personal tasks; a project label belongs to a project and goes on
+/// its tasks. Exactly one of userId and projectId is set (checked in
+/// src/lib/labels-server.ts). Names are unique per owner, ignoring case.
+model Label {
+  id        String   @id @default(cuid())
+  name      String
+  /// A color from the label palette (LABEL_COLORS in src/lib/labels.ts).
+  color     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String?
+  projectId String?
+  user      User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     TaskLabel[]
+
+  @@unique([userId, name])
+  @@unique([projectId, name])
+}
+
+/// The labels on a task (#276). Deleting a label removes it from its tasks.
+model TaskLabel {
+  taskId    String
+  labelId   String
+  createdAt DateTime @default(now())
+
+  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@index([labelId])
 }
 
 /// "taskId can't finish until blockedById is done" (SMART-02).
@@ -304,6 +341,7 @@ model Project {
   recentShortcuts   RecentShortcut[]
   chatReads         ProjectChatRead[]
   automations       ProjectAutomation[]
+  labels            Label[]
 }
 
 model ProjectComment {
