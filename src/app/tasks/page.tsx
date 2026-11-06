@@ -18,6 +18,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { QuickAdd } from "@/components/home/quick-add";
+import { LabelFilter } from "@/components/tasks/label-filter";
+import { loadLabels, useLabels } from "@/components/tasks/label-store";
 import { TaskRow } from "@/components/tasks/task-row";
 import type { TaskRelations } from "@/components/tasks/task-relations-panel";
 import { TaskSheet, taskRequestBody } from "@/components/tasks/task-sheet";
@@ -26,6 +28,7 @@ import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import { daysFrom } from "@/lib/home-summary";
+import { labelsOfTask, matchesLabelFilter } from "@/lib/labels";
 import { PRIORITIES, priorityLabels } from "@/lib/priority";
 import { compareTaskDueDates, formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { topLevelTasks } from "@/lib/task-relations";
@@ -92,6 +95,8 @@ export default function TasksPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [priorityFilter, setPriorityFilter] = useState<"ALL" | Priority>("ALL");
   const [projectFilter, setProjectFilter] = useState("");
+  const [labelFilter, setLabelFilter] = useState<Set<string>>(() => new Set());
+  const labels = useLabels();
   const [sortBy, setSortBy] = useState<SortOption>("DUE_DATE_ASC");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -125,7 +130,7 @@ export default function TasksPage() {
 
   useEffect(() => {
     async function loadInitialData() {
-      await Promise.all([fetchTasks(), fetchProjects()]);
+      await Promise.all([fetchTasks(), fetchProjects(), loadLabels(true)]);
     }
     void loadInitialData();
   }, []);
@@ -140,7 +145,7 @@ export default function TasksPage() {
   // Tasks assigned or changed on another device show up on coming back. An open
   // task keeps its edits: the sheet only resets its form for a different task.
   useRefreshOnReturn(() => {
-    void Promise.all([fetchTasks(false), fetchProjects()]);
+    void Promise.all([fetchTasks(false), fetchProjects(), loadLabels(true)]);
   });
 
   /** `?task=<id>`: clear the filters so the task is visible and open it. */
@@ -148,6 +153,7 @@ export default function TasksPage() {
     setStatusFilter("ALL");
     setPriorityFilter("ALL");
     setProjectFilter("");
+    setLabelFilter(new Set());
     setSearchQuery("");
     setSheet({ open: true, task });
   });
@@ -171,7 +177,8 @@ export default function TasksPage() {
         (!query || task.title.toLowerCase().includes(query) || (task.description ?? "").toLowerCase().includes(query)) &&
         (statusFilter === "ALL" || (statusFilter === "DONE") === (task.status === "DONE")) &&
         (priorityFilter === "ALL" || task.priority === priorityFilter) &&
-        (!projectFilter || task.projectId === projectFilter),
+        (!projectFilter || task.projectId === projectFilter) &&
+        matchesLabelFilter(labelsOfTask(task).map((label) => label.id), labelFilter),
     );
     return filtered.sort((a, b) => {
       if (sortBy === "NEWEST") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -179,7 +186,7 @@ export default function TasksPage() {
       const comparison = compareTaskDueDates(a.dueDate, b.dueDate);
       return sortBy === "DUE_DATE_ASC" ? comparison : -comparison;
     });
-  }, [tasks, searchQuery, statusFilter, priorityFilter, projectFilter, sortBy]);
+  }, [tasks, searchQuery, statusFilter, priorityFilter, projectFilter, labelFilter, sortBy]);
 
   const now = new Date();
   const groups: Record<SectionKey, Task[]> = { OVERDUE: [], TODAY: [], UPCOMING: [], NO_DATE: [], DONE: [] };
@@ -190,7 +197,8 @@ export default function TasksPage() {
 
   const openCount = tasks.filter((task) => task.status !== "DONE").length;
   const doneCount = tasks.length - openCount;
-  const filtersActive = Boolean(searchQuery.trim()) || statusFilter !== "ALL" || priorityFilter !== "ALL" || Boolean(projectFilter);
+  const filtersActive =
+    Boolean(searchQuery.trim()) || statusFilter !== "ALL" || priorityFilter !== "ALL" || Boolean(projectFilter) || labelFilter.size > 0;
 
   // The sheet follows the latest copy of its task, so subtasks and blockers update in place.
   const sheetTask = sheet.task ? (tasks.find((task) => task.id === sheet.task?.id) ?? sheet.task) : null;
@@ -353,6 +361,7 @@ export default function TasksPage() {
               <option key={value} value={value}>{priorityLabels[value]}</option>
             ))}
           </select>
+          <LabelFilter labels={labels ?? []} projects={projects} selected={labelFilter} onChange={setLabelFilter} className="flex-1 basis-34 sm:flex-none sm:basis-auto" />
           <select aria-label="Project" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} className={filterClass}>
             <option value="">All projects</option>
             {projects.map((project) => (
@@ -397,6 +406,7 @@ export default function TasksPage() {
                 setStatusFilter("ALL");
                 setPriorityFilter("ALL");
                 setProjectFilter("");
+                setLabelFilter(new Set());
               }}
               className={cn(uiButtonClass, "mt-4 px-3 py-1.5")}
             >

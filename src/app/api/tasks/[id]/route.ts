@@ -4,6 +4,7 @@ import { requireApiUser } from "@/lib/auth";
 import { after, NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
+import { dropLabelsOutsideScope, labelScopeFor, resolveTaskLabelIds, setTaskLabels } from "@/lib/labels-server";
 import { nextCompletedAt } from "@/lib/task-completion";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import { taskInclude } from "@/lib/task-include";
@@ -121,6 +122,11 @@ export async function PATCH(req: Request, context: RouteContext) {
       if (!canEditProjectContent(existingAccess)) return NextResponse.json(unauthorizedProjectResponse("edit tasks"), { status: 403 });
     }
 
+    // Labels (#276): `labelIds` replaces the set; leaving it out keeps the labels that still fit.
+    const labelScope = labelScopeFor({ projectId, userId: existingTask.userId });
+    const labels = await resolveTaskLabelIds(body.labelIds, labelScope);
+    if (labels.error) return NextResponse.json({ error: labels.error }, { status: 400 });
+
     const updated = await prisma.task.updateMany({
       where: { id, deletedAt: null },
       data: {
@@ -143,7 +149,11 @@ export async function PATCH(req: Request, context: RouteContext) {
     // Moving a task to another project moves its subtasks too; their assignees belonged to the old one.
     if (existingTask.projectId !== projectId) {
       await prisma.task.updateMany({ where: { parentId: id }, data: { projectId, assigneeId: null } });
+      // So did the old project's labels.
+      const subtasks = await prisma.task.findMany({ where: { parentId: id }, select: { id: true } });
+      await dropLabelsOutsideScope([id, ...subtasks.map((subtask) => subtask.id)], labelScope);
     }
+    if (labels.ids) await setTaskLabels(id, labels.ids);
 
     const task = await prisma.task.findUnique({
       where: { id },

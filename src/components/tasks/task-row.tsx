@@ -12,7 +12,9 @@ import {
 import { cn } from "@/lib/cn";
 import { daysFrom, dueLabel } from "@/lib/home-summary";
 import { paletteColor, projectColor } from "@/lib/project-color";
+import { labelsOfTask } from "@/lib/labels";
 import { openBlockers, subtaskProgress } from "@/lib/task-relations";
+import { LabelChips } from "./label-chip";
 import { PriorityBadge } from "./priority-badge";
 import { BlockedBadge, ProgressRing } from "./task-badges";
 import { recurrenceLabels, type Task } from "./types";
@@ -86,6 +88,7 @@ export function TaskRow({
         ) : null}
       </div>
 
+      <LabelChips labels={labelsOfTask(task)} className="hidden sm:flex" />
       {blockers.length ? <BlockedBadge titles={blockers.map((blocker) => blocker.title)} /> : null}
       {progress.total ? <ProgressRing done={progress.done} total={progress.total} /> : null}
       {task.recurrence !== "NONE" ? (
