@@ -13,10 +13,9 @@ import { cn } from "@/lib/cn";
 import { daysFrom, dueLabel } from "@/lib/home-summary";
 import { paletteColor, projectColor } from "@/lib/project-color";
 import { openBlockers, subtaskProgress } from "@/lib/task-relations";
+import { PriorityBadge } from "./priority-badge";
 import { BlockedBadge, ProgressRing } from "./task-badges";
 import { recurrenceLabels, type Task } from "./types";
-
-const priorityShort = { HIGH: "High", MEDIUM: "Med", LOW: "Low" } as const;
 
 /** One task in the list: complete it in place, open it to edit, or delete it. */
 export function TaskRow({
@@ -98,14 +97,7 @@ export function TaskRow({
       {task.status === "IN_PROGRESS" ? (
         <span className="hidden shrink-0 rounded bg-accent-soft px-1.5 text-2xs font-bold text-accent sm:inline">In progress</span>
       ) : null}
-      <span
-        className={cn(
-          "shrink-0 rounded border px-1.5 text-2xs font-bold",
-          task.priority === "HIGH" && !done ? "border-danger/35 text-danger" : "border-line bg-canvas text-muted",
-        )}
-      >
-        {priorityShort[task.priority]}
-      </span>
+      <PriorityBadge priority={task.priority} muted={done} />
       {task.project ? (
         <span className="hidden max-w-32 shrink-0 items-center gap-1.5 truncate text-xs text-muted md:inline-flex">
           <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-[3px]" style={{ backgroundColor: projectColor(task.project) }} />

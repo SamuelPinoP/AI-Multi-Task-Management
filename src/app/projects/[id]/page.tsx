@@ -11,6 +11,7 @@ import { ProjectChatPanel } from "@/components/project-chat-panel";
 import { ProjectInsights } from "@/components/projects/project-insights";
 import { ProjectAutomations } from "@/components/projects/project-automations";
 import { GithubPanel } from "@/components/projects/github-panel";
+import { ProjectPriority } from "@/components/projects/project-priority";
 import { eventWallTime, formatEventDateTime } from "@/lib/event-time";
 import {
   getProjectAccessForUser,
@@ -219,6 +220,7 @@ export default async function ProjectDetailPage({
                 {project.status.charAt(0) +
                   project.status.slice(1).toLowerCase()}
               </span>
+              <ProjectPriority projectId={project.id} initialPriority={project.priority} canEdit={canEditProjectContent} />
               <span
                 className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${isOwner ? "border-accent/30 bg-accent-soft text-accent" :"border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"}`}
               >

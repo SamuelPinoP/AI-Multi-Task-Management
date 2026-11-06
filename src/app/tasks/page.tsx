@@ -26,6 +26,7 @@ import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import { daysFrom } from "@/lib/home-summary";
+import { PRIORITIES, priorityLabels } from "@/lib/priority";
 import { compareTaskDueDates, formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { topLevelTasks } from "@/lib/task-relations";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
@@ -348,9 +349,9 @@ export default function TasksPage() {
         <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap">
           <select aria-label="Priority" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as "ALL" | Priority)} className={filterClass}>
             <option value="ALL">Any priority</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
+            {PRIORITIES.map((value) => (
+              <option key={value} value={value}>{priorityLabels[value]}</option>
+            ))}
           </select>
           <select aria-label="Project" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} className={filterClass}>
             <option value="">All projects</option>

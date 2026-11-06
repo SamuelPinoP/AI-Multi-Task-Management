@@ -5,14 +5,15 @@ import { useState, type FormEvent } from "react";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
+import { PRIORITY_MENU_ORDER, priorityLabels, type Priority } from "@/lib/priority";
 import { describeTemplateContents, PROJECT_TEMPLATES } from "@/lib/project-templates";
 
 export type ProjectStatus = "ACTIVE" | "COMPLETED" | "ARCHIVED";
 
 /** `templateId` is "" for a blank project; only new projects use it (SMART-11). */
-export type ProjectInput = { name: string; description: string; color: string; status: ProjectStatus; templateId: string };
+export type ProjectInput = { name: string; description: string; color: string; status: ProjectStatus; priority: Priority; templateId: string };
 
-export type EditableProject = { id: string; name: string; description: string | null; color: string | null; status: ProjectStatus };
+export type EditableProject = { id: string; name: string; description: string | null; color: string | null; status: ProjectStatus; priority: Priority };
 
 export const projectStatusLabels: Record<ProjectStatus, string> = { ACTIVE: "Active", COMPLETED: "Completed", ARCHIVED: "Archived" };
 
@@ -42,7 +43,7 @@ export function ProjectSheet({
   project?: EditableProject | null;
   onSubmit: (input: ProjectInput) => Promise<string | null>;
 }) {
-  const [input, setInput] = useState<ProjectInput>({ name: "", description: "", color: "", status: "ACTIVE", templateId: "" });
+  const [input, setInput] = useState<ProjectInput>({ name: "", description: "", color: "", status: "ACTIVE", priority: "NONE", templateId: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
@@ -52,8 +53,8 @@ export function ProjectSheet({
     setLoadedFor(formKey);
     setInput(
       project
-        ? { name: project.name, description: project.description ?? "", color: project.color ?? "", status: project.status, templateId: "" }
-        : { name: "", description: "", color: "", status: "ACTIVE", templateId: "" },
+        ? { name: project.name, description: project.description ?? "", color: project.color ?? "", status: project.status, priority: project.priority, templateId: "" }
+        : { name: "", description: "", color: "", status: "ACTIVE", priority: "NONE", templateId: "" },
     );
     setError(null);
   }
@@ -201,6 +202,19 @@ export function ProjectSheet({
               </select>
             </label>
           ) : null}
+          <label className="grid gap-1.5 text-sm font-medium">
+            Priority
+            <select
+              value={input.priority}
+              onChange={(event) => setInput((current) => ({ ...current, priority: event.target.value as Priority }))}
+              className={fieldClass}
+            >
+              {PRIORITY_MENU_ORDER.map((priority) => (
+                <option key={priority} value={priority}>{priorityLabels[priority]}</option>
+              ))}
+            </select>
+            <span className="text-xs font-normal text-muted">Orders this project&rsquo;s tasks on the Tasks page.</span>
+          </label>
           {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
           <div className="flex gap-2 pt-1">
             <button type="submit" disabled={saving} className={uiPrimaryButtonClass}>

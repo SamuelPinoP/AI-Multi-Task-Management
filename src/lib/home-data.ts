@@ -1,6 +1,7 @@
 import "server-only";
 import { ProjectStatus, Recurrence, TaskStatus } from "@prisma/client";
 import { eventWallTime, toEventStorageTime } from "@/lib/event-time";
+import type { Priority } from "@/lib/priority";
 import {
   bandSuggestion,
   dailyCounts,
@@ -28,7 +29,7 @@ export type HomeFocusTask = {
   title: string;
   description: string | null;
   status: TaskStatus;
-  priority: "HIGH" | "MEDIUM" | "LOW";
+  priority: Priority;
   dueDate: string | null;
   recurrence: Recurrence;
   projectId: string | null;

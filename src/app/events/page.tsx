@@ -43,6 +43,7 @@ import { projectColor } from "@/lib/project-color";
 import { occurrencesInRange } from "@/lib/event-occurrences";
 import { describeRepeat, normalizeRecurrence, storedDayKey } from "@/lib/recurrence";
 import { formatTaskDayKey, getLocalDateOnly } from "@/lib/task-date-buckets";
+import { isPressingPriority, priorityLabels } from "@/lib/priority";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
@@ -202,8 +203,8 @@ function TaskRow({ task, busy, onToggle }: { task: AgendaTask; busy: boolean; on
         </Link>
         <span className="block truncate text-xs text-muted">{["Task", task.project?.name].filter(Boolean).join(" · ")}</span>
       </div>
-      {task.priority === "HIGH" && !done ? (
-        <span className="shrink-0 rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-semibold text-danger">High</span>
+      {isPressingPriority(task.priority) && !done ? (
+        <span className="shrink-0 rounded-full bg-danger-soft px-2 py-0.5 text-2xs font-semibold text-danger">{priorityLabels[task.priority]}</span>
       ) : null}
     </li>
   );

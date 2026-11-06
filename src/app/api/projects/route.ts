@@ -4,6 +4,7 @@ import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 import { parseEventTimes, parseRepeatUntil } from "@/lib/event-time";
+import { isPriority } from "@/lib/priority";
 import { projectAccessWhere, getProjectAccessForUser } from "@/lib/project-access";
 import { findProjectTemplate, planTemplate } from "@/lib/project-templates";
 import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
@@ -70,6 +71,9 @@ export async function POST(req: Request) {
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
+    if (body.priority !== undefined && !isPriority(body.priority)) {
+      return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
+    }
 
     // A template (SMART-11) adds starter tasks and check-ins, dated from today in the user's time zone.
     const template = body.templateId ? findProjectTemplate(body.templateId) : null;
@@ -83,6 +87,7 @@ export async function POST(req: Request) {
           name,
           description: descriptionInput || template?.description || null,
           color: colorInput || template?.color || null,
+          priority: isPriority(body.priority) ? body.priority : "NONE",
           userId: user.id,
         },
       });

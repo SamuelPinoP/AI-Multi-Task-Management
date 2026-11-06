@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, type SheetSide } from "@/components/ui/sheet";
+import { PRIORITY_MENU_ORDER } from "@/lib/priority";
 import { formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { loadProjectMembers } from "./load-members";
 import { TaskRelationsPanel, type TaskRelations } from "./task-relations-panel";
@@ -29,7 +30,7 @@ const emptyInput: TaskInput = {
   title: "",
   description: "",
   status: "TODO",
-  priority: "MEDIUM",
+  priority: "NONE",
   dueDate: "",
   recurrence: "NONE",
   projectId: "",
@@ -172,7 +173,7 @@ export function TaskSheet({
             <label className="grid gap-1.5 text-sm font-medium">
               Priority
               <select value={input.priority} onChange={(event) => set("priority", event.target.value as Priority)} className={fieldClass}>
-                {(Object.keys(priorityLabels) as Priority[]).map((value) => (
+                {PRIORITY_MENU_ORDER.map((value) => (
                   <option key={value} value={value}>{priorityLabels[value]}</option>
                 ))}
               </select>
