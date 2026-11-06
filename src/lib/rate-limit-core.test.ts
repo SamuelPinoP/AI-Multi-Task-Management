@@ -51,3 +51,9 @@ test("limits are tighter where abuse costs most", () => {
     assert.ok(rule.limit > 0 && rule.windowMs >= MINUTE);
   }
 });
+
+test("one account gets at most 5 confirmation emails an hour and 10 a day (#350)", () => {
+  const { confirmationEmailsHour: hour, confirmationEmailsDay: day } = RATE_LIMITS;
+  assert.deepEqual([hour.limit, hour.windowMs], [5, 60 * MINUTE]);
+  assert.deepEqual([day.limit, day.windowMs], [10, 24 * 60 * MINUTE]);
+});

@@ -20,13 +20,17 @@ const prisma = new PrismaClient({ adapter });
 const DEMO_PASSWORD_HASH = "scrypt:ae642129353a2e731fed96d40cad35b4:ed748ab376d5a11aa3fd3ea1d8778aeba286861c765a2b42083c9e2aae50e9c351cda4ce361c9fcf3dfc970e1d5561f4fe95f7d81ab4289f4c0b876c654f672b";
 
 async function main() {
+  // example.com can't receive mail, so the demo account counts as confirmed: accounts
+  // can't log in until their email is (#350).
+  const emailVerifiedAt = new Date();
   const user = await prisma.user.upsert({
     where: { email: "samuel@example.com" },
-    update: { passwordHash: DEMO_PASSWORD_HASH },
+    update: { passwordHash: DEMO_PASSWORD_HASH, emailVerifiedAt },
     create: {
       email: "samuel@example.com",
       name: "Samuel",
       passwordHash: DEMO_PASSWORD_HASH,
+      emailVerifiedAt,
     },
   });
 

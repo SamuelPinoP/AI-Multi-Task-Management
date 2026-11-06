@@ -3,10 +3,12 @@ import {
   createSessionRecord,
   getSafeRedirectPath,
   getSessionCookieOptions,
+  mustConfirmEmail,
   SESSION_COOKIE_NAME,
   verifyPassword,
 } from "@/lib/auth";
 import { LOGIN_IDENTIFIER_COOKIE, LOGIN_IDENTIFIER_MAX_LENGTH } from "@/lib/auth-constants";
+import { confirmEmailHref } from "@/lib/auth-links";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, consumeRateLimit, resetRateLimit } from "@/lib/rate-limit";
 import { clientIpFrom, RATE_LIMITS } from "@/lib/rate-limit-core";
@@ -59,7 +61,7 @@ export async function POST(request: Request) {
 
   const user = await prisma.user.findUnique({
     where: "email" in identifier ? { email: identifier.email } : { username: identifier.username },
-    select: { id: true, email: true, passwordHash: true, isGuest: true },
+    select: { id: true, email: true, passwordHash: true, isGuest: true, emailVerifiedAt: true },
   });
 
   // Failed attempts count against the account, whichever of its email or username was typed.
@@ -76,8 +78,11 @@ export async function POST(request: Request) {
 
   await resetRateLimit(RATE_LIMITS.loginAccount, accountKey);
 
+  // The right password, but the email isn't confirmed yet (#350): the session only reaches
+  // "Check your email", which carries on to the page asked for once it is. Only someone
+  // with the password gets this far, so the page gives nothing away.
   const { token, cookieExpiresAt } = await createSessionRecord(user.id);
-  const response = redirectTo(request, nextPath);
+  const response = redirectTo(request, mustConfirmEmail(user) ? confirmEmailHref({ next: nextPath }) : nextPath);
   response.cookies.set(
     SESSION_COOKIE_NAME,
     token,

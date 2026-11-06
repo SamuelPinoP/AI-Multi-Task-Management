@@ -149,7 +149,10 @@ ${button("Reset password", resetUrl)}
   return { subject, text, html };
 }
 
-/** "Confirm your email" with a link that proves the user owns the address (#130). */
+/**
+ * "Confirm your email" with a link that proves the user owns the address
+ * (#130). The account can't be used until it's opened (#350).
+ */
 export function emailVerificationEmail({ verifyUrl }: { verifyUrl: string }): EmailContent {
   const subject = `${APP_NAME}: confirm your email`;
   const reason = "You're getting this because this address was used to sign up.";
@@ -157,10 +160,9 @@ export function emailVerificationEmail({ verifyUrl }: { verifyUrl: string }): Em
     [
       `Confirm your email for ${APP_NAME}`,
       "",
-      "Open this link to confirm this is your email address. It expires in 24 hours:",
+      `Open this link to confirm this is your email address and start using ${APP_NAME}. It expires in 24 hours:`,
       verifyUrl,
       "",
-      "You need a confirmed email to join projects you're invited to.",
       "If you didn't create an account, you can ignore this email.",
     ],
     reason,
@@ -169,9 +171,8 @@ export function emailVerificationEmail({ verifyUrl }: { verifyUrl: string }): Em
     subject,
     `
 <h1 style="font-size: 20px; margin: 0 0 16px;">Confirm your email for ${escapeHtml(APP_NAME)}</h1>
-<p>Confirm this is your email address. The link expires in 24 hours.</p>
+<p>Confirm this is your email address to start using ${escapeHtml(APP_NAME)}. The link expires in 24 hours.</p>
 ${button("Confirm email", verifyUrl)}
-<p>You need a confirmed email to join projects you're invited to.</p>
 <p style="font-size: 13px; color: #52525b;">If you didn't create an account, you can ignore this email.</p>
 `,
     reason,

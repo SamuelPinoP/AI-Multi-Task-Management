@@ -1,5 +1,6 @@
 import { NotebookPen, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AvatarStack } from "@/components/home/avatar-stack";
 import { FocusList } from "@/components/home/focus-list";
@@ -9,7 +10,8 @@ import { TeamChatList } from "@/components/home/team-chat";
 import { WeekBars } from "@/components/home/week-bars";
 import { LandingPage } from "@/components/landing-page";
 import { uiButtonClass } from "@/components/ui";
-import { getCurrentUser, isGuestLoginEnabled, isPublicSignupEnabled } from "@/lib/auth";
+import { getSessionUser, isGuestLoginEnabled, isPublicSignupEnabled, mustConfirmEmail } from "@/lib/auth";
+import { confirmEmailHref } from "@/lib/auth-links";
 import { getChatSummaries } from "@/lib/chats-data";
 import { cn } from "@/lib/cn";
 import { eventWallTime, formatEventTime } from "@/lib/event-time";
@@ -149,7 +151,9 @@ function healthDetail(project: HomeProjectHealth) {
 }
 
 export default async function HomePage() {
-  const user = await getCurrentUser();
+  const user = await getSessionUser();
+  // Signed up, but the email isn't confirmed yet (#350): back to "Check your email".
+  if (user && mustConfirmEmail(user)) redirect(confirmEmailHref());
   if (!user) {
     return <LandingPage signupEnabled={isPublicSignupEnabled()} guestLoginEnabled={isGuestLoginEnabled()} />;
   }

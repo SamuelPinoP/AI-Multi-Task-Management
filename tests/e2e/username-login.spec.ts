@@ -98,8 +98,7 @@ test("sign-up refuses a taken or reserved username and keeps the rest of the for
   await page.getByLabel("Password", { exact: true }).fill("a-long-password");
   await page.getByLabel("Confirm password").fill("a-long-password");
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/login\?error=created/);
-  await expect(page.getByText("Log in with your email or username.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
   const saved = await queryDatabase<{ username: string }>(`SELECT username FROM "User" WHERE email = $1`, [email]);
   expect(saved.rows[0]?.username).toBe(username.toLowerCase());
 });

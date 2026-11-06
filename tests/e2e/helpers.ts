@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { expect, type Page } from "@playwright/test";
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 
 export function uniqueName(prefix: string) {
@@ -42,9 +42,30 @@ export async function queryDatabase<T extends Record<string, unknown> = Record<s
 }
 
 /**
- * Signs up a throwaway account on the local server and logs it in. The email
- * counts as confirmed, as if the link in the confirmation email was opened
- * (#130), unless `confirmEmail` is false.
+ * A link like the one in the confirmation email (#130), for the account with
+ * `email`. Only its SHA-256 is stored, so tests make their own. `sentMinutesAgo`
+ * dates it back, as if it went out earlier.
+ */
+export async function confirmationLink(
+  email: string,
+  { expiresInHours = 24, next, sentMinutesAgo = 0 }: { expiresInHours?: number; next?: string; sentMinutesAgo?: number } = {},
+) {
+  const token = randomBytes(32).toString("base64url");
+  await queryDatabase(
+    `INSERT INTO "EmailVerificationToken" (id, "userId", "tokenHash", "createdAt", "expiresAt")
+     SELECT $1, id, $2, (now() AT TIME ZONE 'utc') - make_interval(mins => $3), (now() AT TIME ZONE 'utc') + make_interval(hours => $4)
+     FROM "User" WHERE email = $5`,
+    [`e2e-${randomUUID()}`, createHash("sha256").update(token).digest("hex"), sentMinutesAgo, expiresInHours, email],
+  );
+  const params = new URLSearchParams({ token });
+  if (next) params.set("next", next);
+  return `/api/auth/verify-email?${params}`;
+}
+
+/**
+ * Signs up a throwaway account on the local server. Sign-up ends on "Check
+ * your email" (#350); unless `confirmEmail` is false, the account's link is
+ * then opened in the same browser, which signs it in, as a person would.
  */
 export async function signUpAndLogIn(page: Page, label = "E2E user", { confirmEmail = true } = {}) {
   const id = randomUUID().slice(0, 8);
@@ -60,15 +81,11 @@ export async function signUpAndLogIn(page: Page, label = "E2E user", { confirmEm
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByLabel("Confirm password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/login\?error=created/);
+  await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
   if (confirmEmail) {
-    await queryDatabase(`UPDATE "User" SET "emailVerifiedAt" = now() AT TIME ZONE 'utc' WHERE email = $1`, [email]);
+    await page.goto(await confirmationLink(email));
+    await expectHome(page);
   }
-
-  await page.getByLabel("Email or username").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Log in" }).click();
-  await expectHome(page);
 
   return { name, username, email, password };
 }

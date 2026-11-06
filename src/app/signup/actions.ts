@@ -3,9 +3,10 @@
 import { Prisma } from "@prisma/client";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { getSafeRedirectPath, hashPassword, isPublicSignupEnabled, normalizeAuthEmail } from "@/lib/auth";
-import { authPageHref } from "@/lib/auth-links";
-import { sendEmailVerification } from "@/lib/email-verification";
+import { createSession, getSafeRedirectPath, hashPassword, isPublicSignupEnabled, normalizeAuthEmail } from "@/lib/auth";
+import { confirmEmailHref } from "@/lib/auth-links";
+import { isUsableEmail } from "@/lib/email-confirmation-core";
+import { sendConfirmationEmail } from "@/lib/email-verification";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { clientIpFrom, RATE_LIMITS, tooManyAttemptsMessage } from "@/lib/rate-limit-core";
@@ -24,8 +25,10 @@ export type SignupState = {
 };
 
 /**
- * Creates the account, then sends the person to log in. Errors come back to
- * the form (#351) instead of reloading the page, so nothing typed is lost.
+ * Creates the account and emails a confirmation link, then shows "Check your
+ * email" (#350): the account can't be used until the link is opened. Errors
+ * come back to the form (#351) instead of reloading the page, so nothing
+ * typed is lost.
  */
 export async function signUp(_previous: SignupState, formData: FormData): Promise<SignupState> {
   const name = String(formData.get("name") || "").trim();
@@ -43,11 +46,12 @@ export async function signUp(_previous: SignupState, formData: FormData): Promis
   const { username, error: usernameError } = checkUsername(typedUsername);
   if (usernameError) return failed(usernameError, "username");
   // The login form reads anything with an @ as an email (#351), so every account's email must have one.
-  if (!email.includes("@")) return failed("Enter a valid email address.", "email");
+  if (!isUsableEmail(email)) return failed("Enter a valid email address.", "email");
   if (password.length < 8) return failed("Password must be at least 8 characters.", "password");
   if (password !== confirmPassword) return failed("Password and confirm password must match.", "password");
 
-  const limit = await consumeRateLimit(RATE_LIMITS.signupIp, clientIpFrom(await headers()));
+  const requestHeaders = await headers();
+  const limit = await consumeRateLimit(RATE_LIMITS.signupIp, clientIpFrom(requestHeaders));
   if (!limit.allowed) return failed(tooManyAttemptsMessage("sign-ups from this network", limit.retryAfterSeconds));
 
   const taken = async (): Promise<SignupState | null> => {
@@ -77,8 +81,11 @@ export async function signUp(_previous: SignupState, formData: FormData): Promis
     }
     throw error;
   }
-  // If this email doesn't go through, the banner in the app sends a new one.
-  await sendEmailVerification(user);
+  // The session only reaches "Check your email" until the address is confirmed, which
+  // lets that page resend the link or fix the address. If this email doesn't go out,
+  // the page offers to send it again.
+  await createSession(user.id);
+  await sendConfirmationEmail(user, { next, origin: requestHeaders.get("origin") ?? undefined });
 
-  redirect(authPageHref("login", { error: "created", email, next }));
+  redirect(confirmEmailHref({ next }));
 }

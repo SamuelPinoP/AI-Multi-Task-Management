@@ -7,7 +7,7 @@ import { ServiceWorkerRegistration } from "@/components/pwa";
 import { ThemeInitScript, ThemeProvider } from "@/components/theme-provider";
 import { TimeZoneCookie } from "@/components/time-zone-cookie";
 import { Toaster } from "@/components/ui/toaster";
-import { getCurrentUser } from "@/lib/auth";
+import { getSessionUser, mustConfirmEmail } from "@/lib/auth";
 import { parseSidebarProjects, SIDEBAR_COLLAPSED_COOKIE, SIDEBAR_PROJECTS_COOKIE } from "@/lib/sidebar-state";
 import { getWorkspaceNav } from "@/lib/workspace-nav";
 
@@ -39,7 +39,10 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const currentUser = await getCurrentUser();
+  const sessionUser = await getSessionUser();
+  // An account whose email isn't confirmed yet only gets the "Check your email" page (#350).
+  const awaitingEmailConfirmation = Boolean(sessionUser && mustConfirmEmail(sessionUser));
+  const currentUser = awaitingEmailConfirmation ? null : sessionUser;
   const [initialNav, cookieStore] = await Promise.all([
     currentUser ? getWorkspaceNav(currentUser) : null,
     cookies(),
@@ -56,6 +59,7 @@ export default async function RootLayout({
         <ThemeProvider>
           <AppShell
             currentUser={currentUser}
+            awaitingEmailConfirmation={awaitingEmailConfirmation}
             initialNav={initialNav}
             initialSidebarCollapsed={sidebarCollapsed}
             initialProjectsOpen={sidebarProjectsOpen}

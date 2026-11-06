@@ -37,7 +37,6 @@ import { NewTaskDialog } from "@/components/new-task-dialog";
 import { NotificationsMenu } from "@/components/notifications-menu";
 import { ProjectSheet, type ProjectInput } from "@/components/projects/project-sheet";
 import { clearOfflineData, OfflineBanner, promptInstall, useInstallPrompt } from "@/components/pwa";
-import { EmailVerificationBanner } from "@/components/email-verification";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { TextSizeMenuItems } from "@/components/text-size-menu";
 import { ThemeToggle, useTheme } from "@/components/theme-provider";
@@ -52,7 +51,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "@/components/ui/toaster";
 import { isFullHeightPage, isNavItemActive, pageTitleFor, type NavMatch } from "@/lib/app-nav";
-import { authPageHref } from "@/lib/auth-links";
+import { authPageHref, confirmEmailHref } from "@/lib/auth-links";
 import { cn } from "@/lib/cn";
 import { getSafeRedirectPath } from "@/lib/safe-redirect";
 import { isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
@@ -75,7 +74,6 @@ type ShellUser = {
   name: string | null;
   email: string;
   isGuest: boolean;
-  emailVerifiedAt: Date | null;
 } | null;
 
 type NavItem = NavMatch & {
@@ -649,12 +647,15 @@ function MobileTabs({ pathname, onNewTask, inFlow }: { pathname: string; onNewTa
 export function AppShell({
   children,
   currentUser,
+  awaitingEmailConfirmation,
   initialNav,
   initialSidebarCollapsed,
   initialProjectsOpen,
 }: {
   children: React.ReactNode;
   currentUser: ShellUser;
+  /** Signed in, but the email isn't confirmed yet, so only "Check your email" opens (#350). */
+  awaitingEmailConfirmation: boolean;
   initialNav: WorkspaceNav | null;
   initialSidebarCollapsed: boolean;
   initialProjectsOpen: SidebarProjectsOpen;
@@ -678,10 +679,11 @@ export function AppShell({
   useEffect(() => {
     if (!currentUser && !isPublicPage) {
       // The session ended (unused for a month, or logged out from another device): log in, then come back here.
+      // An unconfirmed email goes to "Check your email" instead, which comes back here once it's confirmed.
       const here = getSafeRedirectPath(`${window.location.pathname}${window.location.search}`);
-      router.replace(authPageHref("login", { next: here }));
+      router.replace(awaitingEmailConfirmation ? confirmEmailHref({ next: here }) : authPageHref("login", { next: here }));
     }
-  }, [currentUser, isPublicPage, router]);
+  }, [awaitingEmailConfirmation, currentUser, isPublicPage, router]);
 
   // Keep sidebar counts fresh as the user moves around and after the shell creates something.
   useEffect(() => {
@@ -868,7 +870,6 @@ export function AppShell({
           onShowShortcuts={() => setShortcutsOpen(true)}
         />
         <OfflineBanner />
-        {currentUser.isGuest || currentUser.emailVerifiedAt ? null : <EmailVerificationBanner email={currentUser.email} />}
         {/* relative: hidden (sr-only) text is absolutely positioned, and it scrolls only inside a positioned
             scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar. */}
         <main id="main-content" className={cn("relative min-h-0 flex-1 overflow-y-auto", !fullHeight && "pb-24 lg:pb-0")}>
