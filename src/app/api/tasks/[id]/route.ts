@@ -6,6 +6,8 @@ import { createActivity } from "@/lib/activity";
 import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
 import { dropLabelsOutsideScope, labelScopeFor, resolveTaskLabelIds, setTaskLabels } from "@/lib/labels-server";
 import { nextCompletedAt } from "@/lib/task-completion";
+import { TASK_TITLE_MAX } from "@/lib/task-history";
+import { loadHistoryStates, recordTaskChanges } from "@/lib/task-history-server";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import { taskInclude } from "@/lib/task-include";
 import { runOwnerEmailAutomation } from "@/lib/project-automations";
@@ -53,6 +55,9 @@ export async function PATCH(req: Request, context: RouteContext) {
     const title = typeof body.title === "string" ? body.title.trim() : "";
     if (!title) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
+    }
+    if (title.length > TASK_TITLE_MAX) {
+      return NextResponse.json({ error: `Keep the title under ${TASK_TITLE_MAX} characters; put the rest in the description.` }, { status: 400 });
     }
 
     if (!isValidStatus(body.status)) {
@@ -127,6 +132,9 @@ export async function PATCH(req: Request, context: RouteContext) {
     const labels = await resolveTaskLabelIds(body.labelIds, labelScope);
     if (labels.error) return NextResponse.json({ error: labels.error }, { status: 400 });
 
+    // The history (#279) compares the task before and after this change.
+    const before = await loadHistoryStates([id]);
+
     const updated = await prisma.task.updateMany({
       where: { id, deletedAt: null },
       data: {
@@ -154,6 +162,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       await dropLabelsOutsideScope([id, ...subtasks.map((subtask) => subtask.id)], labelScope);
     }
     if (labels.ids) await setTaskLabels(id, labels.ids);
+    await recordTaskChanges(before, user.id);
 
     const task = await prisma.task.findUnique({
       where: { id },

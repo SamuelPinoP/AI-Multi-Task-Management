@@ -8,6 +8,8 @@ import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthoriz
 import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
 import { visibleNoteWhere } from "@/lib/note-access";
 import { resolveTaskLabelIds } from "@/lib/labels-server";
+import { TASK_TITLE_MAX } from "@/lib/task-history";
+import { recordTaskCreated } from "@/lib/task-history-server";
 import { assigneeForNewTask, runOwnerEmailAutomation } from "@/lib/project-automations";
 import { notifyTaskAssigned } from "@/lib/notifications";
 
@@ -58,6 +60,9 @@ export async function POST(req: Request) {
     const noteId = parseId(body.noteId);
 
     if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
+    if (title.length > TASK_TITLE_MAX) {
+      return NextResponse.json({ error: `Keep the title under ${TASK_TITLE_MAX} characters; put the rest in the description.` }, { status: 400 });
+    }
     if (body.status && !isValidStatus(body.status)) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     if (body.priority && !isValidPriority(body.priority)) return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
     if (body.recurrence && !isValidRecurrence(body.recurrence)) return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
@@ -130,6 +135,7 @@ export async function POST(req: Request) {
       include: taskInclude(user.id),
     });
 
+    await recordTaskCreated(task.id, user.id);
     void createActivity({ userId: user.id, action: status === TaskStatus.DONE ? "COMPLETED_TASK" : "CREATED_TASK", message: `${status === TaskStatus.DONE ? "Completed task" : "Created task"}: “${task.title}”`, entityType: "TASK", entityId: task.id, projectId: task.projectId });
     // Email rules (SMART-11) run after the response. Subtasks are checklist items; they don't trigger rules.
     if (task.projectId && !isSubtask) {

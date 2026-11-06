@@ -1,6 +1,6 @@
 "use client";
 
-import { AtSign, Bell, BellOff, BellRing, CalendarClock, FolderKanban, UserCheck } from "lucide-react";
+import { AtSign, Bell, BellOff, BellRing, CalendarClock, FolderKanban, MessageSquare, UserCheck } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import {
@@ -17,7 +17,7 @@ import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 type InboxItem = {
   id: string;
-  type: "TASK_ASSIGNED" | "MENTION" | "TASK_DUE_SOON";
+  type: "TASK_ASSIGNED" | "MENTION" | "TASK_DUE_SOON" | "TASK_COMMENT";
   title: string;
   body: string | null;
   url: string | null;
@@ -25,7 +25,7 @@ type InboxItem = {
   createdAt: string;
 };
 
-const TYPE_ICONS = { TASK_ASSIGNED: UserCheck, MENTION: AtSign, TASK_DUE_SOON: CalendarClock } as const;
+const TYPE_ICONS = { TASK_ASSIGNED: UserCheck, MENTION: AtSign, TASK_DUE_SOON: CalendarClock, TASK_COMMENT: MessageSquare } as const;
 
 const relativeTime = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 

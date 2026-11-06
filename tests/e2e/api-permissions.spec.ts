@@ -377,6 +377,44 @@ test("bulk changes are all or nothing, with the same rules as one task (#281)", 
   );
 });
 
+test("comments: editors and the assignee write, viewers read, outsiders see nothing (#279)", async () => {
+  const task = await json<{ id: string }>(await api.owner.post("/api/tasks", { data: { title: uniqueName("Commented task"), projectId } }));
+  const comments = `/api/tasks/${task.id}/comments`;
+  await expectStatuses("POST comment", (client) => client.post(comments, { data: { body: "Hello" } }), {
+    owner: 201,
+    editor: 201,
+    viewer: 403,
+    outsider: 404,
+  });
+  await expectStatuses("GET activity", (client) => client.get(`/api/tasks/${task.id}/activity`), {
+    owner: 200,
+    editor: 200,
+    viewer: 200,
+    outsider: 404,
+  });
+  const activity = await json<{ comments: { id: string; mine: boolean }[]; events: { kind: string }[]; canComment: boolean }>(
+    await api.viewer.get(`/api/tasks/${task.id}/activity`),
+  );
+  expect(activity.comments).toHaveLength(2);
+  expect(activity.canComment).toBe(false);
+  expect(activity.events.map((event) => event.kind)).toContain("CREATED");
+
+  // Only the author edits or deletes a comment.
+  const ownerComment = activity.comments[0].id;
+  await expectStatuses("PATCH comment", (client) => client.patch(`${comments}/${ownerComment}`, { data: { body: "Edited" } }), {
+    editor: 403,
+    viewer: 403,
+    outsider: 404,
+    owner: 200,
+  });
+  await expectStatuses("DELETE comment", (client) => client.delete(`${comments}/${ownerComment}`), { editor: 403, viewer: 403, outsider: 404 });
+
+  // Assigning the task to the viewer lets them comment on it.
+  expect((await api.owner.patch("/api/tasks/bulk", { data: { ids: [task.id], change: { assigneeId: viewerMemberId } } })).ok()).toBe(true);
+  expect((await api.viewer.post(comments, { data: { body: "On it" } })).status()).toBe(201);
+  expect((await api.owner.post(comments, { data: { body: "   " } })).status()).toBe(400);
+});
+
 test("editors change project tasks, viewers only read them", async () => {
   await expectStatuses(
     "POST project task",

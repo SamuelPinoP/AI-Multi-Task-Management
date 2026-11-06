@@ -8,6 +8,7 @@ import { canEditProjectContent, getProjectAccess, unauthorizedProjectResponse } 
 import { runOwnerEmailAutomation } from "@/lib/project-automations";
 import { nextCompletedAtFor, parseBulkChange, parseBulkIds, parseSnapshots, type BulkTaskChange, type TaskSnapshot } from "@/lib/task-bulk";
 import { formatTaskDueDateInput, parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
+import { loadHistoryStates, recordTaskChanges } from "@/lib/task-history-server";
 import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
 
 /**
@@ -208,7 +209,9 @@ export async function PATCH(req: Request) {
       writes.push(prisma.taskLabel.createMany({ data: ids.flatMap((taskId) => labelIds.map((labelId) => ({ taskId, labelId }))), skipDuplicates: true }));
     }
 
+    const before = await loadHistoryStates(ids);
     await prisma.$transaction(writes);
+    await recordTaskChanges(before, user.id);
     afterChange(tasks, user, new URL(req.url).origin);
 
     const updated = await prisma.task.findMany({ where: { id: { in: ids } }, include: taskInclude(user.id) });
@@ -266,7 +269,9 @@ async function restore(input: unknown, user: { id: string; name: string | null; 
       writes.push(prisma.task.updateMany({ where: { parentId: snapshot.id }, data: { projectId: snapshot.projectId, assigneeId: null } }));
     }
   }
+  const before = await loadHistoryStates(snapshots.map((snapshot) => snapshot.id));
   await prisma.$transaction(writes);
+  await recordTaskChanges(before, user.id);
   afterChange(loaded.tasks, user, origin);
 
   const updated = await prisma.task.findMany({ where: { id: { in: snapshots.map((snapshot) => snapshot.id) } }, include: taskInclude(user.id) });

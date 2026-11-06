@@ -51,6 +51,8 @@ model User {
   recentShortcut               RecentShortcut?
   projectChatReads             ProjectChatRead[]
   labels                       Label[]
+  taskComments                 TaskComment[]
+  taskEvents                   TaskEvent[]
 }
 
 model Session {
@@ -136,6 +138,8 @@ enum NotificationType {
   TASK_ASSIGNED
   MENTION
   TASK_DUE_SOON
+  /// Someone commented on a task assigned to you (#279).
+  TASK_COMMENT
 }
 
 /// A browser that asked for push notifications (Web Push, SMART-08).
@@ -215,6 +219,8 @@ model Task {
   blockedBy TaskDependency[] @relation("DependencyTask")
   blocking  TaskDependency[] @relation("DependencyBlocker")
   labels    TaskLabel[]
+  comments  TaskComment[]
+  events    TaskEvent[]
 
   @@index([parentId])
   @@index([deletedById])
@@ -240,6 +246,56 @@ model Label {
 
   @@unique([userId, name])
   @@unique([projectId, name])
+}
+
+/// A comment on a task (#279). Everyone who can see the task reads it;
+/// Owners, Editors and the task's assignee write them, and authors edit or
+/// delete their own.
+model TaskComment {
+  id        String    @id @default(cuid())
+  taskId    String
+  authorId  String
+  body      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  /// When the author last edited it; null if never.
+  editedAt  DateTime?
+
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+}
+
+/// One change to a task, for its history (#279). Values are kept as they
+/// read at the time ("High", "Babel"), so later renames don't rewrite history.
+model TaskEvent {
+  id        String        @id @default(cuid())
+  taskId    String
+  /// Who made the change; null once their account is deleted.
+  actorId   String?
+  kind      TaskEventKind
+  fromValue String?
+  toValue   String?
+  createdAt DateTime      @default(now())
+
+  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, createdAt])
+}
+
+enum TaskEventKind {
+  CREATED
+  STATUS
+  PRIORITY
+  ASSIGNEE
+  DUE_DATE
+  PROJECT
+  LABEL_ADDED
+  LABEL_REMOVED
+  TITLE
+  DESCRIPTION
 }
 
 /// The labels on a task (#276). Deleting a label removes it from its tasks.
