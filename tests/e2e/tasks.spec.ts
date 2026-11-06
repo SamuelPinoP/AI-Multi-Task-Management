@@ -38,7 +38,7 @@ test("tasks: create in the sheet, edit, complete, filter and delete", async ({ p
   // Complete in place, then filter.
   await page.getByRole("button", { name: `Mark done: ${title}` }).click();
   await expect(page.getByRole("region", { name: /^Done/ }).getByRole("button", { name: title, exact: true })).toBeVisible();
-  await page.getByRole("radio", { name: "Open" }).click();
+  await page.getByRole("radio", { name: "Active" }).click();
   await expect(page.getByRole("heading", { name: "No tasks match these filters." })).toBeVisible();
   await page.getByRole("button", { name: "Clear filters" }).click();
 

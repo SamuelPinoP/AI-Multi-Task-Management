@@ -4,21 +4,27 @@
  * Tasks: the list first, the form second (DES-02).
  *
  * - A one-line quick add and a "New task" sheet for full details.
- * - Search, status, priority, project and sort controls in one row.
- * - Tasks grouped into Overdue, Today, Upcoming, No due date and Done.
- * - Complete a task in place; open it to edit in a side sheet.
+ * - All, Active and Done beside the title; search, priority, labels, project
+ *   and sort in one row, which turns into the bulk bar while tasks are selected.
+ * - One card per project (design 1B, #348): tasks with no project first, then
+ *   projects by priority, ties in the sidebar's order. Inside a card, tasks
+ *   are grouped into Overdue, Today, Upcoming, No due date and Done.
+ * - Each card links to its project's Calendar and Notes; "No project" moves
+ *   its tasks into a project.
+ * - Mark done completes a task in place; open it to edit in a side sheet.
  * - `?task=<id>` opens that task (links from search, Home and the Planner).
  * - Subtasks live inside their parent's sheet; the row shows a progress ring,
  *   and "Blocked" while the task waits on open tasks (SMART-02).
  */
 
-import { Plus, Search, SquareKanban } from "lucide-react";
+import { CalendarDays, ChevronDown, NotebookText, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { QuickAdd } from "@/components/home/quick-add";
 import { BulkBar, type BulkNames } from "@/components/tasks/bulk-bar";
+import { PriorityBadge } from "@/components/tasks/priority-badge";
 import { LabelFilter } from "@/components/tasks/label-filter";
 import { loadLabels, useLabels } from "@/components/tasks/label-store";
 import { TaskRow } from "@/components/tasks/task-row";
@@ -26,11 +32,13 @@ import type { TaskRelations } from "@/components/tasks/task-relations-panel";
 import { TaskSheet, taskRequestBody } from "@/components/tasks/task-sheet";
 import type { Priority, Project, Task, TaskInput, TaskStatus } from "@/components/tasks/types";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import { daysFrom } from "@/lib/home-summary";
 import { labelsOfTask, matchesLabelFilter } from "@/lib/labels";
-import { PRIORITIES, priorityLabels } from "@/lib/priority";
+import { comparePriority, PRIORITIES, priorityLabels } from "@/lib/priority";
+import { projectColor } from "@/lib/project-color";
 import { describeBulkChange, type BulkTaskChange, type TaskSnapshot } from "@/lib/task-bulk";
 import { compareTaskDueDates, formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { topLevelTasks } from "@/lib/task-relations";
@@ -38,11 +46,22 @@ import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged, TASK_CREATED_EVENT } from "@/lib/workspace-events";
 
 /** A project from /api/projects, with the caller's access. */
-type ProjectItem = Project & { accessLevel?: "OWNER" | "EDITOR" | "VIEWER"; status?: string };
+type ProjectItem = Project & { accessLevel?: "OWNER" | "EDITOR" | "VIEWER"; status?: string; updatedAt?: string };
 
 type StatusFilter = "ALL" | "OPEN" | "DONE";
 type SortOption = "DUE_DATE_ASC" | "DUE_DATE_DESC" | "NEWEST" | "OLDEST";
 type SectionKey = "OVERDUE" | "TODAY" | "UPCOMING" | "NO_DATE" | "DONE";
+
+const SECTION_ORDER: SectionKey[] = ["OVERDUE", "TODAY", "UPCOMING", "NO_DATE", "DONE"];
+
+const statusTabs: [StatusFilter, string][] = [
+  ["ALL", "All"],
+  ["OPEN", "Active"],
+  ["DONE", "Done"],
+];
+
+const headerLinkClass =
+  "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[0.8125rem] font-medium text-muted outline-none transition-colors hover:bg-surface hover:text-accent focus-visible:ring-2 focus-visible:ring-accent";
 
 const sectionTitles: Record<SectionKey, string> = {
   OVERDUE: "Overdue",
@@ -105,7 +124,7 @@ export default function TasksPage() {
   const [sortBy, setSortBy] = useState<SortOption>("DUE_DATE_ASC");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const [sheet, setSheet] = useState<{ open: boolean; task: Task | null }>({ open: false, task: null });
+  const [sheet, setSheet] = useState<{ open: boolean; task: Task | null; draft?: Partial<TaskInput> }>({ open: false, task: null });
   const [confirmDelete, setConfirmDelete] = useState<Task | null>(null);
   // Selection for bulk changes (#281): ids, plus the last clicked row for Shift+click ranges.
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -199,19 +218,41 @@ export default function TasksPage() {
   }, [tasks, searchQuery, statusFilter, priorityFilter, projectFilter, labelFilter, sortBy]);
 
   const now = new Date();
-  const groups: Record<SectionKey, Task[]> = { OVERDUE: [], TODAY: [], UPCOMING: [], NO_DATE: [], DONE: [] };
-  for (const task of visibleTasks) groups[sectionFor(task, now)].push(task);
-  const sections = (Object.keys(groups) as SectionKey[])
-    .map((key) => ({ key, tasks: groups[key] }))
-    .filter((section) => section.tasks.length);
+  // One card per project (#348): no project first, then by priority, ties in the sidebar's order.
+  const projectOrder = new Map(
+    [...projects]
+      .sort((a, b) => comparePriority(a.priority ?? "NONE", b.priority ?? "NONE") || (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
+      .map((project, index) => [project.id, index]),
+  );
+  const byProject = new Map<string, Task[]>();
+  for (const task of visibleTasks) byProject.set(task.projectId ?? "", [...(byProject.get(task.projectId ?? "") ?? []), task]);
+  const projectGroups = [...byProject]
+    .map(([projectId, groupTasks]) => {
+      const project = projects.find((item) => item.id === projectId) ?? null;
+      return {
+        key: projectId || "none",
+        projectId: projectId || null,
+        project,
+        name: projectId ? (project?.name ?? groupTasks[0]?.project?.name ?? "Project") : "No project",
+        color: projectId ? projectColor(project ?? groupTasks[0]?.project ?? { id: projectId, color: null }) : null,
+        active: groupTasks.filter((task) => task.status !== "DONE").length,
+        sections: SECTION_ORDER.map((key) => ({ key, tasks: groupTasks.filter((task) => sectionFor(task, now) === key) })).filter(
+          (section) => section.tasks.length,
+        ),
+      };
+    })
+    .sort((a, b) => {
+      if (!a.projectId || !b.projectId) return a.projectId ? 1 : b.projectId ? -1 : 0;
+      const order = (projectOrder.get(a.projectId) ?? Infinity) - (projectOrder.get(b.projectId) ?? Infinity);
+      return order || a.name.localeCompare(b.name);
+    });
+  const shownTasks = projectGroups.flatMap((group) => group.sections.flatMap((section) => section.tasks));
 
   // Bulk changes apply to the selected tasks still on screen, in the order shown.
-  const shownIds = sections.flatMap((section) => section.tasks.map((task) => task.id));
-  const selectedTasks = sections.flatMap((section) => section.tasks).filter((task) => selected.has(task.id));
+  const shownIds = shownTasks.map((task) => task.id);
+  const selectedTasks = shownTasks.filter((task) => selected.has(task.id));
   const bulkProjects = projects.filter((project) => project.accessLevel !== "VIEWER" && project.status !== "ARCHIVED");
 
-  const openCount = tasks.filter((task) => task.status !== "DONE").length;
-  const doneCount = tasks.length - openCount;
   const filtersActive =
     Boolean(searchQuery.trim()) || statusFilter !== "ALL" || priorityFilter !== "ALL" || Boolean(projectFilter) || labelFilter.size > 0;
 
@@ -271,8 +312,7 @@ export default function TasksPage() {
     }
   }
 
-  async function applyBulk(change: BulkTaskChange, names: BulkNames = {}) {
-    const ids = selectedTasks.map((task) => task.id);
+  async function applyBulk(change: BulkTaskChange, names: BulkNames = {}, ids = selectedTasks.map((task) => task.id)) {
     if (!ids.length || bulkBusy) return;
     setBulkBusy(true);
     try {
@@ -423,25 +463,45 @@ export default function TasksPage() {
     }
   }
 
+  /** "No project" moves its tasks into a project: the selected ones in the card, or all of them. */
+  function moveUnfiled(groupTasks: Task[], project: ProjectItem) {
+    const chosen = groupTasks.filter((task) => selected.has(task.id));
+    const ids = (chosen.length ? chosen : groupTasks).filter((task) => !task.parentId).map((task) => task.id);
+    if (!ids.length) {
+      toast.error("Sub-tasks stay in their parent's project.");
+      return;
+    }
+    void applyBulk({ projectId: project.id }, { project: project.name }, ids);
+  }
+
   return (
-    <div className="mx-auto grid w-full grid-cols-1 max-w-5xl gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+    <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+      {/* The status tabs sit by the title, a step smaller than it (design 1B with 1C's header). */}
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           <h1 className="text-title">Tasks</h1>
-          <p className="mt-0.5 text-sm text-muted">
-            {fetching ? "Loading..." : `${openCount} open · ${doneCount} done`}
-          </p>
+          <div role="radiogroup" aria-label="Status" className="flex rounded-xl bg-sunken p-1">
+            {statusTabs.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={statusFilter === value}
+                onClick={() => setStatusFilter(value)}
+                className={cn(
+                  "rounded-lg px-3.5 py-1.5 text-[0.9375rem] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent",
+                  statusFilter === value ? "bg-surface text-ink shadow-card" : "text-muted hover:text-ink",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Link href="/board" className={cn(uiButtonClass, "px-3 py-1.5")}>
-            <SquareKanban aria-hidden="true" className="h-4 w-4 text-muted" />
-            Board
-          </Link>
-          <button type="button" onClick={() => setSheet({ open: true, task: null })} className={cn(uiPrimaryButtonClass, "px-3 py-1.5")}>
-            <Plus aria-hidden="true" className="h-4 w-4" />
-            New task
-          </button>
-        </div>
+        <button type="button" onClick={() => setSheet({ open: true, task: null })} className={cn(uiPrimaryButtonClass, "px-3 py-1.5")}>
+          <Plus aria-hidden="true" className="h-4 w-4" />
+          New task
+        </button>
       </header>
 
       <QuickAdd onAdded={() => void fetchTasks(false)} />
@@ -469,23 +529,6 @@ export default function TasksPage() {
             className={cn(controlClass, "w-full pl-8")}
           />
         </label>
-        <div role="radiogroup" aria-label="Status" className="flex rounded-lg border border-line bg-surface p-0.5">
-          {(["ALL", "OPEN", "DONE"] as StatusFilter[]).map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={statusFilter === value}
-              onClick={() => setStatusFilter(value)}
-              className={cn(
-                "rounded-md px-2.5 py-1 text-sm transition-colors",
-                statusFilter === value ? "bg-accent-soft font-semibold text-accent" : "text-muted hover:text-ink",
-              )}
-            >
-              {value === "ALL" ? "All" : value === "OPEN" ? "Open" : "Done"}
-            </button>
-          ))}
-        </div>
         {/* On phones the filters share rows two by two, so their 16px labels (#337) aren't cut off. */}
         <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap">
           <select aria-label="Priority" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as "ALL" | Priority)} className={filterClass}>
@@ -524,7 +567,7 @@ export default function TasksPage() {
             <div key={index} className="h-11 animate-pulse rounded-xl border border-line bg-surface" />
           ))}
         </div>
-      ) : sections.length === 0 ? (
+      ) : projectGroups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line bg-surface px-6 py-10 text-center">
           <h2 className="text-base font-semibold">{tasks.length === 0 ? "No tasks yet." : "No tasks match these filters."}</h2>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted">
@@ -549,37 +592,136 @@ export default function TasksPage() {
           ) : null}
         </div>
       ) : (
-        sections.map((section) => (
-          <section key={section.key} aria-labelledby={`section-${section.key}`} className="rounded-xl border border-line bg-surface shadow-card">
-            <h2 id={`section-${section.key}`} className="flex items-center gap-2 px-3 pb-1 pt-3 text-sm font-semibold sm:px-4">
-              <span className={section.key === "OVERDUE" ? "text-danger" : undefined}>{sectionTitles[section.key]}</span>
-              <span className="text-xs font-normal text-muted">{section.tasks.length}</span>
-            </h2>
-            <ul>
-              {section.tasks.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  ref={task.id === linkedTaskId ? linkedRowRef : undefined}
-                  task={task}
-                  now={now}
-                  highlighted={task.id === linkedTaskId}
-                  busy={busyIds.includes(task.id)}
-                  onToggle={(item) => void toggleTask(item)}
-                  onOpen={(item) => setSheet({ open: true, task: item })}
-                  onDelete={setConfirmDelete}
-                  selected={selected.has(task.id)}
-                  onSelect={selectTask}
-                />
-              ))}
-            </ul>
-          </section>
-        ))
+        <div className="grid grid-cols-1 gap-5">
+          {projectGroups.map((group) => {
+            const groupTasks = group.sections.flatMap((section) => section.tasks);
+            const scope = group.projectId ?? "none";
+            const canAdd = !group.project || group.project.accessLevel !== "VIEWER";
+            return (
+              <section key={group.key} aria-labelledby={`group-${group.key}`} className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+                <div className="flex min-h-12 flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-line bg-sunken py-1.5 pl-3.5 pr-2 sm:pl-4">
+                  {group.projectId ? (
+                    <>
+                      <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: group.color ?? undefined }} />
+                      <h2 id={`group-${group.key}`} className="min-w-0 truncate text-[0.9375rem] font-semibold">
+                        <Link href={`/projects/${group.projectId}`} className="rounded outline-none hover:text-accent focus-visible:ring-2 focus-visible:ring-accent">
+                          {group.name}
+                        </Link>
+                      </h2>
+                      <PriorityBadge priority={group.project?.priority ?? "NONE"} />
+                    </>
+                  ) : (
+                    <h2 id={`group-${group.key}`} className="min-w-0">
+                      {/* "No project" is itself the button that files these tasks into a project. */}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            title="Move these tasks to a project"
+                            className="-ml-1.5 inline-flex h-8 items-center gap-2 rounded-lg px-1.5 text-[0.9375rem] font-semibold outline-none transition-colors hover:bg-surface hover:text-accent focus-visible:ring-2 focus-visible:ring-accent"
+                          >
+                            <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full border-[1.5px] border-dashed border-muted" />
+                            No project
+                            <ChevronDown aria-hidden="true" className="h-4 w-4 text-muted" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-1">
+                          <p className="px-2.5 pb-1.5 pt-2 text-xs text-muted">
+                            {(() => {
+                              const chosen = groupTasks.filter((task) => selected.has(task.id)).length;
+                              const count = chosen || groupTasks.filter((task) => !task.parentId).length;
+                              return `Move ${chosen ? "the selected" : count === 1 ? "this" : `these ${count}`} task${count === 1 ? "" : "s"} to…`;
+                            })()}
+                          </p>
+                          {bulkProjects.length ? (
+                            bulkProjects.map((project) => (
+                              <button
+                                key={project.id}
+                                type="button"
+                                onClick={() => moveUnfiled(groupTasks, project)}
+                                className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"
+                              >
+                                <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: projectColor(project) }} />
+                                <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                                {project.priority && project.priority !== "NONE" ? <span className="text-xs text-muted">{priorityLabels[project.priority]}</span> : null}
+                              </button>
+                            ))
+                          ) : (
+                            <p className="px-2.5 py-2 text-sm text-muted">No projects yet. Create one from the sidebar.</p>
+                          )}
+                        </PopoverContent>
+                      </Popover>
+                    </h2>
+                  )}
+                  <span className="shrink-0 text-xs text-muted">{group.active} active</span>
+                  <span aria-hidden="true" className="flex-1" />
+                  <Link
+                    href={`/events/calendar?project=${group.projectId ?? "none"}`}
+                    aria-label={`Calendar for ${group.projectId ? group.name : "tasks with no project"}`}
+                    title={`Calendar for ${group.projectId ? group.name : "tasks with no project"}`}
+                    className={headerLinkClass}
+                  >
+                    <CalendarDays aria-hidden="true" className="h-4 w-4" />
+                    <span className="hidden sm:inline">Calendar</span>
+                  </Link>
+                  <Link href={`/notes?project=${scope}`} aria-label={group.projectId ? `Notes for ${group.name}` : "Notes with no project"} title={group.projectId ? `Notes for ${group.name}` : "Notes with no project"} className={headerLinkClass}>
+                    <NotebookText aria-hidden="true" className="h-4 w-4" />
+                  </Link>
+                  {canAdd ? (
+                    <button
+                      type="button"
+                      onClick={() => setSheet({ open: true, task: null, draft: { projectId: group.projectId ?? "" } })}
+                      aria-label={group.projectId ? `New task in ${group.name}` : "New task with no project"}
+                      title={group.projectId ? `New task in ${group.name}` : "New task with no project"}
+                      className={headerLinkClass}
+                    >
+                      <Plus aria-hidden="true" className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+                {group.sections.map((section) => (
+                  <section key={section.key} aria-labelledby={`section-${group.key}-${section.key}`}>
+                    <h3
+                      id={`section-${group.key}-${section.key}`}
+                      className={cn(
+                        "flex items-center gap-2 px-4 pb-1 pt-3 text-2xs font-semibold uppercase tracking-wider",
+                        section.key === "OVERDUE" ? "text-danger" : "text-muted",
+                      )}
+                    >
+                      {sectionTitles[section.key]}
+                      <span className="font-mono tabular-nums">{section.tasks.length}</span>
+                    </h3>
+                    <ul>
+                      {section.tasks.map((task) => (
+                        <TaskRow
+                          key={task.id}
+                          ref={task.id === linkedTaskId ? linkedRowRef : undefined}
+                          task={task}
+                          now={now}
+                          highlighted={task.id === linkedTaskId}
+                          busy={busyIds.includes(task.id)}
+                          showProject={false}
+                          onToggle={(item) => void toggleTask(item)}
+                          onOpen={(item) => setSheet({ open: true, task: item })}
+                          onDelete={setConfirmDelete}
+                          selected={selected.has(task.id)}
+                          onSelect={selectTask}
+                        />
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </section>
+            );
+          })}
+        </div>
       )}
 
       <TaskSheet
         open={sheet.open}
         onOpenChange={closeSheet}
         task={sheetTask}
+        draft={sheet.draft}
         projects={projects}
         onSubmit={saveTask}
         onDelete={setConfirmDelete}

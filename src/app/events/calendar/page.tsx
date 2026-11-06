@@ -24,7 +24,7 @@
 
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarHeader } from "@/components/events/calendar-header";
 import { EventSheet, eventRequestBody, type EventInput } from "@/components/events/event-sheet";
 import { uiButtonClass, uiCardClass } from "@/components/ui";
@@ -130,7 +130,12 @@ export default function EventsCalendarPage() {
   /** All projects belonging to the current user, used for the filter dropdown and color accents. */
   const [projects, setProjects] = useState<Project[]>([]);
   /** Currently selected project filter: ALL_PROJECTS_FILTER, NO_PROJECT_FILTER, or a project id. */
-  const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS_FILTER);
+  // `?project=<id>` (or `none`) opens filtered, from the Tasks page's project cards (#348).
+  const searchParams = useSearchParams();
+  const [projectFilter, setProjectFilter] = useState(() => {
+    const project = searchParams.get("project");
+    return project === "none" ? NO_PROJECT_FILTER : project || ALL_PROJECTS_FILTER;
+  });
   /** Whether due tasks appear on the calendar, shared with the Agenda tab; the server render always shows them. */
   const [showTasks] = useShowTasks();
   /** The New event sheet and the day it opens on. */
