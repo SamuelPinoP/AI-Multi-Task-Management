@@ -53,6 +53,8 @@ const PILLS = [
   ["caution", "caution-soft"],
   ["success", "success-soft"],
   ["accent-ink", "accent"],
+  // A task row's Done button (#281).
+  ["success-ink", "success"],
 ];
 
 function failures(colors: Record<string, string>, pairs: string[][]) {

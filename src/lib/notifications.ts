@@ -105,6 +105,49 @@ export async function notifyTaskAssigned({
   ]);
 }
 
+/**
+ * Bulk assignments (#281): one notification per person, "Ana assigned you 3
+ * tasks", instead of one per task. A single task reads as `notifyTaskAssigned`.
+ */
+export async function notifyTasksAssigned({
+  tasks,
+  actor,
+}: {
+  tasks: { id: string; title: string; assigneeId: string | null; project: { name: string } | null }[];
+  actor: { id: string; name: string | null; email: string };
+}) {
+  const assigneeIds = [...new Set(tasks.flatMap((task) => (task.assigneeId ? [task.assigneeId] : [])))];
+  if (!assigneeIds.length) return;
+  const members = await prisma.projectMember.findMany({ where: { id: { in: assigneeIds } }, select: { id: true, userId: true } });
+  const byUser = new Map<string, typeof tasks>();
+  for (const member of members) {
+    if (!member.userId || member.userId === actor.id) continue;
+    byUser.set(member.userId, [...(byUser.get(member.userId) ?? []), ...tasks.filter((task) => task.assigneeId === member.id)]);
+  }
+  await createNotifications(
+    [...byUser].map(([userId, mine]) => {
+      const [first] = mine;
+      if (mine.length === 1) {
+        return {
+          userId,
+          type: "TASK_ASSIGNED" as const,
+          title: `${personName(actor)} assigned you a task`,
+          body: first.project ? `“${first.title}” in ${first.project.name}` : `“${first.title}”`,
+          url: `/tasks?task=${first.id}`,
+        };
+      }
+      const names = mine.slice(0, 3).map((task) => `“${task.title}”`).join(", ");
+      return {
+        userId,
+        type: "TASK_ASSIGNED" as const,
+        title: `${personName(actor)} assigned you ${mine.length} tasks`,
+        body: mine.length > 3 ? `${names} and ${mine.length - 3} more` : names,
+        url: "/tasks",
+      };
+    }),
+  );
+}
+
 /** "Ana mentioned you in Launch" for each project member a chat message @-mentions. */
 export async function notifyMentions({
   project,
