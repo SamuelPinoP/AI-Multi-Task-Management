@@ -7,6 +7,7 @@ import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
 import { visibleNoteWhere } from "@/lib/note-access";
+import { resolveTaskLabelIds } from "@/lib/labels-server";
 import { assigneeForNewTask, runOwnerEmailAutomation } from "@/lib/project-automations";
 import { notifyTaskAssigned } from "@/lib/notifications";
 
@@ -102,6 +103,10 @@ export async function POST(req: Request) {
       if (!member) return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
     }
 
+    // Labels (#276) come from the task's project, or from the creator's personal labels.
+    const labels = await resolveTaskLabelIds(body.labelIds, projectId ? { projectId } : { userId: user.id });
+    if (labels.error) return NextResponse.json({ error: labels.error }, { status: 400 });
+
     const status = isValidStatus(body.status) ? body.status : TaskStatus.TODO;
     const isSubtask = Boolean(parentId);
     const task = await prisma.task.create({
@@ -120,6 +125,7 @@ export async function POST(req: Request) {
         assigneeId: await assigneeForNewTask(projectId, { assigneeId, isSubtask }),
         parentId,
         noteId,
+        labels: labels.ids?.length ? { create: labels.ids.map((labelId) => ({ labelId })) } : undefined,
       },
       include: taskInclude(user.id),
     });

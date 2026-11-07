@@ -303,6 +303,55 @@ test("editors post in the chat, viewers read it, outsiders get nothing", async (
   );
 });
 
+test("editors manage project labels, viewers only see them, outsiders see nothing (#276)", async () => {
+  const labelName = uniqueName("Label");
+  await expectStatuses(
+    "POST project label",
+    (client) => client.post("/api/labels", { data: { name: `${labelName} ${client === api.owner ? "o" : "x"}`, projectId } }),
+    { owner: 201, viewer: 403, outsider: 404 },
+  );
+  const label = await json<{ id: string; name: string; projectId: string }>(
+    await api.editor.post("/api/labels", { data: { name: labelName, projectId, color: "#2563eb" } }),
+  );
+  expect(label.projectId).toBe(projectId);
+  // The same name again, in any case, is the same label.
+  const again = await api.owner.post("/api/labels", { data: { name: labelName.toUpperCase(), projectId } });
+  expect(again.status()).toBe(409);
+  expect(((await again.json()) as { label: { id: string } }).label.id).toBe(label.id);
+
+  await expectStatuses("GET project labels", (client) => client.get(`/api/labels?project=${projectId}`), {
+    owner: 200,
+    editor: 200,
+    viewer: 200,
+    outsider: 404,
+  });
+  const outsiderLabels = await json<{ id: string }[]>(await api.outsider.get("/api/labels"));
+  expect(outsiderLabels.some((item) => item.id === label.id)).toBe(false);
+  await expectStatuses(
+    "PATCH project label",
+    (client) => client.patch(`/api/labels/${label.id}`, { data: { color: "#7c3aed" } }),
+    { editor: 200, viewer: 403, outsider: 404 },
+  );
+
+  // A project task takes the project's labels, never someone's personal ones.
+  const personal = await json<{ id: string }>(await api.owner.post("/api/labels", { data: { name: uniqueName("Personal") } }));
+  const refused = await api.owner.post("/api/tasks", { data: { title: "Labeled", projectId, labelIds: [personal.id] } });
+  expect(refused.status()).toBe(400);
+  const task = await json<{ id: string; labels: { label: { id: string } }[] }>(
+    await api.editor.post("/api/tasks", { data: { title: uniqueName("Labeled task"), projectId, labelIds: [label.id] } }),
+  );
+  expect(task.labels.map((row) => row.label.id)).toEqual([label.id]);
+
+  // Deleting the label takes it off the task; the task stays.
+  await expectStatuses("DELETE project label", (client) => client.delete(`/api/labels/${label.id}`), {
+    viewer: 403,
+    outsider: 404,
+  });
+  expect((await api.editor.delete(`/api/labels/${label.id}`)).status()).toBe(200);
+  const tasks = await json<{ id: string; labels: unknown[] }[]>(await api.owner.get("/api/tasks"));
+  expect(tasks.find((item) => item.id === task.id)?.labels).toEqual([]);
+});
+
 test("editors change project tasks, viewers only read them", async () => {
   await expectStatuses(
     "POST project task",

@@ -1,3 +1,4 @@
+import type { Label } from "@/lib/labels";
 import type { Priority } from "@/lib/priority";
 
 export type { Priority } from "@/lib/priority";
@@ -32,6 +33,8 @@ export type Task = {
   parentId?: string | null;
   subtasks?: RelatedTask[];
   blockedBy?: Array<{ blockedBy: RelatedTask }>;
+  /** #276: read them with `labelsOfTask`. */
+  labels?: Array<{ label: Label }>;
 };
 
 export type RelatedTask = { id: string; title: string; status: TaskStatus };
@@ -46,6 +49,8 @@ export type TaskInput = {
   recurrence: Recurrence;
   projectId: string;
   assigneeId: string;
+  /** Left out, the labels stay as they are (#276). */
+  labelIds?: string[];
 };
 
 export const statusLabels: Record<TaskStatus, string> = { TODO: "To do", IN_PROGRESS: "In progress", DONE: "Done" };

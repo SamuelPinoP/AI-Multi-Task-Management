@@ -2,9 +2,13 @@
 
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { formatTaskDueDate, getLocalDateOnly } from "@/lib/task-date-buckets";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 import { BlockedBadge, ProgressRing } from "@/components/tasks/task-badges";
+import { LabelChips } from "@/components/tasks/label-chip";
+import { LabelFilter } from "@/components/tasks/label-filter";
+import { labelsInScope, loadLabels, useLabels } from "@/components/tasks/label-store";
+import { labelsOfTask, matchesLabelFilter, type Label } from "@/lib/labels";
 import { PRIORITY_MENU_ORDER, priorityLabels, type Priority } from "@/lib/priority";
 import { openBlockers, subtaskProgress } from "@/lib/task-relations";
 
@@ -29,6 +33,7 @@ type Task = {
   project?: ProjectOption | null;
   subtasks?: Array<{ id: string; title: string; status: TaskStatus }>;
   blockedBy?: Array<{ blockedBy: { id: string; title: string; status: TaskStatus } }>;
+  labels?: Array<{ label: Label }>;
 };
 
 type ProjectKanbanBoardProps = {
@@ -78,8 +83,19 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
   const [newTaskAssigneeId, setNewTaskAssigneeId] = useState("");
   const [newTaskProjectId, setNewTaskProjectId] = useState(projectId ?? "");
+  // Labels (#276): a project's board filters by that project's labels; the all-tasks board by any.
+  const [labelFilter, setLabelFilter] = useState<Set<string>>(() => new Set());
+  const allLabels = useLabels();
+  const filterLabels = projectId ? labelsInScope(allLabels ?? [], projectId) : (allLabels ?? []);
+  useEffect(() => {
+    void loadLabels();
+  }, []);
+  const shownTasks = useMemo(
+    () => tasks.filter((task) => matchesLabelFilter(labelsOfTask(task).map((label) => label.id), labelFilter)),
+    [tasks, labelFilter],
+  );
 
-  const taskCounts = useMemo(() => new Map(STATUS_COLUMNS.map((column) => [column.status, tasks.filter((task) => task.status === column.status).length])), [tasks]);
+  const taskCounts = useMemo(() => new Map(STATUS_COLUMNS.map((column) => [column.status, shownTasks.filter((task) => task.status === column.status).length])), [shownTasks]);
 
   async function moveTask(task: Task, status: TaskStatus) {
     if (!canEdit || task.status === status) return;
@@ -171,9 +187,20 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
 
       {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
 
+      {filterLabels.length ? (
+        <div className="flex justify-end">
+          <LabelFilter
+            labels={filterLabels}
+            projects={projectId ? [{ id: projectId, name: projectName }] : projects}
+            selected={labelFilter}
+            onChange={setLabelFilter}
+          />
+        </div>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-3">
         {STATUS_COLUMNS.map((column) => {
-          const columnTasks = tasks.filter((task) => task.status === column.status);
+          const columnTasks = shownTasks.filter((task) => task.status === column.status);
           return (
             <section key={column.status} className="flex min-h-96 flex-col rounded-2xl border border-line bg-sunken p-4">
               <div className="mb-4 flex items-start justify-between gap-3">
@@ -198,7 +225,7 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
                 const dueIndicator = getDueIndicator(task);
                 const progress = subtaskProgress(task.subtasks);
                 const blockers = task.status === "DONE" ? [] : openBlockers(task.blockedBy);
-                return <article key={task.id} className="rounded-xl border border-line bg-surface p-4 shadow-card"><div className="flex items-start justify-between gap-3"><h3 className="font-semibold">{task.title}</h3><span className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700">{formatEnum(task.status)}</span></div>{task.description && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">{task.description}</p>}<div className="mt-3 flex flex-wrap gap-2">{task.priority !== "NONE" && <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300">Priority: {priorityLabels[task.priority]}</span>}{task.dueDate && <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium dark:border-zinc-700">Due: {formatTaskDueDate(task.dueDate)}</span>}{task.assignee && <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium dark:border-zinc-700">Assigned: {task.assignee.name}</span>}{dueIndicator && <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${dueIndicator.className}`}>{dueIndicator.label}</span>}{blockers.length > 0 && <BlockedBadge titles={blockers.map((blocker) => blocker.title)} className="rounded-full px-2.5 py-1 text-xs" />}{progress.total > 0 && <ProgressRing done={progress.done} total={progress.total} className="text-xs" />}</div>{canEdit && <div className="mt-4 flex flex-wrap gap-2">{STATUS_COLUMNS.filter((option) => option.status !== task.status).map((option) => <button key={option.status} type="button" disabled={updatingTaskId === task.id} onClick={() => void moveTask(task, option.status)} className={`${uiButtonClass} rounded-lg px-2.5 py-1.5 text-xs`}>Move to {option.title}</button>)}</div>}</article>;
+                return <article key={task.id} className="rounded-xl border border-line bg-surface p-4 shadow-card"><div className="flex items-start justify-between gap-3"><h3 className="font-semibold">{task.title}</h3><span className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700">{formatEnum(task.status)}</span></div>{task.description && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">{task.description}</p>}<div className="mt-3 flex flex-wrap gap-2">{task.priority !== "NONE" && <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300">Priority: {priorityLabels[task.priority]}</span>}{task.dueDate && <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium dark:border-zinc-700">Due: {formatTaskDueDate(task.dueDate)}</span>}{task.assignee && <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium dark:border-zinc-700">Assigned: {task.assignee.name}</span>}{dueIndicator && <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${dueIndicator.className}`}>{dueIndicator.label}</span>}{blockers.length > 0 && <BlockedBadge titles={blockers.map((blocker) => blocker.title)} className="rounded-full px-2.5 py-1 text-xs" />}{progress.total > 0 && <ProgressRing done={progress.done} total={progress.total} className="text-xs" />}<LabelChips labels={labelsOfTask(task)} max={3} /></div>{canEdit && <div className="mt-4 flex flex-wrap gap-2">{STATUS_COLUMNS.filter((option) => option.status !== task.status).map((option) => <button key={option.status} type="button" disabled={updatingTaskId === task.id} onClick={() => void moveTask(task, option.status)} className={`${uiButtonClass} rounded-lg px-2.5 py-1.5 text-xs`}>Move to {option.title}</button>)}</div>}</article>;
               })}</div>}
             </section>
           );
