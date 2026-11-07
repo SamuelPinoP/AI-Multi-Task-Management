@@ -283,7 +283,8 @@ export function QuickAdd({
       // One minmax(0, 1fr) column: an auto column would grow to the row's one-line width and widen the page on phones (#288).
       className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-xl border border-line bg-surface px-3 py-2 transition-colors focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft"
     >
-      <div className="flex items-center gap-2.5">
+      {/* On phones the buttons take a row of their own, so the text keeps the full width. */}
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
         <Plus aria-hidden="true" className="h-4 w-4 shrink-0 text-accent" />
         <label htmlFor={QUICK_ADD_INPUT_ID} className="sr-only">
           {label}
@@ -304,7 +305,7 @@ export function QuickAdd({
         />
         {smart ? (
           // Buttons that open the same pickers as the task page (#362, design 1B); typed codes keep working.
-          <div role="group" aria-label="Task details" className="flex shrink-0 items-center" onFocus={() => void loadProjects()}>
+          <div role="group" aria-label="Task details" className="flex shrink-0 items-center max-sm:w-full max-sm:pl-4.5" onFocus={() => void loadProjects()}>
             <DueDatePicker value={picked.dueDate ?? parsed?.dueDate ?? ""} onChange={(key) => pick({ dueDate: key ?? "" })}>
               <button type="button" aria-label="Due date" title="Due date" className={cn(pickerClass, picked.dueDate && "text-accent")}>
                 <CalendarDays aria-hidden="true" />
