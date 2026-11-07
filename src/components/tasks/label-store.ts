@@ -47,6 +47,11 @@ export function labelsInScope(labels: readonly Label[], scope: LabelScopeKey) {
   return labels.filter((label) => (label.projectId ?? "none") === scope);
 }
 
+/** The labels loaded so far, read outside a render (in an event handler). `null` until the first load. */
+export function currentLabels() {
+  return all;
+}
+
 /** The labels loaded so far, re-rendering when they change. `null` until the first load. */
 export function useLabels() {
   return useSyncExternalStore(

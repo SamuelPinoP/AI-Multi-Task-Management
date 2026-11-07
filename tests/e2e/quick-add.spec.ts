@@ -42,16 +42,16 @@ test("quick add reads dates, #project, !priority and @person before saving", asy
   await input.press("Enter");
   await expect(input).toHaveValue("");
   await page.getByRole("region", { name: /^Upcoming/ }).getByRole("button", { name: title, exact: true }).click();
-  const sheet = page.getByRole("dialog", { name: "Edit task" });
-  await expect(sheet.getByLabel("Title")).toHaveValue(title);
+  await expect(page.getByLabel("Title")).toHaveValue(title);
   // "tomorrow" in the browser's calendar, which may differ from the test runner's.
   const tomorrow = await page.evaluate(() => {
     const date = new Date();
     date.setDate(date.getDate() + 1);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   });
-  await expect(sheet.getByLabel("Due date")).toHaveValue(tomorrow);
-  await expect(sheet.getByLabel("Priority")).toHaveValue("HIGH");
-  await expect(sheet.getByLabel("Project")).toHaveValue(project.id);
-  await expect(sheet.getByLabel("Assignee").locator("option:checked")).toHaveText("Dana Lee");
+  const properties = page.getByRole("complementary", { name: "Properties" });
+  await expect(properties.getByRole("button", { name: `Due date: ${tomorrow}` })).toBeVisible();
+  await expect(properties.getByRole("button", { name: "Priority: High" })).toBeVisible();
+  await expect(properties.getByRole("button", { name: `Project: ${projectName}` })).toBeVisible();
+  await expect(properties.getByRole("button", { name: "Assignee: Dana Lee" })).toBeVisible();
 });

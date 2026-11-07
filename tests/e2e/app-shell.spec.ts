@@ -28,11 +28,10 @@ test("New task adds a task, updates the sidebar and is found by search", async (
 
   await page.getByPlaceholder("Search or run a command...").fill(title);
   await page.getByRole("option", { name: new RegExp(title) }).click();
-  await expect(page).toHaveURL(/\/tasks\?task=/);
-  // The Tasks page opens a linked task in its edit sheet.
-  const sheet = page.getByRole("dialog", { name: "Edit task" });
-  await expect(sheet.getByLabel("Title")).toHaveValue(title);
-  await expect(sheet.getByLabel("Priority")).toHaveValue("HIGH");
+  // A found task opens as its page (#352).
+  await expect(page).toHaveURL(/\/tasks\/[^/?]+$/);
+  await expect(page.getByLabel("Title")).toHaveValue(title);
+  await expect(page.getByRole("button", { name: "Priority: High" })).toBeVisible();
 });
 
 test("Account menu switches the theme and logs out", async ({ page }) => {

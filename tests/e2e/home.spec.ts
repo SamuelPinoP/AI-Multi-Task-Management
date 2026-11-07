@@ -229,9 +229,9 @@ test.describe("Now and next", () => {
 
     // Start marks the task In progress and opens it.
     await band.getByRole("button", { name: `Start ${task}` }).click();
-    await expect(page).toHaveURL(/\/tasks\?task=/);
+    await expect(page).toHaveURL(/\/tasks\/[^/?]+$/);
     await expect(page.getByText("Task started")).toBeVisible();
-    await expect(page.getByRole("dialog", { name: "Edit task" }).getByLabel("Status")).toHaveValue("IN_PROGRESS");
+    await expect(page.getByRole("button", { name: "Status: In progress" })).toBeVisible();
   });
 
   test("with nothing under way, Now shows the top Focus task and Next points to the calendar", async ({ page }) => {

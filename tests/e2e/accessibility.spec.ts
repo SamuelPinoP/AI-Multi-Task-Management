@@ -114,13 +114,15 @@ for (const theme of ["light", "dark"] as const) {
     }
     if (viewport) await page.setViewportSize(viewport);
 
-    // Dialogs and sheets too.
+    // A task's page (#352), then dialogs and sheets.
     await page.goto("/tasks");
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: "Overdue task", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "Edit task" })).toBeVisible();
-    found.push(...(await violations(page, "task sheet")));
-    await page.keyboard.press("Escape");
+    await expect(page.getByLabel("Title")).toHaveValue("Overdue task");
+    await expect(page.getByRole("region", { name: "Activity" })).toContainText("created the task");
+    found.push(...(await violations(page, "task page")));
+    await page.goto("/tasks");
+    await page.waitForLoadState("networkidle");
 
     await page.keyboard.press("n");
     await expect(page.getByRole("dialog", { name: "New task" })).toBeVisible();

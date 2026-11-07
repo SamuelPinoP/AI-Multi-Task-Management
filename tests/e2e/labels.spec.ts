@@ -12,18 +12,22 @@ test("labels: create from a task, filter by it, rename and delete", async ({ pag
   }
   await page.goto("/tasks");
 
-  // Create the label from the task's form; it's added to the task at once.
+  // Create the label from the task's page; it's added to the task at once.
   await page.getByRole("button", { name: labeled, exact: true }).click();
-  const sheet = page.getByRole("dialog", { name: "Edit task" });
-  await sheet.getByRole("button", { name: "Add labels" }).click();
+  await expect(page.getByLabel("Title")).toHaveValue(labeled);
+  const properties = page.getByRole("complementary", { name: "Properties" });
+  await properties.getByRole("button", { name: "Add labels" }).click();
   await page.getByLabel("Find or create a label").fill(label);
   await page.getByRole("option", { name: `Create label “${label}”` }).click();
   // Checked labels say so to screen readers: "‹name›, added".
   await expect(page.getByRole("option", { name: new RegExp(`^${label}\\W+added$`) })).toBeVisible();
+  // Escape closes only the picker; the page stays (it goes back to the list only when nothing has it).
+  const taskUrl = page.url();
   await page.keyboard.press("Escape");
-  await expect(sheet.getByRole("group", { name: "Labels" })).toContainText(label);
-  await sheet.getByRole("button", { name: "Save changes" }).click();
-  await expect(sheet).toBeHidden();
+  await expect(page.getByLabel("Find or create a label")).toHaveCount(0);
+  await expect(properties).toContainText(label);
+  expect(page.url()).toBe(taskUrl);
+  await page.getByRole("link", { name: "Back to Tasks" }).click();
   const row = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: labeled, exact: true }) });
   await expect(row).toContainText(label);
 
@@ -43,7 +47,7 @@ test("labels: create from a task, filter by it, rename and delete", async ({ pag
   // Rename it from Edit labels; every task shows the new name.
   const renamed = `${label}-ui`;
   await page.getByRole("button", { name: labeled, exact: true }).click();
-  await sheet.getByRole("button", { name: "Change labels" }).click();
+  await properties.getByRole("button", { name: "Change labels" }).click();
   await page.getByRole("button", { name: "Edit labels…" }).click();
   const manager = page.getByRole("dialog", { name: "Edit labels" });
   await manager.getByLabel(`Name of ${label}`).fill(renamed);
@@ -57,8 +61,8 @@ test("labels: create from a task, filter by it, rename and delete", async ({ pag
   await expect(manager).toContainText("No labels yet.");
   await page.keyboard.press("Escape");
   await expect(manager).toBeHidden();
-  await sheet.getByRole("button", { name: "Cancel" }).click();
-  await page.reload();
+  await expect(properties).not.toContainText(renamed);
+  await page.goto("/tasks");
   await expect(page.getByRole("button", { name: labeled, exact: true })).toBeVisible();
   await expect(page.getByRole("listitem").filter({ has: page.getByRole("button", { name: labeled, exact: true }) })).not.toContainText(renamed);
 });
