@@ -11,8 +11,9 @@ import { rememberCalendarView } from "@/lib/use-calendar-view";
 
 /**
  * The Calendar page's header with its Agenda and Month tabs (DES-13). Both views render it,
- * so switching tabs moves nothing but the view. The view on screen is remembered, so the
- * sidebar's Calendar item opens it next time.
+ * so the title, tabs and buttons stay the same when switching; the Month tab's frame is
+ * wider, since the month uses the page's width (#363). The view on screen is remembered,
+ * so the sidebar's Calendar item opens it next time.
  */
 export function CalendarHeader({ active, summary, onNewEvent }: { active: CalendarView; summary: string; onNewEvent: () => void }) {
   useEffect(() => {

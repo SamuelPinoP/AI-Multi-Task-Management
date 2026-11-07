@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test, type Page } from "@playwright/test";
 import { continueAsGuest, uniqueName } from "./helpers";
 
 function dateInputValue(daysFromToday: number) {
@@ -7,14 +8,31 @@ function dateInputValue(daysFromToday: number) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-/** The Full Calendar's day panel, named after its date ("Thursday, October 22, 2026"). */
-function dayPanel(page: import("@playwright/test").Page, daysFromToday = 0) {
+/** How the Month tab names a day: "Thursday, October 22, 2026". */
+function fullDate(daysFromToday: number) {
   const date = new Date();
   date.setDate(date.getDate() + daysFromToday);
-  return page.getByRole("complementary", { name: new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(date) });
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(date);
 }
 
-test("calendar: Show tasks hides due tasks and is remembered; New event opens on the selected day", async ({ page }) => {
+/** On a phone, the selected day's list under the grid, named after its date. */
+function dayPanel(page: Page, daysFromToday = 0) {
+  return page.getByRole("complementary", { name: fullDate(daysFromToday) });
+}
+
+/**
+ * A day's details: on a phone the list under the grid; on wider screens the
+ * day's pop-over (design 4B, #363), opened from its number when it's closed.
+ */
+async function openDay(page: Page, isMobile: boolean, daysFromToday = 0) {
+  if (isMobile) return dayPanel(page, daysFromToday);
+  const popover = page.getByRole("dialog", { name: fullDate(daysFromToday) });
+  if (!(await popover.isVisible())) await page.getByRole("button", { name: new RegExp(`^${fullDate(daysFromToday)}(, today)?, `) }).click();
+  await expect(popover).toBeVisible();
+  return popover;
+}
+
+test("calendar: Show tasks hides due tasks and is remembered; New event opens on the selected day", async ({ page, isMobile }) => {
   const task = uniqueName("Calendar task");
   const event = uniqueName("Calendar event");
   const created = uniqueName("Made on the calendar");
@@ -29,24 +47,27 @@ test("calendar: Show tasks hides due tasks and is remembered; New event opens on
   ).toBe(true);
 
   await page.goto("/events/calendar");
-  const today = dayPanel(page);
+  let today = await openDay(page, isMobile);
   await expect(today.getByRole("link", { name: task })).toBeVisible();
   await expect(today.getByRole("button", { name: event, exact: true })).toBeVisible();
 
-  // Off: the task leaves the grid and the day panel; events stay.
+  // Off: the task leaves the grid and the day's details; events stay.
   const showTasks = page.getByRole("switch", { name: "Show tasks" });
   await expect(showTasks).toHaveAttribute("aria-checked", "true");
   await showTasks.click();
   await expect(showTasks).toHaveAttribute("aria-checked", "false");
   await expect(page.getByText(task)).toHaveCount(0);
+  today = await openDay(page, isMobile);
   await expect(today.getByRole("button", { name: event, exact: true })).toBeVisible();
 
   // The browser remembers it.
   await page.reload();
+  today = await openDay(page, isMobile);
   await expect(today.getByRole("button", { name: event, exact: true })).toBeVisible();
   await expect(showTasks).toHaveAttribute("aria-checked", "false");
   await expect(page.getByText(task)).toHaveCount(0);
   await showTasks.click();
+  today = await openDay(page, isMobile);
   await expect(today.getByRole("link", { name: task })).toBeVisible();
 
   // New event starts on the selected day (today) and appears there once created.
@@ -57,6 +78,7 @@ test("calendar: Show tasks hides due tasks and is remembered; New event opens on
   await sheet.getByLabel("Start time").fill("16:30");
   await sheet.getByRole("button", { name: "Create event" }).click();
   await expect(sheet).toBeHidden();
+  today = await openDay(page, isMobile);
   await expect(today.getByRole("button", { name: created, exact: true })).toBeVisible();
   await expect(today.getByRole("article").filter({ hasText: created })).toContainText("4:30 PM");
 
@@ -65,6 +87,7 @@ test("calendar: Show tasks hides due tasks and is remembered; New event opens on
   const confirm = page.getByRole("dialog", { name: "Delete this event?" });
   await confirm.getByRole("button", { name: "Move to Trash" }).click();
   await expect(confirm).toBeHidden();
+  today = await openDay(page, isMobile);
   await expect(today.getByRole("button", { name: created, exact: true })).toHaveCount(0);
   await expect(today.getByRole("button", { name: event, exact: true })).toBeVisible();
 });
@@ -83,7 +106,7 @@ function agendaLabel(daysFromToday: number) {
   return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(date);
 }
 
-test("calendar: delete one day of a repeating event, undo it, then that day and later, then the series", async ({ page }) => {
+test("calendar: delete one day of a repeating event, undo it, then that day and later, then the series", async ({ page, isMobile }) => {
   const standup = uniqueName("Daily stand-up");
   await continueAsGuest(page);
   const created = await page.request.post("/api/events", {
@@ -94,13 +117,14 @@ test("calendar: delete one day of a repeating event, undo it, then that day and 
 
   // Only today: the dialog offers the three choices, with "Only <today>" picked.
   await page.goto("/events/calendar");
-  const today = dayPanel(page);
+  let today = await openDay(page, isMobile);
   await today.getByRole("button", { name: `Delete ${standup}` }).click();
   const dialog = page.getByRole("dialog", { name: "Delete a repeating event" });
   await expect(dialog.getByRole("radio", { name: new RegExp(`^Only ${longDay(0)}`) })).toBeChecked();
   await expect(dialog.getByRole("radio")).toHaveCount(3);
   await dialog.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(dialog).toBeHidden();
+  today = await openDay(page, isMobile);
   await expect(today.getByRole("button", { name: standup, exact: true })).toHaveCount(0);
 
   // The other days keep it.
@@ -114,6 +138,7 @@ test("calendar: delete one day of a repeating event, undo it, then that day and 
   expect((await events()).find((event) => event.id === id)?.skippedDates).toEqual([`${dateInputValue(0)}T00:00:00.000Z`]);
   expect((await page.request.patch(`/api/events/${id}/repeats`, { data: { restoreDate: dateInputValue(0) } })).ok()).toBe(true);
   await page.reload();
+  today = await openDay(page, isMobile);
   await expect(today.getByRole("button", { name: standup, exact: true })).toBeVisible();
 
   // The same from the Events page, with the toast's Undo: two days ahead and every day after.
@@ -180,11 +205,6 @@ test("calendar on a phone: pick a day in the month grid, then move a week at a t
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const offset = tomorrow.getMonth() === new Date().getMonth() ? 1 : -1;
-  const fullDate = (daysFromToday: number) => {
-    const date = new Date();
-    date.setDate(date.getDate() + daysFromToday);
-    return new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(date);
-  };
   await continueAsGuest(page);
   expect((await page.request.post("/api/tasks", { data: { title: task, dueDate: dateInputValue(offset) } })).ok()).toBe(true);
   expect(
@@ -222,4 +242,70 @@ test("calendar on a phone: pick a day in the month grid, then move a week at a t
   await page.getByRole("button", { name: "Today", exact: true }).click();
   await expect(dayPanel(page, 0)).toBeVisible();
   await expect(grid.getByRole("button", { pressed: true })).toHaveAccessibleName(`${fullDate(0)}, today, nothing planned`);
+});
+
+/** How the highlight banner names a due day: "Thursday, Nov 12". */
+function bannerDay(daysFromToday: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + daysFromToday);
+  return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric" }).format(date);
+}
+
+test("calendar: Show in calendar highlights the task and says why, until it's cleared (#363)", async ({ page, isMobile }) => {
+  const title = uniqueName("Calendar highlight");
+  await continueAsGuest(page);
+  const task = (await (await page.request.post("/api/tasks", { data: { title, dueDate: dateInputValue(2), priority: "MEDIUM" } })).json()) as { id: string };
+
+  // The task's page links here.
+  await page.goto(`/tasks/${task.id}`);
+  await page.getByRole("link", { name: "Show in calendar" }).click();
+  await page.waitForURL((url) => url.pathname === "/events/calendar" && url.searchParams.get("task") === task.id);
+
+  // A banner gives the reason, and the day's details say "Highlighted" in words as well as color.
+  const banner = page.getByRole("status").filter({ hasText: "Highlighted because you opened it from Tasks." });
+  await expect(banner).toContainText(`“${title}” is due ${bannerDay(2)}.`);
+  const day = isMobile ? dayPanel(page, 2) : page.getByRole("dialog", { name: fullDate(2) });
+  await expect(day.getByRole("article").filter({ hasText: title })).toContainText("Highlighted from Tasks");
+  if (!isMobile) await expect(page.getByText(`Highlighted: ${title}`)).toBeVisible();
+  await expect(banner.getByRole("link", { name: "Open task" })).toHaveAttribute("href", `/tasks/${task.id}`);
+
+  // The highlight passes axe in this theme.
+  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined))));
+  const axe = await new AxeBuilder({ page }).include("#main-content").withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(axe.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(" ")}`)).toEqual([]);
+
+  // Clear: the link loses the task, and the task stays on its day as a plain item.
+  await banner.getByRole("button", { name: "Clear highlight" }).click();
+  await expect(page).toHaveURL(/\/events\/calendar$/);
+  await expect(page.getByRole("status").filter({ hasText: "Highlighted because" })).toHaveCount(0);
+  const after = await openDay(page, isMobile, 2);
+  await expect(after.getByRole("link", { name: title })).toBeVisible();
+  await expect(after.getByRole("article").filter({ hasText: title })).not.toContainText("Highlighted");
+});
+
+test("calendar: a highlighted task without a due date gets one by picking a day, with Undo (#363)", async ({ page }) => {
+  const title = uniqueName("No date yet");
+  await continueAsGuest(page);
+  const task = (await (await page.request.post("/api/tasks", { data: { title } })).json()) as { id: string };
+  const dueDate = async () => ((await (await page.request.get(`/api/tasks/${task.id}`)).json()) as { dueDate: string | null }).dueDate;
+  // A day of this month other than today, so it's in the grid whatever the date.
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const offset = tomorrow.getMonth() === new Date().getMonth() ? 1 : -1;
+
+  await page.goto(`/events/calendar?task=${task.id}`);
+  // The app shell has a status region of its own, so the banner is found by the task's title.
+  const banner = page.getByRole("status").filter({ hasText: title });
+  await expect(banner).toContainText(`“${title}” has no due date yet. Pick a day below to set one.`);
+
+  // Picking a day sets it, and the banner switches to the highlight.
+  await page.getByRole("button", { name: new RegExp(`^${fullDate(offset)}, `) }).click();
+  await expect(page.getByText("Due date set")).toBeVisible();
+  await expect(banner).toContainText(`“${title}” ${offset > 0 ? "is due" : "was due"} ${bannerDay(offset)}`);
+  expect((await dueDate())?.slice(0, 10)).toBe(dateInputValue(offset));
+
+  // Undo takes it away again.
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(banner).toContainText("has no due date yet");
+  await expect.poll(dueDate).toBeNull();
 });
