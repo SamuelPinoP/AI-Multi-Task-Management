@@ -531,16 +531,17 @@ export default function TasksPage() {
             const canAdd = !group.project || group.project.accessLevel !== "VIEWER";
             return (
               <section key={group.key} aria-labelledby={`group-${group.key}`} className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
-                <div className="flex min-h-12 flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-line bg-sunken py-1.5 pl-3.5 pr-2 sm:pl-4">
+                {/* One line at any width: a long project name truncates rather than pushing the buttons onto a second row. */}
+                <div className="flex min-h-12 items-center gap-2 border-b border-line bg-sunken py-1.5 pl-3.5 pr-2 sm:gap-2.5 sm:pl-4">
                   {group.projectId ? (
                     <>
                       <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: group.color ?? undefined }} />
                       <h2 id={`group-${group.key}`} className="min-w-0 truncate text-[0.9375rem] font-semibold">
-                        <Link href={`/projects/${group.projectId}`} className="rounded outline-none hover:text-accent focus-visible:ring-2 focus-visible:ring-accent">
+                        <Link href={`/projects/${group.projectId}`} title={group.name} className="rounded outline-none hover:text-accent focus-visible:ring-2 focus-visible:ring-accent">
                           {group.name}
                         </Link>
                       </h2>
-                      <PriorityBadge priority={group.project?.priority ?? "NONE"} />
+                      <PriorityBadge priority={group.project?.priority ?? "NONE"} className="shrink-0" />
                     </>
                   ) : (
                     <h2 id={`group-${group.key}`} className="min-w-0">

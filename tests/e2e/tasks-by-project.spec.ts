@@ -48,3 +48,30 @@ test("notes: a project link opens the Notes page filtered to it", async ({ page 
   await page.goto("/notes?project=none");
   await expect(page.getByRole("combobox", { name: "Project" })).toHaveValue("none");
 });
+
+test("a long project name truncates in its card's header, and the quick add's text keeps its width on phones", async ({ page, isMobile }) => {
+  await continueAsGuest(page);
+  const post = async <T>(url: string, data: Record<string, unknown>) => (await (await page.request.post(url, { data })).json()) as T;
+  const project = await post<{ id: string; name: string }>("/api/projects", { name: uniqueName("A project with a rather long name for a phone screen"), priority: "HIGH" });
+  await post("/api/tasks", { title: uniqueName("Long name task"), projectId: project.id });
+  await page.goto("/tasks");
+
+  // The name gives way; Calendar, Notes and + stay on the name's line.
+  const card = page.getByRole("region", { name: project.name });
+  const middle = async (box: { y: number; height: number } | null) => (box ? box.y + box.height / 2 : Number.NaN);
+  const name = await middle(await card.getByRole("heading", { level: 2 }).boundingBox());
+  for (const control of [card.getByRole("link", { name: `Calendar for ${project.name}` }), card.getByRole("button", { name: `New task in ${project.name}` })]) {
+    expect(Math.abs((await middle(await control.boundingBox())) - name)).toBeLessThan(6);
+  }
+
+  // On phones the quick add's buttons sit under the text, which keeps most of the width.
+  const input = await page.getByLabel("Add a task", { exact: true }).boundingBox();
+  const details = await page.getByRole("group", { name: "Task details" }).boundingBox();
+  expect(input && details).toBeTruthy();
+  if (isMobile) {
+    expect(details!.y).toBeGreaterThanOrEqual(input!.y + input!.height - 1);
+    expect(input!.width).toBeGreaterThan(250);
+  } else {
+    expect(Math.abs(details!.y + details!.height / 2 - (input!.y + input!.height / 2))).toBeLessThan(6);
+  }
+});
