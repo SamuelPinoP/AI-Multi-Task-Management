@@ -15,10 +15,11 @@ test("New task adds a task, updates the sidebar and is found by search", async (
   await page.getByRole("button", { name: "New task" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New task" });
   await dialog.getByLabel("Title").fill(title);
-  await dialog.getByLabel("Priority").selectOption("HIGH");
-  await dialog.getByRole("button", { name: "Add task" }).click();
+  await dialog.getByRole("button", { name: "Priority: No priority" }).click();
+  await page.getByRole("option", { name: "High" }).click();
+  await dialog.getByRole("button", { name: "Create task" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText("Task added")).toBeVisible();
+  await expect(page.getByText("Task created")).toBeVisible();
   if (!isMobile) {
     await expect(page.getByRole("link", { name: "Tasks, 1 open" })).toBeVisible();
     await page.keyboard.press("Control+K");

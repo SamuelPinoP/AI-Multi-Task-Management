@@ -19,7 +19,7 @@
 
 import { CalendarDays, ChevronDown, NotebookText, Plus, Search } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { QuickAdd } from "@/components/home/quick-add";
@@ -28,9 +28,8 @@ import { PriorityBadge } from "@/components/tasks/priority-badge";
 import { LabelFilter } from "@/components/tasks/label-filter";
 import { loadLabels, useLabels } from "@/components/tasks/label-store";
 import { TaskRow } from "@/components/tasks/task-row";
-import type { TaskRelations } from "@/components/tasks/task-relations-panel";
 import { TASK_ORDER_KEY } from "@/components/tasks/task-page-view";
-import { TaskSheet, taskRequestBody } from "@/components/tasks/task-sheet";
+import { taskRequestBody } from "@/components/tasks/task-sheet";
 import type { Priority, Project, Task, TaskInput, TaskStatus } from "@/components/tasks/types";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -44,7 +43,7 @@ import { describeBulkChange, type BulkTaskChange, type TaskSnapshot } from "@/li
 import { compareTaskDueDates, formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { topLevelTasks } from "@/lib/task-relations";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
-import { notifyWorkspaceChanged, TASK_CREATED_EVENT } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, openNewTask, TASK_CREATED_EVENT } from "@/lib/workspace-events";
 
 /** A project from /api/projects, with the caller's access. */
 type ProjectItem = Project & { accessLevel?: "OWNER" | "EDITOR" | "VIEWER"; status?: string; updatedAt?: string };
@@ -107,7 +106,6 @@ async function errorMessage(response: Response, fallback: string) {
 
 export default function TasksPage() {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const linkedTaskId = searchParams.get("task");
 
@@ -125,7 +123,6 @@ export default function TasksPage() {
   const [sortBy, setSortBy] = useState<SortOption>("DUE_DATE_ASC");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const [sheet, setSheet] = useState<{ open: boolean; task: Task | null; draft?: Partial<TaskInput> }>({ open: false, task: null });
   const [confirmDelete, setConfirmDelete] = useState<Task | null>(null);
   // Selection for bulk changes (#281): ids, plus the last clicked row for Shift+click ranges.
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -241,9 +238,6 @@ export default function TasksPage() {
   const filtersActive =
     Boolean(searchQuery.trim()) || statusFilter !== "ALL" || priorityFilter !== "ALL" || Boolean(projectFilter) || labelFilter.size > 0;
 
-  // The sheet follows the latest copy of its task, so subtasks and blockers update in place.
-  const sheetTask = sheet.task ? (tasks.find((task) => task.id === sheet.task?.id) ?? sheet.task) : null;
-
   function selectTask(task: Task, range: boolean) {
     setSelected((current) => {
       const next = new Set(current);
@@ -350,42 +344,6 @@ export default function TasksPage() {
     }
   }
 
-  async function request(url: string, init: RequestInit, fallback: string) {
-    try {
-      const response = await fetch(url, { headers: { "Content-Type": "application/json" }, ...init });
-      if (!response.ok) return errorMessage(response, fallback);
-      notifyWorkspaceChanged();
-      await fetchTasks(false);
-      return null;
-    } catch {
-      return fallback;
-    }
-  }
-
-  function relationsFor(task: Task): TaskRelations {
-    const blockerIds = new Set((task.blockedBy ?? []).map((item) => item.blockedBy.id));
-    const subtasks = tasks.filter((item) => item.parentId === task.id);
-    const parent = task.parentId ? tasks.find((item) => item.id === task.parentId) : undefined;
-    return {
-      parent: parent ? { id: parent.id, title: parent.title, status: parent.status } : null,
-      subtasks,
-      blockers: (task.blockedBy ?? []).map((item) => item.blockedBy),
-      candidates: tasks.filter(
-        (item) => item.id !== task.id && item.status !== "DONE" && !blockerIds.has(item.id) && item.parentId !== task.id,
-      ),
-      onAddSubtask: (title) =>
-        request("/api/tasks", { method: "POST", body: JSON.stringify({ title, parentId: task.id }) }, "Could not add the subtask."),
-      onToggleSubtask: (subtask) => void toggleTask(subtask),
-      onOpenTask: (id) => {
-        const next = tasks.find((item) => item.id === id);
-        if (next) setSheet({ open: true, task: next });
-      },
-      onAddBlocker: (id) =>
-        request(`/api/tasks/${task.id}/dependencies`, { method: "POST", body: JSON.stringify({ blockedById: id }) }, "Could not add it."),
-      onRemoveBlocker: (id) => request(`/api/tasks/${task.id}/dependencies/${id}`, { method: "DELETE" }, "Could not remove it."),
-    };
-  }
-
   /** Opens a task as its page, remembering the order shown for its previous and next buttons. */
   function openTask(task: Task) {
     try {
@@ -394,26 +352,6 @@ export default function TasksPage() {
       // Private windows can refuse storage; the page then hides previous and next.
     }
     router.push(`/tasks/${task.id}`);
-  }
-
-  function closeSheet(open: boolean) {
-    setSheet((current) => ({ ...current, open }));
-    // Drop ?task= so the sheet doesn't reopen on the next refetch.
-    if (!open && linkedTaskId) router.replace(pathname, { scroll: false });
-  }
-
-  async function saveTask(input: TaskInput) {
-    const editing = sheet.task;
-    const response = await fetch(editing ? `/api/tasks/${editing.id}` : "/api/tasks", {
-      method: editing ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(taskRequestBody(input)),
-    });
-    if (!response.ok) return errorMessage(response, editing ? "Could not save the task." : "Could not create the task.");
-    notifyWorkspaceChanged();
-    await fetchTasks(false);
-    toast.success(editing ? "Task saved" : "Task created", { description: input.title });
-    return null;
   }
 
   async function toggleTask(task: Task) {
@@ -445,7 +383,6 @@ export default function TasksPage() {
       if (!response.ok) throw new Error(await errorMessage(response, "Could not delete the task."));
       setTasks((current) => current.filter((item) => item.id !== task.id));
       notifyWorkspaceChanged();
-      if (sheet.task?.id === task.id) closeSheet(false);
       toast.success("Moved to Trash", {
         description: task.title,
         action: { label: "Open Trash", onClick: () => router.push("/trash") },
@@ -493,7 +430,7 @@ export default function TasksPage() {
             ))}
           </div>
         </div>
-        <button type="button" onClick={() => setSheet({ open: true, task: null })} className={cn(uiPrimaryButtonClass, "px-3 py-1.5")}>
+        <button type="button" onClick={() => openNewTask()} className={cn(uiPrimaryButtonClass, "px-3 py-1.5")}>
           <Plus aria-hidden="true" className="h-4 w-4" />
           New task
         </button>
@@ -665,7 +602,7 @@ export default function TasksPage() {
                   {canAdd ? (
                     <button
                       type="button"
-                      onClick={() => setSheet({ open: true, task: null, draft: { projectId: group.projectId ?? "" } })}
+                      onClick={() => openNewTask({ projectId: group.projectId ?? undefined })}
                       aria-label={group.projectId ? `New task in ${group.name}` : "New task with no project"}
                       title={group.projectId ? `New task in ${group.name}` : "New task with no project"}
                       className={headerLinkClass}
@@ -712,16 +649,6 @@ export default function TasksPage() {
         </div>
       )}
 
-      <TaskSheet
-        open={sheet.open}
-        onOpenChange={closeSheet}
-        task={sheetTask}
-        draft={sheet.draft}
-        projects={projects}
-        onSubmit={saveTask}
-        onDelete={setConfirmDelete}
-        relations={sheetTask ? relationsFor(sheetTask) : undefined}
-      />
 
       <ConfirmDialog
         open={confirmBulkDelete}

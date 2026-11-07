@@ -33,7 +33,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { AccentMenuItems } from "@/components/accent-menu";
 import { LogoMark } from "@/components/brand/logo-mark";
 import { CommandPalette } from "@/components/command-palette";
-import { NewTaskDialog } from "@/components/new-task-dialog";
+import { NewTaskDialog, type NewTaskDraft } from "@/components/new-task-dialog";
 import { NotificationsMenu } from "@/components/notifications-menu";
 import { ProjectSheet, type ProjectInput } from "@/components/projects/project-sheet";
 import { clearOfflineData, OfflineBanner, promptInstall, useInstallPrompt } from "@/components/pwa";
@@ -66,7 +66,7 @@ import {
 } from "@/lib/sidebar-state";
 import { useCalendarView } from "@/lib/use-calendar-view";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
-import { notifyWorkspaceChanged, WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, OPEN_NEW_TASK_EVENT, WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
 import type { WorkspaceNav, WorkspaceNavProject } from "@/lib/workspace-nav";
 
 type ShellUser = {
@@ -673,6 +673,17 @@ export function AppShell({
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [newTaskDraft, setNewTaskDraft] = useState<NewTaskDraft>({});
+
+  // Pages open the same pop-up, sometimes in a project (the Tasks page's project cards).
+  useEffect(() => {
+    const open = (event: Event) => {
+      setNewTaskDraft((event as CustomEvent<NewTaskDraft>).detail ?? {});
+      setNewTaskOpen(true);
+    };
+    window.addEventListener(OPEN_NEW_TASK_EVENT, open);
+    return () => window.removeEventListener(OPEN_NEW_TASK_EVENT, open);
+  }, []);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
@@ -787,6 +798,7 @@ export function AppShell({
 
   const openNewTask = () => {
     setMenuOpen(false);
+    setNewTaskDraft({});
     setNewTaskOpen(true);
   };
 
@@ -884,7 +896,7 @@ export function AppShell({
         onNewTask={openNewTask}
         onShowShortcuts={() => setShortcutsOpen(true)}
       />
-      <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} projects={nav.projects} />
+      <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} draft={newTaskDraft} />
       <ProjectSheet open={newProjectOpen} onOpenChange={setNewProjectOpen} onSubmit={createProject} />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>

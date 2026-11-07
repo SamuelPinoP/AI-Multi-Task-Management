@@ -7,6 +7,13 @@ export const WORKSPACE_CHANGED_EVENT = "workspace:changed";
 /** Fired by the shell's New task dialog, so the Tasks page can refetch. */
 export const TASK_CREATED_EVENT = "workspace:task-created";
 
+/** Asks the shell to open its New task pop-up (#362), optionally in a project: `detail: { projectId }`. */
+export const OPEN_NEW_TASK_EVENT = "workspace:open-new-task";
+
+export function openNewTask(draft: { projectId?: string } = {}) {
+  window.dispatchEvent(new CustomEvent(OPEN_NEW_TASK_EVENT, { detail: draft }));
+}
+
 /** Call after creating, completing, deleting or restoring a task or project. */
 export function notifyWorkspaceChanged() {
   window.dispatchEvent(new Event(WORKSPACE_CHANGED_EVENT));

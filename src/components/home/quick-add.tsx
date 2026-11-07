@@ -1,15 +1,21 @@
 "use client";
 
-import { CalendarDays, Flag, Info, Plus, UserRound, X } from "lucide-react";
+import { CalendarDays, Flag, FolderInput, Info, Plus, Tag, UserRound, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { DueDatePicker } from "@/components/tasks/due-date-picker";
+import { LabelPicker } from "@/components/tasks/label-picker";
+import { loadLabels, scopeKeyFor, useLabels } from "@/components/tasks/label-store";
 import { loadProjectMembers } from "@/components/tasks/load-members";
+import { MemberAvatar } from "@/components/tasks/member-avatar";
+import { PropertyPicker } from "@/components/tasks/property-picker";
 import type { Member } from "@/components/tasks/types";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
-import { isPressingPriority, priorityLabels } from "@/lib/priority";
+import { isPressingPriority, PRIORITY_MENU_ORDER, priorityLabels, type Priority } from "@/lib/priority";
 import { projectColor } from "@/lib/project-color";
 import { parseQuickAdd, type QuickAddKind, type QuickAddResult } from "@/lib/quick-add-parse";
+import { TASK_TITLE_MAX } from "@/lib/task-history";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 export const QUICK_ADD_INPUT_ID = "quick-add-input";
@@ -34,13 +40,12 @@ type ProjectOption = { id: string; name: string; color: string | null };
 type ProjectListItem = ProjectOption & { accessLevel?: string; status?: string };
 
 const TASKS_ENDPOINT = "/api/tasks";
-/** The quick-add syntax, shown as hints on wider screens (DES-10). */
-const syntaxHints = [
-  ["fri", "due date"],
-  ["#project", "project"],
-  ["!high", "priority"],
-  ["@name", "assignee"],
-] as const;
+
+/** Values picked with the quick add's buttons (#362); they win over typed codes. An empty string means "none". */
+type Picked = { dueDate?: string; projectId?: string; priority?: Priority; assigneeId?: string; labelIds?: string[] };
+
+const pickerClass =
+  "grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40 [&_svg]:h-4 [&_svg]:w-4";
 
 /** A button that puts the cursor in the page's quick add, for empty states that say "Add a task". */
 export function QuickAddFocusButton({ className, children }: { className?: string; children: ReactNode }) {
@@ -83,7 +88,7 @@ export function QuickAdd({
   endpoint = TASKS_ENDPOINT,
   field = "title",
   successMessage = "Task added",
-  editHref = (id) => `/tasks?task=${id}`,
+  editHref = (id) => `/tasks/${id}`,
   quiet = false,
 }: QuickAddProps = {}) {
   const router = useRouter();
@@ -93,6 +98,8 @@ export function QuickAdd({
   const [ignore, setIgnore] = useState<ReadonlySet<QuickAddKind>>(new Set());
   const [projects, setProjects] = useState<ProjectOption[] | undefined>(undefined);
   const [members, setMembers] = useState<{ projectId: string; list: Member[] } | null>(null);
+  const [picked, setPicked] = useState<Picked>({});
+  const allLabels = useLabels();
   const projectsRequest = useRef<Promise<ProjectOption[]> | null>(null);
 
   function loadProjects() {
@@ -110,19 +117,22 @@ export function QuickAdd({
 
   const first = smart ? parse(text) : null;
   const parsedProjectId = first?.project?.id ?? null;
+  // A picked project wins over a typed #project (#362).
+  const projectId = picked.projectId !== undefined ? picked.projectId : (parsedProjectId ?? "");
   const loadedMembers = parsedProjectId && members?.projectId === parsedProjectId ? members.list : undefined;
   const parsed = first && loadedMembers ? parse(text, projects, loadedMembers) : first;
+  const memberList = projectId && members?.projectId === projectId ? members.list : [];
 
   useEffect(() => {
-    if (!parsedProjectId || members?.projectId === parsedProjectId) return;
+    if (!projectId || members?.projectId === projectId) return;
     let cancelled = false;
-    void loadProjectMembers(parsedProjectId).then((list) => {
-      if (!cancelled) setMembers({ projectId: parsedProjectId, list });
+    void loadProjectMembers(projectId).then((list) => {
+      if (!cancelled) setMembers({ projectId, list });
     });
     return () => {
       cancelled = true;
     };
-  }, [parsedProjectId, members?.projectId]);
+  }, [projectId, members?.projectId]);
 
   /** The final reading of the text, waiting for projects and members if they're still loading. */
   async function resolve(value: string) {
@@ -141,13 +151,18 @@ export function QuickAdd({
     try {
       const result = smart ? await resolve(trimmed) : null;
       const title = result?.title ?? trimmed;
+      // Picked values win over typed codes; the assignee only counts in the project it belongs to.
+      const dueDate = picked.dueDate !== undefined ? picked.dueDate : result?.dueDate;
+      const project = picked.projectId !== undefined ? picked.projectId : result?.project?.id;
+      const assignee = picked.assigneeId ?? (project && project === result?.project?.id ? result?.assignee?.id : undefined);
       const payload = result
         ? {
             title,
-            ...(result.dueDate ? { dueDate: result.dueDate } : {}),
-            ...(result.priority ? { priority: result.priority } : {}),
-            ...(result.project ? { projectId: result.project.id } : {}),
-            ...(result.assignee ? { assigneeId: result.assignee.id } : {}),
+            ...(dueDate ? { dueDate } : {}),
+            ...((picked.priority ?? result.priority) ? { priority: picked.priority ?? result.priority } : {}),
+            ...(project ? { projectId: project } : {}),
+            ...(project && assignee ? { assigneeId: assignee } : {}),
+            ...(picked.labelIds?.length ? { labelIds: picked.labelIds } : {}),
           }
         : { [field]: trimmed };
       const response = await fetch(endpoint, {
@@ -163,6 +178,7 @@ export function QuickAdd({
       const id = body.id;
       setText("");
       setIgnore(new Set());
+      setPicked({});
       notifyWorkspaceChanged();
       onAdded?.(id, title);
       router.refresh();
@@ -181,6 +197,42 @@ export function QuickAdd({
   function keepAsText(kind: QuickAddKind) {
     setIgnore((current) => new Set(current).add(kind));
   }
+
+  function pick(change: Picked) {
+    setPicked((current) => ({ ...current, ...change }));
+  }
+
+  // What the buttons picked, as chips with a way to clear each.
+  const pickedProject = projects?.find((project) => project.id === picked.projectId);
+  const pickedMember = memberList.find((member) => member.id === picked.assigneeId);
+  const pickedLabels = (allLabels ?? []).filter((label) => picked.labelIds?.includes(label.id));
+  const pickedChips: { key: keyof Picked; name: string; value: string; icon: ReactNode }[] = [];
+  if (picked.dueDate !== undefined) {
+    pickedChips.push({ key: "dueDate", name: "Due", value: picked.dueDate ? formatDueChip(picked.dueDate) : "No due date", icon: <CalendarDays aria-hidden="true" className="h-3.5 w-3.5 text-muted" /> });
+  }
+  if (picked.projectId !== undefined) {
+    pickedChips.push({
+      key: "projectId",
+      name: "Project",
+      value: pickedProject?.name ?? "No project",
+      icon: <span aria-hidden="true" className="h-2 w-2 rounded-[3px]" style={{ backgroundColor: pickedProject ? projectColor(pickedProject) : "transparent" }} />,
+    });
+  }
+  if (picked.priority) {
+    pickedChips.push({ key: "priority", name: "Priority", value: priorityLabels[picked.priority], icon: <Flag aria-hidden="true" className={cn("h-3.5 w-3.5", isPressingPriority(picked.priority) ? "text-danger" : "text-muted")} /> });
+  }
+  if (picked.assigneeId && pickedMember) {
+    pickedChips.push({ key: "assigneeId", name: "Assignee", value: pickedMember.name, icon: <UserRound aria-hidden="true" className="h-3.5 w-3.5 text-muted" /> });
+  }
+  if (pickedLabels.length) {
+    pickedChips.push({ key: "labelIds", name: "Labels", value: pickedLabels.map((label) => label.name).join(", "), icon: <Tag aria-hidden="true" className="h-3.5 w-3.5 text-muted" /> });
+  }
+  const overridden = new Set<QuickAddKind>([
+    ...(picked.dueDate !== undefined ? (["date"] as const) : []),
+    ...(picked.projectId !== undefined ? (["project", "assignee"] as const) : []),
+    ...(picked.priority ? (["priority"] as const) : []),
+    ...(picked.assigneeId ? (["assignee"] as const) : []),
+  ]);
 
   const chips: { kind: QuickAddKind; name: string; source: string; icon: ReactNode; value: string; tone?: string }[] = [];
   if (parsed?.dueDate && parsed.dueText) {
@@ -221,13 +273,15 @@ export function QuickAdd({
       value: parsed.assignee.name,
     });
   }
+  const typedChips = chips.filter((chip) => !overridden.has(chip.kind));
   const hints = parsed?.hints ?? [];
-  const showDetails = smart && text.trim() !== "" && (chips.length > 0 || hints.length > 0);
+  const showDetails = smart && ((text.trim() !== "" && (typedChips.length > 0 || hints.length > 0)) || pickedChips.length > 0);
 
   return (
     <form
       onSubmit={handleSubmit}
-      className="grid gap-2 rounded-xl border border-line bg-surface px-3 py-2 transition-colors focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft"
+      // One minmax(0, 1fr) column: an auto column would grow to the row's one-line width and widen the page on phones (#288).
+      className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-xl border border-line bg-surface px-3 py-2 transition-colors focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft"
     >
       <div className="flex items-center gap-2.5">
         <Plus aria-hidden="true" className="h-4 w-4 shrink-0 text-accent" />
@@ -243,31 +297,111 @@ export function QuickAdd({
           }}
           onFocus={() => void loadProjects()}
           placeholder={placeholder ?? (smart ? "Add a task: Draft slides fri #project !high" : "Add a task and press Enter")}
-          maxLength={200}
+          maxLength={TASK_TITLE_MAX}
           autoComplete="off"
-          aria-describedby={smart ? "quick-add-details quick-add-hints" : undefined}
+          aria-describedby={smart ? "quick-add-details" : undefined}
           className="min-w-0 flex-1 bg-transparent py-1 text-sm text-ink outline-none placeholder:text-muted"
         />
+        {smart ? (
+          // Buttons that open the same pickers as the task page (#362, design 1B); typed codes keep working.
+          <div role="group" aria-label="Task details" className="flex shrink-0 items-center" onFocus={() => void loadProjects()}>
+            <DueDatePicker value={picked.dueDate ?? parsed?.dueDate ?? ""} onChange={(key) => pick({ dueDate: key ?? "" })}>
+              <button type="button" aria-label="Due date" title="Due date" className={cn(pickerClass, picked.dueDate && "text-accent")}>
+                <CalendarDays aria-hidden="true" />
+              </button>
+            </DueDatePicker>
+            <PropertyPicker
+              label="Add to project"
+              align="end"
+              value={projectId}
+              options={[
+                { value: "", label: "No project", icon: <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full border-[1.5px] border-dashed border-muted" /> },
+                ...(projects ?? []).map((project) => ({
+                  value: project.id,
+                  label: project.name,
+                  icon: <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: projectColor(project) }} />,
+                })),
+              ]}
+              emptyText={projects ? "No project matches." : "Loading projects…"}
+              onSelect={(id) => pick({ projectId: id, assigneeId: undefined, labelIds: undefined })}
+            >
+              <button type="button" aria-label="Project" title="Project" onClick={() => void loadProjects()} className={cn(pickerClass, picked.projectId && "text-accent")}>
+                <FolderInput aria-hidden="true" />
+              </button>
+            </PropertyPicker>
+            <PropertyPicker
+              label="Change priority"
+              align="end"
+              value={picked.priority ?? parsed?.priority ?? "NONE"}
+              options={PRIORITY_MENU_ORDER.map((priority) => ({ value: priority, label: priorityLabels[priority] }))}
+              onSelect={(priority) => pick({ priority })}
+            >
+              <button type="button" aria-label="Priority" title="Priority" className={cn(pickerClass, picked.priority && "text-accent")}>
+                <Flag aria-hidden="true" />
+              </button>
+            </PropertyPicker>
+            <PropertyPicker
+              label="Assign to"
+              align="end"
+              value={picked.assigneeId ?? (projectId && projectId === parsed?.project?.id ? parsed.assignee?.id : undefined) ?? ""}
+              options={
+                projectId
+                  ? [
+                      { value: "", label: "Unassigned", icon: <UserRound /> },
+                      ...memberList.map((member) => ({ value: member.id, label: member.name, icon: <MemberAvatar id={member.id} name={member.name} /> })),
+                    ]
+                  : []
+              }
+              emptyText={projectId ? "No member matches." : "Add a project first: people are assigned within a project."}
+              onSelect={(id) => pick({ assigneeId: id || undefined })}
+            >
+              <button type="button" aria-label="Assignee" title="Assignee" className={cn(pickerClass, picked.assigneeId && "text-accent")}>
+                <UserRound aria-hidden="true" />
+              </button>
+            </PropertyPicker>
+            <LabelPicker
+              scope={scopeKeyFor(projectId)}
+              scopeName={projects?.find((project) => project.id === projectId)?.name ?? "Personal"}
+              selectedIds={picked.labelIds ?? []}
+              onChange={(ids) => pick({ labelIds: ids })}
+            >
+              <button type="button" aria-label="Labels" title="Labels" onClick={() => void loadLabels()} className={cn(pickerClass, picked.labelIds?.length && "text-accent")}>
+                <Tag aria-hidden="true" />
+              </button>
+            </LabelPicker>
+          </div>
+        ) : null}
         <kbd className="hidden rounded border border-line px-1.5 font-mono text-2xs text-muted sm:inline">Enter</kbd>
       </div>
-      {smart ? (
-        <p id="quick-add-hints" className={cn("hidden flex-wrap items-center gap-x-3 gap-y-1 pl-6 text-xs text-muted", !showDetails && "sm:flex")}>
-          <span className="sr-only">Shortcuts: </span>
-          {syntaxHints.map(([token, meaning]) => (
-            <span key={token} className="inline-flex items-center gap-1">
-              <kbd className="rounded border border-line bg-canvas px-1 font-mono text-2xs text-ink">{token}</kbd>
-              {meaning}
-            </span>
-          ))}
-        </p>
-      ) : null}
       {smart ? (
         <div id="quick-add-details" aria-live="polite" className={cn("flex flex-wrap items-center gap-1.5 pl-6", !showDetails && "hidden")}>
           {showDetails ? (
             <>
-              {chips.length ? (
+              {pickedChips.length ? (
+                <ul aria-label="Details you picked" className="flex flex-wrap gap-1.5">
+                  {pickedChips.map((chip) => (
+                    <li key={chip.key} className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent-soft py-0.5 pl-2 pr-0.5 text-xs text-ink">
+                      {chip.icon}
+                      <span>
+                        <span className="sr-only">{chip.name}: </span>
+                        {chip.value}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPicked((current) => ({ ...current, [chip.key]: undefined }))}
+                        aria-label={`Clear ${chip.name.toLowerCase()}`}
+                        title={`Clear ${chip.name.toLowerCase()}`}
+                        className="rounded-full p-1 text-muted hover:bg-surface-hover hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                      >
+                        <X aria-hidden="true" className="h-3 w-3" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {typedChips.length ? (
                 <ul aria-label="Details from your text" className="flex flex-wrap gap-1.5">
-                  {chips.map((chip) => (
+                  {typedChips.map((chip) => (
                     <li
                       key={chip.kind}
                       className={cn(
