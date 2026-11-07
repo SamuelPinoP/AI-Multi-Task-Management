@@ -71,7 +71,8 @@ export default function NotesPage() {
   const [fetching, setFetching] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [projectFilter, setProjectFilter] = useState("");
+  // `?project=<id>` (or `none`) opens filtered, from the Tasks page's project cards (#348).
+  const [projectFilter, setProjectFilter] = useState(() => searchParams.get("project") ?? "");
 
   // The note open in the editor sheet, and its fields.
   const [editingNoteId, setEditingNoteId] = useState<string | null>(() => getInitialOpenNoteId());
@@ -112,7 +113,7 @@ export default function NotesPage() {
     const query = searchQuery.trim().toLowerCase();
     return notes.filter(
       (note) =>
-        (!projectFilter || note.projectId === projectFilter) &&
+        (!projectFilter || (projectFilter === "none" ? !note.projectId : note.projectId === projectFilter)) &&
         (!query || note.title.toLowerCase().includes(query) || (note.content ?? "").toLowerCase().includes(query)),
     );
   }, [notes, projectFilter, searchQuery]);
@@ -428,6 +429,7 @@ export default function NotesPage() {
         </label>
         <select aria-label="Project" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} className={controlClass}>
           <option value="">All projects</option>
+          <option value="none">No project</option>
           {projects.map((project) => (
             <option key={project.id} value={project.id}>{project.name}</option>
           ))}
