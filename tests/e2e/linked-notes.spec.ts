@@ -2,16 +2,31 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator } from "@playwright/test";
 import { continueAsGuest, uniqueName } from "./helpers";
 
-/** Selects `text` in the note editor the way a person would (the selection fires keyup too). */
+/**
+ * Selects `text` in the note editor the way a person would (the selection fires keyup too).
+ *
+ * Opening a note fills the editor, then a frame later focuses it with the caret at the
+ * end. A selection made before that lands is undone, and the Shift keys then picked the
+ * note's last character, so the test turned "." into a task now and then. So: wait for the
+ * text and the focus, then select until the selection holds.
+ */
 async function selectInEditor(editor: Locator, text: string) {
-  await editor.evaluate((element, wanted) => {
-    const area = element as HTMLTextAreaElement;
-    const start = area.value.indexOf(wanted);
-    area.focus();
-    area.setSelectionRange(start, start + wanted.length);
-  }, text);
-  await editor.press("Shift+ArrowRight");
-  await editor.press("Shift+ArrowLeft");
+  await expect.poll(() => editor.inputValue()).toContain(text);
+  await expect(editor).toBeFocused();
+  await expect(async () => {
+    await editor.evaluate((element, wanted) => {
+      const area = element as HTMLTextAreaElement;
+      const start = area.value.indexOf(wanted);
+      area.setSelectionRange(start, start + wanted.length);
+    }, text);
+    await editor.press("Shift+ArrowRight");
+    await editor.press("Shift+ArrowLeft");
+    const selected = await editor.evaluate((element) => {
+      const area = element as HTMLTextAreaElement;
+      return area.value.slice(area.selectionStart, area.selectionEnd);
+    });
+    expect(selected).toBe(text);
+  }).toPass({ timeout: 10_000 });
 }
 
 test("linked notes: [[links]], backlinks, tasks from a selection and meeting notes (SMART-05)", async ({ page }) => {
