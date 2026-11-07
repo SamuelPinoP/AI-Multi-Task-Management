@@ -2,7 +2,7 @@
 // mentions, which tasks need a "due soon" reminder, and the push payload.
 // src/lib/notifications.ts does the database and push work.
 
-export type NotificationKind = "TASK_ASSIGNED" | "MENTION" | "TASK_DUE_SOON";
+export type NotificationKind = "TASK_ASSIGNED" | "MENTION" | "TASK_DUE_SOON" | "TASK_COMMENT";
 
 export type NewNotification = {
   userId: string;

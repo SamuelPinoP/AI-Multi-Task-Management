@@ -13,6 +13,7 @@ import { LabelChip } from "./label-chip";
 import { LabelPicker } from "./label-picker";
 import { scopeKeyFor, useLabels } from "./label-store";
 import { loadProjectMembers } from "./load-members";
+import { TaskActivity } from "./task-activity";
 import { TaskRelationsPanel, type TaskRelations } from "./task-relations-panel";
 import {
   priorityLabels,
@@ -270,6 +271,8 @@ export function TaskSheet({
           </div>
         </form>
         {task && relations ? <TaskRelationsPanel key={task.id} task={task} relations={relations} /> : null}
+        {/* Comments and history (#279); they reload after each saved change. */}
+        {task ? <TaskActivity key={task.id} taskId={task.id} refreshKey={task.updatedAt} /> : null}
       </SheetContent>
     </Sheet>
   );

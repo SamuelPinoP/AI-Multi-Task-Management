@@ -106,6 +106,50 @@ export async function notifyTaskAssigned({
 }
 
 /**
+ * A new comment on a task (#279): "@Name" notifies those project members,
+ * and the task's assignee hears about every comment someone else writes.
+ */
+export async function notifyTaskComment({
+  task,
+  author,
+  body,
+}: {
+  task: { id: string; title: string; projectId: string | null; assignee: { userId: string | null } | null; project: { name: string; userId: string } | null };
+  author: { id: string; name: string | null; email: string };
+  body: string;
+}) {
+  const snippet = body.length > 160 ? `${body.slice(0, 157).trimEnd()}...` : body;
+  const url = `/tasks?task=${task.id}`;
+  let mentioned: string[] = [];
+  if (task.project && task.projectId && body.includes("@")) {
+    const [owner, members] = await Promise.all([
+      prisma.user.findUnique({ where: { id: task.project.userId }, select: { id: true, name: true, email: true } }),
+      prisma.projectMember.findMany({
+        where: { projectId: task.projectId, userId: { not: null } },
+        select: { user: { select: { id: true, name: true, email: true } } },
+      }),
+    ]);
+    const people = new Map<string, { userId: string; name: string | null; email: string }>();
+    for (const person of [owner, ...members.map((member) => member.user)]) {
+      if (person && person.id !== author.id) people.set(person.id, { userId: person.id, name: person.name, email: person.email });
+    }
+    mentioned = mentionedUserIds(body, [...people.values()]);
+  }
+  const notifications: NewNotification[] = mentioned.map((userId) => ({
+    userId,
+    type: "MENTION" as const,
+    title: `${personName(author)} mentioned you on “${task.title}”`,
+    body: snippet,
+    url,
+  }));
+  const assignee = task.assignee?.userId;
+  if (assignee && assignee !== author.id && !mentioned.includes(assignee)) {
+    notifications.push({ userId: assignee, type: "TASK_COMMENT", title: `${personName(author)} commented on “${task.title}”`, body: snippet, url });
+  }
+  await createNotifications(notifications);
+}
+
+/**
  * Bulk assignments (#281): one notification per person, "Ana assigned you 3
  * tasks", instead of one per task. A single task reads as `notifyTaskAssigned`.
  */
