@@ -7,6 +7,7 @@ import { loadProjectMembers } from "@/components/tasks/load-members";
 import type { Member } from "@/components/tasks/types";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
+import { isPressingPriority, priorityLabels } from "@/lib/priority";
 import { projectColor } from "@/lib/project-color";
 import { parseQuickAdd, type QuickAddKind, type QuickAddResult } from "@/lib/quick-add-parse";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
@@ -33,7 +34,6 @@ type ProjectOption = { id: string; name: string; color: string | null };
 type ProjectListItem = ProjectOption & { accessLevel?: string; status?: string };
 
 const TASKS_ENDPOINT = "/api/tasks";
-const priorityLabels = { HIGH: "High", MEDIUM: "Medium", LOW: "Low" } as const;
 /** The quick-add syntax, shown as hints on wider screens (DES-10). */
 const syntaxHints = [
   ["fri", "due date"],
@@ -207,9 +207,9 @@ export function QuickAdd({
       kind: "priority",
       name: "Priority",
       source: parsed.priorityText,
-      icon: <Flag aria-hidden="true" className={cn("h-3.5 w-3.5", parsed.priority === "HIGH" ? "text-danger" : "text-muted")} />,
+      icon: <Flag aria-hidden="true" className={cn("h-3.5 w-3.5", isPressingPriority(parsed.priority) ? "text-danger" : "text-muted")} />,
       value: priorityLabels[parsed.priority],
-      tone: parsed.priority === "HIGH" ? "border-danger/35 text-danger" : undefined,
+      tone: isPressingPriority(parsed.priority) ? "border-danger/35 text-danger" : undefined,
     });
   }
   if (parsed?.assignee && parsed.assigneeText) {

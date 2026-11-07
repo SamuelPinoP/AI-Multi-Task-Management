@@ -10,11 +10,12 @@ import {
 import { uiButtonClass, uiCardClass } from "@/components/ui";
 import { formatTaskDueDate, getLocalDateOnly } from "@/lib/task-date-buckets";
 import { eventWallTime, formatEventDateTime } from "@/lib/event-time";
+import { priorityLabels, type Priority } from "@/lib/priority";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
-type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
+type TaskPriority = Priority;
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 type Project = { id: string; name: string; color: string | null };
 type Task = {
@@ -363,9 +364,9 @@ export default function RoadmapPage() {
                             >
                               {item.kind === "TASK" ? "Task" : "Event"}
                             </span>
-                            {item.taskPriority && (
+                            {item.taskPriority && item.taskPriority !== "NONE" && (
                               <span className="rounded-full bg-zinc-100 px-2 py-1 dark:bg-zinc-800">
-                                Priority: {item.taskPriority}
+                                Priority: {priorityLabels[item.taskPriority]}
                               </span>
                             )}
                             {item.taskStatus && (

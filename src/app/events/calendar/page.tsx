@@ -52,6 +52,7 @@ import {
 } from "@/lib/recurrence";
 import { formatTaskDueDate, getLocalDateOnly } from "@/lib/task-date-buckets";
 import { formatEventTime } from "@/lib/event-time";
+import { priorityLabels, type Priority } from "@/lib/priority";
 
 /** Supported recurrence patterns for an event or recurring task. */
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
@@ -83,7 +84,6 @@ type EventItem = {
 };
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
-type Priority = "LOW" | "MEDIUM" | "HIGH";
 
 /** Shape of a task as used by the UI (only tasks with a due date appear on this calendar). */
 type TaskItem = {
@@ -913,7 +913,7 @@ export default function EventsCalendarPage() {
                     </div>
                     <p className="mt-1 text-sm text-accent">
                       Status: {task.status.replace("_", " ")} · Priority:{" "}
-                      {task.priority}
+                      {priorityLabels[task.priority]}
                     </p>
                     {/* A phone shows the day right above the list, so the date isn't repeated. */}
                     {task.dueDate && (

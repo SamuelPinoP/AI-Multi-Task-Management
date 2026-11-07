@@ -6,7 +6,8 @@
  * sheet shows the same list.
  */
 
-type Priority = "LOW" | "MEDIUM" | "HIGH";
+import type { Priority } from "@/lib/priority";
+
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
@@ -203,7 +204,7 @@ export function planTemplate(template: ProjectTemplate, today: CalendarDay): { t
   return {
     tasks: template.tasks.map((task) => ({
       title: task.title,
-      priority: task.priority ?? "MEDIUM",
+      priority: task.priority ?? "NONE",
       status: task.status ?? "TODO",
       recurrence: task.recurrence ?? "NONE",
       dueDate: task.dueInDays === undefined ? null : dayKey(today, task.dueInDays),

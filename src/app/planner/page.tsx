@@ -21,11 +21,11 @@ async function createTaskFromSuggestion(formData: FormData) {
   const user = await requirePageUser();
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
-  const priorityInput = String(formData.get("priority") ?? "MEDIUM");
+  const priorityInput = String(formData.get("priority") ?? "NONE");
   const projectId = String(formData.get("projectId") ?? "").trim() || null;
 
   if (!title) return;
-  const priority = Object.values(Priority).includes(priorityInput as Priority) ? (priorityInput as Priority) : Priority.MEDIUM;
+  const priority = Object.values(Priority).includes(priorityInput as Priority) ? (priorityInput as Priority) : Priority.NONE;
 
   if (projectId) {
     const project = await prisma.project.findFirst({ where: projectAccessWhereForProject(projectId, user.id), select: { id: true } });

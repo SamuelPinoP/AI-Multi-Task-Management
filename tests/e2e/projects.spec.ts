@@ -104,9 +104,23 @@ test("projects: quick add, edit, archive, restore and delete", async ({ page }) 
   const sheet = page.getByRole("dialog", { name: "Edit project" });
   await sheet.getByLabel("Description").fill("Shown on the card.");
   await sheet.getByRole("radio", { name: "Violet" }).click();
+  // A new project has no priority; the sheet offers all five (#361).
+  await expect(sheet.getByLabel("Priority")).toHaveValue("NONE");
+  await sheet.getByLabel("Priority").selectOption("HIGH");
   await sheet.getByRole("button", { name: "Save changes" }).click();
   await expect(sheet).toBeHidden();
   await expect(card).toContainText("Shown on the card.");
+  await expect(card).toContainText("High priority");
+
+  // The project page changes it at once, and it sticks.
+  await card.getByRole("link", { name }).click();
+  await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+  await page.getByRole("combobox", { name: "Priority:" }).selectOption("URGENT");
+  await expect(page.getByText("Priority set to Urgent")).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "Priority:" })).toHaveValue("URGENT");
+  await openSection(page, "Projects");
+  await expect(card).toContainText("Urgent priority");
 
   // Archive hides it from Active; Restore brings it back.
   await card.getByRole("button", { name: `More actions for ${name}` }).click();

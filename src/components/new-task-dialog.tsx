@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toaster";
+import { PRIORITY_MENU_ORDER, priorityLabels } from "@/lib/priority";
 import { notifyWorkspaceChanged, TASK_CREATED_EVENT } from "@/lib/workspace-events";
 
 type ProjectOption = { id: string; name: string };
@@ -95,10 +96,10 @@ export function NewTaskDialog({
             </label>
             <label className="grid gap-1.5 text-sm font-medium">
               Priority
-              <select name="priority" defaultValue="MEDIUM" className={fieldClass}>
-                <option value="HIGH">High</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="LOW">Low</option>
+              <select name="priority" defaultValue="NONE" className={fieldClass}>
+                {PRIORITY_MENU_ORDER.map((value) => (
+                  <option key={value} value={value}>{priorityLabels[value]}</option>
+                ))}
               </select>
             </label>
           </div>

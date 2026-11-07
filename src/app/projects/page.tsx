@@ -21,6 +21,7 @@ import {
   type ProjectInput,
   type ProjectStatus,
 } from "@/components/projects/project-sheet";
+import { PriorityBadge } from "@/components/tasks/priority-badge";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import {
@@ -142,8 +143,8 @@ export default function ProjectsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
         editing
-          ? { name: input.name, description: input.description, color: input.color, status: input.status }
-          : { name: input.name, description: input.description, color: input.color, templateId: input.templateId },
+          ? { name: input.name, description: input.description, color: input.color, status: input.status, priority: input.priority }
+          : { name: input.name, description: input.description, color: input.color, priority: input.priority, templateId: input.templateId },
       ),
     });
     if (!response.ok) return errorMessage(response, editing ? "Could not save the project." : "Could not create the project.");
@@ -351,6 +352,7 @@ export default function ProjectsPage() {
                   {project.description || "No description"}
                 </p>
                 <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-3 text-xs text-muted">
+                  <PriorityBadge priority={project.priority} />
                   <span>{project.openTaskCount} open task{project.openTaskCount === 1 ? "" : "s"}</span>
                   {project.memberCount ? (
                     <span className="inline-flex items-center gap-1">

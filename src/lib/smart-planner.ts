@@ -62,7 +62,7 @@ function dayDiff(target: Date, now: Date) {
 }
 
 function priorityFromTask(priority: Priority, overdue = false): PlannerPriority {
-  if (overdue || priority === Priority.HIGH) return "HIGH";
+  if (overdue || priority === Priority.URGENT || priority === Priority.HIGH) return "HIGH";
   if (priority === Priority.MEDIUM) return "MEDIUM";
   return "LOW";
 }
@@ -141,7 +141,7 @@ export async function generateSmartPlanner(userId: string, now = new Date(), rea
     const diff = task.dueDate ? dayDiff(task.dueDate, now) : null;
     const waitingOn = task.blockedBy.map((dependency) => dependency.blockedBy.title);
     const unblocks = waitingOn.length ? 0 : task._count.blocking;
-    const timing = diff === null ? `Active ${task.priority.toLowerCase()} priority task${task.project ? ` in ${task.project.name}` : ""}.` : diff < 0 ? `Overdue by ${Math.abs(diff)} day${Math.abs(diff) === 1 ? "" : "s"}.` : diff === 0 ? "Due today; schedule it before flexible work." : `Due in ${diff} day${diff === 1 ? "" : "s"}.`;
+    const timing = diff === null ? `Active ${task.priority === Priority.NONE ? "" : `${task.priority.toLowerCase()} priority `}task${task.project ? ` in ${task.project.name}` : ""}.` : diff < 0 ? `Overdue by ${Math.abs(diff)} day${Math.abs(diff) === 1 ? "" : "s"}.` : diff === 0 ? "Due today; schedule it before flexible work." : `Due in ${diff} day${diff === 1 ? "" : "s"}.`;
     const suggestion: PlannerSuggestion = {
       id: `task-${task.id}`,
       title: task.title,

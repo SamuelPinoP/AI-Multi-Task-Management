@@ -63,8 +63,13 @@ test("a time without a day is not a due date", () => {
 });
 
 test("priority words and shortcuts", () => {
-  assert.equal(parseQuickAdd("Fix login !urgent", { now }).priority, "HIGH");
+  assert.equal(parseQuickAdd("Fix login !urgent", { now }).priority, "URGENT");
+  assert.equal(parseQuickAdd("Fix login !u", { now }).priority, "URGENT");
+  assert.equal(parseQuickAdd("Fix login !high", { now }).priority, "HIGH");
+  assert.equal(parseQuickAdd("Fix login !1", { now }).priority, "HIGH");
   assert.equal(parseQuickAdd("Fix login !2", { now }).priority, "MEDIUM");
+  // No typed priority means No priority, which the API fills in.
+  assert.equal(parseQuickAdd("Fix login", { now }).priority, null);
   assert.equal(parseQuickAdd("!low Tidy desk", { now }).priority, "LOW");
   assert.equal(parseQuickAdd("!low Tidy desk", { now }).title, "Tidy desk");
   const unknown = parseQuickAdd("Say hi!great", { now });
