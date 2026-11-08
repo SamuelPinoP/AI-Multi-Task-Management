@@ -74,6 +74,37 @@ test("the message box grows with its text up to a limit, then scrolls", async ({
   await expect.poll(async () => (await measure(box)).height).toBeCloseTo(empty.height, 0);
 });
 
+test("the latest message stays in view when the box grows before the thread's last scroll is reported", async ({ page, isMobile }) => {
+  test.skip(isMobile, "A phone's box grows by 4 lines (96px) at most, less than the 120px that counts as leaving the latest message.");
+  await page.route("**/api/projects/*/comments*", (route) =>
+    route.request().method() === "GET" ? route.fulfill({ json: { version: "e2e", changed: false } }) : route.fallback(),
+  );
+  const box = await openNewProjectChat(page, 12);
+  const latest = page.getByText("Update 12", { exact: true });
+  await expect(latest).toBeInViewport({ ratio: 1 });
+  const viewport = page.viewportSize()!;
+  const empty = await measure(box);
+
+  // What made the test above flaky on CI (#377): the thread scrolls down, and the box grows by more
+  // than 120px before the browser reports that scroll. Browsers report scrolls at the start of the
+  // next frame, before resize observers run, so the report measured a thread that was already shorter.
+  await box.evaluate(async (textarea: HTMLTextAreaElement, text) => {
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)));
+    let thread = textarea.closest("form")?.previousElementSibling ?? null;
+    while (thread && getComputedStyle(thread).overflowY !== "auto") thread = thread.previousElementSibling;
+    if (!(thread instanceof HTMLElement)) throw new Error("No scrolling thread above the message box.");
+    thread.scrollTop -= 10;
+    await nextFrame();
+    thread.scrollTop = thread.scrollHeight;
+    // The prototype's setter keeps React's value tracking from swallowing the change.
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, text);
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  }, lines(30));
+  const limit = Math.min(10 * empty.lineHeight + empty.padding, 0.4 * viewport.height);
+  await expect.poll(async () => (await measure(box)).height).toBeCloseTo(limit, 0);
+  await expect(latest).toBeInViewport({ ratio: 1 });
+});
+
 test("the message box follows its text when the window gets narrower", async ({ page, isMobile }) => {
   test.skip(isMobile, "A phone's window doesn't change width.");
   const box = await openNewProjectChat(page);

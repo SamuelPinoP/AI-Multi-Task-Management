@@ -236,6 +236,8 @@ export function ProjectChatWorkspace({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Whether the reader is at the bottom of the thread; only then do new messages scroll it.
   const nearBottomRef = useRef(true);
+  // The thread's position at its last scroll, to tell the reader scrolling up from the thread getting shorter.
+  const lastScrollTopRef = useRef(0);
   const chatVersionRef = useRef<string | null>(null);
   const busyRef = useRef(false);
 
@@ -715,7 +717,12 @@ export function ProjectChatWorkspace({
           className="min-h-0 flex-1 overflow-y-auto bg-zinc-100/60 px-3 py-3 dark:bg-zinc-950 sm:px-6 sm:py-4 lg:px-8"
           onScroll={(event) => {
             const element = event.currentTarget;
-            nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 120;
+            const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 120;
+            // Only scrolling up leaves the bottom. Browsers report a scroll in the next frame, before the
+            // observer above runs, so a report can measure a thread that the message box has just made
+            // shorter and that the observer hasn't scrolled yet (#377).
+            if (nearBottom || element.scrollTop < lastScrollTopRef.current) nearBottomRef.current = nearBottom;
+            lastScrollTopRef.current = element.scrollTop;
           }}
         >
           {/* An empty chat centers its hint in the space instead of hanging it from the top. */}
