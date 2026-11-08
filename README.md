@@ -177,7 +177,10 @@ check passes and leaves it open if one fails.
 CI also fails if any `@radix-ui` package is installed in more than one version
 (`scripts/check-single-radix.mjs`). Duplicate Radix copies can break a menu
 inside a dialog. The `overrides` entry in `package.json` keeps Prisma Studio on
-the app's Radix release; update it when Radix is updated.
+the app's Radix release; update it when Radix is updated. It also gives
+`typescript-eslint` minimatch 11, which fixes a denial-of-service advisory
+(GHSA-g3hv-75wg-m249) that has no 10.x fix; remove that entry once
+`typescript-eslint` depends on minimatch 11 itself.
 
 On the 1st of each month, `.github/workflows/maintenance-report.yml` opens a
 "Monthly maintenance check" issue assigned to the repository owner, so GitHub
