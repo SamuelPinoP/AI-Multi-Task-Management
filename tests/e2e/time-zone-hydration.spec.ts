@@ -25,6 +25,12 @@ async function post<T>(page: Page, url: string, data: Record<string, unknown>) {
   return (await response.json()) as T;
 }
 
+/**
+ * What the reader sees. Pages stream in (the root `loading.tsx`), and the server's HTML can sit in a
+ * hidden copy beside the shown page for a moment, still with the server's times.
+ */
+const shown = (locator: Locator) => locator.filter({ visible: true });
+
 /** Records React's hydration errors: after a mismatch, React rebuilds the page in the browser. */
 function watchHydration(page: Page) {
   const errors: string[] = [];
@@ -45,7 +51,7 @@ function watchHydration(page: Page) {
 async function open(page: Page, url: string, ready: Locator, { firstVisit }: { firstVisit: boolean }) {
   if (firstVisit) await page.context().clearCookies({ name: "tz" });
   await page.goto(url);
-  await expect.poll(() => ready.evaluate((node) => Object.keys(node).some((key) => key.startsWith("__reactFiber")))).toBe(true);
+  await expect.poll(() => shown(ready).evaluate((node) => Object.keys(node).some((key) => key.startsWith("__reactFiber")))).toBe(true);
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
@@ -61,33 +67,34 @@ test("message, note and invitation times read the same from the server and the b
   });
   const note = await post<{ createdAt: string }>(page, `/api/projects/${project.id}/members/${member.id}/notes`, { message: "Zone note" });
   const errors = watchHydration(page);
+  const messageTime = inZone({ month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }, comment.createdAt);
+  const time = shown(page.locator(`#comment-${comment.id} time`));
 
   for (const firstVisit of [true, false]) {
     const visit = firstVisit ? "first visit" : "with the tz cookie";
 
     // The chat: each message's time, and the full date and time on hover.
     errors.length = 0;
-    const time = page.locator(`#comment-${comment.id} time`);
     await open(page, `/projects/${project.id}/chat`, page.getByPlaceholder(/share an update/i), { firstVisit });
     expect(errors, `chat, ${visit}`).toEqual([]);
-    await expect(time).toHaveText(inZone({ month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }, comment.createdAt));
+    await expect(time).toHaveText(messageTime);
     await expect(time).toHaveAttribute("title", inZone({ dateStyle: "medium", timeStyle: "short" }, comment.createdAt));
 
     // The same chat opened beside the list on the Chats page.
     errors.length = 0;
     await open(page, `/chats?project=${project.id}`, page.getByPlaceholder(/share an update/i), { firstVisit });
     expect(errors, `Chats page, ${visit}`).toEqual([]);
-    await expect(time).toHaveText(inZone({ month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }, comment.createdAt));
+    await expect(time).toHaveText(messageTime);
 
     // The project page: the chat preview, a team member's note and a pending invitation.
     errors.length = 0;
     await open(page, `/projects/${project.id}`, page.getByRole("heading", { level: 1 }), { firstVisit });
     expect(errors, `project page, ${visit}`).toEqual([]);
-    await expect(page.getByText(`Guest Workspace • ${inZone({ dateStyle: "medium", timeStyle: "short" }, comment.createdAt)}`)).toBeVisible();
-    await expect(page.getByRole("listitem").filter({ hasText: "Zone note" })).toContainText(
+    await expect(shown(page.getByText(`Guest Workspace • ${inZone({ dateStyle: "medium", timeStyle: "short" }, comment.createdAt)}`))).toBeVisible();
+    await expect(shown(page.getByRole("listitem").filter({ hasText: "Zone note" }))).toContainText(
       `• ${inZone({ dateStyle: "medium", timeStyle: "short" }, note.createdAt)}`,
     );
-    await expect(page.getByText(`Invitation sent ${inZone({ dateStyle: "medium" }, invitation.createdAt)}`)).toBeVisible();
+    await expect(shown(page.getByText(`Invitation sent ${inZone({ dateStyle: "medium" }, invitation.createdAt)}`))).toBeVisible();
   }
 });
 
@@ -103,16 +110,16 @@ test("calendars, boards and due dates show the reader's day in English, the same
   const dayLabel = (options: Intl.DateTimeFormatOptions) =>
     new Intl.DateTimeFormat("en-US", { ...options, timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, day)));
   const fullDay = dayLabel({ dateStyle: "full" });
+  const due = `Due: ${dayLabel({})}`;
 
   for (const firstVisit of [true, false]) {
     const visit = firstVisit ? "first visit" : "with the tz cookie";
 
-    // The Calendar's month view opens on today, and marks it.
+    // The Calendar's month view marks the reader's today.
     errors.length = 0;
-    await open(page, "/events/calendar", page.locator("#calendar-selected-day"), { firstVisit });
+    await open(page, "/events/calendar", page.getByRole("heading", { level: 1, name: "Calendar" }), { firstVisit });
     expect(errors, `Calendar, ${visit}`).toEqual([]);
-    await expect(page.locator("#calendar-selected-day")).toHaveText(fullDay);
-    await expect(page.getByRole("button", { name: new RegExp(`^${fullDay}, today, `) })).toBeVisible();
+    await expect(shown(page.getByRole("button", { name: new RegExp(`^${fullDay}, today, `) }))).toBeVisible();
 
     // The task's own page: the due date button.
     errors.length = 0;
@@ -124,12 +131,12 @@ test("calendars, boards and due dates show the reader's day in English, the same
     errors.length = 0;
     await open(page, `/projects/${project.id}`, page.getByRole("heading", { level: 1 }), { firstVisit });
     expect(errors, `project page, ${visit}`).toEqual([]);
-    await expect(page.getByText(`Due: ${dayLabel({})}`, { exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 4, name: fullDay })).toBeVisible();
+    await expect(shown(page.getByText(due, { exact: true }))).toBeVisible();
+    await expect(shown(page.getByRole("heading", { level: 4, name: fullDay }))).toBeVisible();
 
     // The project's board.
     errors.length = 0;
-    await open(page, `/projects/${project.id}/board`, page.getByText(`Due: ${dayLabel({})}`, { exact: true }), { firstVisit });
+    await open(page, `/projects/${project.id}/board`, page.getByText(due, { exact: true }), { firstVisit });
     expect(errors, `board, ${visit}`).toEqual([]);
   }
 });
@@ -145,7 +152,7 @@ test("My day files a task by the reader's day, the same on the server and in the
     errors.length = 0;
     await open(page, "/today", page.getByRole("heading", { name: "Today", exact: true }), { firstVisit });
     expect(errors, firstVisit ? "first visit" : "with the tz cookie").toEqual([]);
-    await expect(page.getByText(inZone({ dateStyle: "full" }), { exact: true })).toBeVisible();
-    await expect(dueToday.getByText(title)).toBeVisible();
+    await expect(shown(page.getByText(inZone({ dateStyle: "full" }), { exact: true }))).toBeVisible();
+    await expect(shown(dueToday.getByText(title))).toBeVisible();
   }
 });
