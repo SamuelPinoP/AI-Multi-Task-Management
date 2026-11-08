@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/toaster";
+import { useTodayKey } from "@/components/user-time-zone";
 import { cn } from "@/lib/cn";
 import { formatEventTime } from "@/lib/event-time";
 import { projectColor } from "@/lib/project-color";
@@ -221,8 +222,10 @@ export default function EventsPage() {
   const [tasks, setTasks] = useState<AgendaTask[]>([]);
   const [showTasks] = useShowTasks();
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
+  /** Today in the reader's zone; `new Date()` would give the server's day, which is UTC's (#381). */
+  const todayKey = useTodayKey();
   /** Phones and tablets: the day the week strip marks; its week is the strip's week (DES-17). */
-  const [stripDayKey, setStripDayKey] = useState(() => formatTaskDayKey(new Date()));
+  const [stripDayKey, setStripDayKey] = useState(todayKey);
   const [stripHeight, setStripHeight] = useState(0);
   const stripRef = useRef<HTMLDivElement>(null);
   /**
@@ -246,10 +249,22 @@ export default function EventsPage() {
   const [deleteTarget, setDeleteTarget] = useState<DeleteEventTarget | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
+    const today = getLocalDateOnly(todayKey);
+    return new Date(today.getFullYear(), today.getMonth(), 1);
   });
-  const [selectedDayKey, setSelectedDayKey] = useState(() => formatTaskDayKey(new Date()));
+  const [selectedDayKey, setSelectedDayKey] = useState(todayKey);
+  // The page hydrates on the server's idea of today. When the browser's differs (no `tz` cookie
+  // yet, or midnight passed), the strip and the calendar move along if they're still on the old today.
+  const [shownTodayKey, setShownTodayKey] = useState(todayKey);
+  if (shownTodayKey !== todayKey) {
+    setShownTodayKey(todayKey);
+    if (stripDayKey === shownTodayKey) setStripDayKey(todayKey);
+    if (selectedDayKey === shownTodayKey) {
+      const today = getLocalDateOnly(todayKey);
+      setSelectedDayKey(todayKey);
+      setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    }
+  }
 
   async function fetchEvents() {
     try {
@@ -322,9 +337,7 @@ export default function EventsPage() {
     );
   }, [events, projectFilter, searchQuery]);
 
-  const now = new Date();
-  const todayStart = getLocalDateOnly(now);
-  const todayKey = formatTaskDayKey(todayStart);
+  const todayStart = getLocalDateOnly(todayKey);
   const tomorrowKey = formatTaskDayKey(addDays(todayStart, 1));
 
   const filteredTasks = useMemo(() => {
@@ -339,7 +352,7 @@ export default function EventsPage() {
 
   // Every day from today through the agenda window, with its events (occurrences) and due tasks, open ones first.
   const agendaDays = useMemo(() => {
-    const start = getLocalDateOnly(new Date());
+    const start = getLocalDateOnly(todayKey);
     const end = addDays(start, AGENDA_DAYS);
     end.setMilliseconds(-1);
     const occurrences = occurrencesInRange(filtered, start, end).sort(
@@ -362,12 +375,12 @@ export default function EventsPage() {
       const key = formatTaskDayKey(addDays(start, index));
       return { key, events: eventDays.get(key) ?? [], tasks: taskDays.get(key) ?? [] };
     });
-  }, [filtered, filteredTasks]);
+  }, [filtered, filteredTasks, todayKey]);
   const agendaIsEmpty = agendaDays.every((day) => day.events.length + day.tasks.length === 0);
 
   // Stored events that ended before today (repeating ones only once their series has ended).
   const past = useMemo(() => {
-    const start = getLocalDateOnly(new Date());
+    const start = getLocalDateOnly(todayKey);
     return filtered
       .filter((event) => {
         if (normalizeRecurrence(event.recurrence) !== "NONE") {
@@ -377,7 +390,7 @@ export default function EventsPage() {
       })
       .sort((a, b) => b.startTime.localeCompare(a.startTime))
       .slice(0, PAST_LIMIT);
-  }, [filtered]);
+  }, [filtered, todayKey]);
 
   const weekEndKey = formatTaskDayKey(addDays(todayStart, 7));
   const weekCount = agendaDays.filter((day) => day.key < weekEndKey).reduce((sum, day) => sum + day.events.length + day.tasks.length, 0);

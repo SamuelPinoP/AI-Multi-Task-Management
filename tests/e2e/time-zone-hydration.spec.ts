@@ -91,6 +91,49 @@ test("message, note and invitation times read the same from the server and the b
   }
 });
 
+test("calendars, boards and due dates show the reader's day in English, the same from the server and the browser", async ({ page }) => {
+  await continueAsGuest(page);
+  const today = todayKey();
+  const project = await post<{ id: string }>(page, "/api/projects", { name: uniqueName("E2E zone days") });
+  const task = await post<{ id: string }>(page, "/api/tasks", { title: uniqueName("E2E zone task"), dueDate: today, projectId: project.id });
+  // With an event, the project page shows its calendar instead of an empty note.
+  await post(page, "/api/events", { title: "Zone event", startDate: today, startTime: "10:00", endDate: "", endTime: "", recurrence: "NONE", projectId: project.id });
+  const errors = watchHydration(page);
+  const [year, month, day] = today.split("-").map(Number);
+  const dayLabel = (options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat("en-US", { ...options, timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, day)));
+  const fullDay = dayLabel({ dateStyle: "full" });
+
+  for (const firstVisit of [true, false]) {
+    const visit = firstVisit ? "first visit" : "with the tz cookie";
+
+    // The Calendar's month view opens on today, and marks it.
+    errors.length = 0;
+    await open(page, "/events/calendar", page.locator("#calendar-selected-day"), { firstVisit });
+    expect(errors, `Calendar, ${visit}`).toEqual([]);
+    await expect(page.locator("#calendar-selected-day")).toHaveText(fullDay);
+    await expect(page.getByRole("button", { name: new RegExp(`^${fullDay}, today, `) })).toBeVisible();
+
+    // The task's own page: the due date button.
+    errors.length = 0;
+    const dueButton = page.getByRole("button", { name: `Due date: ${dayLabel({ weekday: "short", month: "short", day: "numeric" })}` });
+    await open(page, `/tasks/${task.id}`, dueButton, { firstVisit });
+    expect(errors, `task page, ${visit}`).toEqual([]);
+
+    // The project page: the task's due date, and the project calendar on today.
+    errors.length = 0;
+    await open(page, `/projects/${project.id}`, page.getByRole("heading", { level: 1 }), { firstVisit });
+    expect(errors, `project page, ${visit}`).toEqual([]);
+    await expect(page.getByText(`Due: ${dayLabel({})}`, { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 4, name: fullDay })).toBeVisible();
+
+    // The project's board.
+    errors.length = 0;
+    await open(page, `/projects/${project.id}/board`, page.getByText(`Due: ${dayLabel({})}`, { exact: true }), { firstVisit });
+    expect(errors, `board, ${visit}`).toEqual([]);
+  }
+});
+
 test("My day files a task by the reader's day, the same on the server and in the browser", async ({ page }) => {
   await continueAsGuest(page);
   const title = uniqueName("E2E due today");

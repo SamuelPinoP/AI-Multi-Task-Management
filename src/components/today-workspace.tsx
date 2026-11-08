@@ -7,7 +7,7 @@ import {
   uiCardClass,
   uiPrimaryButtonClass,
 } from "@/components/ui";
-import { useUserTimeZone } from "@/components/user-time-zone";
+import { useTodayKey } from "@/components/user-time-zone";
 import { expandRecurringEventsForRange } from "@/lib/recurrence";
 import { getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
 import { eventWallTime, formatEventTime } from "@/lib/event-time";
@@ -16,7 +16,6 @@ import { projectColor } from "@/lib/project-color";
 import type { Priority } from "@/lib/priority";
 import { calendarViews } from "@/lib/calendar-view";
 import { useCalendarView } from "@/lib/use-calendar-view";
-import { dayKeyInZone } from "@/lib/user-time";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
@@ -78,10 +77,9 @@ export function TodayWorkspace({
   const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null);
   // Like the sidebar's Calendar item, opens the Agenda or Month tab, whichever was used last.
   const calendarView = useCalendarView();
-  const timeZone = useUserTimeZone();
-  // The reader's day, as "2026-11-08", so the server and the browser file tasks and events the
-  // same way; `new Date()` would give the server's day, which is UTC's (#381).
-  const todayKey = dayKeyInZone(timeZone);
+  // The reader's day, so the server and the browser file tasks and events the same way;
+  // `new Date()` would give the server's day, which is UTC's (#381).
+  const todayKey = useTodayKey();
 
   const { overdueTasks, dueTodayTasks, todayEvents, upcomingEvents } =
     useMemo(() => {

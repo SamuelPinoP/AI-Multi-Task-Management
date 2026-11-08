@@ -28,7 +28,11 @@ export function getLocalDateOnly(value: Date | string) {
   return parseLocalDateOnly(value);
 }
 
-export function formatTaskDueDate(value: Date | string, locales?: Intl.LocalesArgument) {
+/**
+ * "11/7/2026". English like the rest of the app unless `locales` says otherwise: the browser's own
+ * language would differ from the server's text, and React would rebuild the page it hydrates (#381).
+ */
+export function formatTaskDueDate(value: Date | string, locales: Intl.LocalesArgument = "en-US") {
   return new Intl.DateTimeFormat(locales).format(getLocalDateOnly(value));
 }
 

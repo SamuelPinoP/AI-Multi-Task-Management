@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useSyncExternalStore, type ReactNode } from "react";
+import { dayKeyInZone } from "@/lib/user-time";
 
 /** The reader's time zone as the server knows it: the `tz` cookie, or null until a first visit sets it. */
 const ServerTimeZoneContext = createContext<string | null>(null);
@@ -22,4 +23,12 @@ const browserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone |
 export function useUserTimeZone() {
   const serverTimeZone = useContext(ServerTimeZoneContext);
   return useSyncExternalStore(subscribe, browserTimeZone, () => serverTimeZone);
+}
+
+/**
+ * Today in the reader's zone, as "2026-11-08". Like `useUserTimeZone`, it can change right after
+ * the page hydrates: a calendar that starts on today should move along while it's still there.
+ */
+export function useTodayKey() {
+  return dayKeyInZone(useUserTimeZone());
 }
