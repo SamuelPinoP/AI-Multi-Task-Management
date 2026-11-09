@@ -48,9 +48,7 @@ async function seedWorkspace(page: Page) {
     projectId: project.id,
   });
   await post("/api/notes", { title: "A note", content: "Some text", projectId: project.id });
-  // Phase 6 sections on the project page: an automation and a linked repository (the GitHub
-  // stand-in from github-stub.ts).
-  await post(`/api/projects/${project.id}/automations`, { trigger: "TASK_COMPLETED", action: "EMAIL_OWNER" });
+  // A linked repository on the project page (the GitHub stand-in from github-stub.ts).
   await page.request.put(`/api/projects/${project.id}/github`, { data: { repo: "ai-multi-demo/roadmap" } });
   // A tree page with a child, so the tree view shows a filled root card and a plain one.
   const tree = (await post("/api/tree-pages", { title: "A11y tree" })) as { id: string; nodes: { id: string }[] };

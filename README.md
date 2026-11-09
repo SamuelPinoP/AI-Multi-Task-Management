@@ -14,7 +14,7 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 - A sidebar where each project opens to its Overview, Board and Chat, with unread chat counts
 - A Chats page with every project chat in one place, unread first, synced across devices
 - An installable app (phones and desktops) that keeps the pages you've opened readable offline
-- Project templates (Capstone, Sprint, Job search) and simple automations, such as emailing the owner when a task is done
+- Project templates (Capstone, Sprint, Job search)
 - A linked GitHub repository per project, showing its open pull requests and issues
 
 ## Project chat attachment storage
@@ -207,8 +207,7 @@ logins per account per 15 minutes, whether its email or its username was typed
 (a successful login clears the account count), 5 sign-ups and 5 password reset requests per network per hour, 3 reset
 requests per account per hour, 10 reset submissions per network per 15
 minutes, 10 guest workspaces per network per hour, 30 invitations per user per
-hour, 60 upload requests per user per 10 minutes and 30 automation emails
-per project per hour (past that, they're skipped). Forms show "Too many …
+hour and 60 upload requests per user per 10 minutes. Forms show "Too many …
 Try again in N minutes"; API routes answer 429 with a `Retry-After` header.
 The client IP is the first `x-forwarded-for` entry, which Vercel overwrites;
 requests without one (local development, CI) skip the per-network limits.
@@ -240,21 +239,13 @@ you log out or open a signed-out page. Icons are drawn by
 `node scripts/generate-app-icons.mjs`. Playwright blocks the service worker
 except in `tests/e2e/pwa.spec.ts`, which runs against a production build.
 
-## Project templates and automations
+## Project templates
 
 The New project sheet can start from a template in
 `src/lib/project-templates.ts`: Capstone, Sprint or Job search. Each one adds
 starter tasks (some with subtasks, some repeating weekly), its first tasks on
 the board, and recurring check-ins on the calendar. Dates count from the day
 the project is created, in the creator's time zone.
-
-Owners add automations on the project page (`ProjectAutomation`, one rule of
-each kind per project; the list is in `src/lib/project-automations-core.ts`):
-email the owner when a task moves to Done, email the owner when a task is
-added, or assign new unassigned tasks to a member. Subtasks don't trigger
-rules, and owners aren't emailed about their own changes. Emails go out after
-the response (`after()` in `src/lib/project-automations.ts`) through the
-configured email provider.
 
 ## GitHub links
 

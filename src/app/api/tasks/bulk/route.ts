@@ -5,7 +5,6 @@ import { labelScopeFor, labelScopeWhere } from "@/lib/labels-server";
 import { notifyTasksAssigned } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { canEditProjectContent, getProjectAccess, unauthorizedProjectResponse } from "@/lib/project-access";
-import { runOwnerEmailAutomation } from "@/lib/project-automations";
 import { nextCompletedAtFor, parseBulkChange, parseBulkIds, parseSnapshots, type BulkTaskChange, type TaskSnapshot } from "@/lib/task-bulk";
 import { formatTaskDueDateInput, parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
 import { loadHistoryStates, recordTaskChanges } from "@/lib/task-history-server";
@@ -103,8 +102,8 @@ async function checkTargets(change: BulkTaskChange, tasks: LoadedTask[], userId:
   return null;
 }
 
-/** Runs after a change: activity for newly done tasks, the project's "email the owner" rule, and assignment notifications. */
-function afterChange(before: LoadedTask[], user: { id: string; name: string | null; email: string }, origin: string) {
+/** Runs after a change: activity for newly done tasks, and assignment notifications. */
+function afterChange(before: LoadedTask[], user: { id: string; name: string | null; email: string }) {
   const ids = before.map((task) => task.id);
   after(async () => {
     const tasks = await prisma.task.findMany({
@@ -124,9 +123,6 @@ function afterChange(before: LoadedTask[], user: { id: string; name: string | nu
           projectId: task.projectId,
         })),
       });
-      for (const task of done) {
-        if (task.projectId && !task.parentId) await runOwnerEmailAutomation({ trigger: "TASK_COMPLETED", task, actorId: user.id, origin });
-      }
     }
     const assigned = tasks.filter((task) => task.assigneeId && task.assigneeId !== old.get(task.id)?.assigneeId);
     if (assigned.length) await notifyTasksAssigned({ tasks: assigned, actor: user });
@@ -144,7 +140,7 @@ export async function PATCH(req: Request) {
     const body = (await req.json().catch(() => null)) as { ids?: unknown; change?: unknown; restore?: unknown } | null;
     if (!body || typeof body !== "object") return badRequest("Invalid request");
 
-    if (body.restore !== undefined) return restore(body.restore, user, new URL(req.url).origin);
+    if (body.restore !== undefined) return restore(body.restore, user);
 
     const parsedIds = parseBulkIds(body.ids);
     if (!parsedIds.ids) return badRequest(parsedIds.error ?? "Invalid tasks");
@@ -212,7 +208,7 @@ export async function PATCH(req: Request) {
     const before = await loadHistoryStates(ids);
     await prisma.$transaction(writes);
     await recordTaskChanges(before, user.id);
-    afterChange(tasks, user, new URL(req.url).origin);
+    afterChange(tasks, user);
 
     const updated = await prisma.task.findMany({ where: { id: { in: ids } }, include: taskInclude(user.id) });
     return NextResponse.json({ tasks: updated, previous: tasks.map(snapshotOf) });
@@ -223,7 +219,7 @@ export async function PATCH(req: Request) {
 }
 
 /** Undo: each task back to its snapshot, with the same access checks. */
-async function restore(input: unknown, user: { id: string; name: string | null; email: string }, origin: string) {
+async function restore(input: unknown, user: { id: string; name: string | null; email: string }) {
   const parsed = parseSnapshots(input);
   if (!parsed.snapshots) return badRequest(parsed.error ?? "Nothing to restore");
   const snapshots = parsed.snapshots;
@@ -272,7 +268,7 @@ async function restore(input: unknown, user: { id: string; name: string | null; 
   const before = await loadHistoryStates(snapshots.map((snapshot) => snapshot.id));
   await prisma.$transaction(writes);
   await recordTaskChanges(before, user.id);
-  afterChange(loaded.tasks, user, origin);
+  afterChange(loaded.tasks, user);
 
   const updated = await prisma.task.findMany({ where: { id: { in: snapshots.map((snapshot) => snapshot.id) } }, include: taskInclude(user.id) });
   return NextResponse.json({ tasks: updated });

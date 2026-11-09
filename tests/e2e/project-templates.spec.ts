@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { signUpAndLogIn, uniqueName } from "./helpers";
 
-// SMART-11: project templates and simple automations.
+// SMART-11: project templates. Its automations were removed in #383.
 
 test("a template starts the project with tasks, subtasks and a weekly check-in", async ({ page }) => {
   await signUpAndLogIn(page, "Templates");
@@ -40,51 +40,25 @@ test("a template starts the project with tasks, subtasks and a weekly check-in",
   expect(unknown.status()).toBe(400);
 });
 
-test("automations: new tasks go to a member until the rule is turned off", async ({ page }) => {
-  await signUpAndLogIn(page, "Automations");
+test("projects have no automations: no section, no API, and a new task keeps the assignee it names (#383)", async ({ page }) => {
+  await signUpAndLogIn(page, "No automations");
   const project = (await (await page.request.post("/api/projects", { data: { name: uniqueName("Rules") } })).json()) as { id: string };
-  const member = await page.request.post(`/api/projects/${project.id}/members`, { data: { name: "Alex Rivera", role: "EDITOR" } });
-  expect(member.status()).toBe(201);
-  const newTask = async (title: string) =>
-    (await (await page.request.post("/api/tasks", { data: { title, projectId: project.id } })).json()) as {
-      id: string;
-      assignee: { name: string } | null;
-    };
+  const { member } = (await (
+    await page.request.post(`/api/projects/${project.id}/members`, { data: { name: "Alex Rivera", role: "EDITOR" } })
+  ).json()) as { member: { id: string } };
+
+  expect((await page.request.get(`/api/projects/${project.id}/automations`)).status()).toBe(404);
+  const unassigned = (await (await page.request.post("/api/tasks", { data: { title: "Nobody yet", projectId: project.id } })).json()) as {
+    assignee: unknown;
+  };
+  expect(unassigned.assignee).toBeNull();
+  const assigned = (await (
+    await page.request.post("/api/tasks", { data: { title: "For Alex", projectId: project.id, assigneeId: member.id } })
+  ).json()) as { assignee: { name: string } | null };
+  expect(assigned.assignee?.name).toBe("Alex Rivera");
 
   await page.goto(`/projects/${project.id}`);
-  const section = page.getByRole("region", { name: "Automations" });
-  await expect(section).toContainText("No automations yet");
-
-  await section.getByLabel("New rule").selectOption({ label: "When a task is added without an assignee, assign it to a member" });
-  await section.getByLabel("Assign to").selectOption({ label: "Alex Rivera" });
-  await section.getByRole("button", { name: "Add rule" }).click();
-  const assignRule = section.getByRole("switch", { name: "When a task is added without an assignee, assign it to Alex Rivera" });
-  await expect(assignRule).toHaveAttribute("aria-checked", "true");
-
-  const parent = await newTask("Goes to Alex");
-  expect(parent.assignee?.name).toBe("Alex Rivera");
-  // Subtasks are checklist items: the rule leaves them alone.
-  const subtask = (await (
-    await page.request.post("/api/tasks", { data: { title: "Checklist item", parentId: parent.id } })
-  ).json()) as { assignee: unknown };
-  expect(subtask.assignee).toBeNull();
-
-  await assignRule.click();
-  await expect(assignRule).toHaveAttribute("aria-checked", "false");
-  expect((await newTask("Stays unassigned")).assignee).toBeNull();
-
-  // The email rule is added the same way (this test server doesn't send email).
-  await section.getByLabel("New rule").selectOption({ label: "When a task moves to Done, email the project owner" });
-  await section.getByRole("button", { name: "Add rule" }).click();
-  await expect(section.getByRole("switch", { name: "When a task moves to Done, email the project owner" })).toHaveAttribute(
-    "aria-checked",
-    "true",
-  );
-
-  await page.reload();
-  await expect(assignRule).toHaveAttribute("aria-checked", "false");
-  await section.getByRole("button", { name: "Delete rule: When a task is added without an assignee, assign it to Alex Rivera" }).click();
-  await expect(assignRule).toHaveCount(0);
-  await page.reload();
-  await expect(section.getByRole("switch")).toHaveCount(1);
+  await expect(page.getByRole("heading", { name: "Assigned Notes" }).filter({ visible: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Automations" })).toHaveCount(0);
+  await expect(page.getByText("No automations yet")).toHaveCount(0);
 });

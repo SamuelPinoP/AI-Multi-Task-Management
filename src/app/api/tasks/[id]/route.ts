@@ -10,7 +10,6 @@ import { TASK_TITLE_MAX } from "@/lib/task-history";
 import { loadHistoryStates, recordTaskChanges } from "@/lib/task-history-server";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
-import { runOwnerEmailAutomation } from "@/lib/project-automations";
 import { notifyTaskAssigned } from "@/lib/notifications";
 
 
@@ -192,11 +191,6 @@ export async function PATCH(req: Request, context: RouteContext) {
         entityId: task.id,
         projectId: task.projectId,
       });
-      // The project's "email the owner when done" rule (SMART-11); subtasks don't trigger rules.
-      if (task.projectId && !task.parentId) {
-        const origin = new URL(req.url).origin;
-        after(() => runOwnerEmailAutomation({ trigger: "TASK_COMPLETED", task, actorId: user.id, origin }));
-      }
     }
 
     // A new assignee hears about it in their inbox (SMART-08).

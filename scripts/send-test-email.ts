@@ -10,7 +10,7 @@
 // send, never settings. Each email counts toward the provider's daily limit
 // (about 500 for Gmail).
 //
-//   npm run email:test -- <address> [verification|reset|invitation|automation|all]
+//   npm run email:test -- <address> [verification|reset|invitation|all]
 //
 // The default is "verification", the first email a new user gets; mail-tester
 // scores one email per address.
@@ -19,7 +19,6 @@ import {
   sendEmailVerificationEmail,
   sendPasswordResetEmail,
   sendProjectInvitationEmail,
-  sendTaskAutomationEmail,
   type EmailDeliveryResult,
 } from "../src/lib/email";
 
@@ -32,13 +31,11 @@ const senders: Record<string, (to: string) => Promise<EmailDeliveryResult>> = {
   reset: (to) => sendPasswordResetEmail({ to, resetUrl: `${PRODUCTION_URL}/reset-password?token=${SAMPLE_TOKEN}` }),
   invitation: (to) =>
     sendProjectInvitationEmail({ to, inviterName: "Dana Lee", inviterEmail: "dana@example.com", projectName: "Capstone", hasAccount: false }),
-  automation: (to) =>
-    sendTaskAutomationEmail({ to, trigger: "TASK_COMPLETED", taskTitle: "Draft the slides", projectId: "sample", projectName: "Capstone", actorName: "Dana Lee" }),
 };
 
 async function main() {
   if (!to || !/^[^\s@]+@[^\s@]+$/.test(to) || (kind !== "all" && !senders[kind])) {
-    console.error("Usage: npm run email:test -- <address> [verification|reset|invitation|automation|all]");
+    console.error("Usage: npm run email:test -- <address> [verification|reset|invitation|all]");
     process.exit(2);
   }
 
