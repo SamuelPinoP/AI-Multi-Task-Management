@@ -94,7 +94,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
     });
     if (deleted.count === 0) return NextResponse.json({ error: "Event not found" }, { status: 404 });
 
-    void createActivity({
+    await createActivity({
       userId: existingEvent.userId,
       action: "DELETED_ITEM",
       message: `Deleted event: “${existingEvent.title}”`,

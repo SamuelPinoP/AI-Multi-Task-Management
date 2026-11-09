@@ -151,7 +151,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
     if (deleted.count === 0)
       return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
-    void createActivity({
+    await createActivity({
       userId: existingNote.userId,
       action: "DELETED_ITEM",
       message: `Deleted note: “${existingNote.title}”`,

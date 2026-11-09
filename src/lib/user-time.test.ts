@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isValidTimeZone, toWallClock } from "./user-time";
+import { dayKeyInZone, formatInstant, isValidTimeZone, toWallClock } from "./user-time";
 
 function fields(date: Date) {
   return [date.getFullYear(), date.getMonth() + 1, date.getDate(), date.getHours(), date.getMinutes()];
@@ -36,4 +36,29 @@ test("isValidTimeZone accepts IANA names only", () => {
   assert.equal(isValidTimeZone("Mars/Olympus_Mons"), false);
   assert.equal(isValidTimeZone(42), false);
   assert.equal(isValidTimeZone("x".repeat(65)), false);
+});
+
+const messageTime = { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" } as const;
+
+test("formatInstant shows a moment in the reader's zone, in English, whatever the runtime's zone (#381)", () => {
+  // 00:27 UTC on November 8 is 7:27 PM on November 7 in New York (EST).
+  const instant = "2026-11-08T00:27:00.000Z";
+  assert.equal(formatInstant(instant, "America/New_York", messageTime), "Nov 7, 7:27 PM");
+  assert.equal(formatInstant(new Date(instant), "Pacific/Kiritimati", messageTime), "Nov 8, 2:27 PM");
+  assert.equal(formatInstant(instant, "America/New_York", { dateStyle: "medium", timeStyle: "short" }), "Nov 7, 2026, 7:27 PM");
+});
+
+test("formatInstant uses UTC without a valid zone, as the server does before the tz cookie exists", () => {
+  const instant = "2026-11-08T00:27:00.000Z";
+  assert.equal(formatInstant(instant, null, messageTime), "Nov 8, 12:27 AM");
+  assert.equal(formatInstant(instant, undefined, messageTime), "Nov 8, 12:27 AM");
+  assert.equal(formatInstant(instant, "Not/AZone", messageTime), "Nov 8, 12:27 AM");
+});
+
+test("dayKeyInZone gives the reader's calendar day", () => {
+  const instant = new Date("2026-11-08T00:27:00.000Z");
+  assert.equal(dayKeyInZone("America/New_York", instant), "2026-11-07");
+  assert.equal(dayKeyInZone("Pacific/Kiritimati", new Date("2026-10-20T20:00:00.000Z")), "2026-10-21");
+  assert.equal(dayKeyInZone(null, instant), "2026-11-08");
+  assert.equal(dayKeyInZone("Not/AZone", instant), "2026-11-08");
 });

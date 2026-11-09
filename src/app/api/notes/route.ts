@@ -97,7 +97,7 @@ export async function POST(req: Request) {
       },
     });
 
-    void createActivity({
+    await createActivity({
       userId: user.id,
       action: "CREATED_NOTE",
       message: `Created note: “${note.title || note.content?.slice(0, 40) || "Note"}”`,
