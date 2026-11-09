@@ -59,7 +59,7 @@ export function diffTaskHistory(before: TaskHistoryState, after: TaskHistoryStat
 
 function dayName(key: string) {
   const [year, month, day] = key.split("-").map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return new Date(year, month - 1, day).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function quote(value: string) {

@@ -264,6 +264,7 @@ export default async function ProjectDetailPage({
               createdAt: attachment.createdAt.toISOString(),
             })),
           }))}
+          timeZone={timeZone}
         />
 
         <section className="mt-8">

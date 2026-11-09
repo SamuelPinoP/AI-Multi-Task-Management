@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTodayKey } from "@/components/user-time-zone";
 import { expandRecurringEventsForRange, normalizeRecurrence } from "@/lib/recurrence";
 import { eventWallTime, formatEventTime } from "@/lib/event-time";
 
@@ -32,12 +33,27 @@ function formatDayKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+/** The first of the month that holds a `YYYY-MM-DD` day. */
+function monthOfKey(key: string) {
+  const [year, month] = key.split("-").map(Number);
+  return new Date(year, month - 1, 1);
+}
+
 export function ProjectCalendar({ projectColor, events }: ProjectCalendarProps) {
-  const [month, setMonth] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
-  const [selectedDayKey, setSelectedDayKey] = useState(() => formatDayKey(new Date()));
+  // Today in the reader's zone; `new Date()` would give the server's day, which is UTC's (#381).
+  const todayKey = useTodayKey();
+  const [month, setMonth] = useState(() => monthOfKey(todayKey));
+  const [selectedDayKey, setSelectedDayKey] = useState(todayKey);
+  // The page hydrates on the server's idea of today. When the browser's differs (no `tz` cookie
+  // yet, or midnight passed), a calendar still on the old today moves to the new one.
+  const [shownTodayKey, setShownTodayKey] = useState(todayKey);
+  if (shownTodayKey !== todayKey) {
+    setShownTodayKey(todayKey);
+    if (selectedDayKey === shownTodayKey) {
+      setSelectedDayKey(todayKey);
+      setMonth(monthOfKey(todayKey));
+    }
+  }
 
   const normalizedEvents = useMemo(
     () => events.map((event) => ({ ...event, recurrence: normalizeRecurrence(event.recurrence) })),
@@ -130,7 +146,7 @@ export function ProjectCalendar({ projectColor, events }: ProjectCalendarProps) 
             {monthDays.map((day) => {
               const dayKey = formatDayKey(day);
               const isCurrentMonth = day.getMonth() === month.getMonth();
-              const isToday = dayKey === formatDayKey(new Date());
+              const isToday = dayKey === todayKey;
               const isSelected = dayKey === selectedDayKey;
               const dayEvents = eventsByDay[dayKey] ?? [];
               const eventCount = dayEvents.length;

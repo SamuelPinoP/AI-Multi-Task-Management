@@ -7,9 +7,11 @@ import { ServiceWorkerRegistration } from "@/components/pwa";
 import { ThemeInitScript, ThemeProvider } from "@/components/theme-provider";
 import { TimeZoneCookie } from "@/components/time-zone-cookie";
 import { Toaster } from "@/components/ui/toaster";
+import { UserTimeZoneProvider } from "@/components/user-time-zone";
 import { getSessionUser, mustConfirmEmail } from "@/lib/auth";
 import { siteVerification } from "@/lib/legal";
 import { parseSidebarProjects, SIDEBAR_COLLAPSED_COOKIE, SIDEBAR_PROJECTS_COOKIE } from "@/lib/sidebar-state";
+import { getUserTimeZone } from "@/lib/user-time-server";
 import { getWorkspaceNav } from "@/lib/workspace-nav";
 
 export const metadata: Metadata = {
@@ -46,9 +48,10 @@ export default async function RootLayout({
   // An account whose email isn't confirmed yet only gets the "Check your email" page (#350).
   const awaitingEmailConfirmation = Boolean(sessionUser && mustConfirmEmail(sessionUser));
   const currentUser = awaitingEmailConfirmation ? null : sessionUser;
-  const [initialNav, cookieStore] = await Promise.all([
+  const [initialNav, cookieStore, timeZone] = await Promise.all([
     currentUser ? getWorkspaceNav(currentUser) : null,
     cookies(),
+    getUserTimeZone(),
   ]);
   const sidebarCollapsed = cookieStore.get(SIDEBAR_COLLAPSED_COOKIE)?.value === "1";
   const sidebarProjectsOpen = parseSidebarProjects(cookieStore.get(SIDEBAR_PROJECTS_COOKIE)?.value);
@@ -60,15 +63,18 @@ export default async function RootLayout({
         <TimeZoneCookie />
         <ServiceWorkerRegistration signedIn={Boolean(currentUser)} />
         <ThemeProvider>
-          <AppShell
-            currentUser={currentUser}
-            awaitingEmailConfirmation={awaitingEmailConfirmation}
-            initialNav={initialNav}
-            initialSidebarCollapsed={sidebarCollapsed}
-            initialProjectsOpen={sidebarProjectsOpen}
-          >
-            {children}
-          </AppShell>
+          {/* Times render in the reader's zone, the same on the server and in the browser (#381). */}
+          <UserTimeZoneProvider timeZone={timeZone}>
+            <AppShell
+              currentUser={currentUser}
+              awaitingEmailConfirmation={awaitingEmailConfirmation}
+              initialNav={initialNav}
+              initialSidebarCollapsed={sidebarCollapsed}
+              initialProjectsOpen={sidebarProjectsOpen}
+            >
+              {children}
+            </AppShell>
+          </UserTimeZoneProvider>
           <Toaster />
         </ThemeProvider>
       </body>
