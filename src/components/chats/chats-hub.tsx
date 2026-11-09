@@ -372,6 +372,8 @@ export function ChatsHub({
                   <PanelLeftOpen aria-hidden="true" className="h-4 w-4 text-muted" />
                 )}
                 Chats
+                {/* The space keeps the visible text "Chats 1", part of the label, as the sidebar's badge does. */}
+                {unreadChats ? " " : null}
                 {unreadChats ? (
                   <span
                     aria-hidden="true"
