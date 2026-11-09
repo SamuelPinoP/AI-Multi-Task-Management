@@ -24,7 +24,7 @@ export function editableTaskWhere(userId: string) {
     deletedAt: null,
     OR: [
       { projectId: null, userId },
-      { project: { OR: [{ userId }, { members: { some: { userId, role: { not: "VIEWER" } } } }] } },
+      { project: { OR: [{ userId }, { members: { some: { userId } } }] } },
     ],
   } satisfies Prisma.TaskWhereInput;
 }

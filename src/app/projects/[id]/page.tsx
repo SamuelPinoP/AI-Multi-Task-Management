@@ -13,14 +13,14 @@ import { GithubPanel } from "@/components/projects/github-panel";
 import { ProjectPriority } from "@/components/projects/project-priority";
 import { eventWallTime, formatEventDateTime } from "@/lib/event-time";
 import {
+  canEditProjectContent,
   getProjectAccessForUser,
   projectAccessWhereForProject,
 } from "@/lib/project-access";
-import { OWNER_INVITATION_SELECT } from "@/lib/project-invitations";
+import { PROJECT_ROLE_LABELS } from "@/lib/project-roles";
 import { markProjectOpened } from "@/lib/recent-shortcuts";
 import { describeRepeat, firstOccurrenceEnd } from "@/lib/recurrence";
 import { projectInsights } from "@/lib/project-insights";
-import { isOverdueTask } from "@/lib/task-date-buckets";
 import { toWallClock } from "@/lib/user-time";
 import { getUserTimeZone } from "@/lib/user-time-server";
 
@@ -63,19 +63,6 @@ export default async function ProjectDetailPage({
         orderBy: { createdAt: "asc" },
         include: {
           user: { select: { id: true, name: true, email: true } },
-          notes: {
-            where: {
-              OR: [{ visibility: "TEAM" }, { createdByUserId: user.id }],
-            },
-            orderBy: { createdAt: "desc" },
-            select: {
-              id: true,
-              message: true,
-              createdAt: true,
-              visibility: true,
-              createdByUserId: true,
-            },
-          },
         },
       },
       events: {
@@ -93,11 +80,6 @@ export default async function ProjectDetailPage({
           skippedDates: true,
         },
       },
-      invitations: {
-        where: { status: "PENDING" },
-        orderBy: { createdAt: "desc" },
-        select: OWNER_INVITATION_SELECT,
-      },
       comments: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -113,9 +95,9 @@ export default async function ProjectDetailPage({
   await markProjectOpened(project.id, user.id);
 
   const access = getProjectAccessForUser(project, user.id);
-  const isOwner = access?.accessLevel === "OWNER";
-  const canEditProjectContent = access?.accessLevel === "OWNER" || access?.accessLevel === "EDITOR";
-  const roleLabel = access?.accessLevel === "VIEWER" ? "Viewer (read-only)" : isOwner ? "Owner" : "Editor";
+  const role = access?.accessLevel ?? "EDITOR";
+  const isOwner = role === "OWNER";
+  const canEdit = canEditProjectContent(access);
   const timeZone = await getUserTimeZone();
   const wall = (instant: Date) => toWallClock(timeZone, instant);
   const now = wall(new Date());
@@ -135,34 +117,6 @@ export default async function ProjectDetailPage({
     { updatedAt: wall(project.updatedAt) },
     now,
   );
-
-  const workload = new Map<
-    string,
-    { name: string; active: number; completed: number; overdue: number }
-  >();
-  for (const member of project.members)
-    workload.set(member.id, {
-      name: member.name,
-      active: 0,
-      completed: 0,
-      overdue: 0,
-    });
-  workload.set("unassigned", {
-    name: "Unassigned",
-    active: 0,
-    completed: 0,
-    overdue: 0,
-  });
-  for (const task of project.tasks) {
-    const key = task.assignee?.id ?? "unassigned";
-    const item = workload.get(key);
-    if (!item) continue;
-    if (task.status === "DONE") item.completed += 1;
-    else {
-      item.active += 1;
-      if (isOverdueTask(task.dueDate, now)) item.overdue += 1;
-    }
-  }
 
   return (
     <main className="min-h-screen px-6 py-10">
@@ -217,20 +171,13 @@ export default async function ProjectDetailPage({
                 {project.status.charAt(0) +
                   project.status.slice(1).toLowerCase()}
               </span>
-              <ProjectPriority projectId={project.id} initialPriority={project.priority} canEdit={canEditProjectContent} />
+              <ProjectPriority projectId={project.id} initialPriority={project.priority} canEdit={canEdit} />
               <span
                 className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${isOwner ? "border-accent/30 bg-accent-soft text-accent" :"border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"}`}
               >
-                {roleLabel}
+                {PROJECT_ROLE_LABELS[role]}
               </span>
             </div>
-          </div>
-          <div className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-300">
-            {isOwner
-              ? "Owner permissions: you can edit project details, invite collaborators, remove members, change roles, and coordinate work through tasks, notes, events, and chat."
-              : canEditProjectContent
-                ? "Editor permissions: you can create and edit project tasks, notes, events, comments, and attachments, but cannot invite members or delete the project."
-                : "Viewer permissions: this is a read-only project. You can view project tasks, notes, events, comments, attachments, dashboard, and planner data, but cannot create or change project content."}
           </div>
           <div className="mt-4 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
             <span
@@ -246,29 +193,14 @@ export default async function ProjectDetailPage({
           counts={{ notes: project.notes.length, upcomingEvents }}
         />
 
-        {canEditProjectContent ? (
+        {canEdit ? (
           <ProjectQuickActions project={{ id: project.id, name: project.name, color: project.color }} />
-        ) : (
-          <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
-            Read-only access: ask the project owner for Editor access to create tasks, notes, events, comments, or attachments.
-          </div>
-        )}
+        ) : null}
         <ProjectTeamSection
           projectId={project.id}
-          initialMembers={project.members.map((member) => ({
-            ...member,
-            notes: member.notes.map((note) => ({
-              ...note,
-              createdAt: note.createdAt.toISOString(),
-            })),
-          }))}
-          workloadRows={Array.from(workload.entries())}
-          isOwner={isOwner}
-          // Invitee emails are for the owner only; don't ship them to other members.
-          pendingInvitations={(isOwner ? project.invitations : []).map((invitation) => ({
-            ...invitation,
-            createdAt: invitation.createdAt.toISOString(),
-          }))}
+          initialMembers={project.members}
+          viewerRole={role}
+          currentUserId={user.id}
         />
 
         <GithubPanel projectId={project.id} repo={project.githubRepo} canManage={isOwner} />

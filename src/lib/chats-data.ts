@@ -1,7 +1,7 @@
 import "server-only";
-import { formatChatTime, sortChatSummaries, teammateCount, type ChatAccessLevel, type ChatSummary } from "@/lib/chats";
+import { formatChatTime, sortChatSummaries, teammateCount, type ChatSummary } from "@/lib/chats";
 import { prisma } from "@/lib/prisma";
-import { getProjectAccessForUser, projectAccessWhereForProject } from "@/lib/project-access";
+import { projectAccessWhereForProject } from "@/lib/project-access";
 import {
   chatProjectsWhere,
   getChatLastRead,
@@ -59,7 +59,6 @@ export async function getChatSummaries(user: ChatUser): Promise<ChatSummary[]> {
         projectId: project.id,
         name: project.name,
         color: project.color,
-        accessLevel: getProjectAccessForUser(project, user.id)?.accessLevel ?? "VIEWER",
         memberCount: peopleCount(project),
         unread: unread.get(project.id) ?? 0,
         teammates: teammateCount(project, user.id),
@@ -101,7 +100,6 @@ export async function openProjectChat(projectId: string, user: ChatUser) {
   });
   if (!project) return null;
 
-  const accessLevel: ChatAccessLevel = getProjectAccessForUser(project, user.id)?.accessLevel ?? "VIEWER";
   const previousRead = await getChatLastRead(user.id, project.id);
   await markChatsRead(user.id, [project.id]);
   const newSince = previousRead ?? new Date(Date.now() - UNREAD_CHAT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
@@ -110,9 +108,7 @@ export async function openProjectChat(projectId: string, user: ChatUser) {
     id: project.id,
     name: project.name,
     color: project.color,
-    accessLevel,
     memberCount: peopleCount(project),
-    readOnly: accessLevel === "VIEWER",
     attachmentsDisabledMessage:
       user.isGuest && !projectChatGuestUploadsEnabled() ? PROJECT_CHAT_GUEST_UPLOADS_MESSAGE : undefined,
     newSince: newSince.toISOString(),

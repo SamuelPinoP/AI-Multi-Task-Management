@@ -1,7 +1,7 @@
 import { BackLink } from "@/components/ui";
 import { ProjectKanbanBoard } from "@/components/project-kanban-board";
 import { requirePageUser } from "@/lib/auth";
-import { getProjectAccessForUser, projectAccessWhereForProject } from "@/lib/project-access";
+import { canEditProjectContent, getProjectAccessForUser, projectAccessWhereForProject } from "@/lib/project-access";
 import { prisma } from "@/lib/prisma";
 import { taskInclude } from "@/lib/task-include";
 import { notFound } from "next/navigation";
@@ -36,7 +36,7 @@ export default async function ProjectBoardPage({ params }: ProjectBoardPageProps
   if (!project) notFound();
 
   const access = getProjectAccessForUser(project, user.id);
-  const canEdit = access?.accessLevel === "OWNER" || access?.accessLevel === "EDITOR";
+  const canEdit = canEditProjectContent(access);
 
   return (
     <main className="min-h-screen px-6 py-10">

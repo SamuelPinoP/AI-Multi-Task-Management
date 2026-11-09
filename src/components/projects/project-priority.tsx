@@ -9,8 +9,8 @@ import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 const chipClass = "inline-flex items-center gap-1 rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700";
 
 /**
- * The project's priority on its page (#361): a small select for Owners and
- * Editors, saved at once; plain text for Viewers. It orders the project's
+ * The project's priority on its page (#361): a small select for every
+ * member, saved at once; plain text without edit rights. It orders the project's
  * group on the Tasks page.
  */
 export function ProjectPriority({ projectId, initialPriority, canEdit }: { projectId: string; initialPriority: Priority; canEdit: boolean }) {

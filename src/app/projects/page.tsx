@@ -34,16 +34,17 @@ import {
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import { projectColor } from "@/lib/project-color";
+import { memberRole, PROJECT_ROLE_LABELS, type ProjectRole } from "@/lib/project-roles";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
-type Role = "OWNER" | "EDITOR" | "VIEWER";
 type StatusFilter = "ALL" | ProjectStatus;
 
 type Project = EditableProject & {
   createdAt: string;
   updatedAt: string;
-  accessLevel: Role;
-  memberRole: Role;
+  accessLevel: ProjectRole;
+  /** The member row's role as stored; a VIEWER row made while #385 deployed still counts as an editor. */
+  memberRole: string;
   openTaskCount: number;
   memberCount: number;
 };
@@ -53,8 +54,6 @@ type Invitation = {
   project: { id: string; name: string; color: string | null };
   inviterUser: { name: string | null; email: string };
 };
-
-const roleLabels: Record<Role, string> = { OWNER: "Owner", EDITOR: "Editor", VIEWER: "Viewer" };
 
 async function errorMessage(response: Response, fallback: string) {
   const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -366,7 +365,7 @@ export default function ProjectsPage() {
                       owner ? "bg-canvas text-muted" : "bg-accent-soft text-accent",
                     )}
                   >
-                    {owner ? "Owner" : `Shared · ${roleLabels[project.memberRole]}`}
+                    {owner ? "Owner" : `Shared · ${PROJECT_ROLE_LABELS[memberRole(project.memberRole)]}`}
                   </span>
                   {project.status !== "ACTIVE" ? (
                     <span className="rounded-full bg-caution-soft px-2 py-px font-semibold text-caution">{projectStatusLabels[project.status]}</span>

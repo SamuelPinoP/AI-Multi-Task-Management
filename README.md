@@ -8,8 +8,8 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 
 - Secure authentication with signup, a confirmed email before the first login, Sign in with Google, login with a username or email, logout, and password reset, in forms that browsers' password managers save and fill in. Sessions stay signed in while used, up to a year, and can be ended on other devices
 - Notes, tasks, events, projects, calendars, a rule-based Smart Daily Planner, and trash recovery
-- Project-specific Kanban boards for organizing tasks by status with read-only Viewer access and Owner/Editor task creation and movement
-- Project collaboration with invitations and role-based Owner, Editor, and Viewer access enforced server-side
+- Project-specific Kanban boards for organizing tasks by status
+- Project collaboration with invitations and Owner, Admin and Editor roles enforced server-side: everyone edits, admins invite, remove and promote members, and only the owner dismisses or removes an admin
 - Project chat with file attachments using local, Vercel Blob, or private AWS S3 storage
 - A sidebar where each project opens to its Overview, Board and Chat, with unread chat counts
 - A Chats page with every project chat in one place, unread first, synced across devices

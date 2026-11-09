@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { isPriority, type Priority } from "@/lib/priority";
 import {
   canEditProjectContent,
+  canManageProjectMembers,
   getProjectAccess,
   getProjectAccessForUser,
   projectAccessWhereForProject,
@@ -52,16 +53,6 @@ export async function GET(_req: Request, context: RouteContext) {
           orderBy: { createdAt: "asc" },
           include: {
             user: { select: { id: true, name: true, email: true } },
-            notes: {
-              where: {
-                OR: [
-                  { visibility: "TEAM" },
-                  { createdByUserId: user.id },
-                ],
-              },
-              orderBy: { createdAt: "desc" },
-              select: { id: true, message: true, createdAt: true, visibility: true, createdByUserId: true },
-            },
           },
         },
         invitations: {
@@ -88,7 +79,8 @@ export async function GET(_req: Request, context: RouteContext) {
     const access = getProjectAccessForUser(project, user.id);
     return NextResponse.json({
       ...project,
-      invitations: access?.accessLevel === "OWNER" ? project.invitations : [],
+      // Invitee emails are for the people who manage members: the owner and admins (#385).
+      invitations: canManageProjectMembers(access) ? project.invitations : [],
       accessLevel: access?.accessLevel ?? "OWNER",
       memberRole: access?.memberRole ?? "OWNER",
     });
@@ -112,7 +104,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
     }
 
-    // The priority alone (#361) is planning, like editing tasks: Owners and Editors may change it.
+    // The priority alone (#361) is planning, like editing tasks: every member may change it.
     const details = ["name", "description", "color", "status"].some((key) => key in body);
     if (!details) {
       if (!isPriority(body.priority)) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });

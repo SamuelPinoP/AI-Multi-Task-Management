@@ -46,7 +46,7 @@ import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged, openNewTask, TASK_CREATED_EVENT } from "@/lib/workspace-events";
 
 /** A project from /api/projects, with the caller's access. */
-type ProjectItem = Project & { accessLevel?: "OWNER" | "EDITOR" | "VIEWER"; status?: string; updatedAt?: string };
+type ProjectItem = Project & { status?: string; updatedAt?: string };
 
 type StatusFilter = "ALL" | "OPEN" | "DONE";
 type SortOption = "DUE_DATE_ASC" | "DUE_DATE_DESC" | "NEWEST" | "OLDEST";
@@ -233,7 +233,7 @@ export default function TasksPage() {
   // Bulk changes apply to the selected tasks still on screen, in the order shown.
   const shownIds = shownTasks.map((task) => task.id);
   const selectedTasks = shownTasks.filter((task) => selected.has(task.id));
-  const bulkProjects = projects.filter((project) => project.accessLevel !== "VIEWER" && project.status !== "ARCHIVED");
+  const bulkProjects = projects.filter((project) => project.status !== "ARCHIVED");
 
   const filtersActive =
     Boolean(searchQuery.trim()) || statusFilter !== "ALL" || priorityFilter !== "ALL" || Boolean(projectFilter) || labelFilter.size > 0;
@@ -528,7 +528,6 @@ export default function TasksPage() {
           {projectGroups.map((group) => {
             const groupTasks = group.sections.flatMap((section) => section.tasks);
             const scope = group.projectId ?? "none";
-            const canAdd = !group.project || group.project.accessLevel !== "VIEWER";
             return (
               <section key={group.key} aria-labelledby={`group-${group.key}`} className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
                 {/* One line at any width: a long project name truncates rather than pushing the buttons onto a second row. */}
@@ -600,17 +599,15 @@ export default function TasksPage() {
                   <Link href={`/notes?project=${scope}`} aria-label={group.projectId ? `Notes for ${group.name}` : "Notes with no project"} title={group.projectId ? `Notes for ${group.name}` : "Notes with no project"} className={headerLinkClass}>
                     <NotebookText aria-hidden="true" className="h-4 w-4" />
                   </Link>
-                  {canAdd ? (
-                    <button
-                      type="button"
-                      onClick={() => openNewTask({ projectId: group.projectId ?? undefined })}
-                      aria-label={group.projectId ? `New task in ${group.name}` : "New task with no project"}
-                      title={group.projectId ? `New task in ${group.name}` : "New task with no project"}
-                      className={headerLinkClass}
-                    >
-                      <Plus aria-hidden="true" className="h-4 w-4" />
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => openNewTask({ projectId: group.projectId ?? undefined })}
+                    aria-label={group.projectId ? `New task in ${group.name}` : "New task with no project"}
+                    title={group.projectId ? `New task in ${group.name}` : "New task with no project"}
+                    className={headerLinkClass}
+                  >
+                    <Plus aria-hidden="true" className="h-4 w-4" />
+                  </button>
                 </div>
                 {group.sections.map((section) => (
                   <section key={section.key} aria-labelledby={`section-${group.key}-${section.key}`}>

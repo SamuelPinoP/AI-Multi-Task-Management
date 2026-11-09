@@ -37,7 +37,7 @@ type QuickAddProps = {
 };
 
 type ProjectOption = { id: string; name: string; color: string | null };
-type ProjectListItem = ProjectOption & { accessLevel?: string; status?: string };
+type ProjectListItem = ProjectOption & { status?: string };
 
 const TASKS_ENDPOINT = "/api/tasks";
 
@@ -63,7 +63,7 @@ async function fetchTaskProjects(): Promise<ProjectOption[]> {
     if (!response.ok) return [];
     const projects = (await response.json()) as ProjectListItem[];
     return projects
-      .filter((project) => project.accessLevel !== "VIEWER" && project.status !== "ARCHIVED")
+      .filter((project) => project.status !== "ARCHIVED")
       .map(({ id, name, color }) => ({ id, name, color }));
   } catch {
     return [];

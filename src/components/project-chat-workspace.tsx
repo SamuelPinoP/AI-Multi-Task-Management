@@ -184,7 +184,6 @@ export function ProjectChatWorkspace({
   projectId,
   initialComments,
   currentUser,
-  readOnly = false,
   attachmentsDisabledMessage,
   newSince,
   framed = true,
@@ -192,7 +191,6 @@ export function ProjectChatWorkspace({
   projectId: string;
   initialComments: ProjectComment[];
   currentUser: CurrentUser;
-  readOnly?: boolean;
   /** Shown instead of accepting files when this user can't upload. */
   attachmentsDisabledMessage?: string;
   /** When the user last read this chat: a "New messages" line goes above the first later message from someone else. */
@@ -971,93 +969,86 @@ export function ProjectChatWorkspace({
               className="hidden"
               onChange={handleFileChange}
             />
-            {readOnly ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200 sm:p-4">
-                Read-only access: you can review project chat and attachments,
-                but only Owners and Editors can post messages or upload files.
-              </div>
-            ) : (
-              // One row at every size: attach, the message box, send. The buttons stay at the bottom as the box grows.
-              <div className="flex items-end gap-2">
-                <button
-                  type="button"
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-zinc-600 shadow-sm ring-1 ring-zinc-200 transition hover:text-zinc-950 hover:ring-zinc-300 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:text-zinc-50 dark:hover:ring-zinc-700 sm:h-9 sm:w-9"
-                  onClick={() => {
-                    if (attachmentsDisabledMessage) setError(attachmentsDisabledMessage);
-                    else fileInputRef.current?.click();
-                  }}
-                  disabled={isSubmitting}
-                  aria-label="Attach files"
-                  title="Attach files"
-                >
-                  <PaperclipIcon />
-                </button>
+            {/* One row at every size: attach, the message box, send. The buttons stay at the bottom as the box grows. */}
+            <div className="flex items-end gap-2">
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-zinc-600 shadow-sm ring-1 ring-zinc-200 transition hover:text-zinc-950 hover:ring-zinc-300 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:text-zinc-50 dark:hover:ring-zinc-700 sm:h-9 sm:w-9"
+                onClick={() => {
+                  if (attachmentsDisabledMessage) setError(attachmentsDisabledMessage);
+                  else fileInputRef.current?.click();
+                }}
+                disabled={isSubmitting}
+                aria-label="Attach files"
+                title="Attach files"
+              >
+                <PaperclipIcon />
+              </button>
 
-                <div
-                  className={`min-w-0 flex-1 rounded-2xl bg-zinc-50/80 ring-1 transition dark:bg-zinc-900/70 ${
-                    isDragging
-                      ? "ring-4 ring-zinc-300 dark:ring-zinc-700"
-                      : "ring-zinc-200 focus-within:ring-zinc-400 dark:ring-zinc-800 dark:focus-within:ring-zinc-600"
-                  }`}
-                  onDragEnter={(event) => {
-                    event.preventDefault();
-                    setIsDragging(true);
-                  }}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    setIsDragging(true);
-                  }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onDrop={handleDrop}
-                >
-                  <div className="grid grid-cols-1">
-                    <textarea
-                      id="project-chat-message"
-                      value={message}
-                      onChange={(e) => {
-                        setMessage(e.target.value);
-                        if (error) setError("");
-                      }}
-                      onKeyDown={(event) => {
-                        if (!sendsOnKeyDown(event)) return;
-                        event.preventDefault();
-                        // Enter in an empty box, or while a message is still sending, does nothing.
-                        if (!isSubmitting && (message.trim() || selectedAttachments.length > 0)) void sendMessage();
-                      }}
-                      placeholder="Share an update, decision, blocker, or handoff..."
-                      rows={1}
-                      // At least two lines on a phone, so the whole hint shows; one line from sm.
-                      className={`${COMPOSER_TEXT_CLASS} min-h-[calc(2lh+1rem)] w-full resize-none rounded-2xl border-0 bg-transparent text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 sm:min-h-[calc(1lh+1rem)]`}
-                    />
-                    {/* The trailing space gives a final empty line its height. */}
-                    <div
-                      aria-hidden="true"
-                      className={`${COMPOSER_TEXT_CLASS} invisible overflow-hidden whitespace-pre-wrap break-words`}
-                    >
-                      {`${message} `}
-                    </div>
+              <div
+                className={`min-w-0 flex-1 rounded-2xl bg-zinc-50/80 ring-1 transition dark:bg-zinc-900/70 ${
+                  isDragging
+                    ? "ring-4 ring-zinc-300 dark:ring-zinc-700"
+                    : "ring-zinc-200 focus-within:ring-zinc-400 dark:ring-zinc-800 dark:focus-within:ring-zinc-600"
+                }`}
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleDrop}
+              >
+                <div className="grid grid-cols-1">
+                  <textarea
+                    id="project-chat-message"
+                    value={message}
+                    onChange={(e) => {
+                      setMessage(e.target.value);
+                      if (error) setError("");
+                    }}
+                    onKeyDown={(event) => {
+                      if (!sendsOnKeyDown(event)) return;
+                      event.preventDefault();
+                      // Enter in an empty box, or while a message is still sending, does nothing.
+                      if (!isSubmitting && (message.trim() || selectedAttachments.length > 0)) void sendMessage();
+                    }}
+                    placeholder="Share an update, decision, blocker, or handoff..."
+                    rows={1}
+                    // At least two lines on a phone, so the whole hint shows; one line from sm.
+                    className={`${COMPOSER_TEXT_CLASS} min-h-[calc(2lh+1rem)] w-full resize-none rounded-2xl border-0 bg-transparent text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 sm:min-h-[calc(1lh+1rem)]`}
+                  />
+                  {/* The trailing space gives a final empty line its height. */}
+                  <div
+                    aria-hidden="true"
+                    className={`${COMPOSER_TEXT_CLASS} invisible overflow-hidden whitespace-pre-wrap break-words`}
+                  >
+                    {`${message} `}
                   </div>
-                  {selectedAttachments.length > 0 ? (
-                    <ComposerAttachmentTray
-                      attachments={selectedAttachments}
-                      onRemove={removeSelectedAttachment}
-                    />
-                  ) : null}
                 </div>
-
-                {/* An icon on phones and "Send" from sm; either way its name is "Send message". The message
-                    itself shows "Sending" while it uploads. */}
-                <button
-                  type="submit"
-                  className={cn(uiPrimaryButtonClass, "h-10 w-10 shrink-0 px-0 sm:h-9 sm:w-auto sm:px-4")}
-                  disabled={isSubmitting}
-                >
-                  <SendHorizontal aria-hidden="true" className="h-4 w-4" />
-                  <span className="sr-only sm:not-sr-only">Send</span>
-                  <span className="sr-only"> message</span>
-                </button>
+                {selectedAttachments.length > 0 ? (
+                  <ComposerAttachmentTray
+                    attachments={selectedAttachments}
+                    onRemove={removeSelectedAttachment}
+                  />
+                ) : null}
               </div>
-            )}
+
+              {/* An icon on phones and "Send" from sm; either way its name is "Send message". The message
+                  itself shows "Sending" while it uploads. */}
+              <button
+                type="submit"
+                className={cn(uiPrimaryButtonClass, "h-10 w-10 shrink-0 px-0 sm:h-9 sm:w-auto sm:px-4")}
+                disabled={isSubmitting}
+              >
+                <SendHorizontal aria-hidden="true" className="h-4 w-4" />
+                <span className="sr-only sm:not-sr-only">Send</span>
+                <span className="sr-only"> message</span>
+              </button>
+            </div>
             {error ? (
               <div className="mt-2">
                 <p className="text-sm font-medium text-red-600 dark:text-red-400">

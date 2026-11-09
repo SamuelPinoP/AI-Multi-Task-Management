@@ -43,20 +43,18 @@ test("pages catch up with an invitation sent and accepted elsewhere when you com
     // The owner has the project open while the invitee accepts on another device.
     await ownerPage.clock.install();
     await ownerPage.goto(`/projects/${project.id}`);
-    // The innermost section with that heading: the team section around it shows members too.
-    const pending = ownerPage.locator("section", { has: ownerPage.getByRole("heading", { name: "Pending invitations" }) }).last();
-    await expect(pending.getByText(invitee.email)).toBeVisible();
+    const members = ownerPage.getByRole("region", { name: "Members" }).filter({ visible: true });
+    await expect(members.getByText("No members yet.")).toBeVisible();
     const list = (await (await inviteeContext.request.get("/api/project-invitations")).json()) as { id: string; project: { id: string } }[];
     const invitation = list.find((item) => item.project.id === project.id);
     expect(invitation).toBeTruthy();
     const accepted = await inviteeContext.request.patch(`/api/project-invitations/${invitation!.id}`, { data: { action: "ACCEPT" } });
     expect(accepted.ok()).toBe(true);
 
-    await expect(pending.getByText(invitee.email)).toBeVisible();
+    await expect(members.getByText(invitee.email)).toHaveCount(0);
     await comeBack(ownerPage);
-    await expect(pending.getByText("No pending invitations.")).toBeVisible();
-    const collaborators = ownerPage.locator("section", { has: ownerPage.getByRole("heading", { name: "Accepted collaborators" }) }).last();
-    await expect(collaborators.getByText(invitee.email)).toBeVisible();
+    await expect(members.getByText(invitee.email)).toBeVisible();
+    await expect(members.getByText("No members yet.")).toHaveCount(0);
   } finally {
     await Promise.all([ownerContext.close(), inviteeContext.close()]);
   }

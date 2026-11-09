@@ -21,7 +21,7 @@ import { projectColor } from "@/lib/project-color";
 import { TASK_TITLE_MAX } from "@/lib/task-history";
 import { notifyWorkspaceChanged, TASK_CREATED_EVENT } from "@/lib/workspace-events";
 
-type ProjectOption = { id: string; name: string; color: string | null; accessLevel?: string; status?: string };
+type ProjectOption = { id: string; name: string; color: string | null; status?: string };
 
 /** What a New task can start with, such as the project it's added from. */
 export type NewTaskDraft = { projectId?: string };
@@ -128,7 +128,7 @@ export function NewTaskDialog({
     };
   }, [open, projectId]);
 
-  const editableProjects = projects.filter((project) => project.accessLevel !== "VIEWER" && project.status !== "ARCHIVED");
+  const editableProjects = projects.filter((project) => project.status !== "ARCHIVED");
   const project = projects.find((item) => item.id === projectId) ?? null;
   const memberList = projectId && members?.projectId === projectId ? members.list : [];
   const assignee = memberList.find((member) => member.id === assigneeId) ?? null;

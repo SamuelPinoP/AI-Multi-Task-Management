@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeAuthEmail, requireApiUser } from "@/lib/auth";
+import { canManageProjectMembers, getProjectAccess } from "@/lib/project-access";
 import { checkProjectInvitation, createPendingInvitation, sendInvitationEmail } from "@/lib/project-invitations";
+import { parseAssignableRole } from "@/lib/project-roles";
 
 
 type RouteContext = {
@@ -11,12 +13,13 @@ type RouteContext = {
 // No userId: the response must not reveal whether the email has an account.
 const MEMBER_SELECT = { id: true, name: true, email: true, role: true, createdAt: true } as const;
 
-function isValidRole(value: unknown): value is "EDITOR" | "VIEWER" {
-  return value === "EDITOR" || value === "VIEWER";
-}
-
 export async function POST(req: Request, context: RouteContext) {
   try {
+    const user = await requireApiUser();
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
     const { id: projectId } = await context.params;
     const body = await req.json();
     const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -26,19 +29,18 @@ export async function POST(req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Member name is required" }, { status: 400 });
     }
 
-    if (!isValidRole(body.role)) {
-      return NextResponse.json({ error: "Invalid role" }, { status: 400 });
-    }
-    const role: "EDITOR" | "VIEWER" = body.role;
-
-    const user = await requireApiUser();
-    if (!user) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    const role = parseAssignableRole(body.role, { required: true });
+    if (!role) {
+      return NextResponse.json({ error: "Role must be Admin or Editor." }, { status: 400 });
     }
 
-    const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id }, select: { id: true, name: true } });
+    // The owner and admins add members (#385).
+    const access = await getProjectAccess(projectId, user.id);
+    const project = canManageProjectMembers(access)
+      ? await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true } })
+      : null;
     if (!project) {
-      return NextResponse.json({ error: "Only project owners can add members." }, { status: 403 });
+      return NextResponse.json({ error: "Only the project owner and admins can add members." }, { status: 403 });
     }
 
     let invitedUserId: string | null = null;

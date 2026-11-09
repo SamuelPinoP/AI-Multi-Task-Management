@@ -141,7 +141,7 @@ async function confirmedPreparedAttachments({
 }
 
 /**
- * The project chat for any member (viewers included), polled by the open chat.
+ * The project chat for any member, polled by the open chat.
  * `version` sums up the thread: count, latest edit and pinned count, so adds,
  * edits, deletes and pins all change it. When the caller already has the
  * current version, only that is returned.

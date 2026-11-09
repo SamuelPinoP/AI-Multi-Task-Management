@@ -1,91 +1,70 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import {
   uiButtonClass,
   uiCardClass,
   uiDangerButtonClass,
 } from "@/components/ui";
-import { useUserTimeZone } from "@/components/user-time-zone";
-import { formatInstant } from "@/lib/user-time";
+import {
+  canManageMembers,
+  canRemoveMember,
+  memberRole,
+  PROJECT_ROLE_LABELS,
+  type AssignableRole,
+  type ProjectRole,
+} from "@/lib/project-roles";
 
-type Role = "OWNER" | "EDITOR" | "VIEWER";
-type NoteVisibility = "TEAM" | "PRIVATE";
-type MemberNote = {
-  id: string;
-  message: string;
-  createdAt: string;
-  visibility: NoteVisibility;
-  createdByUserId: string;
-};
 type Member = {
   id: string;
   userId: string | null;
   name: string;
   email: string | null;
-  role: Role;
-  notes: MemberNote[];
+  /** As stored: ADMIN, EDITOR, or an old VIEWER row that counts as an editor. */
+  role: string;
   user?: { id: string; name: string | null; email: string } | null;
-};
-type PendingInvitation = {
-  id: string;
-  invitedEmail: string;
-  status: "PENDING" | "ACCEPTED" | "DECLINED";
-  createdAt: string;
-  role: Role;
 };
 type EmailDelivery = { status: "disabled" | "sent" | "failed"; message: string };
 
 type ProjectTeamSectionProps = {
   projectId: string;
   initialMembers: Member[];
-  workloadRows: Array<
-    [
-      string,
-      { name: string; active: number; completed: number; overdue: number },
-    ]
-  >;
-  isOwner: boolean;
-  pendingInvitations: PendingInvitation[];
+  /** The signed-in person's role here: the owner and admins manage members (#385). */
+  viewerRole: ProjectRole;
+  currentUserId: string;
 };
+
+function RoleOptions() {
+  return (
+    <>
+      <option value="EDITOR">{PROJECT_ROLE_LABELS.EDITOR}</option>
+      <option value="ADMIN">{PROJECT_ROLE_LABELS.ADMIN}</option>
+    </>
+  );
+}
 
 export function ProjectTeamSection({
   projectId,
   initialMembers,
-  workloadRows,
-  isOwner,
-  pendingInvitations,
+  viewerRole,
+  currentUserId,
 }: ProjectTeamSectionProps) {
-  const timeZone = useUserTimeZone();
   const [members, setMembers] = useState<Member[]>(initialMembers);
-  const [invitations, setInvitations] =
-    useState<PendingInvitation[]>(pendingInvitations);
   // The shell refreshes the page on coming back, bringing the server's latest
-  // lists, such as an invitation accepted on another device.
-  const [shownLists, setShownLists] = useState({ initialMembers, pendingInvitations });
-  if (shownLists.initialMembers !== initialMembers || shownLists.pendingInvitations !== pendingInvitations) {
-    setShownLists({ initialMembers, pendingInvitations });
+  // members, such as an invitation accepted on another device.
+  const [shownMembers, setShownMembers] = useState(initialMembers);
+  if (shownMembers !== initialMembers) {
+    setShownMembers(initialMembers);
     setMembers(initialMembers);
-    setInvitations(pendingInvitations);
   }
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [role, setRole] = useState<Exclude<Role, "OWNER">>("EDITOR");
-  const [inviteRole, setInviteRole] = useState<Exclude<Role, "OWNER">>("EDITOR");
+  const [role, setRole] = useState<AssignableRole>("EDITOR");
+  const [inviteRole, setInviteRole] = useState<AssignableRole>("EDITOR");
   const [error, setError] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
-  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
-  const [visibilityDrafts, setVisibilityDrafts] = useState<
-    Record<string, NoteVisibility>
-  >({});
-
-  const workloadById = useMemo(() => new Map(workloadRows), [workloadRows]);
-  const acceptedCollaborators = members.filter((member) => member.userId);
-  const pendingInviteEmails = useMemo(
-    () => new Set(invitations.map((invitation) => invitation.invitedEmail)),
-    [invitations],
-  );
+  const canManage = canManageMembers(viewerRole);
 
   async function addMember(e: FormEvent) {
     e.preventDefault();
@@ -95,8 +74,8 @@ export function ProjectTeamSection({
       body: JSON.stringify({ name, email, role }),
     });
     const data = (await res.json().catch(() => null)) as {
-      member?: Omit<Member, "userId" | "notes">;
-      invitation?: PendingInvitation | null;
+      member?: Omit<Member, "userId">;
+      invitation?: { invitedEmail: string } | null;
       email?: EmailDelivery | null;
       error?: string;
     } | null;
@@ -109,8 +88,7 @@ export function ProjectTeamSection({
     }
     const { member, invitation } = data;
     // New members are never linked to an account until they accept.
-    setMembers((prev) => [...prev, { ...member, userId: null, notes: [] }]);
-    if (invitation) setInvitations((prev) => [invitation, ...prev]);
+    setMembers((prev) => [...prev, { ...member, userId: null }]);
     setName("");
     setEmail("");
     setRole("EDITOR");
@@ -133,46 +111,33 @@ export function ProjectTeamSection({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
     });
-    const data = (await res.json().catch(() => null)) as
-      | PendingInvitation
-      | {
-          invitation?: PendingInvitation;
-          email?: EmailDelivery;
-          message?: string;
-          error?: string;
-        }
-      | null;
+    const data = (await res.json().catch(() => null)) as {
+      message?: string;
+      error?: string;
+    } | null;
     if (!res.ok) {
       setInviteMessage("");
-      return setError(
-        data && "error" in data && data.error
-          ? data.error
-          : "Could not send invitation",
-      );
+      return setError(data?.error || "Could not send invitation");
     }
-    const invitation =
-      data && "invitation" in data && data.invitation
-        ? data.invitation
-        : (data as PendingInvitation);
-    const message =
-      data && "message" in data && data.message
-        ? data.message
-        : "Invitation created. The user can accept it from their Projects page.";
-
-    setInvitations((prev) => [invitation, ...prev]);
     setInviteEmail("");
     setInviteRole("EDITOR");
     setError("");
-    setInviteMessage(message);
+    setInviteMessage(
+      data?.message ||
+        "Invitation created. The user can accept it from their Projects page.",
+    );
   }
 
-  async function updateMemberRole(memberId: string, nextRole: Exclude<Role, "OWNER">) {
+  async function updateMemberRole(memberId: string, nextRole: AssignableRole) {
     const res = await fetch(`/api/projects/${projectId}/members/${memberId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: nextRole }),
     });
-    if (!res.ok) return setError("Could not update member role.");
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      return setError(data?.error || "Could not update member role.");
+    }
     const updated = (await res.json()) as Member;
     setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, role: updated.role } : m)));
     setError("");
@@ -182,68 +147,20 @@ export function ProjectTeamSection({
     const res = await fetch(`/api/projects/${projectId}/members/${memberId}`, {
       method: "DELETE",
     });
-    if (!res.ok)
-      return setError(
-        "Could not remove member. Only removable non-owner members can be deleted.",
-      );
-    setMembers((prev) => prev.filter((m) => m.id !== memberId));
-  }
-
-  async function addNote(memberId: string) {
-    const message = noteDrafts[memberId]?.trim() ?? "";
-    if (!message) {
-      setError("Member note message is required.");
-      return;
-    }
-    const visibility = visibilityDrafts[memberId] ?? "TEAM";
-    const res = await fetch(
-      `/api/projects/${projectId}/members/${memberId}/notes`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, visibility }),
-      },
-    );
     if (!res.ok) {
-      const data = (await res.json().catch(() => null)) as {
-        error?: string;
-      } | null;
-      return setError(
-        data?.error || "Could not add member note. Please try again.",
-      );
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      return setError(data?.error || "Could not remove member.");
     }
-    const note = (await res.json()) as MemberNote;
-    setMembers((prev) =>
-      prev.map((member) =>
-        member.id === memberId
-          ? { ...member, notes: [note, ...member.notes] }
-          : member,
-      ),
-    );
-    setNoteDrafts((prev) => ({ ...prev, [memberId]: "" }));
-    setVisibilityDrafts((prev) => ({ ...prev, [memberId]: "TEAM" }));
+    setMembers((prev) => prev.filter((m) => m.id !== memberId));
     setError("");
   }
 
   return (
-    <section className="mt-8">
-      <div className="mb-4">
-        <h2 className="text-2xl font-semibold">Team / Members</h2>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-          Owners manage invitations, project details, and membership.
-          Collaborators can participate in shared project work such as chat and
-          permitted member notes.
-        </p>
-      </div>
+    <section aria-labelledby="members-heading" className="mt-8">
+      <h2 id="members-heading" className="mb-4 text-2xl font-semibold">Members</h2>
       <div className={`${uiCardClass} p-4`}>
-        {isOwner ? (
+        {canManage ? (
           <>
-            <div className="mb-4 rounded-xl border border-accent/30 bg-accent-soft p-3 text-sm text-ink">
-              You are the project owner. You can invite collaborators by email,
-              add members for planning (adding an email also sends them an
-              invitation), remove non-owner members, and keep member notes.
-              Nobody gets access until they accept an invitation.
-            </div>
             <form
               onSubmit={inviteUser}
               className="mb-4 grid gap-3 md:grid-cols-[1fr_180px_auto]"
@@ -263,9 +180,8 @@ export function ProjectTeamSection({
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Role</label>
-                <select aria-label="Role" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as Exclude<Role, "OWNER">)} className="w-full rounded-xl border px-3 py-2">
-                  <option value="EDITOR">Editor</option>
-                  <option value="VIEWER">Viewer</option>
+                <select aria-label="Role" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as AssignableRole)} className="w-full rounded-xl border px-3 py-2">
+                  <RoleOptions />
                 </select>
               </div>
               <button type="submit" className={`${uiButtonClass} self-end`}>
@@ -293,211 +209,59 @@ export function ProjectTeamSection({
               />
               <select aria-label="Role"
                 value={role}
-                onChange={(e) => setRole(e.target.value as Exclude<Role, "OWNER">)}
+                onChange={(e) => setRole(e.target.value as AssignableRole)}
                 className="rounded-xl border px-3 py-2"
               >
-                <option value="EDITOR">Editor</option>
-                <option value="VIEWER">Viewer</option>
+                <RoleOptions />
               </select>
               <button type="submit" className={uiButtonClass}>
                 Add member
               </button>
             </form>
           </>
-        ) : (
-          <p className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200">
-            You have shared access. Viewers have a read-only workspace; Editors can add project content and chat. Only the owner can invite, remove, or change roles.
-          </p>
-        )}
+        ) : null}
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
-        {isOwner && (
-          <section className="mt-5 rounded-xl border border-dashed p-3">
-            <h3 className="text-sm font-semibold">Pending invitations</h3>
-            {invitations.length === 0 ? (
-              <p className="mt-1 text-sm text-zinc-500">
-                No pending invitations. Invite a teammate by email above when
-                you are ready to collaborate.
-              </p>
-            ) : (
-              <ul className="mt-2 space-y-1 text-sm text-zinc-600 dark:text-zinc-300">
-                {invitations.map((invitation) => (
-                  <li
-                    key={invitation.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2"
-                  >
-                    <span>{invitation.invitedEmail} <span className="text-xs text-zinc-500">({invitation.role})</span></span>
-                    <span className="text-xs text-zinc-500">
-                      Invitation sent{" "}
-                      {formatInstant(invitation.createdAt, timeZone, { dateStyle: "medium" })} •
-                      Waiting for acceptance
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
-
-        <section className="mt-5 rounded-xl border border-dashed p-3">
-          <h3 className="text-sm font-semibold">Accepted collaborators</h3>
-          {acceptedCollaborators.length === 0 ? (
-            <p className="mt-1 text-sm text-zinc-500">
-              No accepted account collaborators yet. Accepted invitees will
-              appear here with linked account details.
-            </p>
-          ) : (
-            <ul className="mt-2 space-y-1 text-sm text-zinc-600 dark:text-zinc-300">
-              {acceptedCollaborators.map((member) => (
-                <li key={member.id} className="rounded-lg border px-3 py-2">
-                  {member.user?.name || member.name} •{" "}
-                  {member.user?.email || member.email}{" "}
-                  <span className="ml-1 text-xs">({member.role})</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <div className="mt-4 space-y-3">
-          {members.map((m) => {
-            const memberWorkload = workloadById.get(m.id) ?? {
-              name: m.name,
-              active: 0,
-              completed: 0,
-              overdue: 0,
-            };
-            return (
-              <article key={m.id} className="rounded-xl border p-3">
-                <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <strong>{m.name}</strong>
-                  <span>({m.role})</span>
-                  {m.email ? <span>• {m.email}</span> : null}
-                  {m.userId ? (
-                    <span className="rounded-full border border-success/40 bg-success-soft px-2 py-0.5 text-2xs font-semibold text-success">
-                      Has access
-                    </span>
-                  ) : m.email && pendingInviteEmails.has(m.email) ? (
-                    <span className="rounded-full border border-warning/40 bg-warning-soft px-2 py-0.5 text-2xs font-semibold text-warning">
-                      Waiting for acceptance
-                    </span>
-                  ) : null}
-                  <span className="ml-auto text-xs text-zinc-600">
-                    Active: {memberWorkload.active} • Completed:{" "}
-                    {memberWorkload.completed} • Overdue:{" "}
-                    {memberWorkload.overdue}
-                  </span>
-                  {isOwner && m.role !== "OWNER" && (
-                    <select aria-label="Role" value={m.role} onChange={(e) => void updateMemberRole(m.id, e.target.value as Exclude<Role, "OWNER">)} className="rounded-lg border px-2 py-1 text-xs">
-                      <option value="EDITOR">Editor</option>
-                      <option value="VIEWER">Viewer</option>
-                    </select>
-                  )}
-                  {isOwner && m.role !== "OWNER" && (
-                    <button
-                      className={`${uiDangerButtonClass} px-2 py-0.5 text-xs`}
-                      onClick={() => void removeMember(m.id)}
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <input
-                    value={noteDrafts[m.id] ?? ""}
-                    onChange={(e) =>
-                      setNoteDrafts((prev) => ({
-                        ...prev,
-                        [m.id]: e.target.value,
-                      }))
-                    }
-                    placeholder={`Add note for ${m.name}`}
-                    className="w-full rounded-lg border px-3 py-1.5 text-sm"
-                  />
-                  <select aria-label="Note visibility"
-                    value={visibilityDrafts[m.id] ?? "TEAM"}
-                    onChange={(e) =>
-                      setVisibilityDrafts((prev) => ({
-                        ...prev,
-                        [m.id]: e.target.value as NoteVisibility,
-                      }))
-                    }
-                    className="rounded-lg border px-2 py-1.5 text-xs"
-                  >
-                    <option value="TEAM">Team note</option>
-                    <option value="PRIVATE">Private note</option>
-                  </select>
-                  <button
-                    type="button"
-                    className={`${uiButtonClass} px-3 py-1.5 text-xs`}
-                    onClick={() => void addNote(m.id)}
-                  >
-                    Add note
-                  </button>
-                </div>
-                {m.notes.length > 0 ? (
-                  <ul className="mt-2 space-y-1 text-xs text-zinc-600">
-                    {m.notes.map((note) => (
-                      <li key={note.id} className="rounded border px-2 py-1">
-                        {note.message}{" "}
-                        {note.visibility === "PRIVATE" ? (
-                          <span className="ml-1 rounded border border-purple-300 bg-purple-50 px-1 py-0.5 text-2xs font-semibold text-purple-700">
-                            Private
-                          </span>
+        {members.length === 0 ? (
+          <p className={`${canManage ? "mt-4 " : ""}text-sm text-muted`}>No members yet.</p>
+        ) : (
+          <ul className={`${canManage ? "mt-4 " : ""}space-y-3`}>
+            {members.map((m) => {
+              const current = memberRole(m.role);
+              const mine = m.userId === currentUserId;
+              // Admins make editors admins; only the owner turns an admin back into an editor (#385).
+              const canPickRole = !mine && (viewerRole === "OWNER" || (viewerRole === "ADMIN" && current === "EDITOR"));
+              const canRemove = !mine && canRemoveMember(viewerRole, m.role);
+              return (
+                <li key={m.id} className="rounded-xl border p-3">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <strong>{m.name}</strong>
+                    <span>({PROJECT_ROLE_LABELS[current]})</span>
+                    {m.email ? <span>• {m.email}</span> : null}
+                    {canPickRole || canRemove ? (
+                      <span className="ml-auto flex items-center gap-2">
+                        {canPickRole ? (
+                          <select aria-label={`Role of ${m.name}`} value={current} onChange={(e) => void updateMemberRole(m.id, e.target.value as AssignableRole)} className="rounded-lg border px-2 py-1 text-xs">
+                            <RoleOptions />
+                          </select>
                         ) : null}
-                        <span className="text-zinc-500">
-                          {" "}
-                          • {formatInstant(note.createdAt, timeZone, { dateStyle: "medium", timeStyle: "short" })}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-xs text-zinc-500">
-                    No member notes yet. Add a quick handoff, responsibility
-                    note, or follow-up for this person.
-                  </p>
-                )}
-              </article>
-            );
-          })}
-        </div>
+                        {canRemove ? (
+                          <button
+                            className={`${uiDangerButtonClass} px-2 py-0.5 text-xs`}
+                            onClick={() => void removeMember(m.id)}
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </span>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
-
-      <section className="mt-8">
-        <h2 id="workload-summary-heading" className="mb-4 text-2xl font-semibold">Workload Summary</h2>
-        {/* Focusable so keyboard users can scroll the table sideways on small screens. */}
-        <div
-          role="region"
-          aria-labelledby="workload-summary-heading"
-          tabIndex={0}
-          className="overflow-x-auto rounded-2xl border border-zinc-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent dark:border-zinc-800"
-        >
-          <table className="min-w-full text-sm">
-            <thead className="bg-zinc-100 dark:bg-zinc-900">
-              <tr>
-                <th className="px-3 py-2 text-left">Member</th>
-                <th className="px-3 py-2 text-left">Active</th>
-                <th className="px-3 py-2 text-left">Completed</th>
-                <th className="px-3 py-2 text-left">Overdue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {workloadRows.map(([key, row]) => (
-                <tr
-                  key={key}
-                  className="border-t border-zinc-200 dark:border-zinc-800"
-                >
-                  <td className="px-3 py-2">{row.name}</td>
-                  <td className="px-3 py-2">{row.active}</td>
-                  <td className="px-3 py-2">{row.completed}</td>
-                  <td className="px-3 py-2">{row.overdue}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
     </section>
   );
 }
