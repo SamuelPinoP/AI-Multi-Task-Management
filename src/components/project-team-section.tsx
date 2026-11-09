@@ -6,6 +6,8 @@ import {
   uiCardClass,
   uiDangerButtonClass,
 } from "@/components/ui";
+import { useUserTimeZone } from "@/components/user-time-zone";
+import { formatInstant } from "@/lib/user-time";
 
 type Role = "OWNER" | "EDITOR" | "VIEWER";
 type NoteVisibility = "TEAM" | "PRIVATE";
@@ -54,6 +56,7 @@ export function ProjectTeamSection({
   isOwner,
   pendingInvitations,
 }: ProjectTeamSectionProps) {
+  const timeZone = useUserTimeZone();
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [invitations, setInvitations] =
     useState<PendingInvitation[]>(pendingInvitations);
@@ -326,7 +329,7 @@ export function ProjectTeamSection({
                     <span>{invitation.invitedEmail} <span className="text-xs text-zinc-500">({invitation.role})</span></span>
                     <span className="text-xs text-zinc-500">
                       Invitation sent{" "}
-                      {new Date(invitation.createdAt).toLocaleDateString()} •
+                      {formatInstant(invitation.createdAt, timeZone, { dateStyle: "medium" })} •
                       Waiting for acceptance
                     </span>
                   </li>
@@ -444,7 +447,7 @@ export function ProjectTeamSection({
                         ) : null}
                         <span className="text-zinc-500">
                           {" "}
-                          • {new Date(note.createdAt).toLocaleString()}
+                          • {formatInstant(note.createdAt, timeZone, { dateStyle: "medium", timeStyle: "short" })}
                         </span>
                       </li>
                     ))}
