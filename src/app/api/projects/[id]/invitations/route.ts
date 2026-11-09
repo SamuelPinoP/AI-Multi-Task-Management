@@ -9,7 +9,8 @@ import {
   OWNER_INVITATION_SELECT,
   sendInvitationEmail,
 } from "@/lib/project-invitations";
-import { ProjectMemberRole } from "@prisma/client";
+import { canManageProjectMembers, getProjectAccess } from "@/lib/project-access";
+import { parseAssignableRole } from "@/lib/project-roles";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -19,8 +20,10 @@ export async function GET(_req: Request, context: RouteContext) {
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
     const { id: projectId } = await context.params;
-    const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id }, select: { id: true } });
-    if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    // The owner and admins manage invitations (#385); to anyone else the project isn't there.
+    if (!canManageProjectMembers(await getProjectAccess(projectId, user.id))) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
 
     const invitations = await prisma.projectInvitation.findMany({
       where: { projectId, status: "PENDING" },
@@ -45,11 +48,15 @@ export async function POST(req: Request, context: RouteContext) {
     const { id: projectId } = await context.params;
     const body = await req.json().catch(() => ({}));
     const invitedEmail = typeof body.email === "string" ? normalizeAuthEmail(body.email) : "";
-    const role = body.role === ProjectMemberRole.VIEWER ? ProjectMemberRole.VIEWER : ProjectMemberRole.EDITOR;
+    const role = parseAssignableRole(body.role);
 
     if (!invitedEmail) return NextResponse.json({ error: "Invitee email is required" }, { status: 400 });
+    if (!role) return NextResponse.json({ error: "Role must be Admin or Editor." }, { status: 400 });
 
-    const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id }, select: { id: true, name: true } });
+    if (!canManageProjectMembers(await getProjectAccess(projectId, user.id))) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
     const check = await checkProjectInvitation({ projectId, invitedEmail, inviter: user });

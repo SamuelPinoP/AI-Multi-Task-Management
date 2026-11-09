@@ -39,7 +39,6 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
         <ProjectChatWorkspace
           projectId={chat.id}
           currentUser={{ name: user.name, email: user.email }}
-          readOnly={chat.readOnly}
           attachmentsDisabledMessage={chat.attachmentsDisabledMessage}
           newSince={chat.newSince}
           initialComments={chat.initialComments}

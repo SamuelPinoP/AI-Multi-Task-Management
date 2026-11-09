@@ -1,12 +1,9 @@
 /** The Chats hub (SIDE-02): the list's data and the pure helpers that sort, filter and label it. */
 
-export type ChatAccessLevel = "OWNER" | "EDITOR" | "VIEWER";
-
 export type ChatSummary = {
   projectId: string;
   name: string;
   color: string | null;
-  accessLevel: ChatAccessLevel;
   /** People in the project, the owner included. */
   memberCount: number;
   /** Messages from others since the user last read this chat (SIDE-03). */

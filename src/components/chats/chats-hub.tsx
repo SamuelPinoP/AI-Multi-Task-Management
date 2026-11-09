@@ -29,7 +29,6 @@ import {
   chatPreview,
   filterChatSummaries,
   formatUnreadCount,
-  type ChatAccessLevel,
   type ChatFilter,
   type ChatSummary,
 } from "@/lib/chats";
@@ -37,12 +36,6 @@ import type { OpenedProjectChat } from "@/lib/chats-data";
 import { cn } from "@/lib/cn";
 import { projectColor } from "@/lib/project-color";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
-
-const roleText: Record<ChatAccessLevel, string> = {
-  OWNER: "You own this project",
-  EDITOR: "You can post",
-  VIEWER: "Read only",
-};
 
 function plural(count: number, word: string) {
   return `${count} ${word}${count === 1 ? "" : "s"}`;
@@ -66,9 +59,6 @@ function ChatRow({ chat, selected }: { chat: ChatSummary; selected: boolean }) {
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex items-baseline gap-2">
           <span className={cn("min-w-0 flex-1 truncate text-sm", unread ? "font-bold" : "font-semibold")}>{chat.name}</span>
-          {chat.accessLevel === "VIEWER" ? (
-            <span className="shrink-0 rounded-full bg-sunken px-1.5 text-2xs font-semibold text-muted">Viewer</span>
-          ) : null}
           {chat.lastMessage ? (
             <span className={cn("shrink-0 text-xs", unread ? "font-bold text-accent" : "text-muted")}>{chat.lastMessage.timeLabel}</span>
           ) : null}
@@ -277,7 +267,7 @@ export function ChatsHub({
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-base font-bold">{selected.name}</h2>
                 <p className="truncate text-xs text-muted">
-                  {plural(selected.memberCount, "member")} · {roleText[selected.accessLevel]}
+                  {plural(selected.memberCount, "member")}
                 </p>
               </div>
               <div className="flex shrink-0 gap-1.5 sm:gap-2">
@@ -298,7 +288,6 @@ export function ChatsHub({
                 framed={false}
                 projectId={selected.id}
                 currentUser={currentUser}
-                readOnly={selected.readOnly}
                 attachmentsDisabledMessage={selected.attachmentsDisabledMessage}
                 newSince={selected.newSince}
                 initialComments={selected.initialComments}

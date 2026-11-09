@@ -8,12 +8,13 @@ import {
 } from "@playwright/test";
 import { signUpAndLogIn, uniqueName } from "./helpers";
 
-// Every project route checked as the project's Owner, an Editor, a Viewer and
-// a signed-in outsider. Outsiders get 404 rather than 403 wherever the route
+// Every project route checked as the project's Owner, an Admin, an Editor and
+// a signed-in outsider (#385: everyone in a project edits; the owner and admins
+// also manage members). Outsiders get 404 rather than 403 wherever the route
 // would otherwise confirm that the project exists.
 
-type Role = "owner" | "editor" | "viewer" | "outsider";
-const ROLES: Role[] = ["owner", "editor", "viewer", "outsider"];
+type Role = "owner" | "admin" | "editor" | "outsider";
+const ROLES: Role[] = ["owner", "admin", "editor", "outsider"];
 
 type Expected = Partial<Record<Role, number>>;
 
@@ -29,7 +30,7 @@ let attachmentId = "";
 let projectTaskId = "";
 let projectTaskTitle = "";
 let editorMemberId = "";
-let viewerMemberId = "";
+let adminMemberId = "";
 let ownerPersonalNoteId = "";
 
 test.describe.configure({ mode: "serial" });
@@ -75,7 +76,7 @@ test.beforeAll(async ({ browser }, testInfo) => {
 
   for (const [role, memberRole] of [
     ["editor", "EDITOR"],
-    ["viewer", "VIEWER"],
+    ["admin", "ADMIN"],
   ] as const) {
     await json(
       await api.owner.post(`/api/projects/${projectId}/invitations`, {
@@ -118,10 +119,14 @@ test.beforeAll(async ({ browser }, testInfo) => {
   projectTaskId = task.id;
 
   const details = await json<{
-    members: { id: string; user: { email: string } | null }[];
+    members: { id: string; role: string; user: { email: string } | null }[];
   }>(await api.owner.get(`/api/projects/${projectId}`));
-  editorMemberId = details.members.find((member) => member.user?.email === emails.editor)!.id;
-  viewerMemberId = details.members.find((member) => member.user?.email === emails.viewer)!.id;
+  const editor = details.members.find((member) => member.user?.email === emails.editor)!;
+  const admin = details.members.find((member) => member.user?.email === emails.admin)!;
+  expect(editor.role).toBe("EDITOR");
+  expect(admin.role).toBe("ADMIN");
+  editorMemberId = editor.id;
+  adminMemberId = admin.id;
 
   const note = await json<{ id: string }>(
     await api.owner.post("/api/notes", {
@@ -138,8 +143,8 @@ test.afterAll(async () => {
 test("members can open the project; outsiders can't see it exists", async () => {
   await expectStatuses("GET project", (client) => client.get(`/api/projects/${projectId}`), {
     owner: 200,
+    admin: 200,
     editor: 200,
-    viewer: 200,
     outsider: 404,
   });
 
@@ -170,96 +175,125 @@ test("only the owner can rename or delete the project", async () => {
   await expectStatuses(
     "PATCH project",
     (client) => client.patch(`/api/projects/${projectId}`, { data: { name: projectName } }),
-    { owner: 200, editor: 404, viewer: 404, outsider: 404 },
+    { owner: 200, admin: 404, editor: 404, outsider: 404 },
   );
   await expectStatuses("DELETE project", (client) => client.delete(`/api/projects/${projectId}`), {
+    admin: 404,
     editor: 404,
-    viewer: 404,
     outsider: 404,
   });
 });
 
-test("editors set the project's priority, viewers only see it (#361)", async () => {
+test("every member sets the project's priority (#361)", async () => {
   await expectStatuses(
     "PATCH project priority",
     (client) => client.patch(`/api/projects/${projectId}`, { data: { priority: "HIGH" } }),
-    { owner: 200, editor: 200, viewer: 403, outsider: 404 },
+    { owner: 200, admin: 200, editor: 200, outsider: 404 },
   );
-  const project = await json<{ priority: string }>(await api.viewer.get(`/api/projects/${projectId}`));
+  const project = await json<{ priority: string }>(await api.editor.get(`/api/projects/${projectId}`));
   expect(project.priority).toBe("HIGH");
   expect((await api.owner.patch(`/api/projects/${projectId}`, { data: { priority: "CRITICAL" } })).status()).toBe(400);
   // Renaming stays the owner's, even with a priority in the same request.
   expect((await api.editor.patch(`/api/projects/${projectId}`, { data: { name: "Renamed", priority: "LOW" } })).status()).toBe(404);
+  expect((await api.admin.patch(`/api/projects/${projectId}`, { data: { name: "Renamed", priority: "LOW" } })).status()).toBe(404);
 });
 
-test("only the owner sees and sends invitations", async () => {
-  const pendingEmail = `e2e-pending-${Date.now()}@example.test`;
+test("the owner and admins send and see invitations; editors don't (#385)", async () => {
+  const ownerInvite = `e2e-pending-owner-${Date.now()}@example.test`;
+  const adminInvite = `e2e-pending-admin-${Date.now()}@example.test`;
+  const invitations = `/api/projects/${projectId}/invitations`;
   await expectStatuses(
     "POST invitation",
-    (client) =>
-      client.post(`/api/projects/${projectId}/invitations`, {
-        data: { email: pendingEmail, role: "VIEWER" },
-      }),
-    { editor: 404, viewer: 404, outsider: 404, owner: 201 },
+    (client) => client.post(invitations, { data: { email: client === api.admin ? adminInvite : ownerInvite, role: "EDITOR" } }),
+    { owner: 201, admin: 201, editor: 404, outsider: 404 },
   );
-  await expectStatuses("GET invitations", (client) => client.get(`/api/projects/${projectId}/invitations`), {
+  // Admin is a role an invitation can give; Viewer is gone.
+  expect((await api.admin.post(invitations, { data: { email: `e2e-as-admin-${Date.now()}@example.test`, role: "ADMIN" } })).status()).toBe(201);
+  expect((await api.owner.post(invitations, { data: { email: `e2e-as-viewer-${Date.now()}@example.test`, role: "VIEWER" } })).status()).toBe(400);
+  await expectStatuses("GET invitations", (client) => client.get(invitations), {
     owner: 200,
+    admin: 200,
     editor: 404,
-    viewer: 404,
     outsider: 404,
   });
 
-  // Pending invitee emails stay with the owner, even in the project details.
-  for (const role of ["owner", "editor", "viewer"] as const) {
+  // Pending invitee emails stay with the people who manage members, even in the project details.
+  for (const role of ["owner", "admin", "editor"] as const) {
     const details = await json<{ invitations: { invitedEmail: string }[] }>(
       await api[role].get(`/api/projects/${projectId}`),
     );
-    expect
-      .soft(details.invitations.some((invitation) => invitation.invitedEmail === pendingEmail), `invitations as ${role}`)
-      .toBe(role === "owner");
+    for (const email of [ownerInvite, adminInvite]) {
+      expect
+        .soft(details.invitations.some((invitation) => invitation.invitedEmail === email), `${email} as ${role}`)
+        .toBe(role !== "editor");
+    }
 
     // The project page no longer lists invitations (#384), so it carries no invitee emails at all.
     const page = await api[role].get(`/projects/${projectId}`);
     expect(page.ok()).toBe(true);
-    expect.soft((await page.text()).includes(pendingEmail), `project page as ${role}`).toBe(false);
+    expect.soft((await page.text()).includes(ownerInvite), `project page as ${role}`).toBe(false);
   }
 });
 
-test("only the owner manages members", async () => {
+test("the owner and admins manage members; only the owner dismisses or removes an admin (#385)", async () => {
+  const members = `/api/projects/${projectId}/members`;
   await expectStatuses(
     "POST member",
-    (client) =>
-      client.post(`/api/projects/${projectId}/members`, {
-        data: { name: "Placeholder teammate", role: "VIEWER" },
-      }),
-    { editor: 403, viewer: 403, outsider: 403, owner: 201 },
+    (client) => client.post(members, { data: { name: "Placeholder teammate", role: "EDITOR" } }),
+    { owner: 201, admin: 201, editor: 403, outsider: 403 },
   );
+  expect((await api.owner.post(members, { data: { name: "Old role", role: "VIEWER" } })).status()).toBe(400);
+
   await expectStatuses(
     "PATCH member role",
-    (client) =>
-      client.patch(`/api/projects/${projectId}/members/${viewerMemberId}`, {
-        data: { role: "EDITOR" },
-      }),
-    { editor: 403, viewer: 403, outsider: 403 },
+    (client) => client.patch(`${members}/${editorMemberId}`, { data: { role: "EDITOR" } }),
+    { editor: 403, outsider: 403 },
   );
   await expectStatuses(
     "DELETE member",
-    (client) => client.delete(`/api/projects/${projectId}/members/${editorMemberId}`),
-    { editor: 403, viewer: 403, outsider: 403 },
+    (client) => client.delete(`${members}/${editorMemberId}`),
+    { editor: 403, outsider: 403 },
   );
+  await expectStatuses("PATCH member role to Viewer", (client) => client.patch(`${members}/${editorMemberId}`, { data: { role: "VIEWER" } }), {
+    owner: 400,
+    admin: 400,
+  });
+  // Nobody changes their own role or removes themselves here.
+  expect((await api.admin.patch(`${members}/${adminMemberId}`, { data: { role: "EDITOR" } })).status()).toBe(400);
+  expect((await api.admin.delete(`${members}/${adminMemberId}`)).status()).toBe(400);
+
+  // An admin makes a member an admin, but can't dismiss or remove that admin again.
+  const { member: helper } = await json<{ member: { id: string } }>(
+    await api.owner.post(members, { data: { name: "Helper", role: "EDITOR" } }),
+  );
+  const role = (value: string) => ({ data: { role: value } });
+  expect((await json<{ role: string }>(await api.admin.patch(`${members}/${helper.id}`, role("ADMIN")))).role).toBe("ADMIN");
+  expect((await api.admin.patch(`${members}/${helper.id}`, role("EDITOR"))).status()).toBe(403);
+  expect((await api.admin.delete(`${members}/${helper.id}`)).status()).toBe(403);
+
+  // The owner dismisses that admin; then the admin can remove the member.
+  expect((await json<{ role: string }>(await api.owner.patch(`${members}/${helper.id}`, role("EDITOR")))).role).toBe("EDITOR");
+  expect((await api.admin.delete(`${members}/${helper.id}`)).status()).toBe(200);
+
+  // The owner also removes admins.
+  const { member: second } = await json<{ member: { id: string } }>(
+    await api.owner.post(members, { data: { name: "Second admin", role: "ADMIN" } }),
+  );
+  expect((await api.admin.delete(`${members}/${second.id}`)).status()).toBe(403);
+  expect((await api.owner.delete(`${members}/${second.id}`)).status()).toBe(200);
 });
 
-test("editors post in the chat, viewers read it, outsiders get nothing", async () => {
+test("every member posts in the chat; outsiders get nothing", async () => {
   await expectStatuses("GET comments", (client) => client.get(`/api/projects/${projectId}/comments`), {
     owner: 200,
+    admin: 200,
     editor: 200,
-    viewer: 200,
     outsider: 404,
   });
   await expectStatuses(
     "POST comment",
     (client) => client.post(`/api/projects/${projectId}/comments`, { data: { message: "Hello team" } }),
-    { owner: 201, editor: 201, viewer: 403, outsider: 404 },
+    { owner: 201, admin: 201, editor: 201, outsider: 404 },
   );
   await expectStatuses(
     "PATCH someone else's comment",
@@ -267,12 +301,12 @@ test("editors post in the chat, viewers read it, outsiders get nothing", async (
       client.patch(`/api/projects/${projectId}/comments/${ownerCommentId}`, {
         data: { message: "Rewritten" },
       }),
-    { editor: 403, viewer: 403, outsider: 404 },
+    { admin: 403, editor: 403, outsider: 404 },
   );
   await expectStatuses(
     "DELETE someone else's comment",
     (client) => client.delete(`/api/projects/${projectId}/comments/${ownerCommentId}`),
-    { editor: 403, viewer: 403, outsider: 404 },
+    { admin: 403, editor: 403, outsider: 404 },
   );
   await expectStatuses(
     "POST upload plan",
@@ -280,27 +314,27 @@ test("editors post in the chat, viewers read it, outsiders get nothing", async (
       client.post(`/api/projects/${projectId}/attachments/uploads`, {
         data: { files: [{ clientId: "plan-check", name: "plan.txt", size: 12, type: "text/plain" }] },
       }),
-    { owner: 200, editor: 200, viewer: 403, outsider: 404 },
+    { owner: 200, admin: 200, editor: 200, outsider: 404 },
   );
   await expectStatuses(
     "GET attachment",
     (client) => client.get(`/api/projects/${projectId}/attachments/${attachmentId}/download`),
-    { owner: 200, editor: 200, viewer: 200, outsider: 404 },
+    { owner: 200, admin: 200, editor: 200, outsider: 404 },
   );
   await expectStatuses(
     "GET attachment preview",
     (client) => client.get(`/api/projects/${projectId}/attachments/${attachmentId}/preview`),
     // A text file has no Word preview; outsiders must not learn even that.
-    { owner: 415, editor: 415, viewer: 415, outsider: 404 },
+    { owner: 415, admin: 415, editor: 415, outsider: 404 },
   );
 });
 
-test("editors manage project labels, viewers only see them, outsiders see nothing (#276)", async () => {
+test("every member manages project labels; outsiders see nothing (#276)", async () => {
   const labelName = uniqueName("Label");
   await expectStatuses(
     "POST project label",
     (client) => client.post("/api/labels", { data: { name: `${labelName} ${client === api.owner ? "o" : "x"}`, projectId } }),
-    { owner: 201, viewer: 403, outsider: 404 },
+    { owner: 201, admin: 201, outsider: 404 },
   );
   const label = await json<{ id: string; name: string; projectId: string }>(
     await api.editor.post("/api/labels", { data: { name: labelName, projectId, color: "#2563eb" } }),
@@ -313,8 +347,8 @@ test("editors manage project labels, viewers only see them, outsiders see nothin
 
   await expectStatuses("GET project labels", (client) => client.get(`/api/labels?project=${projectId}`), {
     owner: 200,
+    admin: 200,
     editor: 200,
-    viewer: 200,
     outsider: 404,
   });
   const outsiderLabels = await json<{ id: string }[]>(await api.outsider.get("/api/labels"));
@@ -322,7 +356,7 @@ test("editors manage project labels, viewers only see them, outsiders see nothin
   await expectStatuses(
     "PATCH project label",
     (client) => client.patch(`/api/labels/${label.id}`, { data: { color: "#7c3aed" } }),
-    { editor: 200, viewer: 403, outsider: 404 },
+    { admin: 200, editor: 200, outsider: 404 },
   );
 
   // A project task takes the project's labels, never someone's personal ones.
@@ -336,7 +370,6 @@ test("editors manage project labels, viewers only see them, outsiders see nothin
 
   // Deleting the label takes it off the task; the task stays.
   await expectStatuses("DELETE project label", (client) => client.delete(`/api/labels/${label.id}`), {
-    viewer: 403,
     outsider: 404,
   });
   expect((await api.editor.delete(`/api/labels/${label.id}`)).status()).toBe(200);
@@ -349,7 +382,7 @@ test("bulk changes are all or nothing, with the same rules as one task (#281)", 
   await expectStatuses(
     "PATCH bulk project task",
     (client) => client.patch("/api/tasks/bulk", bulk([projectTaskId], { priority: "LOW" })),
-    { owner: 200, editor: 200, viewer: 403, outsider: 404 },
+    { owner: 200, admin: 200, editor: 200, outsider: 404 },
   );
   // The owner's personal task is invisible to the editor, so the whole request fails and nothing changes.
   const personal = await json<{ id: string }>(await api.owner.post("/api/tasks", { data: { title: uniqueName("Owner personal") } }));
@@ -358,60 +391,54 @@ test("bulk changes are all or nothing, with the same rules as one task (#281)", 
   const tasks = await json<{ id: string; priority: string }[]>(await api.owner.get("/api/tasks"));
   expect(tasks.find((task) => task.id === projectTaskId)?.priority).toBe("LOW");
   expect(tasks.find((task) => task.id === personal.id)?.priority).toBe("NONE");
-  // A viewer's refusal names the tasks, and a bad change is refused before anything is read.
-  const refused = await api.viewer.patch("/api/tasks/bulk", bulk([projectTaskId], { status: "DONE" }));
-  expect(((await refused.json()) as { refused: string[] }).refused).toEqual([projectTaskId]);
+  // A bad change is refused before anything is read.
   expect((await api.owner.patch("/api/tasks/bulk", bulk([projectTaskId], { priority: "CRITICAL" }))).status()).toBe(400);
   await expectStatuses(
     "DELETE bulk project task",
     (client) => client.delete("/api/tasks/bulk", { data: { ids: [projectTaskId] } }),
-    { viewer: 403, outsider: 404 },
+    { outsider: 404 },
   );
 });
 
-test("comments: editors and the assignee write, viewers read, outsiders see nothing (#279)", async () => {
+test("comments: every member writes, outsiders see nothing (#279)", async () => {
   const task = await json<{ id: string }>(await api.owner.post("/api/tasks", { data: { title: uniqueName("Commented task"), projectId } }));
   const comments = `/api/tasks/${task.id}/comments`;
   await expectStatuses("POST comment", (client) => client.post(comments, { data: { body: "Hello" } }), {
     owner: 201,
+    admin: 201,
     editor: 201,
-    viewer: 403,
     outsider: 404,
   });
   await expectStatuses("GET activity", (client) => client.get(`/api/tasks/${task.id}/activity`), {
     owner: 200,
+    admin: 200,
     editor: 200,
-    viewer: 200,
     outsider: 404,
   });
   const activity = await json<{ comments: { id: string; mine: boolean }[]; events: { kind: string }[]; canComment: boolean }>(
-    await api.viewer.get(`/api/tasks/${task.id}/activity`),
+    await api.editor.get(`/api/tasks/${task.id}/activity`),
   );
-  expect(activity.comments).toHaveLength(2);
-  expect(activity.canComment).toBe(false);
+  expect(activity.comments).toHaveLength(3);
+  expect(activity.canComment).toBe(true);
   expect(activity.events.map((event) => event.kind)).toContain("CREATED");
 
   // Only the author edits or deletes a comment.
   const ownerComment = activity.comments[0].id;
   await expectStatuses("PATCH comment", (client) => client.patch(`${comments}/${ownerComment}`, { data: { body: "Edited" } }), {
+    admin: 403,
     editor: 403,
-    viewer: 403,
     outsider: 404,
     owner: 200,
   });
-  await expectStatuses("DELETE comment", (client) => client.delete(`${comments}/${ownerComment}`), { editor: 403, viewer: 403, outsider: 404 });
-
-  // Assigning the task to the viewer lets them comment on it.
-  expect((await api.owner.patch("/api/tasks/bulk", { data: { ids: [task.id], change: { assigneeId: viewerMemberId } } })).ok()).toBe(true);
-  expect((await api.viewer.post(comments, { data: { body: "On it" } })).status()).toBe(201);
+  await expectStatuses("DELETE comment", (client) => client.delete(`${comments}/${ownerComment}`), { admin: 403, editor: 403, outsider: 404 });
   expect((await api.owner.post(comments, { data: { body: "   " } })).status()).toBe(400);
 });
 
-test("editors change project tasks, viewers only read them", async () => {
+test("every member changes project tasks; outsiders can't", async () => {
   await expectStatuses(
     "POST project task",
     (client) => client.post("/api/tasks", { data: { title: "New project task", projectId } }),
-    { owner: 201, editor: 201, viewer: 403, outsider: 400 },
+    { owner: 201, admin: 201, editor: 201, outsider: 400 },
   );
   // PATCH replaces the whole task, so it sends every field. Naming a project
   // the caller can't access is "Invalid project", without saying whether it exists.
@@ -419,15 +446,14 @@ test("editors change project tasks, viewers only read them", async () => {
   await expectStatuses(
     "PATCH project task",
     (client) => client.patch(`/api/tasks/${projectTaskId}`, { data: taskUpdate }),
-    { owner: 200, editor: 200, viewer: 403, outsider: 400 },
+    { owner: 200, admin: 200, editor: 200, outsider: 400 },
   );
   await expectStatuses(
     "PATCH project task without naming the project",
     (client) => client.patch(`/api/tasks/${projectTaskId}`, { data: { ...taskUpdate, projectId: undefined } }),
-    { viewer: 403, outsider: 404 },
+    { outsider: 404 },
   );
   await expectStatuses("DELETE project task", (client) => client.delete(`/api/tasks/${projectTaskId}`), {
-    viewer: 403,
     outsider: 404,
   });
 
@@ -444,17 +470,17 @@ test("subtasks and dependencies follow the same rules as editing tasks", async (
   await expectStatuses(
     "POST subtask",
     (client) => client.post("/api/tasks", { data: { title: "Subtask", parentId: projectTaskId } }),
-    { owner: 201, editor: 201, viewer: 403, outsider: 400 },
+    { owner: 201, admin: 201, editor: 201, outsider: 400 },
   );
   await expectStatuses(
     "POST dependency",
     (client) => client.post(`/api/tasks/${other.id}/dependencies`, { data: { blockedById: projectTaskId } }),
-    { owner: 201, editor: 201, viewer: 403, outsider: 404 },
+    { owner: 201, admin: 201, editor: 201, outsider: 404 },
   );
   await expectStatuses(
     "DELETE dependency",
     (client) => client.delete(`/api/tasks/${other.id}/dependencies/${projectTaskId}`),
-    { viewer: 403, outsider: 404, editor: 200 },
+    { outsider: 404, editor: 200 },
   );
   // An outsider's own task can't wait on a project task they can't see.
   const outsiderTask = await json<{ id: string }>(await api.outsider.post("/api/tasks", { data: { title: "Outsider task" } }));
@@ -470,7 +496,7 @@ test("goals are personal; linking a task needs edit rights on it", async () => {
   await expectStatuses(
     "PATCH someone else's goal",
     (client) => client.patch(`/api/goals/${goal.id}`, { data: { status: "COMPLETED" } }),
-    { owner: 200, editor: 404, viewer: 404, outsider: 404 },
+    { owner: 200, admin: 404, editor: 404, outsider: 404 },
   );
   await expectStatuses(
     "link a project task to your own goal",
@@ -478,7 +504,7 @@ test("goals are personal; linking a task needs edit rights on it", async () => {
       const own = await json<{ id: string }>(await client.post("/api/goals", { data: { title: "My goal", targetWeek: "2026-W43" } }));
       return client.post(`/api/goals/${own.id}/tasks`, { data: { taskId: projectTaskId } });
     },
-    { owner: 200, editor: 200, viewer: 403, outsider: 404 },
+    { owner: 200, admin: 200, editor: 200, outsider: 404 },
   );
 });
 
@@ -488,26 +514,26 @@ test("note links follow note access; attaching an event needs edit rights", asyn
   );
   await expectStatuses("GET project note links", (client) => client.get(`/api/notes/${projectNote.id}/links`), {
     owner: 200,
+    admin: 200,
     editor: 200,
-    viewer: 200,
     outsider: 404,
   });
   await expectStatuses("GET personal note links", (client) => client.get(`/api/notes/${ownerPersonalNoteId}/links`), {
     owner: 200,
+    admin: 404,
     editor: 404,
-    viewer: 404,
     outsider: 404,
   });
   await expectStatuses("PUT note event", (client) => client.put(`/api/notes/${projectNote.id}/event`, { data: { eventId: null } }), {
     owner: 200,
+    admin: 200,
     editor: 200,
-    viewer: 403,
     outsider: 404,
   });
   await expectStatuses(
     "POST task from someone else's personal note",
     (client) => client.post("/api/tasks", { data: { title: "From a note", noteId: ownerPersonalNoteId } }),
-    { editor: 400, viewer: 400, outsider: 400 },
+    { admin: 400, editor: 400, outsider: 400 },
   );
 });
 
@@ -518,11 +544,11 @@ test("personal notes stay private, even to teammates", async () => {
       client.patch(`/api/notes/${ownerPersonalNoteId}`, {
         data: { title: "Owner personal note", content: "Changed" },
       }),
-    { owner: 200, editor: 404, viewer: 404, outsider: 404 },
+    { owner: 200, admin: 404, editor: 404, outsider: 404 },
   );
   await expectStatuses("DELETE personal note", (client) => client.delete(`/api/notes/${ownerPersonalNoteId}`), {
+    admin: 404,
     editor: 404,
-    viewer: 404,
     outsider: 404,
   });
 });
@@ -538,13 +564,13 @@ test("whoever can edit the project can restore a teammate's deleted task", async
   );
   await json(await api.editor.delete(`/api/tasks/${taskId}`));
 
-  // The owner and the editor see it in their trash, with who deleted it; others don't.
+  // Every member sees it in their trash, with who deleted it; outsiders don't.
   expect(await trashedTask("owner")).toMatchObject({ deletedByName: names.editor, projectName, ownedByYou: true });
+  expect(await trashedTask("admin")).toMatchObject({ deletedByName: names.editor, projectName, ownedByYou: false });
   expect(await trashedTask("editor")).toMatchObject({ deletedByName: null, projectName, ownedByYou: false });
-  expect(await trashedTask("viewer")).toBeUndefined();
   expect(await trashedTask("outsider")).toBeUndefined();
 
-  await expectStatuses("restore a teammate's task", restore, { viewer: 404, outsider: 404 });
+  await expectStatuses("restore a teammate's task", restore, { outsider: 404 });
   expect((await api.editor.patch("/api/trash", { data: { type: "project", id: taskId } })).status()).toBe(400);
 
   // Emptying the editor's trash leaves the owner's task alone.
@@ -560,13 +586,13 @@ test("whoever can edit the project can restore a teammate's deleted task", async
 test("only the owner links GitHub", async () => {
   const github = `/api/projects/${projectId}/github`;
   await expectStatuses("PUT GitHub repository", (client) => client.put(github, { data: { repo: "ai-multi-demo/roadmap" } }), {
+    admin: 403,
     editor: 403,
-    viewer: 403,
     outsider: 404,
     owner: 200,
   });
-  await expectStatuses("GET GitHub panel", (client) => client.get(github), { owner: 200, editor: 200, viewer: 200, outsider: 404 });
-  await expectStatuses("DELETE GitHub repository", (client) => client.delete(github), { editor: 403, viewer: 403, outsider: 404, owner: 200 });
+  await expectStatuses("GET GitHub panel", (client) => client.get(github), { owner: 200, admin: 200, editor: 200, outsider: 404 });
+  await expectStatuses("DELETE GitHub repository", (client) => client.delete(github), { admin: 403, editor: 403, outsider: 404, owner: 200 });
 });
 
 test("signed-out requests are rejected", async ({ baseURL }) => {
@@ -579,7 +605,9 @@ test("signed-out requests are rejected", async ({ baseURL }) => {
     ["POST comment", () => anonymous.post(`/api/projects/${projectId}/comments`, { data: { message: "x" } })],
     ["GET attachment", () => anonymous.get(`/api/projects/${projectId}/attachments/${attachmentId}/download`)],
     ["GET invitations", () => anonymous.get(`/api/projects/${projectId}/invitations`)],
-    ["POST member", () => anonymous.post(`/api/projects/${projectId}/members`, { data: { name: "x", role: "VIEWER" } })],
+    ["POST member", () => anonymous.post(`/api/projects/${projectId}/members`, { data: { name: "x", role: "EDITOR" } })],
+    ["PATCH member", () => anonymous.patch(`/api/projects/${projectId}/members/${editorMemberId}`, { data: { role: "ADMIN" } })],
+    ["DELETE member", () => anonymous.delete(`/api/projects/${projectId}/members/${editorMemberId}`)],
     ["PUT GitHub repository", () => anonymous.put(`/api/projects/${projectId}/github`, { data: { repo: "a/b" } })],
     ["GET tasks", () => anonymous.get("/api/tasks")],
     ["PATCH task", () => anonymous.patch(`/api/tasks/${projectTaskId}`, { data: { title: "x" } })],

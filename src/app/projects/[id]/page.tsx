@@ -13,9 +13,11 @@ import { GithubPanel } from "@/components/projects/github-panel";
 import { ProjectPriority } from "@/components/projects/project-priority";
 import { eventWallTime, formatEventDateTime } from "@/lib/event-time";
 import {
+  canEditProjectContent,
   getProjectAccessForUser,
   projectAccessWhereForProject,
 } from "@/lib/project-access";
+import { PROJECT_ROLE_LABELS } from "@/lib/project-roles";
 import { markProjectOpened } from "@/lib/recent-shortcuts";
 import { describeRepeat, firstOccurrenceEnd } from "@/lib/recurrence";
 import { projectInsights } from "@/lib/project-insights";
@@ -93,9 +95,9 @@ export default async function ProjectDetailPage({
   await markProjectOpened(project.id, user.id);
 
   const access = getProjectAccessForUser(project, user.id);
-  const isOwner = access?.accessLevel === "OWNER";
-  const canEditProjectContent = access?.accessLevel === "OWNER" || access?.accessLevel === "EDITOR";
-  const roleLabel = access?.accessLevel === "VIEWER" ? "Viewer (read-only)" : isOwner ? "Owner" : "Editor";
+  const role = access?.accessLevel ?? "EDITOR";
+  const isOwner = role === "OWNER";
+  const canEdit = canEditProjectContent(access);
   const timeZone = await getUserTimeZone();
   const wall = (instant: Date) => toWallClock(timeZone, instant);
   const now = wall(new Date());
@@ -169,11 +171,11 @@ export default async function ProjectDetailPage({
                 {project.status.charAt(0) +
                   project.status.slice(1).toLowerCase()}
               </span>
-              <ProjectPriority projectId={project.id} initialPriority={project.priority} canEdit={canEditProjectContent} />
+              <ProjectPriority projectId={project.id} initialPriority={project.priority} canEdit={canEdit} />
               <span
                 className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${isOwner ? "border-accent/30 bg-accent-soft text-accent" :"border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"}`}
               >
-                {roleLabel}
+                {PROJECT_ROLE_LABELS[role]}
               </span>
             </div>
           </div>
@@ -191,13 +193,14 @@ export default async function ProjectDetailPage({
           counts={{ notes: project.notes.length, upcomingEvents }}
         />
 
-        {canEditProjectContent ? (
+        {canEdit ? (
           <ProjectQuickActions project={{ id: project.id, name: project.name, color: project.color }} />
         ) : null}
         <ProjectTeamSection
           projectId={project.id}
           initialMembers={project.members}
-          isOwner={isOwner}
+          viewerRole={role}
+          currentUserId={user.id}
         />
 
         <GithubPanel projectId={project.id} repo={project.githubRepo} canManage={isOwner} />

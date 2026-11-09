@@ -50,7 +50,7 @@ import { TaskActivity } from "./task-activity";
 import { taskRequestBody } from "./task-sheet";
 import { recurrenceLabels, statusLabels, type Member, type Project, type Recurrence, type RelatedTask, type Task, type TaskInput, type TaskStatus } from "./types";
 
-type ProjectItem = Project & { accessLevel?: "OWNER" | "EDITOR" | "VIEWER"; status?: string };
+type ProjectItem = Project & { status?: string };
 
 /** The Tasks page keeps the order it showed, so a task page can step to the previous and next task. */
 export const TASK_ORDER_KEY = "tasks:order";
@@ -140,7 +140,7 @@ export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Ta
   const blockers = (task.blockedBy ?? []).map((row) => row.blockedBy);
   const waiting = done ? [] : openBlockers(task.blockedBy);
   const project = task.project ? (projects.find((item) => item.id === task.project?.id) ?? task.project) : null;
-  const editableProjects = projects.filter((item) => item.accessLevel !== "VIEWER" && item.status !== "ARCHIVED");
+  const editableProjects = projects.filter((item) => item.status !== "ARCHIVED");
   const memberList = task.projectId && members?.projectId === task.projectId ? members.list : [];
 
   // Previous and next follow the order the Tasks page last showed.

@@ -15,7 +15,7 @@ import { openBlockers, subtaskProgress } from "@/lib/task-relations";
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
-type Member = { id: string; name: string; email?: string | null; role: "OWNER" | "EDITOR" | "VIEWER" };
+type Member = { id: string; name: string; email?: string | null; role: string };
 
 type ProjectOption = { id: string; name: string; color: string | null };
 
@@ -177,7 +177,7 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Kanban View</p>
           <h1 className="mt-1 truncate text-title">{projectName}</h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            {canEdit ? "Move cards or create new tasks directly on the board." : "Viewer access is read-only."}
+            Move cards or create new tasks directly on the board.
           </p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-sm sm:min-w-72">
