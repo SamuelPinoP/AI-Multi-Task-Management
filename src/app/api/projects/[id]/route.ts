@@ -11,7 +11,7 @@ import {
   projectAccessWhereForProject,
   unauthorizedProjectResponse,
 } from "@/lib/project-access";
-import { OWNER_INVITATION_SELECT } from "@/lib/project-invitations";
+import { OWNER_INVITATION_SELECT, ownerInvitationJson } from "@/lib/project-invitations";
 import { deleteProjectChatAttachments } from "@/lib/project-chat-storage";
 
 
@@ -80,7 +80,7 @@ export async function GET(_req: Request, context: RouteContext) {
     return NextResponse.json({
       ...project,
       // Invitee emails are for the people who manage members: the owner and admins (#385).
-      invitations: canManageProjectMembers(access) ? project.invitations : [],
+      invitations: canManageProjectMembers(access) ? project.invitations.map(ownerInvitationJson) : [],
       accessLevel: access?.accessLevel ?? "OWNER",
       memberRole: access?.memberRole ?? "OWNER",
     });

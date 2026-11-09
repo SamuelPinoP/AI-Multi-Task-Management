@@ -27,6 +27,8 @@ export const RATE_LIMITS = {
   uploadPlansUser: { name: "upload-plans-user", limit: 60, windowMs: 10 * MINUTE },
   /** Direct messages (#387) per sender: a lively chat fits, a script spamming teammates doesn't. */
   directMessagesUser: { name: "direct-messages-user", limit: 120, windowMs: 10 * MINUTE },
+  /** Looking people up by exact username to add them to a project (#393): enough to find teammates, too few to sweep usernames. */
+  peopleLookupUser: { name: "people-lookup-user", limit: 60, windowMs: 10 * MINUTE },
   /** Task comments (#279) per person: plenty for a discussion, not for a script. */
   taskComments: { name: "task-comments-user", limit: 60, windowMs: 10 * MINUTE },
 } as const satisfies Record<string, RateLimitRule>;

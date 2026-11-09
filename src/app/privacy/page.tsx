@@ -42,6 +42,8 @@ export default function PrivacyPage() {
         <p>
           <strong>Account details.</strong> Your name, username and email address, and your password, which is stored only
           as a salted scrypt hash that nobody can read back. AI Multi also records when you confirmed your email address.
+          Someone who types your exact username can invite you to a project; they see your name, never your email, and
+          nobody can browse or search everyone in AI Multi.
         </p>
         <p>
           <strong>Sign in with Google.</strong> If you choose Continue with Google, Google shares your Google account&apos;s

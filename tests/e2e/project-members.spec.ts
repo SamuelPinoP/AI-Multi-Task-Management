@@ -3,7 +3,7 @@ import { signUpAndLogIn, uniqueName } from "./helpers";
 
 // #386: a project's members, owner first, each role as a badge under the name
 // (design 1B), a Message button for each person, and a menu that offers only
-// what the role rules allow (#385). The Invite dialog says what each role does (3B).
+// what the role rules allow (#385). Adding people says what each role does (3B).
 test.describe.configure({ mode: "serial" });
 
 const contexts: BrowserContext[] = [];
@@ -111,20 +111,23 @@ test("the owner dismisses an admin, and removing someone asks first", async () =
   await expect(members(page).getByRole("listitem")).toHaveCount(2);
 });
 
-test("the Invite dialog says what each role does and invites as the role picked", async () => {
+test("Add people says what each role does and invites as the role picked", async () => {
   const page = pages.admin;
   await openProject(page);
-  await members(page).getByRole("button", { name: "Invite" }).click();
-  const dialog = page.getByRole("dialog", { name: `Invite to ${projectName}` });
+  await members(page).getByRole("button", { name: "Add people" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add people" });
   await expect(dialog.getByRole("radio", { name: /^Member/ })).toBeChecked();
   await expect(dialog).toContainText("Works on tasks, notes, events and chat.");
   await expect(dialog).toContainText("Also adds and removes members, and makes admins.");
 
   const email = `e2e-invite-${Date.now()}@example.test`;
-  await dialog.getByLabel("Email").fill(email);
+  await dialog.getByRole("button", { name: "New to Multi" }).click();
+  await dialog.getByLabel("Their email").fill(email);
   await dialog.getByRole("radio", { name: /^Admin/ }).check();
   await dialog.getByRole("button", { name: "Send invite" }).click();
-  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("dialog", { name: "Invite sent" })).toContainText(`Once ${email} accepts, they're in.`);
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   const invitations = await ok<{ invitedEmail: string; role: string }[]>(await page.request.get(`/api/projects/${projectId}/invitations`));
   expect(invitations.find((invitation) => invitation.invitedEmail === email)?.role).toBe("ADMIN");
 });

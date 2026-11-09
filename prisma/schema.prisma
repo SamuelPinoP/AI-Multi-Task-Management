@@ -566,15 +566,17 @@ model ProjectMember {
 }
 
 model ProjectInvitation {
-  id            String                  @id @default(cuid())
-  projectId     String
-  inviterUserId String
-  invitedEmail  String
-  invitedUserId String?
-  status        ProjectInvitationStatus @default(PENDING)
-  role          ProjectMemberRole       @default(EDITOR)
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
+  id              String                  @id @default(cuid())
+  projectId       String
+  inviterUserId   String
+  invitedEmail    String
+  invitedUserId   String?
+  /// Set when someone was invited by their username (#393): the inviter knows that, never their email.
+  invitedUsername String?
+  status          ProjectInvitationStatus @default(PENDING)
+  role            ProjectMemberRole       @default(EDITOR)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
 
   project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   inviterUser User    @relation("ProjectInvitationInviter", fields: [inviterUserId], references: [id], onDelete: Cascade)
