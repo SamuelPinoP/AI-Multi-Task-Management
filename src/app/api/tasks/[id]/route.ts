@@ -183,7 +183,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       include: taskInclude(user.id),
     });
     if (task && existingTask.status !== TaskStatus.DONE && task.status === TaskStatus.DONE) {
-      void createActivity({
+      await createActivity({
         userId: existingTask.userId,
         action: "COMPLETED_TASK",
         message: `Completed task: “${task.title}”`,
@@ -240,7 +240,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    void createActivity({
+    await createActivity({
       userId: existingTask.userId,
       action: "DELETED_ITEM",
       message: `Deleted task: “${existingTask.title}”`,
