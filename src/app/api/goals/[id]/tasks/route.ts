@@ -26,7 +26,7 @@ export async function POST(req: Request, context: RouteContext) {
 
     if (title) {
       const task = await prisma.task.create({ data: { title, userId: user.id, goalId: goal.id }, select: { id: true, title: true } });
-      void createActivity({ userId: user.id, action: "CREATED_TASK", message: `Created task: “${task.title}”`, entityType: "TASK", entityId: task.id });
+      await createActivity({ userId: user.id, action: "CREATED_TASK", message: `Created task: “${task.title}”`, entityType: "TASK", entityId: task.id });
       return NextResponse.json(task, { status: 201 });
     }
     if (!taskId) return NextResponse.json({ error: "Pick a task or type a title" }, { status: 400 });

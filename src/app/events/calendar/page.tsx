@@ -42,6 +42,7 @@ import { DeleteEventDialog, deleteEventDays, type DeleteEventTarget, type Delete
 import { ShowTasksSwitch } from "@/components/events/show-tasks-switch";
 import { uiButtonClass } from "@/components/ui";
 import { toast } from "@/components/ui/toaster";
+import { useTodayKey } from "@/components/user-time-zone";
 import { cn } from "@/lib/cn";
 import { projectColor } from "@/lib/project-color";
 import { expandRecurringEventsForRange, normalizeRecurrence, storedDayKey } from "@/lib/recurrence";
@@ -113,13 +114,26 @@ export default function EventsCalendarPage() {
   // ---------------------------------------------------------------------
   // Where the calendar is
   // ---------------------------------------------------------------------
+  /** Today in the reader's zone; `new Date()` would give the server's day, which is UTC's (#381). */
+  const todayKey = useTodayKey();
   /** The first of the month on screen. */
   const [month, setMonth] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
+    const today = dateFromKey(todayKey);
+    return new Date(today.getFullYear(), today.getMonth(), 1);
   });
   /** The selected day: the phone's list shows it, and New event starts on it. */
-  const [selectedDayKey, setSelectedDayKey] = useState(() => formatDayKey(new Date()));
+  const [selectedDayKey, setSelectedDayKey] = useState(todayKey);
+  // The page hydrates on the server's idea of today. When the browser's differs (no `tz` cookie
+  // yet, or midnight passed), a calendar still on the old today moves to the new one.
+  const [shownTodayKey, setShownTodayKey] = useState(todayKey);
+  if (shownTodayKey !== todayKey) {
+    setShownTodayKey(todayKey);
+    if (selectedDayKey === shownTodayKey) {
+      const today = dateFromKey(todayKey);
+      setSelectedDayKey(todayKey);
+      setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    }
+  }
   /** Wider screens: the day whose pop-over is open. */
   const [openDayKey, setOpenDayKey] = useState<string | null>(null);
   /** The pop-over was opened by a link, so it shows without taking focus. */
@@ -270,7 +284,6 @@ export default function EventsCalendarPage() {
     return start < 0 ? monthDays.slice(0, 7) : monthDays.slice(weekStart, weekStart + 7);
   }, [monthDays, phoneWeekOnly, selectedDayKey]);
 
-  const todayKey = formatDayKey(new Date());
   const linkedDayKey = linkedTask?.dueDate ? formatDayKey(getLocalDateOnly(linkedTask.dueDate)) : null;
 
   // ---------------------------------------------------------------------
@@ -287,7 +300,7 @@ export default function EventsCalendarPage() {
   function moveView(direction: -1 | 0 | 1) {
     setOpenDayKey(null);
     if (direction === 0) {
-      selectDay(new Date());
+      selectDay(dateFromKey(todayKey));
       return;
     }
     if (phoneWeekOnly && !wide) {
@@ -297,7 +310,7 @@ export default function EventsCalendarPage() {
     }
     // Land on today in this month and on the 1st in any other.
     const first = new Date(month.getFullYear(), month.getMonth() + direction, 1);
-    const today = new Date();
+    const today = dateFromKey(todayKey);
     selectDay(first.getFullYear() === today.getFullYear() && first.getMonth() === today.getMonth() ? today : first);
   }
 

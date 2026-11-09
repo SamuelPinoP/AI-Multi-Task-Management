@@ -128,7 +128,7 @@ export async function POST(req: Request) {
       return created;
     }, TEMPLATE_TRANSACTION);
 
-    void createActivity({
+    await createActivity({
       userId: user.id,
       action: "CREATED_PROJECT",
       message: `Created project: “${project.name}”`,
