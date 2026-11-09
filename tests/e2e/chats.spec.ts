@@ -66,12 +66,14 @@ test("unread messages are counted, shown first and cleared when the chat is open
   const row = chatRow(teammate);
   await expect(row).toHaveAccessibleName(/2 unread messages$/);
 
-  // The Unread filter keeps it; a search that doesn't match hides it.
-  await teammate.getByRole("button", { name: "Unread 1" }).click();
+  // The Unread chip keeps it (no counts on the chips, #387). Under Projects the search looks for
+  // projects: another name hides it, the start of its own finds it.
+  await teammate.getByRole("button", { name: "Unread", exact: true }).click();
   await expect(row).toBeVisible();
-  await teammate.getByLabel("Search chats").fill("nothing matches this");
+  await teammate.getByRole("button", { name: "Projects", exact: true }).click();
+  await teammate.getByLabel("Search projects").fill("nothing matches this");
   await expect(row).toBeHidden();
-  await teammate.getByLabel("Search chats").fill("thursday");
+  await teammate.getByLabel("Search projects").fill(projectName.slice(0, 12));
   await expect(row).toBeVisible();
 
   await row.click();
@@ -88,7 +90,7 @@ test("unread messages are counted, shown first and cleared when the chat is open
   // Opening it marked it read: the list and the sidebar stop counting it, and it stays under Unread until a reload.
   await expect(row).toBeVisible();
   await expect(row).not.toHaveAccessibleName(/unread/);
-  await expect(teammate.getByRole("button", { name: "Unread 0" })).toBeVisible();
+  await expect(teammate.getByRole("button", { name: "Unread", exact: true })).toBeVisible();
   await expect(sidebar(teammate).getByRole("link", { name: "Chats", exact: true })).toBeVisible();
 
   // A reload starts from the new read mark: no "New messages" line any more.

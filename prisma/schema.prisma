@@ -49,6 +49,10 @@ model User {
   treePages                    TreePage[]
   recentShortcut               RecentShortcut?
   projectChatReads             ProjectChatRead[]
+  directChatsAsA               DirectChat[]                  @relation("DirectChatUserA")
+  directChatsAsB               DirectChat[]                  @relation("DirectChatUserB")
+  directMessages               DirectMessage[]
+  directChatReads              DirectChatRead[]
   labels                       Label[]
   taskComments                 TaskComment[]
   taskEvents                   TaskEvent[]
@@ -413,6 +417,54 @@ model ProjectComment {
 
   @@index([projectId, createdAt])
   @@index([userId])
+}
+
+/// A one-to-one chat between two people (#387). They must share a project to
+/// start one or to send in it; either can always read it. `userAId` is the
+/// smaller of the two user ids, so a pair has one chat whoever wrote first.
+model DirectChat {
+  id        String   @id @default(cuid())
+  userAId   String
+  userBId   String
+  createdAt DateTime @default(now())
+
+  userA    User             @relation("DirectChatUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB    User             @relation("DirectChatUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  messages DirectMessage[]
+  reads    DirectChatRead[]
+
+  @@unique([userAId, userBId])
+  @@index([userBId])
+}
+
+/// A message in a direct chat (#387). Text only; pinned and edited like a project chat message.
+model DirectMessage {
+  id        String   @id @default(cuid())
+  chatId    String
+  userId    String
+  message   String
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chat DirectChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
+  @@index([userId])
+}
+
+/// When each person last read each direct chat, for unread counts (#387), like ProjectChatRead.
+model DirectChatRead {
+  userId     String
+  chatId     String
+  lastReadAt DateTime @default(now())
+
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chat DirectChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@id([userId, chatId])
+  @@index([chatId])
 }
 
 /// When each user last read each project's chat, for unread counts (SIDE-03).

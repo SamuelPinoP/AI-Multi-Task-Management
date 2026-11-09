@@ -3,6 +3,7 @@ import { TaskStatus } from "@prisma/client";
 import { normalizeAuthEmail } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { projectAccessWhere } from "@/lib/project-access";
+import { getDirectUnreadCounts } from "@/lib/direct-chats";
 import { chatProjectsWhere, getChatUnreadCounts } from "@/lib/project-chat-unread";
 
 /** How many projects the sidebar lists; the rest are one click away on /projects. */
@@ -63,7 +64,10 @@ export async function getWorkspaceNav(user: { id: string; email: string; emailVe
     prisma.project.findMany({ where: chatProjectsWhere(user.id), select: { id: true } }),
     prisma.notification.count({ where: { userId: user.id, readAt: null } }),
   ]);
-  const unreadChat = await getChatUnreadCounts(user.id, chatProjects.map((project) => project.id));
+  const [unreadChat, unreadDirect] = await Promise.all([
+    getChatUnreadCounts(user.id, chatProjects.map((project) => project.id)),
+    getDirectUnreadCounts(user.id),
+  ]);
 
   return {
     projects: projects.map(({ _count, ...project }) => ({
@@ -74,7 +78,8 @@ export async function getWorkspaceNav(user: { id: string; email: string; emailVe
     activeProjectCount,
     openTasks,
     pendingInvitations,
-    unreadChats: unreadChat.size,
+    // Project chats and direct chats (#387) with new messages.
+    unreadChats: unreadChat.size + unreadDirect.size,
     unreadNotifications,
   };
 }

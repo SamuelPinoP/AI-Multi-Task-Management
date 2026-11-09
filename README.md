@@ -12,7 +12,7 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 - Project collaboration with invitations and Owner, Admin and Editor roles enforced server-side: everyone edits, admins invite, remove and promote members, and only the owner dismisses or removes an admin
 - Project chat with file attachments using local, Vercel Blob, or private AWS S3 storage
 - A sidebar where each project opens to its Overview, Board and Chat, with unread chat counts
-- A Chats page with every project chat in one place, unread first, synced across devices
+- A Chats page with every project chat and your direct messages with anyone you share a project with, unread first, synced across devices
 - An installable app (phones and desktops) that keeps the pages you've opened readable offline
 - Project templates (Capstone, Sprint, Job search)
 - A linked GitHub repository per project, showing its open pull requests and issues
@@ -207,7 +207,7 @@ logins per account per 15 minutes, whether its email or its username was typed
 (a successful login clears the account count), 5 sign-ups and 5 password reset requests per network per hour, 3 reset
 requests per account per hour, 10 reset submissions per network per 15
 minutes, 10 guest workspaces per network per hour, 30 invitations per user per
-hour and 60 upload requests per user per 10 minutes. Forms show "Too many …
+hour, 60 upload requests per user per 10 minutes and 120 direct messages per user per 10 minutes. Forms show "Too many …
 Try again in N minutes"; API routes answer 429 with a `Retry-After` header.
 The client IP is the first `x-forwarded-for` entry, which Vercel overwrites;
 requests without one (local development, CI) skip the per-network limits.

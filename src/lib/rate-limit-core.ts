@@ -25,6 +25,8 @@ export const RATE_LIMITS = {
   guestIp: { name: "guest-ip", limit: 10, windowMs: 60 * MINUTE },
   invitationsUser: { name: "invitations-user", limit: 30, windowMs: 60 * MINUTE },
   uploadPlansUser: { name: "upload-plans-user", limit: 60, windowMs: 10 * MINUTE },
+  /** Direct messages (#387) per sender: a lively chat fits, a script spamming teammates doesn't. */
+  directMessagesUser: { name: "direct-messages-user", limit: 120, windowMs: 10 * MINUTE },
   /** Task comments (#279) per person: plenty for a discussion, not for a script. */
   taskComments: { name: "task-comments-user", limit: 60, windowMs: 10 * MINUTE },
 } as const satisfies Record<string, RateLimitRule>;

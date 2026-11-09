@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getDirectChatIds, markDirectChatsRead } from "@/lib/direct-chats";
 import { chatProjectsWhere, markChatsRead } from "@/lib/project-chat-unread";
 
-/** "Mark all read" on the Chats page: every chat the hub lists counts as read up to now. */
+/** "Mark all read" on the Chats page: every project and direct chat the hub lists counts as read up to now. */
 export async function POST() {
   try {
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
     const projects = await prisma.project.findMany({ where: chatProjectsWhere(user.id), select: { id: true } });
-    await markChatsRead(user.id, projects.map((project) => project.id));
+    await Promise.all([
+      markChatsRead(user.id, projects.map((project) => project.id)),
+      getDirectChatIds(user.id).then((ids) => markDirectChatsRead(user.id, ids)),
+    ]);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("POST /api/chats/read error:", error);
