@@ -10,7 +10,6 @@ import { visibleNoteWhere } from "@/lib/note-access";
 import { resolveTaskLabelIds } from "@/lib/labels-server";
 import { TASK_TITLE_MAX } from "@/lib/task-history";
 import { recordTaskCreated } from "@/lib/task-history-server";
-import { assigneeForNewTask, runOwnerEmailAutomation } from "@/lib/project-automations";
 import { notifyTaskAssigned } from "@/lib/notifications";
 
 
@@ -113,7 +112,6 @@ export async function POST(req: Request) {
     if (labels.error) return NextResponse.json({ error: labels.error }, { status: 400 });
 
     const status = isValidStatus(body.status) ? body.status : TaskStatus.TODO;
-    const isSubtask = Boolean(parentId);
     const task = await prisma.task.create({
       data: {
         title,
@@ -126,8 +124,7 @@ export async function POST(req: Request) {
         recurrence: isValidRecurrence(body.recurrence) ? body.recurrence : Recurrence.NONE,
         userId: user.id,
         projectId,
-        // The project's "assign new tasks" rule (SMART-11) fills an empty assignee.
-        assigneeId: await assigneeForNewTask(projectId, { assigneeId, isSubtask }),
+        assigneeId,
         parentId,
         noteId,
         labels: labels.ids?.length ? { create: labels.ids.map((labelId) => ({ labelId })) } : undefined,
@@ -137,13 +134,7 @@ export async function POST(req: Request) {
 
     await recordTaskCreated(task.id, user.id);
     void createActivity({ userId: user.id, action: status === TaskStatus.DONE ? "COMPLETED_TASK" : "CREATED_TASK", message: `${status === TaskStatus.DONE ? "Completed task" : "Created task"}: “${task.title}”`, entityType: "TASK", entityId: task.id, projectId: task.projectId });
-    // Email rules (SMART-11) run after the response. Subtasks are checklist items; they don't trigger rules.
-    if (task.projectId && !isSubtask) {
-      const origin = new URL(req.url).origin;
-      after(() => runOwnerEmailAutomation({ trigger: "TASK_CREATED", task, actorId: user.id, origin }));
-      if (status === TaskStatus.DONE) after(() => runOwnerEmailAutomation({ trigger: "TASK_COMPLETED", task, actorId: user.id, origin }));
-    }
-    // The assignee hears about it in their inbox (SMART-08), even when the project's rule picked them.
+    // The assignee hears about it in their inbox (SMART-08).
     if (task.assigneeId) after(() => notifyTaskAssigned({ task, actor: user }));
     return NextResponse.json(task, { status: 201 });
   } catch (error) {

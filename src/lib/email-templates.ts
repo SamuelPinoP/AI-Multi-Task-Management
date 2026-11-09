@@ -179,39 +179,3 @@ ${button("Confirm email", verifyUrl)}
   );
   return { subject, text, html };
 }
-
-/** A project automation's "email the owner" message (SMART-11). */
-export function taskAutomationEmail({
-  trigger,
-  taskTitle,
-  projectId,
-  projectName,
-  actorName,
-  baseUrl,
-}: {
-  trigger: "TASK_CREATED" | "TASK_COMPLETED";
-  taskTitle: string;
-  projectId: string;
-  projectName: string;
-  actorName: string;
-  baseUrl: string;
-}): EmailContent {
-  const projectUrl = `${baseUrl}/projects/${encodeURIComponent(projectId)}`;
-  const happened = trigger === "TASK_COMPLETED" ? "marked a task as done" : "added a task";
-  const subject = `${APP_NAME}: ${trigger === "TASK_COMPLETED" ? "Done in" : "New task in"} ${oneLine(projectName)}: ${oneLine(taskTitle)}`;
-  const reason = "You're getting this because an automation on the project is on. The project owner can turn it off on the project page.";
-  const text = withFooter(
-    [`${actorName} ${happened} in ${projectName}:`, "", taskTitle, "", `Open the project: ${projectUrl}`],
-    reason,
-  );
-  const html = htmlDocument(
-    subject,
-    `
-<p>${escapeHtml(actorName)} ${happened} in <strong>${escapeHtml(projectName)}</strong>:</p>
-<p style="font-size: 16px; font-weight: bold; margin: 0 0 16px;">${escapeHtml(taskTitle)}</p>
-${button("Open the project", projectUrl, "#0a6f68")}
-`,
-    reason,
-  );
-  return { subject, text, html };
-}

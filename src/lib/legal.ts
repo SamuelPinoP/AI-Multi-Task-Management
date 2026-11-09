@@ -9,7 +9,7 @@ export const TERMS_PATH = "/terms";
 export const LEGAL_CONTACT_EMAIL = "samuelpinopena@gmail.com";
 
 /** Shown at the top of both documents. Change it with every edit to either. */
-export const LEGAL_LAST_UPDATED = "November 5, 2026";
+export const LEGAL_LAST_UPDATED = "November 9, 2026";
 
 /**
  * Accounts are for adults: the planned Gemini assistant (#256) may not be part

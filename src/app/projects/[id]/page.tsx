@@ -9,7 +9,6 @@ import { ProjectTeamSection } from "@/components/project-team-section";
 import { ProjectAssignedTasksSection } from "@/components/project-assigned-tasks-section";
 import { ProjectChatPanel } from "@/components/project-chat-panel";
 import { ProjectInsights } from "@/components/projects/project-insights";
-import { ProjectAutomations } from "@/components/projects/project-automations";
 import { GithubPanel } from "@/components/projects/github-panel";
 import { ProjectPriority } from "@/components/projects/project-priority";
 import { eventWallTime, formatEventDateTime } from "@/lib/event-time";
@@ -18,7 +17,6 @@ import {
   projectAccessWhereForProject,
 } from "@/lib/project-access";
 import { OWNER_INVITATION_SELECT } from "@/lib/project-invitations";
-import { AUTOMATION_SELECT, automationJson } from "@/lib/project-automations";
 import { markProjectOpened } from "@/lib/recent-shortcuts";
 import { describeRepeat, firstOccurrenceEnd } from "@/lib/recurrence";
 import { projectInsights } from "@/lib/project-insights";
@@ -107,7 +105,6 @@ export default async function ProjectDetailPage({
           attachments: { orderBy: { createdAt: "asc" } },
         },
       },
-      automations: { orderBy: { createdAt: "asc" }, select: AUTOMATION_SELECT },
     },
   });
 
@@ -272,13 +269,6 @@ export default async function ProjectDetailPage({
             ...invitation,
             createdAt: invitation.createdAt.toISOString(),
           }))}
-        />
-
-        <ProjectAutomations
-          projectId={project.id}
-          isOwner={isOwner}
-          initialRules={project.automations.map(automationJson)}
-          members={project.members.map((member) => ({ id: member.id, name: member.name }))}
         />
 
         <GithubPanel projectId={project.id} repo={project.githubRepo} canManage={isOwner} />

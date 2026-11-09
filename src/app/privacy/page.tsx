@@ -78,8 +78,8 @@ export default function PrivacyPage() {
         <ul className={legalListClass}>
           <li>To run the app: sign you in, keep your work, and show it to you and to the people you share projects with.</li>
           <li>
-            To send account emails: confirmation links, password resets, project invitations, and the reminders and
-            automation emails you set up. There are no marketing emails.
+            To send account emails: confirmation links, password resets, project invitations, and the reminders you set
+            up. There are no marketing emails.
           </li>
           <li>To keep the app and its users safe: limits on attempts, abuse prevention, and confirming that email addresses are real.</li>
           <li>To recover from problems: a daily backup of the database.</li>

@@ -25,8 +25,6 @@ export const RATE_LIMITS = {
   guestIp: { name: "guest-ip", limit: 10, windowMs: 60 * MINUTE },
   invitationsUser: { name: "invitations-user", limit: 30, windowMs: 60 * MINUTE },
   uploadPlansUser: { name: "upload-plans-user", limit: 60, windowMs: 10 * MINUTE },
-  /** Emails sent by a project's automations (SMART-11), so a busy board can't flood the owner's inbox. */
-  automationEmailsProject: { name: "automation-emails-project", limit: 30, windowMs: 60 * MINUTE },
   /** Task comments (#279) per person: plenty for a discussion, not for a script. */
   taskComments: { name: "task-comments-user", limit: 60, windowMs: 10 * MINUTE },
 } as const satisfies Record<string, RateLimitRule>;

@@ -4,7 +4,6 @@ import {
   emailVerificationEmail,
   passwordResetEmail,
   projectInvitationEmail,
-  taskAutomationEmail,
   type EmailContent,
 } from "./email-templates";
 
@@ -20,10 +19,6 @@ const emails: [string, EmailContent][] = [
   [
     "invitation, existing account",
     projectInvitationEmail({ to: "old@example.com", inviterName: null, inviterEmail: "dana@example.com", projectName: "Capstone", hasAccount: true, baseUrl }),
-  ],
-  [
-    "task automation",
-    taskAutomationEmail({ trigger: "TASK_COMPLETED", taskTitle: "Draft slides", projectId: "p1", projectName: "Capstone", actorName: "Dana", baseUrl }),
   ],
 ];
 
@@ -59,15 +54,15 @@ test("subjects start with the app name and stay on one line", () => {
     assert.match(email.subject, /^AI Multi: /, name);
     assert.ok(!/[\r\n]/.test(email.subject), name);
   }
-  const multiline = taskAutomationEmail({
-    trigger: "TASK_CREATED",
-    taskTitle: "Line one\nLine two",
-    projectId: "p1",
-    projectName: "Cap\r\nstone",
-    actorName: "Dana",
+  const multiline = projectInvitationEmail({
+    to: "new@example.com",
+    inviterName: "Dana",
+    inviterEmail: "dana@example.com",
+    projectName: "Cap\r\nstone\nlaunch",
+    hasAccount: false,
     baseUrl,
   });
-  assert.equal(multiline.subject, "AI Multi: New task in Cap stone: Line one Line two");
+  assert.equal(multiline.subject, "AI Multi: invitation to Cap stone launch");
 });
 
 test("names from users are escaped in the HTML", () => {

@@ -83,7 +83,7 @@ Every email is a complete HTML document with a matching plain-text part, the sam
 
 1. Put the production email settings (`EMAIL_PROVIDER` and its keys) in your local `.env`.
 2. Open https://www.mail-tester.com and copy the address it shows.
-3. Run `npm run email:test -- <that address>`. It sends the "confirm your email" message, with links pointing at production. Add `reset`, `invitation`, `automation` or `all` after the address to send other emails, for example to your own inbox.
+3. Run `npm run email:test -- <that address>`. It sends the "confirm your email" message, with links pointing at production. Add `reset`, `invitation` or `all` after the address to send other emails, for example to your own inbox.
 4. Back on mail-tester, check the score (aim for 9/10 or more) and what it lists to fix.
 
 In Gmail, "Show original" on a received email should report `SPF: PASS`, `DKIM: PASS` and `DMARC: PASS`. If emails still land in junk, marking a few as "Not spam" teaches the filter. The strongest fix is sending from your own domain with SPF, DKIM and DMARC through Brevo's free plan, but a domain costs money.

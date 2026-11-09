@@ -12,7 +12,6 @@ import {
   emailVerificationEmail,
   passwordResetEmail,
   projectInvitationEmail,
-  taskAutomationEmail,
   type EmailContent,
 } from "@/lib/email-templates";
 
@@ -44,16 +43,6 @@ type PasswordResetEmailParams = {
 type EmailVerificationEmailParams = {
   to: string;
   verifyUrl: string;
-};
-
-type TaskAutomationEmailParams = {
-  to: string;
-  trigger: "TASK_CREATED" | "TASK_COMPLETED";
-  taskTitle: string;
-  projectId: string;
-  projectName: string;
-  actorName: string;
-  fallbackOrigin?: string;
 };
 
 function cleanEnvValue(name: string) {
@@ -191,25 +180,6 @@ export async function sendEmailVerificationEmail({ to, verifyUrl }: EmailVerific
     content: emailVerificationEmail({ verifyUrl }),
     successMessage: "Confirmation email sent.",
     failureMessage: "The confirmation email could not be sent. Try again in a few minutes.",
-    disabledMessage: "Email sending is not configured.",
-  });
-}
-
-/** A project automation's "email the owner" message (SMART-11). */
-export async function sendTaskAutomationEmail({
-  to,
-  trigger,
-  taskTitle,
-  projectId,
-  projectName,
-  actorName,
-  fallbackOrigin,
-}: TaskAutomationEmailParams): Promise<EmailDeliveryResult> {
-  return sendEmail({
-    to,
-    content: taskAutomationEmail({ trigger, taskTitle, projectId, projectName, actorName, baseUrl: getAppBaseUrl(fallbackOrigin) }),
-    successMessage: "Automation email sent.",
-    failureMessage: "Automation email could not be sent.",
     disabledMessage: "Email sending is not configured.",
   });
 }
