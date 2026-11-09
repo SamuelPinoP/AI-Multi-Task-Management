@@ -703,10 +703,14 @@ enum GoalStatus {
   ARCHIVED
 }
 
+/// Project roles (#385); the rules are in src/lib/project-roles.ts. The project's owner is Project.userId.
+/// ADMIN also manages members. EDITOR is every other member: everyone edits.
+/// VIEWER is no longer given: its rows became EDITOR, and #388 drops the value.
 enum ProjectMemberRole {
   OWNER
   EDITOR
   VIEWER
+  ADMIN
 }
 
 enum ProjectInvitationStatus {

@@ -30,7 +30,7 @@ export function LabelPicker({
   scopeName: string;
   selectedIds: readonly string[];
   onChange: (ids: string[]) => void;
-  /** Viewers see the labels but can't create or edit them. */
+  /** Without edit rights, the labels show but can't be created or edited. */
   canEdit?: boolean;
   /** Inside a dialog: a click outside closes only this menu, not the dialog too (#362). */
   modal?: boolean;

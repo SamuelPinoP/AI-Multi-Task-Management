@@ -11,7 +11,7 @@ export type Recurrence = "NONE" | "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 /** `priority` comes with /api/projects (#361); a task's own `project` only has the first three. */
 export type Project = { id: string; name: string; color: string | null; priority?: Priority };
 
-export type Member = { id: string; name: string; email: string | null; role: "OWNER" | "EDITOR" | "VIEWER" };
+export type Member = { id: string; name: string; email: string | null; role: string };
 
 export type Task = {
   id: string;

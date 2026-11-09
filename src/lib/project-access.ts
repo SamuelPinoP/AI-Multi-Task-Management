@@ -1,7 +1,9 @@
 import { Prisma, type Project, type ProjectMemberRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { canManageMembers, memberRole, type ProjectRole } from "@/lib/project-roles";
 
-export type ProjectAccessLevel = "OWNER" | "EDITOR" | "VIEWER";
+/** OWNER: the project's creator. ADMIN: also manages people. EDITOR: every other member. The rules are in project-roles.ts (#385). */
+export type ProjectAccessLevel = ProjectRole;
 
 export type ProjectAccess = {
   projectId: string;
@@ -10,19 +12,13 @@ export type ProjectAccess = {
   memberRole: ProjectMemberRole | null;
 };
 
-export const PROJECT_ROLE_LABELS: Record<ProjectMemberRole, string> = {
-  OWNER: "Owner",
-  EDITOR: "Editor",
-  VIEWER: "Viewer",
-};
-
 export function projectAccessWhere(userId: string): Prisma.ProjectWhereInput {
   return { OR: [{ userId }, { members: { some: { userId } } }] };
 }
 
-/** Projects where the user can add, edit and delete content: owners and editors. */
+/** Projects where the user can add, edit and delete content: every member edits (#385). */
 export function projectEditWhere(userId: string): Prisma.ProjectWhereInput {
-  return { OR: [{ userId }, { members: { some: { userId, role: { in: ["OWNER", "EDITOR"] } } } }] };
+  return projectAccessWhere(userId);
 }
 
 export function projectAccessWhereForProject(projectId: string, userId: string): Prisma.ProjectWhereInput {
@@ -33,7 +29,7 @@ export function getProjectAccessForUser(project: Pick<Project, "id" | "userId"> 
   if (project.userId === userId) return { projectId: project.id, userId, accessLevel: "OWNER", memberRole: "OWNER" };
   const membership = project.members?.find((member) => member.userId === userId);
   if (!membership) return null;
-  return { projectId: project.id, userId, accessLevel: membership.role === "VIEWER" ? "VIEWER" : "EDITOR", memberRole: membership.role };
+  return { projectId: project.id, userId, accessLevel: memberRole(membership.role), memberRole: membership.role };
 }
 
 export async function getProjectAccess(projectId: string, userId: string): Promise<ProjectAccess | null> {
@@ -52,8 +48,14 @@ export function isProjectOwner(access: ProjectAccess | null): access is ProjectA
   return access?.accessLevel === "OWNER";
 }
 
-export function canEditProjectContent(access: ProjectAccess | null) {
-  return access?.accessLevel === "OWNER" || access?.accessLevel === "EDITOR";
+/** Every member edits the project's content: the owner, admins and editors (#385). */
+export function canEditProjectContent(access: ProjectAccess | null): access is ProjectAccess {
+  return access !== null;
+}
+
+/** The owner and admins invite people, add and remove members, and make admins (#385). */
+export function canManageProjectMembers(access: ProjectAccess | null): access is ProjectAccess & { accessLevel: "OWNER" | "ADMIN" } {
+  return canManageMembers(access?.accessLevel);
 }
 
 export function unauthorizedProjectResponse(action = "perform this action") {

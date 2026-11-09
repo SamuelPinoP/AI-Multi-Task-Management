@@ -65,13 +65,13 @@ test("invitations answer 429 with a clear message after 30 in an hour", async ({
 
   for (let invite = 1; invite <= 30; invite += 1) {
     const response = await page.request.post(`/api/projects/${project.id}/invitations`, {
-      data: { email: `e2e-limit-${invite}-${Date.now()}@example.test`, role: "VIEWER" },
+      data: { email: `e2e-limit-${invite}-${Date.now()}@example.test`, role: "EDITOR" },
     });
     expect(response.status(), `invitation ${invite}`).toBe(201);
   }
 
   const blocked = await page.request.post(`/api/projects/${project.id}/invitations`, {
-    data: { email: `e2e-limit-over-${Date.now()}@example.test`, role: "VIEWER" },
+    data: { email: `e2e-limit-over-${Date.now()}@example.test`, role: "EDITOR" },
   });
   expect(blocked.status()).toBe(429);
   expect(Number(blocked.headers()["retry-after"])).toBeGreaterThan(0);

@@ -71,15 +71,15 @@ test("comments: trimmed, Windows line breaks unified, empty or too long refused"
   assert.equal(cleanComment("x".repeat(COMMENT_MAX + 1)), null);
 });
 
-test("who may comment: a personal task's owner; in a project, Owners, Editors and the assignee", () => {
+test("who may comment: a personal task's owner; in a project, every member and the assignee", () => {
   const personal = { userId: "owner", projectId: null, assigneeUserId: null };
   assert.equal(mayCommentOnTask(personal, "owner", null), true);
   assert.equal(mayCommentOnTask(personal, "someone else", null), false);
 
-  const shared = { userId: "owner", projectId: "project", assigneeUserId: "viewing assignee" };
+  const shared = { userId: "owner", projectId: "project", assigneeUserId: "assignee" };
   assert.equal(mayCommentOnTask(shared, "owner", "OWNER"), true);
+  assert.equal(mayCommentOnTask(shared, "admin", "ADMIN"), true);
   assert.equal(mayCommentOnTask(shared, "editor", "EDITOR"), true);
-  assert.equal(mayCommentOnTask(shared, "viewer", "VIEWER"), false);
-  assert.equal(mayCommentOnTask(shared, "viewing assignee", "VIEWER"), true);
+  assert.equal(mayCommentOnTask(shared, "assignee", "EDITOR"), true);
   assert.equal(mayCommentOnTask(shared, "outsider", null), false);
 });

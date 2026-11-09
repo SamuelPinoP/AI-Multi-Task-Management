@@ -108,16 +108,14 @@ export function cleanComment(value: unknown): string | null {
 
 /**
  * Who may comment on a task (#279): on a personal task, its owner; in a
- * project, Owners and Editors, and the task's assignee even when they only
- * view the project. `projectAccess` is this person's level in the task's
- * project, or null without one.
+ * project, every member (#385) and the task's assignee. `projectAccess` is
+ * this person's level in the task's project, or null without one.
  */
 export function mayCommentOnTask(
   task: { userId: string; projectId: string | null; assigneeUserId: string | null },
   userId: string,
-  projectAccess: "OWNER" | "EDITOR" | "VIEWER" | null,
+  projectAccess: "OWNER" | "ADMIN" | "EDITOR" | null,
 ): boolean {
   if (!task.projectId) return task.userId === userId;
-  if (task.assigneeUserId === userId) return true;
-  return projectAccess === "OWNER" || projectAccess === "EDITOR";
+  return task.assigneeUserId === userId || projectAccess !== null;
 }
