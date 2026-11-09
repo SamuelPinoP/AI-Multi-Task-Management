@@ -201,28 +201,41 @@ test("unread chat badges have no WCAG A/AA violations", async ({ page, browser, 
   await continueAsGuest(page);
 
   const projectName = uniqueName("A11y shared project");
-  const project = (await (await page.request.post("/api/projects", { data: { name: projectName } })).json()) as { id: string };
+  const project = (await (await page.request.post("/api/projects", { data: { name: projectName } })).json()) as { id: string; userId: string };
   expect((await page.request.post(`/api/projects/${project.id}/invitations`, { data: { email: teammate.email, role: "EDITOR" } })).ok()).toBe(true);
   const invitations = (await (await teammatePage.request.get("/api/project-invitations")).json()) as { id: string; project: { id: string } }[];
   const invitation = invitations.find((item) => item.project.id === project.id);
   expect(invitation).toBeTruthy();
   expect((await teammatePage.request.patch(`/api/project-invitations/${invitation!.id}`, { data: { action: "ACCEPT" } })).ok()).toBe(true);
   expect((await teammatePage.request.post(`/api/projects/${project.id}/comments`, { data: { message: "A new message" } })).ok()).toBe(true);
+  // And a direct message (#387).
+  expect((await teammatePage.request.post(`/api/direct-chats/${project.userId}/comments`, { data: { message: "A direct message" } })).ok()).toBe(true);
   await teammateContext.close();
+  const details = (await (await page.request.get(`/api/projects/${project.id}`)).json()) as { members: { user: { id: string; email: string } | null }[] };
+  const teammateId = details.members.find((member) => member.user?.email === teammate.email)!.user!.id;
 
   // The sidebar's Chats link and the open project's Chat link show a count.
   const found: string[] = [];
   await page.goto(`/projects/${project.id}`);
   await page.waitForLoadState("networkidle");
   const sidebar = page.getByRole("navigation", { name: "Workspace" });
-  await expect(sidebar.getByRole("link", { name: "Chats, 1 with new messages" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "Chats, 2 with new messages" })).toBeVisible();
   await expect(sidebar.getByRole("group", { name: `${projectName} pages` }).getByRole("link", { name: "Chat, 1 unread" })).toBeVisible();
   found.push(...(await violations(page, "project page with an unread message")));
 
   await page.goto("/chats");
   await page.waitForLoadState("networkidle");
   await expect(page.getByRole("list", { name: "Project chats" }).getByRole("link", { name: new RegExp(`^${projectName}.*1 unread message$`) })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Direct messages" }).getByRole("link", { name: /1 unread message$/ })).toBeVisible();
   found.push(...(await violations(page, "Chats page with an unread message")));
+  await page.getByLabel("Search people").fill("A11y");
+  await expect(page.getByRole("list", { name: "People" })).toBeVisible();
+  found.push(...(await violations(page, "Chats page's people search")));
+
+  await page.goto(`/chats?person=${teammateId}`);
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("region", { name: "Conversation" }).getByText("A direct message")).toBeVisible();
+  found.push(...(await violations(page, "a direct chat")));
 
   expect(found).toEqual([]);
 });

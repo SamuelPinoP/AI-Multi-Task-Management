@@ -54,8 +54,9 @@ export default function PrivacyPage() {
           below.
         </p>
         <p>
-          <strong>What you create.</strong> Notes, tasks, events, goals, projects, boards, tree pages, chat messages and
-          comments, files you upload, and the email addresses of people you invite to a project.
+          <strong>What you create.</strong> Notes, tasks, events, goals, projects, boards, tree pages, project chat messages
+          and comments, direct messages to people you share a project with (only the two of you see them), files you
+          upload, and the email addresses of people you invite to a project.
         </p>
         <p>
           <strong>Signing in and preferences.</strong> A session cookie keeps you signed in; AI Multi stores only a SHA-256

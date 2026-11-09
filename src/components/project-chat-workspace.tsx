@@ -185,13 +185,25 @@ function PaperclipIcon({ className = "h-5 w-5" }: { className?: string }) {
 
 export function ProjectChatWorkspace({
   projectId,
+  apiBase = `/api/projects/${projectId}`,
+  allowAttachments = true,
+  placeholder = "Share an update, decision, blocker, or handoff...",
+  composerNotice,
   initialComments,
   currentUser,
   attachmentsDisabledMessage,
   newSince,
   framed = true,
 }: {
-  projectId: string;
+  /** The project whose chat this is; its files load through it. A direct chat has none. */
+  projectId?: string;
+  /** Where the chat's messages live: the project's by default, /api/direct-chats/<userId> for a direct chat (#387). */
+  apiBase?: string;
+  /** Direct chats are text only (#387): no attach button, and dropped files are ignored. */
+  allowAttachments?: boolean;
+  placeholder?: string;
+  /** Shown in place of the message box when nothing can be sent here, such as a direct chat with someone you no longer share a project with. */
+  composerNotice?: string;
   initialComments: ProjectComment[];
   currentUser: CurrentUser;
   /** Shown instead of accepting files when this user can't upload. */
@@ -271,7 +283,7 @@ export function ProjectChatWorkspace({
       try {
         const version = chatVersionRef.current;
         const res = await fetch(
-          `/api/projects/${projectId}/comments${version ? `?version=${encodeURIComponent(version)}` : ""}`,
+          `${apiBase}/comments${version ? `?version=${encodeURIComponent(version)}` : ""}`,
           { cache: "no-store" },
         );
         if (!res.ok || stopped) return;
@@ -283,7 +295,7 @@ export function ProjectChatWorkspace({
         if (!data.changed || !fresh) return;
         setComments((prev) => [...fresh, ...prev.filter((comment) => comment.id.startsWith("pending-"))]);
         // The reader is looking at the chat, so what just arrived counts as read (SIDE-03).
-        void fetch(`/api/projects/${projectId}/chat-read`, { method: "POST" }).catch(() => undefined);
+        void fetch(`${apiBase}/chat-read`, { method: "POST" }).catch(() => undefined);
       } catch {
         // Offline or a hiccup: try again on the next tick.
       }
@@ -296,9 +308,10 @@ export function ProjectChatWorkspace({
       window.clearInterval(timer);
       stopListening();
     };
-  }, [projectId]);
+  }, [apiBase]);
 
   function addFiles(fileList: FileList | File[]) {
+    if (!allowAttachments) return;
     const nextFiles = Array.from(fileList).filter((file) => file.size > 0);
     if (nextFiles.length === 0) return;
 
@@ -362,7 +375,7 @@ export function ProjectChatWorkspace({
   async function prepareAttachmentUploads(attachments: SelectedAttachment[]) {
     if (attachments.length === 0) return new Map<string, AttachmentUploadPlan>();
 
-    const res = await fetch(`/api/projects/${projectId}/attachments/uploads`, {
+    const res = await fetch(`${apiBase}/attachments/uploads`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -389,7 +402,7 @@ export function ProjectChatWorkspace({
   async function sendMessage() {
     const trimmed = message.trim();
     if (!trimmed && selectedAttachments.length === 0) {
-      setError("Add a message or attach at least one file.");
+      setError(allowAttachments ? "Add a message or attach at least one file." : "Write a message first.");
       return;
     }
 
@@ -474,12 +487,12 @@ export function ProjectChatWorkspace({
           formData.append("attachments", attachment.file),
         );
         res = await sendWithProgress(
-          `/api/projects/${projectId}/comments`,
+          `${apiBase}/comments`,
           { method: "POST", body: formData },
           (fraction) => reportProgress(multipartAttachments, fraction),
         );
       } else {
-        res = await fetch(`/api/projects/${projectId}/comments`, {
+        res = await fetch(`${apiBase}/comments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -557,7 +570,7 @@ export function ProjectChatWorkspace({
 
     try {
       const res = await fetch(
-        `/api/projects/${projectId}/comments/${comment.id}`,
+        `${apiBase}/comments/${comment.id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -598,7 +611,7 @@ export function ProjectChatWorkspace({
 
     try {
       const res = await fetch(
-        `/api/projects/${projectId}/comments/${commentId}`,
+        `${apiBase}/comments/${commentId}`,
         { method: "DELETE" },
       );
 
@@ -642,7 +655,7 @@ export function ProjectChatWorkspace({
 
     try {
       const res = await fetch(
-        `/api/projects/${projectId}/comments/${comment.id}`,
+        `${apiBase}/comments/${comment.id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -932,7 +945,7 @@ export function ProjectChatWorkspace({
                     ) : null}
                     {comment.attachments.length > 0 ? (
                       <AttachmentGallery
-                        projectId={projectId}
+                        projectId={projectId ?? ""}
                         attachments={
                           isPending
                             ? comment.attachments.map((attachment) => ({
@@ -963,29 +976,34 @@ export function ProjectChatWorkspace({
             <label htmlFor="project-chat-message" className="sr-only">
               Message
             </label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept={ACCEPTED_FILE_TYPES}
-              className="hidden"
-              onChange={handleFileChange}
-            />
+            {allowAttachments ? (
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={ACCEPTED_FILE_TYPES}
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            ) : null}
+            {composerNotice ? <p className="py-2 text-center text-sm text-muted">{composerNotice}</p> : null}
             {/* One row at every size: attach, the message box, send. The buttons stay at the bottom as the box grows. */}
-            <div className="flex items-end gap-2">
-              <button
-                type="button"
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-zinc-600 shadow-sm ring-1 ring-zinc-200 transition hover:text-zinc-950 hover:ring-zinc-300 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:text-zinc-50 dark:hover:ring-zinc-700 sm:h-9 sm:w-9"
-                onClick={() => {
-                  if (attachmentsDisabledMessage) setError(attachmentsDisabledMessage);
-                  else fileInputRef.current?.click();
-                }}
-                disabled={isSubmitting}
-                aria-label="Attach files"
-                title="Attach files"
-              >
-                <PaperclipIcon />
-              </button>
+            <div className={cn("flex items-end gap-2", composerNotice && "hidden")}>
+              {allowAttachments ? (
+                <button
+                  type="button"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-zinc-600 shadow-sm ring-1 ring-zinc-200 transition hover:text-zinc-950 hover:ring-zinc-300 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:text-zinc-50 dark:hover:ring-zinc-700 sm:h-9 sm:w-9"
+                  onClick={() => {
+                    if (attachmentsDisabledMessage) setError(attachmentsDisabledMessage);
+                    else fileInputRef.current?.click();
+                  }}
+                  disabled={isSubmitting}
+                  aria-label="Attach files"
+                  title="Attach files"
+                >
+                  <PaperclipIcon />
+                </button>
+              ) : null}
 
               <div
                 className={`min-w-0 flex-1 rounded-2xl bg-zinc-50/80 ring-1 transition dark:bg-zinc-900/70 ${
@@ -994,10 +1012,12 @@ export function ProjectChatWorkspace({
                     : "ring-zinc-200 focus-within:ring-zinc-400 dark:ring-zinc-800 dark:focus-within:ring-zinc-600"
                 }`}
                 onDragEnter={(event) => {
+                  if (!allowAttachments) return;
                   event.preventDefault();
                   setIsDragging(true);
                 }}
                 onDragOver={(event) => {
+                  if (!allowAttachments) return;
                   event.preventDefault();
                   setIsDragging(true);
                 }}
@@ -1018,7 +1038,7 @@ export function ProjectChatWorkspace({
                       // Enter in an empty box, or while a message is still sending, does nothing.
                       if (!isSubmitting && (message.trim() || selectedAttachments.length > 0)) void sendMessage();
                     }}
-                    placeholder="Share an update, decision, blocker, or handoff..."
+                    placeholder={placeholder}
                     rows={1}
                     // At least two lines on a phone, so the whole hint shows; one line from sm.
                     className={`${COMPOSER_TEXT_CLASS} min-h-[calc(2lh+1rem)] w-full resize-none rounded-2xl border-0 bg-transparent text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 sm:min-h-[calc(1lh+1rem)]`}

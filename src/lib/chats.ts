@@ -1,4 +1,10 @@
-/** The Chats hub (SIDE-02): the list's data and the pure helpers that sort, filter and label it. */
+/**
+ * The Chats hub (SIDE-02): the list's data and the pure helpers that sort,
+ * filter and label it. Since #387 it holds project chats and direct chats, in
+ * two sections, Projects first.
+ */
+
+import { nameMatches, type Teammate } from "@/lib/direct-chats-core";
 
 export type ChatSummary = {
   projectId: string;
@@ -22,7 +28,95 @@ export type ChatSummary = {
   } | null;
 };
 
-export type ChatFilter = "all" | "unread";
+/** A one-to-one chat with someone you share, or shared, a project with (#387). */
+export type DirectChatSummary = {
+  /** The other person's user id; the chat's address is /chats?person=<id>. */
+  personId: string;
+  name: string;
+  unread: number;
+  /** The projects you share now, by name; empty once you share none. */
+  projects: string[];
+  lastMessage: ChatSummary["lastMessage"];
+};
+
+/** The Chats list's chips (#387). */
+export type ChatFilter = "all" | "unread" | "people" | "projects";
+
+/** The search box looks for projects under the Projects chip and for people otherwise (#387). */
+export function searchTarget(filter: ChatFilter): "people" | "projects" {
+  return filter === "projects" ? "projects" : "people";
+}
+
+/** One person in a people search: your chat with them, or someone from your projects you haven't written to yet. */
+export type PersonResult = { personId: string; name: string; projects: string[]; chat: DirectChatSummary | null };
+
+/**
+ * What the list shows. Without a search: the Projects and Direct messages
+ * sections the chip keeps (null hides one). A search finds people (your chats
+ * and everyone else in your projects) or, under Projects, project chats.
+ */
+export type ChatListView =
+  | { kind: "sections"; projects: ChatSummary[] | null; people: DirectChatSummary[] | null }
+  | { kind: "people"; people: PersonResult[] }
+  | { kind: "projects"; projects: ChatSummary[] };
+
+/** Keys for `keepUnread`: chats the Unread chip keeps although they're read now (opened since the page loaded). */
+export const projectChatKey = (projectId: string) => `project:${projectId}`;
+export const directChatKey = (personId: string) => `person:${personId}`;
+
+/** Direct chats with unread messages first, then the newest. */
+export function sortDirectChats(chats: DirectChatSummary[]) {
+  return [...chats].sort((a, b) => {
+    const unread = Number(b.unread > 0) - Number(a.unread > 0);
+    if (unread) return unread;
+    return Date.parse(b.lastMessage?.at ?? "0") - Date.parse(a.lastMessage?.at ?? "0");
+  });
+}
+
+export function chatListView({
+  projects,
+  directs,
+  teammates,
+  filter,
+  query,
+  keepUnread,
+}: {
+  projects: ChatSummary[];
+  directs: DirectChatSummary[];
+  teammates: Teammate[];
+  filter: ChatFilter;
+  query: string;
+  keepUnread?: ReadonlySet<string>;
+}): ChatListView {
+  const isUnread = (key: string, unread: number) => unread > 0 || Boolean(keepUnread?.has(key));
+  const unreadOnly = filter === "unread";
+  const shownProjects = unreadOnly ? projects.filter((chat) => isUnread(projectChatKey(chat.projectId), chat.unread)) : projects;
+  const shownDirects = unreadOnly ? directs.filter((chat) => isUnread(directChatKey(chat.personId), chat.unread)) : directs;
+  const needle = query.trim();
+
+  if (!needle) {
+    return {
+      kind: "sections",
+      projects: filter === "people" ? null : shownProjects,
+      people: filter === "projects" ? null : shownDirects,
+    };
+  }
+  if (searchTarget(filter) === "projects") {
+    return { kind: "projects", projects: projects.filter((chat) => nameMatches(chat.name, needle)) };
+  }
+
+  const chats: PersonResult[] = shownDirects
+    .filter((chat) => nameMatches(chat.name, needle))
+    .map((chat) => ({ personId: chat.personId, name: chat.name, projects: chat.projects, chat }));
+  // Under Unread a search stays within unread chats; otherwise it reaches everyone in your projects.
+  const written = new Set(directs.map((chat) => chat.personId));
+  const others: PersonResult[] = unreadOnly
+    ? []
+    : teammates
+        .filter((person) => !written.has(person.id) && nameMatches(person.name, needle))
+        .map((person) => ({ personId: person.id, name: person.name, projects: person.projects, chat: null }));
+  return { kind: "people", people: [...chats, ...others] };
+}
 
 /** "1" while the desktop Chats page shows its list beside an open chat; the list hides by default (#324). */
 export const CHATS_LIST_COOKIE = "chats-list-open";
@@ -38,17 +132,11 @@ export function sortChatSummaries(chats: ChatSummary[]) {
   });
 }
 
-/**
- * The chats a filter and a search keep; the search matches the project name and the last message.
- * `keepUnread` names chats the Unread filter keeps although they're read now (opened since the page loaded).
- */
-export function filterChatSummaries(chats: ChatSummary[], filter: ChatFilter, query: string, keepUnread?: ReadonlySet<string>) {
-  const needle = query.trim().toLowerCase();
-  return chats.filter((chat) => {
-    if (filter === "unread" && chat.unread === 0 && !keepUnread?.has(chat.projectId)) return false;
-    if (!needle) return true;
-    return chat.name.toLowerCase().includes(needle) || Boolean(chat.lastMessage?.text.toLowerCase().includes(needle));
-  });
+/** A direct chat's second line: their message as is, yours after "You:" (#387). */
+export function directChatPreview(chat: DirectChatSummary) {
+  const last = chat.lastMessage;
+  if (!last) return "No messages yet";
+  return last.author === "You" ? `You: ${last.text}` : last.text;
 }
 
 /** A row's second line: "Ana: Homepage copy is ready", "You sent 2 files" or "No messages yet". */
