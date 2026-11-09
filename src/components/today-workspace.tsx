@@ -7,6 +7,7 @@ import {
   uiCardClass,
   uiPrimaryButtonClass,
 } from "@/components/ui";
+import { useTodayKey } from "@/components/user-time-zone";
 import { expandRecurringEventsForRange } from "@/lib/recurrence";
 import { getLocalDateOnly, getTaskDateBucket } from "@/lib/task-date-buckets";
 import { eventWallTime, formatEventTime } from "@/lib/event-time";
@@ -44,7 +45,6 @@ type EventItem = {
   project?: Project | null;
 };
 
-const dayStart = (date: Date) => getLocalDateOnly(date);
 const fmtDate = (value: string) =>
   new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(
     getLocalDateOnly(value),
@@ -77,10 +77,13 @@ export function TodayWorkspace({
   const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null);
   // Like the sidebar's Calendar item, opens the Agenda or Month tab, whichever was used last.
   const calendarView = useCalendarView();
+  // The reader's day, so the server and the browser file tasks and events the same way;
+  // `new Date()` would give the server's day, which is UTC's (#381).
+  const todayKey = useTodayKey();
 
   const { overdueTasks, dueTodayTasks, todayEvents, upcomingEvents } =
     useMemo(() => {
-      const today = dayStart(new Date());
+      const today = getLocalDateOnly(todayKey);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       const soonBoundary = new Date(today);
@@ -89,10 +92,10 @@ export function TodayWorkspace({
         (task) => task.status !== "DONE" && task.dueDate,
       );
       const overdue = activeTasks.filter(
-        (task) => getTaskDateBucket(task.dueDate) === "OVERDUE",
+        (task) => getTaskDateBucket(task.dueDate, todayKey) === "OVERDUE",
       );
       const dueToday = activeTasks.filter(
-        (task) => getTaskDateBucket(task.dueDate) === "DUE_TODAY",
+        (task) => getTaskDateBucket(task.dueDate, todayKey) === "DUE_TODAY",
       );
       const expanded = expandRecurringEventsForRange(
         events.map((event) => ({ ...event, sourceEventId: event.id })),
@@ -114,7 +117,7 @@ export function TodayWorkspace({
           return start >= tomorrow && start <= soonBoundary;
         }),
       };
-    }, [tasks, events]);
+    }, [tasks, events, todayKey]);
 
   async function markDone(task: Task) {
     try {
@@ -142,7 +145,7 @@ export function TodayWorkspace({
 
   const currentDate = new Intl.DateTimeFormat("en-US", {
     dateStyle: "full",
-  }).format(new Date());
+  }).format(getLocalDateOnly(todayKey));
   const allClear =
     overdueTasks.length === 0 &&
     dueTodayTasks.length === 0 &&

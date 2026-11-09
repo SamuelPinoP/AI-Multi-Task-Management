@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { uiButtonClass, uiCardClass } from "@/components/ui";
+import { formatInstant } from "@/lib/user-time";
 
 type ProjectComment = {
   id: string;
@@ -13,9 +14,12 @@ type ProjectComment = {
 export function ProjectChatPanel({
   projectId,
   initialComments,
+  timeZone,
 }: {
   projectId: string;
   initialComments: ProjectComment[];
+  /** The reader's zone from the `tz` cookie; this renders on the server only, so UTC without it (#381). */
+  timeZone: string | null;
 }) {
   const recentPreview = initialComments.slice(-3);
 
@@ -59,7 +63,8 @@ export function ProjectChatPanel({
                   </p>
                 ) : null}
                 <p className="mt-1 text-xs text-zinc-500">
-                  {comment.author.name || comment.author.email} • {new Date(comment.createdAt).toLocaleString()}
+                  {comment.author.name || comment.author.email} •{" "}
+                  {formatInstant(comment.createdAt, timeZone, { dateStyle: "medium", timeStyle: "short" })}
                 </p>
               </article>
             ))

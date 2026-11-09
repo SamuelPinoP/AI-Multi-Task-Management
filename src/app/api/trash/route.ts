@@ -111,7 +111,7 @@ export async function PATCH(req: Request) {
 
   if (updated.count === 0 || !item) return NextResponse.json({ error: "Item not found" }, { status: 404 });
 
-  void createActivity({
+  await createActivity({
     userId: user.id,
     action: "RESTORED_ITEM",
     message: `Restored ${type}: “${item.title}”`,

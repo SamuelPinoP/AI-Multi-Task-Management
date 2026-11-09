@@ -5,10 +5,12 @@ import { ChangeEvent, DragEvent, Fragment, KeyboardEvent, useEffect, useRef, use
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AttachmentGallery, ComposerAttachmentTray } from "@/components/project-chat-attachments";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import { useUserTimeZone } from "@/components/user-time-zone";
 import { cn } from "@/lib/cn";
 import { formatFileSize } from "@/lib/project-chat-attachment-display";
 import { sendsChatMessage } from "@/lib/shortcuts";
 import { isPageIdle, onPageReturn } from "@/lib/use-page-activity";
+import { formatInstant } from "@/lib/user-time";
 
 type ProjectCommentAttachment = {
   id: string;
@@ -124,14 +126,9 @@ function isEdited(comment: ProjectComment) {
   );
 }
 
-/** "Oct 29, 5:13 PM", short enough for a phone; the full date and time show on hover. */
-function formatMessageTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+/** "Oct 29, 5:13 PM" in the reader's zone, short enough for a phone; the full date and time show on hover. */
+function formatMessageTime(iso: string, timeZone: string | null) {
+  return formatInstant(iso, timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 /** Whether a key press in a message box sends the message or saves the edit (#303). */
@@ -202,6 +199,7 @@ export function ProjectChatWorkspace({
   framed?: boolean;
 }) {
   const [comments, setComments] = useState(initialComments);
+  const timeZone = useUserTimeZone();
   // Fixed when the chat opens, so the line stays put while the user replies.
   const [firstNewCommentId] = useState(() => {
     if (!newSince) return null;
@@ -785,10 +783,10 @@ export function ProjectChatWorkspace({
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
                           <time
                             dateTime={comment.createdAt}
-                            title={new Date(comment.createdAt).toLocaleString()}
+                            title={formatInstant(comment.createdAt, timeZone, { dateStyle: "medium", timeStyle: "short" })}
                             className="font-mono tabular-nums"
                           >
-                            {formatMessageTime(comment.createdAt)}
+                            {formatMessageTime(comment.createdAt, timeZone)}
                           </time>
                           {comment.pinned ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
