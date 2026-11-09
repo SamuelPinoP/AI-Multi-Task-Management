@@ -94,9 +94,10 @@ test("searching Chats finds a teammate you've never written to, and a message st
   await send(owner, "Can you look at the outline tonight?");
 });
 
-test("the message is unread for the teammate until they open the chat, then they reply", async () => {
+test("the message is unread for the teammate until they open the chat, then they reply", async ({ isMobile }) => {
   await teammate.goto("/chats");
-  await expect(sidebar(teammate).getByRole("link", { name: "Chats, 1 with new messages" })).toBeVisible();
+  // Phones keep the sidebar in a menu sheet; the badge is checked on desktop.
+  if (!isMobile) await expect(sidebar(teammate).getByRole("link", { name: "Chats, 1 with new messages" })).toBeVisible();
   const row = teammate.getByRole("list", { name: "Direct messages" }).getByRole("link", { name: new RegExp(`^${ownerName}`) });
   await expect(row).toHaveAccessibleName(/1 unread message$/);
   await expect(row).toContainText("Can you look at the outline tonight?");
@@ -116,7 +117,7 @@ test("the message is unread for the teammate until they open the chat, then they
   await expect(conversation(teammate).getByRole("heading", { name: ownerName })).toBeVisible();
   await expect(conversation(teammate).getByRole("separator", { name: "New messages" })).toBeVisible();
   await send(teammate, "Yes, after dinner.");
-  await expect(sidebar(teammate).getByRole("link", { name: "Chats", exact: true })).toBeVisible();
+  if (!isMobile) await expect(sidebar(teammate).getByRole("link", { name: "Chats", exact: true })).toBeVisible();
 
   // The owner's open chat picks the reply up on its next refresh.
   await owner.goto(`/chats?person=${teammateId}`);
@@ -152,7 +153,7 @@ test("only the two people in a chat can reach it, and only while they share a pr
   await expect(conversation(teammate).getByText("Can you look at the outline tomorrow?")).toBeVisible();
 });
 
-test("Mark all read clears direct chats too", async () => {
+test("Mark all read clears direct chats too", async ({ isMobile }) => {
   // The teammate is out of the project, so the owner writes to someone new: the outsider joins first.
   await ok(await owner.request.post(`/api/projects/${projectId}/invitations`, { data: { email: outsiderEmail, role: "EDITOR" } }));
   const invitations = await ok<Array<{ id: string; project: { id: string } }>>(await outsider.request.get("/api/project-invitations"));
@@ -160,9 +161,10 @@ test("Mark all read clears direct chats too", async () => {
   await ok(await outsider.request.post(`/api/direct-chats/${ownerId}/comments`, { data: { message: "Thanks for adding me!" } }));
 
   await owner.goto("/chats");
-  await expect(sidebar(owner).getByRole("link", { name: "Chats, 1 with new messages" })).toBeVisible();
+  if (!isMobile) await expect(sidebar(owner).getByRole("link", { name: "Chats, 1 with new messages" })).toBeVisible();
+  await expect(owner.getByRole("list", { name: "Direct messages" }).getByRole("link", { name: /1 unread message$/ })).toBeVisible();
   await owner.getByRole("button", { name: "Mark all read" }).click();
   await expect(owner.getByText("All chats marked as read")).toBeVisible();
   await expect(owner.getByRole("list", { name: "Direct messages" }).getByRole("link", { name: /unread/ })).toHaveCount(0);
-  await expect(sidebar(owner).getByRole("link", { name: "Chats", exact: true })).toBeVisible();
+  if (!isMobile) await expect(sidebar(owner).getByRole("link", { name: "Chats", exact: true })).toBeVisible();
 });
