@@ -46,3 +46,33 @@ export function toWallClock(timeZone: string | null | undefined, instant = new D
     instant.getMilliseconds(),
   );
 }
+
+/** `timeZone` when it's a real zone, otherwise UTC: the same choice on the server and in the browser. */
+function zoneOrUtc(timeZone: string | null | undefined) {
+  return isValidTimeZone(timeZone) ? timeZone : "UTC";
+}
+
+/**
+ * A moment in time as English text in `timeZone`, or in UTC without one (#381).
+ * `toLocaleString()` uses the runtime's zone and language instead: UTC and English on the server,
+ * the reader's own in the browser. The texts then differ, and React rebuilds the page it hydrates.
+ */
+export function formatInstant(
+  value: Date | string,
+  timeZone: string | null | undefined,
+  options: Intl.DateTimeFormatOptions,
+) {
+  return new Intl.DateTimeFormat("en-US", { ...options, timeZone: zoneOrUtc(timeZone) }).format(new Date(value));
+}
+
+/** The calendar day in `timeZone` (UTC without one) at `instant`, as "2026-11-08". */
+export function dayKeyInZone(timeZone: string | null | undefined, instant = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: zoneOrUtc(timeZone),
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(instant);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}

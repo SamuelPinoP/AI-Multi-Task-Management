@@ -133,7 +133,7 @@ export async function POST(req: Request) {
     });
 
     await recordTaskCreated(task.id, user.id);
-    void createActivity({ userId: user.id, action: status === TaskStatus.DONE ? "COMPLETED_TASK" : "CREATED_TASK", message: `${status === TaskStatus.DONE ? "Completed task" : "Created task"}: “${task.title}”`, entityType: "TASK", entityId: task.id, projectId: task.projectId });
+    await createActivity({ userId: user.id, action: status === TaskStatus.DONE ? "COMPLETED_TASK" : "CREATED_TASK", message: `${status === TaskStatus.DONE ? "Completed task" : "Created task"}: “${task.title}”`, entityType: "TASK", entityId: task.id, projectId: task.projectId });
     // The assignee hears about it in their inbox (SMART-08).
     if (task.assigneeId) after(() => notifyTaskAssigned({ task, actor: user }));
     return NextResponse.json(task, { status: 201 });

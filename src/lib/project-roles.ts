@@ -7,8 +7,7 @@
  * - Admins invite people, add and remove members, and make members admins.
  * - Everyone else is a member (stored as EDITOR). Every member edits the project's content.
  *
- * Viewer is gone: a member row still holding VIEWER (made by the old code
- * while the new one deployed) counts as an editor until #388 drops the value.
+ * There is no Viewer: #385 made every viewer an editor and #388 dropped the value.
  */
 
 export type ProjectRole = "OWNER" | "ADMIN" | "EDITOR";
@@ -23,7 +22,7 @@ export const PROJECT_ROLE_LABELS: Record<ProjectRole, string> = {
   EDITOR: "Member",
 };
 
-/** A member row's role as access: ADMIN stays ADMIN; EDITOR, and the legacy VIEWER and OWNER rows, are editors. */
+/** A member row's role as access: ADMIN stays ADMIN; EDITOR, and the OWNER value no member row uses, are editors. */
 export function memberRole(role: string): Exclude<ProjectRole, "OWNER"> {
   return role === "ADMIN" ? "ADMIN" : "EDITOR";
 }

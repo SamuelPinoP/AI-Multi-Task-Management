@@ -43,7 +43,6 @@ model User {
   sentProjectInvitations       ProjectInvitation[]           @relation("ProjectInvitationInviter")
   receivedProjectInvitations   ProjectInvitation[]           @relation("ProjectInvitationInvitee")
   activities                   Activity[]
-  projectMemberNotes           ProjectMemberNote[]           @relation("ProjectMemberNoteAuthor")
   projectComments              ProjectComment[]
   projectCommentAttachments    ProjectCommentAttachment[]
   projectChatAttachmentUploads ProjectChatAttachmentUpload[]
@@ -400,7 +399,6 @@ model Project {
   attachmentUploads ProjectChatAttachmentUpload[]
   recentShortcuts   RecentShortcut[]
   chatReads         ProjectChatRead[]
-  automations       ProjectAutomation[]
   labels            Label[]
 }
 
@@ -557,8 +555,6 @@ model ProjectMember {
   project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user        User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
   tasks       Task[]
-  notes       ProjectMemberNote[]
-  automations ProjectAutomation[]
 
   @@unique([projectId, userId])
   @@index([projectId])
@@ -587,52 +583,6 @@ model ProjectInvitation {
   @@index([inviterUserId])
   @@index([invitedUserId])
   @@index([invitedEmail])
-}
-
-/// A simple rule: "when <trigger> in this project, <action>" (SMART-11).
-/// The allowed pairs are in src/lib/project-automations-core.ts; one rule of each kind per project.
-model ProjectAutomation {
-  id        String            @id @default(cuid())
-  projectId String
-  trigger   AutomationTrigger
-  action    AutomationAction
-  /// ASSIGN_MEMBER only: who gets new tasks. Removing the member removes the rule.
-  memberId  String?
-  enabled   Boolean           @default(true)
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-
-  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  member  ProjectMember? @relation(fields: [memberId], references: [id], onDelete: Cascade)
-
-  @@unique([projectId, trigger, action])
-  @@index([memberId])
-}
-
-enum AutomationTrigger {
-  TASK_CREATED
-  TASK_COMPLETED
-}
-
-enum AutomationAction {
-  EMAIL_OWNER
-  ASSIGN_MEMBER
-}
-
-model ProjectMemberNote {
-  id              String                      @id @default(cuid())
-  memberId        String
-  message         String
-  visibility      ProjectMemberNoteVisibility @default(TEAM)
-  createdByUserId String
-  createdAt       DateTime                    @default(now())
-  updatedAt       DateTime                    @updatedAt
-
-  member        ProjectMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  createdByUser User          @relation("ProjectMemberNoteAuthor", fields: [createdByUserId], references: [id], onDelete: Cascade)
-
-  @@index([memberId])
-  @@index([createdByUserId])
 }
 
 model TreePage {
@@ -667,11 +617,6 @@ model TreeNode {
 
   @@index([pageId, parentId, sortOrder])
   @@index([parentId])
-}
-
-enum ProjectMemberNoteVisibility {
-  TEAM
-  PRIVATE
 }
 
 model Activity {
@@ -757,11 +702,9 @@ enum GoalStatus {
 
 /// Project roles (#385); the rules are in src/lib/project-roles.ts. The project's owner is Project.userId.
 /// ADMIN also manages members. EDITOR is every other member: everyone edits.
-/// VIEWER is no longer given: its rows became EDITOR, and #388 drops the value.
 enum ProjectMemberRole {
   OWNER
   EDITOR
-  VIEWER
   ADMIN
 }
 

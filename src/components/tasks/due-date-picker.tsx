@@ -16,10 +16,10 @@ function nextMonday() {
   return formatTaskDayKey(date);
 }
 
-/** "Fri, Nov 13" for a `YYYY-MM-DD` key. */
+/** "Fri, Nov 13" for a `YYYY-MM-DD` key, in English: the task page renders it on the server too (#381). */
 export function dueDayName(key: string) {
   const [year, month, day] = key.split("-").map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  return new Date(year, month - 1, day).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
 /** Today, Tomorrow, Next week, any date, or none: the due date picker the task page and New task share. */
