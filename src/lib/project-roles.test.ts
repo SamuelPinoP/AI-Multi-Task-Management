@@ -49,5 +49,5 @@ test("admins make editors admins; only the owner dismisses an admin", () => {
 });
 
 test("roles read as words", () => {
-  assert.deepEqual(PROJECT_ROLE_LABELS, { OWNER: "Owner", ADMIN: "Admin", EDITOR: "Editor" });
+  assert.deepEqual(PROJECT_ROLE_LABELS, { OWNER: "Owner", ADMIN: "Admin", EDITOR: "Member" });
 });

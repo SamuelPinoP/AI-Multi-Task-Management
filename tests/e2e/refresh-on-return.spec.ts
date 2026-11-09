@@ -44,17 +44,18 @@ test("pages catch up with an invitation sent and accepted elsewhere when you com
     await ownerPage.clock.install();
     await ownerPage.goto(`/projects/${project.id}`);
     const members = ownerPage.getByRole("region", { name: "Members" }).filter({ visible: true });
-    await expect(members.getByText("No members yet.")).toBeVisible();
+    // The owner always heads the list (#386).
+    await expect(members.getByRole("listitem")).toHaveCount(1);
     const list = (await (await inviteeContext.request.get("/api/project-invitations")).json()) as { id: string; project: { id: string } }[];
     const invitation = list.find((item) => item.project.id === project.id);
     expect(invitation).toBeTruthy();
     const accepted = await inviteeContext.request.patch(`/api/project-invitations/${invitation!.id}`, { data: { action: "ACCEPT" } });
     expect(accepted.ok()).toBe(true);
 
-    await expect(members.getByText(invitee.email)).toHaveCount(0);
+    await expect(members.getByText(invitee.name)).toHaveCount(0);
     await comeBack(ownerPage);
-    await expect(members.getByText(invitee.email)).toBeVisible();
-    await expect(members.getByText("No members yet.")).toHaveCount(0);
+    await expect(members.getByText(invitee.name)).toBeVisible();
+    await expect(members.getByRole("listitem")).toHaveCount(2);
   } finally {
     await Promise.all([ownerContext.close(), inviteeContext.close()]);
   }

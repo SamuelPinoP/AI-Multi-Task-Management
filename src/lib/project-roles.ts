@@ -5,7 +5,7 @@
  * - The owner created the project. They can do everything below, and they
  *   alone dismiss an admin or remove one.
  * - Admins invite people, add and remove members, and make members admins.
- * - Everyone else is an editor. Every member edits the project's content.
+ * - Everyone else is a member (stored as EDITOR). Every member edits the project's content.
  *
  * Viewer is gone: a member row still holding VIEWER (made by the old code
  * while the new one deployed) counts as an editor until #388 drops the value.
@@ -16,10 +16,11 @@ export type ProjectRole = "OWNER" | "ADMIN" | "EDITOR";
 /** The roles an invitation or a member can be given. */
 export type AssignableRole = "ADMIN" | "EDITOR";
 
+/** How roles read in the app; the stored EDITOR reads as Member (#386, design 3B). */
 export const PROJECT_ROLE_LABELS: Record<ProjectRole, string> = {
   OWNER: "Owner",
   ADMIN: "Admin",
-  EDITOR: "Editor",
+  EDITOR: "Member",
 };
 
 /** A member row's role as access: ADMIN stays ADMIN; EDITOR, and the legacy VIEWER and OWNER rows, are editors. */

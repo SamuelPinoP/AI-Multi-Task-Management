@@ -5,7 +5,8 @@ import { requirePageUser } from "@/lib/auth";
 import { ProjectCalendar } from "@/components/project-calendar";
 import { ProjectQuickActions } from "@/components/project-quick-actions";
 import { BackLink, uiButtonClass, uiCardClass } from "@/components/ui";
-import { ProjectTeamSection } from "@/components/project-team-section";
+import { ProjectMembers } from "@/components/projects/project-members";
+import { displayName } from "@/lib/direct-chats-core";
 import { ProjectAssignedTasksSection } from "@/components/project-assigned-tasks-section";
 import { ProjectChatPanel } from "@/components/project-chat-panel";
 import { ProjectInsights } from "@/components/projects/project-insights";
@@ -37,10 +38,12 @@ export default async function ProjectDetailPage({
   const project = await prisma.project.findFirst({
     where: projectAccessWhereForProject(id, user.id),
     include: {
+      // The owner heads the members list (#386).
+      user: { select: { id: true, name: true, email: true } },
+      // Counted for the insights; the notes themselves live on the Notes page.
       notes: {
         where: { deletedAt: null },
-        orderBy: { createdAt: "desc" },
-        select: { id: true, title: true, content: true },
+        select: { id: true },
       },
       tasks: {
         where: { deletedAt: null },
@@ -196,39 +199,21 @@ export default async function ProjectDetailPage({
         {canEdit ? (
           <ProjectQuickActions project={{ id: project.id, name: project.name, color: project.color }} />
         ) : null}
-        <ProjectTeamSection
+        <ProjectMembers
           projectId={project.id}
-          initialMembers={project.members}
+          projectName={project.name}
+          owner={{ id: project.user.id, name: displayName(project.user) }}
+          initialMembers={project.members.map((member) => ({
+            id: member.id,
+            userId: member.userId,
+            name: member.user ? displayName(member.user) : member.name,
+            role: member.role,
+          }))}
           viewerRole={role}
           currentUserId={user.id}
         />
 
         <GithubPanel projectId={project.id} repo={project.githubRepo} canManage={isOwner} />
-
-        <section className="mt-8">
-          <h2 className="mb-4 text-2xl font-semibold">Assigned Notes</h2>
-          {project.notes.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-zinc-300 p-5 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
-              No notes are assigned to this project yet. Create or edit a note
-              and choose this project to keep research, decisions, and meeting
-              context together.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {project.notes.map((note) => (
-                <article
-                  key={note.id}
-                  className="rounded-2xl border border-line bg-surface p-5 shadow-card"
-                >
-                  <h3 className="text-lg font-semibold">{note.title}</h3>
-                  <p className="mt-2 text-zinc-700 dark:text-zinc-300">
-                    {note.content || "No content."}
-                  </p>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
 
         <ProjectAssignedTasksSection
           projectId={project.id}
