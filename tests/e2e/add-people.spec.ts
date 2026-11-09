@@ -1,5 +1,5 @@
 import { expect, test, type APIResponse, type BrowserContext, type Page } from "@playwright/test";
-import { signUpAndLogIn, uniqueName } from "./helpers";
+import { queryDatabase, signUpAndLogIn, uniqueName } from "./helpers";
 
 // #393 (design 5B): "Already in Multi" adds someone you already share a project
 // with at once, or invites anyone by their exact @username without showing
@@ -127,4 +127,11 @@ test("only the owner and admins add people, and only people they already share a
   expect((await people.owner.page.request.post(`/api/projects/${projectId}/members`, { data: { userId: strangerId, role: "EDITOR" } })).status()).toBe(403);
   // Someone already in the project can't be added twice.
   expect((await people.owner.page.request.post(`/api/projects/${projectId}/members`, { data: { userId: people.teammate.id, role: "EDITOR" } })).status()).toBe(409);
+
+  // Someone with no name shows as their username, never as the start of their email.
+  await queryDatabase(`UPDATE "User" SET name = NULL WHERE id = $1`, [strangerId]);
+  const lookup = await people.owner.page.request.get(`/api/projects/${projectId}/people?username=${people.stranger.username}`);
+  const nameless = await ok<{ person: { name: string } | null }>(lookup);
+  expect(nameless.person?.name).toBe(`@${people.stranger.username}`);
+  expect(JSON.stringify(nameless)).not.toContain(people.stranger.email.split("@")[0]);
 });

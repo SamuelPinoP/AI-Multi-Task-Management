@@ -17,6 +17,9 @@ test("initials take the first two words", () => {
   assert.equal(initials("Ana Torres"), "AT");
   assert.equal(initials("maya"), "M");
   assert.equal(initials("Maria José de la Cruz"), "MJ");
+  // Someone without a name shows as "@username" (#393): the @ is no initial.
+  assert.equal(initials("@ana_t"), "A");
+  assert.equal(initials("Ana - Torres"), "AT");
 });
 
 test("the shared projects read as a short line", () => {

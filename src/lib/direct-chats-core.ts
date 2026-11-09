@@ -33,12 +33,15 @@ export function sharedProjectsLine(projects: string[]) {
   return `In ${projects[0]}, ${projects[1]} and ${projects.length - 2} more`;
 }
 
-/** Up to two initials: "Ana Torres" is AT, "maya" is M. */
+/** Up to two initials: "Ana Torres" is AT, "maya" is M, "@ana_t" is A (symbols are skipped). */
 export function initials(name: string) {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  return words
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.match(/[\p{L}\p{N}]/u)?.[0] ?? "")
+    .filter(Boolean)
     .slice(0, 2)
-    .map((word) => word.charAt(0).toUpperCase())
+    .map((letter) => letter.toUpperCase())
     .join("");
 }
 

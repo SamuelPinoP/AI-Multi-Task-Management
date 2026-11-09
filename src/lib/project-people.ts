@@ -1,5 +1,5 @@
 import "server-only";
-import { displayName, type Teammate } from "@/lib/direct-chats-core";
+import type { Teammate } from "@/lib/direct-chats-core";
 import { getTeammates, sharedProjects } from "@/lib/direct-chats";
 import { prisma } from "@/lib/prisma";
 import { normalizeUsername } from "@/lib/username";
@@ -40,8 +40,9 @@ export async function isInProject(projectId: string, userId: string) {
 export async function findByUsername(projectId: string, userId: string, value: string) {
   const username = normalizeUsername(value.replace(/^@/, ""));
   if (!username) return null;
-  const person = await prisma.user.findUnique({ where: { username }, select: { id: true, name: true, email: true, username: true, isGuest: true } });
-  if (!person || person.isGuest || person.id === userId || (await isInProject(projectId, person.id))) return null;
+  const person = await prisma.user.findUnique({ where: { username }, select: { id: true, name: true, username: true, isGuest: true } });
+  if (!person?.username || person.isGuest || person.id === userId || (await isInProject(projectId, person.id))) return null;
   const teammate = (await sharedProjects(userId, person.id)).length > 0;
-  return { id: person.id, name: displayName(person), username: person.username!, teammate };
+  // Someone without a name shows as their username, never as the start of their email.
+  return { id: person.id, name: person.name?.trim() || `@${person.username}`, username: person.username, teammate };
 }

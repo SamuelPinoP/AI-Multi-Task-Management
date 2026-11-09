@@ -146,7 +146,7 @@ export function AddPeopleDialog({
         <PersonAvatar id={person.id} name={person.name} />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-sm font-semibold">{person.name}</span>
-          <span className="truncate text-xs text-muted">{detail}</span>
+          {detail && detail !== person.name ? <span className="truncate text-xs text-muted">{detail}</span> : null}
         </span>
         <button
           type="button"
