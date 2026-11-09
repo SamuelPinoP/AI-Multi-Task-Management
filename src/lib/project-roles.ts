@@ -5,7 +5,7 @@
  * - The owner created the project. They can do everything below, and they
  *   alone dismiss an admin or remove one.
  * - Admins invite people, add and remove members, and make members admins.
- * - Everyone else is an editor. Every member edits the project's content.
+ * - Everyone else is a member (stored as EDITOR). Every member edits the project's content.
  *
  * There is no Viewer: #385 made every viewer an editor and #388 dropped the value.
  */
@@ -15,10 +15,11 @@ export type ProjectRole = "OWNER" | "ADMIN" | "EDITOR";
 /** The roles an invitation or a member can be given. */
 export type AssignableRole = "ADMIN" | "EDITOR";
 
+/** How roles read in the app; the stored EDITOR reads as Member (#386, design 3B). */
 export const PROJECT_ROLE_LABELS: Record<ProjectRole, string> = {
   OWNER: "Owner",
   ADMIN: "Admin",
-  EDITOR: "Editor",
+  EDITOR: "Member",
 };
 
 /** A member row's role as access: ADMIN stays ADMIN; EDITOR, and the OWNER value no member row uses, are editors. */

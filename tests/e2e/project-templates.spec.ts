@@ -58,7 +58,7 @@ test("projects have no automations: no section, no API, and a new task keeps the
   expect(assigned.assignee?.name).toBe("Alex Rivera");
 
   await page.goto(`/projects/${project.id}`);
-  await expect(page.getByRole("heading", { name: "Assigned Notes" }).filter({ visible: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Members", exact: true }).filter({ visible: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Automations" })).toHaveCount(0);
   await expect(page.getByText("No automations yet")).toHaveCount(0);
 });

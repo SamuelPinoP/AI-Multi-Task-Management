@@ -40,7 +40,10 @@ test("project quick actions: the three buttons create a task, a note and an even
   await noteSheet.getByLabel("Note").fill("Written from Quick Actions.");
   await noteSheet.getByRole("button", { name: "Create note" }).click();
   await expect(noteSheet).toBeHidden();
-  await expect(main.getByRole("heading", { name: noteTitle })).toBeVisible();
+  // The project page counts its notes; the notes themselves live on the Notes page (#386).
+  await expect(main.getByText(/^1 note · /)).toBeVisible();
+  const notes = (await (await page.request.get("/api/notes")).json()) as { title: string; projectId: string | null }[];
+  expect(notes.find((note) => note.title === noteTitle)?.projectId).toBe(project.id);
 
   // The event starts today unless another day is picked.
   const eventTitle = uniqueName("Quick event");
