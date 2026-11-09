@@ -20,7 +20,7 @@ type Member = {
   userId: string | null;
   name: string;
   email: string | null;
-  /** As stored: ADMIN, EDITOR, or an old VIEWER row that counts as an editor. */
+  /** As stored: ADMIN or EDITOR. */
   role: string;
   user?: { id: string; name: string | null; email: string } | null;
 };
