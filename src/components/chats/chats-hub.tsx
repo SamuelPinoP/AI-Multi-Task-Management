@@ -97,14 +97,21 @@ function RowText({ name, time, preview, unread, attachment }: { name: string; ti
   );
 }
 
-/** A project's chat: a square tile in the project's color. Its visible text is its accessible name. */
+/**
+ * A project's chat: a square tile tinted with the project's color, its letter in
+ * the text color, so it reads in both themes whatever color the project has.
+ * Its visible text is its accessible name.
+ */
 function ProjectChatRow({ chat, selected }: { chat: ChatSummary; selected: boolean }) {
   return (
     <Link href={`/chats?project=${chat.projectId}`} scroll={false} aria-current={selected ? "true" : undefined} className={rowClass(selected)}>
       <span
         aria-hidden="true"
-        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base font-bold text-white"
-        style={{ backgroundColor: projectColor({ id: chat.projectId, color: chat.color }) }}
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border text-base font-bold text-ink"
+        style={{
+          backgroundColor: `color-mix(in srgb, ${projectColor({ id: chat.projectId, color: chat.color })} 22%, var(--surface))`,
+          borderColor: `color-mix(in srgb, ${projectColor({ id: chat.projectId, color: chat.color })} 45%, transparent)`,
+        }}
       >
         {chat.name.trim().charAt(0).toUpperCase()}
       </span>
