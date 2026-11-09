@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { continueAsGuest, uniqueName } from "./helpers";
 
@@ -55,17 +54,12 @@ async function open(page: Page, url: string, ready: Locator, { firstVisit }: { f
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
-test("message, note and invitation times read the same from the server and the browser, in the reader's zone", async ({ page }) => {
+// The project page used to show member notes and pending invitations with their times too; the Team
+// section no longer lists either (#384), so the chat's times are the ones left to check.
+test("message times read the same from the server and the browser, in the reader's zone", async ({ page }) => {
   await continueAsGuest(page);
   const project = await post<{ id: string }>(page, "/api/projects", { name: uniqueName("E2E zones") });
   const comment = await post<{ id: string; createdAt: string }>(page, `/api/projects/${project.id}/comments`, { message: "Zone check" });
-  // A member added by email also gets a pending invitation.
-  const { member, invitation } = await post<{ member: { id: string }; invitation: { createdAt: string } }>(page, `/api/projects/${project.id}/members`, {
-    name: "Zone Member",
-    email: `e2e.zone.${randomUUID().slice(0, 8)}@example.com`,
-    role: "EDITOR",
-  });
-  const note = await post<{ createdAt: string }>(page, `/api/projects/${project.id}/members/${member.id}/notes`, { message: "Zone note" });
   const errors = watchHydration(page);
   const messageTime = inZone({ month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }, comment.createdAt);
   const time = shown(page.locator(`#comment-${comment.id} time`));
@@ -86,15 +80,11 @@ test("message, note and invitation times read the same from the server and the b
     expect(errors, `Chats page, ${visit}`).toEqual([]);
     await expect(time).toHaveText(messageTime);
 
-    // The project page: the chat preview, a team member's note and a pending invitation.
+    // The project page: the chat preview.
     errors.length = 0;
     await open(page, `/projects/${project.id}`, page.getByRole("heading", { level: 1 }), { firstVisit });
     expect(errors, `project page, ${visit}`).toEqual([]);
     await expect(shown(page.getByText(`Guest Workspace • ${inZone({ dateStyle: "medium", timeStyle: "short" }, comment.createdAt)}`))).toBeVisible();
-    await expect(shown(page.getByRole("listitem").filter({ hasText: "Zone note" }))).toContainText(
-      `• ${inZone({ dateStyle: "medium", timeStyle: "short" }, note.createdAt)}`,
-    );
-    await expect(shown(page.getByText(`Invitation sent ${inZone({ dateStyle: "medium" }, invitation.createdAt)}`))).toBeVisible();
   }
 });
 
