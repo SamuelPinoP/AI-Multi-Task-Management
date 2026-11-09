@@ -16,12 +16,12 @@ const landingFeatures = [
   {
     title: "Projects",
     description:
-      "Organize team workspaces with members, workload summaries, quick actions, calendars, and shared task context.",
+      "Organize team workspaces with members, quick actions, calendars, and shared task context.",
   },
   {
     title: "Team collaboration",
     description:
-      "Invite registered collaborators, show owner/shared access clearly, and keep member notes and permissions understandable.",
+      "Invite collaborators by email and see who is in each project.",
   },
   {
     title: "Project chat + attachments",

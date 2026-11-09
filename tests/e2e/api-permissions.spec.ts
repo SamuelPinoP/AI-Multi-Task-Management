@@ -218,10 +218,10 @@ test("only the owner sees and sends invitations", async () => {
       .soft(details.invitations.some((invitation) => invitation.invitedEmail === pendingEmail), `invitations as ${role}`)
       .toBe(role === "owner");
 
-    // The server-rendered project page must not carry them either.
+    // The project page no longer lists invitations (#384), so it carries no invitee emails at all.
     const page = await api[role].get(`/projects/${projectId}`);
     expect(page.ok()).toBe(true);
-    expect.soft((await page.text()).includes(pendingEmail), `project page as ${role}`).toBe(role === "owner");
+    expect.soft((await page.text()).includes(pendingEmail), `project page as ${role}`).toBe(false);
   }
 });
 
@@ -246,14 +246,6 @@ test("only the owner manages members", async () => {
     "DELETE member",
     (client) => client.delete(`/api/projects/${projectId}/members/${editorMemberId}`),
     { editor: 403, viewer: 403, outsider: 403 },
-  );
-  await expectStatuses(
-    "POST member note",
-    (client) =>
-      client.post(`/api/projects/${projectId}/members/${editorMemberId}/notes`, {
-        data: { message: "Checked in on progress." },
-      }),
-    { owner: 201, editor: 201, viewer: 403, outsider: 404 },
   );
 });
 

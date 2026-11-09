@@ -16,11 +16,9 @@ import {
   getProjectAccessForUser,
   projectAccessWhereForProject,
 } from "@/lib/project-access";
-import { OWNER_INVITATION_SELECT } from "@/lib/project-invitations";
 import { markProjectOpened } from "@/lib/recent-shortcuts";
 import { describeRepeat, firstOccurrenceEnd } from "@/lib/recurrence";
 import { projectInsights } from "@/lib/project-insights";
-import { isOverdueTask } from "@/lib/task-date-buckets";
 import { toWallClock } from "@/lib/user-time";
 import { getUserTimeZone } from "@/lib/user-time-server";
 
@@ -63,19 +61,6 @@ export default async function ProjectDetailPage({
         orderBy: { createdAt: "asc" },
         include: {
           user: { select: { id: true, name: true, email: true } },
-          notes: {
-            where: {
-              OR: [{ visibility: "TEAM" }, { createdByUserId: user.id }],
-            },
-            orderBy: { createdAt: "desc" },
-            select: {
-              id: true,
-              message: true,
-              createdAt: true,
-              visibility: true,
-              createdByUserId: true,
-            },
-          },
         },
       },
       events: {
@@ -92,11 +77,6 @@ export default async function ProjectDetailPage({
           repeatUntil: true,
           skippedDates: true,
         },
-      },
-      invitations: {
-        where: { status: "PENDING" },
-        orderBy: { createdAt: "desc" },
-        select: OWNER_INVITATION_SELECT,
       },
       comments: {
         orderBy: { createdAt: "asc" },
@@ -135,34 +115,6 @@ export default async function ProjectDetailPage({
     { updatedAt: wall(project.updatedAt) },
     now,
   );
-
-  const workload = new Map<
-    string,
-    { name: string; active: number; completed: number; overdue: number }
-  >();
-  for (const member of project.members)
-    workload.set(member.id, {
-      name: member.name,
-      active: 0,
-      completed: 0,
-      overdue: 0,
-    });
-  workload.set("unassigned", {
-    name: "Unassigned",
-    active: 0,
-    completed: 0,
-    overdue: 0,
-  });
-  for (const task of project.tasks) {
-    const key = task.assignee?.id ?? "unassigned";
-    const item = workload.get(key);
-    if (!item) continue;
-    if (task.status === "DONE") item.completed += 1;
-    else {
-      item.active += 1;
-      if (isOverdueTask(task.dueDate, now)) item.overdue += 1;
-    }
-  }
 
   return (
     <main className="min-h-screen px-6 py-10">
@@ -225,13 +177,6 @@ export default async function ProjectDetailPage({
               </span>
             </div>
           </div>
-          <div className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-300">
-            {isOwner
-              ? "Owner permissions: you can edit project details, invite collaborators, remove members, change roles, and coordinate work through tasks, notes, events, and chat."
-              : canEditProjectContent
-                ? "Editor permissions: you can create and edit project tasks, notes, events, comments, and attachments, but cannot invite members or delete the project."
-                : "Viewer permissions: this is a read-only project. You can view project tasks, notes, events, comments, attachments, dashboard, and planner data, but cannot create or change project content."}
-          </div>
           <div className="mt-4 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
             <span
               className="inline-block h-3 w-3 rounded-full border border-zinc-300 dark:border-zinc-700"
@@ -248,27 +193,11 @@ export default async function ProjectDetailPage({
 
         {canEditProjectContent ? (
           <ProjectQuickActions project={{ id: project.id, name: project.name, color: project.color }} />
-        ) : (
-          <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
-            Read-only access: ask the project owner for Editor access to create tasks, notes, events, comments, or attachments.
-          </div>
-        )}
+        ) : null}
         <ProjectTeamSection
           projectId={project.id}
-          initialMembers={project.members.map((member) => ({
-            ...member,
-            notes: member.notes.map((note) => ({
-              ...note,
-              createdAt: note.createdAt.toISOString(),
-            })),
-          }))}
-          workloadRows={Array.from(workload.entries())}
+          initialMembers={project.members}
           isOwner={isOwner}
-          // Invitee emails are for the owner only; don't ship them to other members.
-          pendingInvitations={(isOwner ? project.invitations : []).map((invitation) => ({
-            ...invitation,
-            createdAt: invitation.createdAt.toISOString(),
-          }))}
         />
 
         <GithubPanel projectId={project.id} repo={project.githubRepo} canManage={isOwner} />

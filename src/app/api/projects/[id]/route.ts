@@ -52,16 +52,6 @@ export async function GET(_req: Request, context: RouteContext) {
           orderBy: { createdAt: "asc" },
           include: {
             user: { select: { id: true, name: true, email: true } },
-            notes: {
-              where: {
-                OR: [
-                  { visibility: "TEAM" },
-                  { createdByUserId: user.id },
-                ],
-              },
-              orderBy: { createdAt: "desc" },
-              select: { id: true, message: true, createdAt: true, visibility: true, createdByUserId: true },
-            },
           },
         },
         invitations: {
