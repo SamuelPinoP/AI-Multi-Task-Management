@@ -36,7 +36,7 @@ async function createTaskFromSuggestion(formData: FormData) {
     data: { title, description: description || null, priority, status: TaskStatus.TODO, recurrence: Recurrence.NONE, userId: user.id, projectId },
   });
 
-  void createActivity({ userId: user.id, action: "CREATED_TASK", message: `Created task from Smart Planner: “${task.title}”`, entityType: "TASK", entityId: task.id, projectId });
+  await createActivity({ userId: user.id, action: "CREATED_TASK", message: `Created task from Smart Planner: “${task.title}”`, entityType: "TASK", entityId: task.id, projectId });
   revalidatePath("/planner");
   revalidatePath("/tasks");
 }

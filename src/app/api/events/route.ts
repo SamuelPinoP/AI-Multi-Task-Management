@@ -65,7 +65,7 @@ export async function POST(req: Request) {
       },
       include: { project: { select: { id: true, name: true, color: true } } },
     });
-    void createActivity({
+    await createActivity({
       userId: user.id,
       action: "CREATED_EVENT",
       message: `Created event: “${event.title}”`,
