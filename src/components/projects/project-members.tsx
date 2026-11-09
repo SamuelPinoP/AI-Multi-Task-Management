@@ -103,6 +103,9 @@ export function ProjectMembers({
   const [removing, setRemoving] = useState<Row | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [added, setAdded] = useState<Set<string>>(() => new Set());
+  // Who Add people offers, fixed as it opens: someone just added stays in the
+  // results, marked Added, until it closes.
+  const [offered, setOffered] = useState<Teammate[]>([]);
   const canManage = canManageMembers(viewerRole);
 
   const rows: Row[] = [
@@ -162,7 +165,13 @@ export function ProjectMembers({
         </h2>
         <span className="text-sm text-muted">{rows.length}</span>
         {canManage ? (
-          <button type="button" onClick={() => setAddOpen(true)} className={cn(uiButtonClass, "ml-auto gap-1.5 border-accent px-3 py-1.5 text-sm font-semibold text-accent")}>
+          <button
+            type="button"
+            onClick={() => {
+              setOffered(candidates.filter((person) => !added.has(person.id)));
+              setAddOpen(true);
+            }}
+            className={cn(uiButtonClass, "ml-auto gap-1.5 border-accent px-3 py-1.5 text-sm font-semibold text-accent")}>
             <UserPlus aria-hidden="true" className="h-4 w-4" />
             Add people
           </button>
@@ -243,7 +252,7 @@ export function ProjectMembers({
           onOpenChange={setAddOpen}
           projectId={projectId}
           projectName={projectName}
-          candidates={candidates.filter((person) => !added.has(person.id))}
+          candidates={offered}
           onAdded={(member) => {
             setMembers((current) => [...current, member]);
             if (member.userId) setAdded((current) => new Set(current).add(member.userId!));
