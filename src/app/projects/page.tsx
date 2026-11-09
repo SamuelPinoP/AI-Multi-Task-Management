@@ -43,7 +43,7 @@ type Project = EditableProject & {
   createdAt: string;
   updatedAt: string;
   accessLevel: ProjectRole;
-  /** The member row's role as stored; a VIEWER row made while #385 deployed still counts as an editor. */
+  /** The member row's role as stored. */
   memberRole: string;
   openTaskCount: number;
   memberCount: number;
