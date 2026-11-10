@@ -33,6 +33,9 @@ const rounded = svg(`<rect width="48" height="48" rx="12" fill="${teal}" />${gly
 const maskable = svg(`<rect width="48" height="48" fill="${teal}" />${glyph(0.8)}`);
 // iOS rounds the corners itself and shows transparency as black.
 const square = svg(`<rect width="48" height="48" fill="${teal}" />${glyph()}`);
+// Push notifications' badge (#401). Android keeps only its alpha channel, so a tile
+// would show as a blank square: it's the white mark alone, filling the 24 dp icon.
+const badge = svg(glyph(1.2));
 
 const png = (source, size) => sharp(Buffer.from(source)).resize(size, size).png({ compressionLevel: 9 }).toBuffer();
 
@@ -64,6 +67,8 @@ const outputs = [
   ["public/icons/apple-touch-icon.png", await png(square, 180)],
   // The app logo for Google's sign-in Branding page (#358): square, 120 x 120, under 1 MB.
   ["public/icons/logo-120.png", await png(square, 120)],
+  // Status bar icons are 24 dp, and Chrome scales badges to at most 96 px (24 dp at 4x).
+  ["public/icons/badge-96.png", await png(badge, 96)],
   // Next.js links app/favicon.ico from every page. (The sign-in redirect in
   // src/proxy.ts skips /favicon.ico and /icons/, so both load when signed out.)
   ["src/app/favicon.ico", ico(await Promise.all([16, 32, 48].map(async (size) => ({ size, data: await png(rounded, size) }))))],
