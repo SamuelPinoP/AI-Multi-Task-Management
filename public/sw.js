@@ -97,7 +97,9 @@ self.addEventListener("push", (event) => {
       body: typeof data.body === "string" ? data.body : "",
       tag: typeof data.tag === "string" ? data.tag : undefined,
       icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
+      // Android draws the badge from its alpha channel alone (in the status bar, and
+      // above the title in place of Chrome's icon), so it's the white mark on transparent.
+      badge: "/icons/badge-96.png",
       data: { url: typeof data.url === "string" ? data.url : "/" },
     }),
   );

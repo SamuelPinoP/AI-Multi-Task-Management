@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+// sharp comes with Next.js, like in scripts/generate-app-icons.mjs.
+import sharp from "sharp";
 import manifest from "../app/manifest";
 import { BRAND_TEAL, LOGO_LETTERS_PATH, LOGO_SPARK_PATH } from "./brand";
 
@@ -22,6 +24,31 @@ test("every manifest icon is a PNG of the size it declares", () => {
     assert.equal(pngSize(read(path.join("public", icon.src))), icon.sizes, icon.src);
   }
   assert.ok(icons.some((icon) => icon.purpose === "maskable"), "a maskable icon for Android");
+});
+
+/** The image public/sw.js gives push notifications as their "icon" or "badge". */
+function notificationImage(option: "icon" | "badge") {
+  const src = read("public/sw.js").toString("utf8").match(new RegExp(`${option}: "(/icons/[^"]+)"`))?.[1];
+  assert.ok(src, `public/sw.js sets the notification's ${option}`);
+  return read(path.join("public", src));
+}
+
+test("push notifications show the app icon, and a white mark on transparent as their badge", async () => {
+  assert.equal(pngSize(notificationImage("icon")), "192x192");
+  // Android draws the badge from its alpha channel alone, so the colored tile showed
+  // as a plain white square (#401). Chrome scales badges to at most 96 px.
+  const badge = notificationImage("badge");
+  assert.equal(pngSize(badge), "96x96");
+  const { data } = await sharp(badge).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  let visible = 0;
+  for (let index = 0; index < data.length; index += 4) {
+    if (data[index + 3] === 0) continue;
+    visible += 1;
+    assert.equal(Math.min(data[index], data[index + 1], data[index + 2]), 255, "every visible pixel is white");
+  }
+  // The mark covers about a third of the square; a tile would cover nearly all of it.
+  const share = visible / (96 * 96);
+  assert.ok(share > 0.2 && share < 0.6, `${Math.round(share * 100)}% of the badge is visible`);
 });
 
 test("the Apple touch icon is 180 x 180", () => {

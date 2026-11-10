@@ -28,7 +28,8 @@ test("the manifest, icons and service worker load signed out", { tag: "@smoke" }
   expect(manifest.icons.map((icon) => icon.sizes)).toEqual(expect.arrayContaining(["192x192", "512x512"]));
   expect(manifest.icons.some((icon) => icon.purpose === "maskable")).toBe(true);
 
-  for (const src of [...manifest.icons.map((icon) => icon.src), "/icons/apple-touch-icon.png"]) {
+  // Also the badge push notifications show in Android's status bar (public/sw.js).
+  for (const src of [...manifest.icons.map((icon) => icon.src), "/icons/apple-touch-icon.png", "/icons/badge-96.png"]) {
     const icon = await getSignedOut(request, src);
     expect.soft(icon.headers()["content-type"], src).toBe("image/png");
   }
