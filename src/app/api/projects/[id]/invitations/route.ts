@@ -7,8 +7,10 @@ import {
   checkProjectInvitation,
   createPendingInvitation,
   OWNER_INVITATION_SELECT,
+  ownerInvitationJson,
   sendInvitationEmail,
 } from "@/lib/project-invitations";
+import { findByUsername } from "@/lib/project-people";
 import { canManageProjectMembers, getProjectAccess } from "@/lib/project-access";
 import { parseAssignableRole } from "@/lib/project-roles";
 
@@ -31,7 +33,7 @@ export async function GET(_req: Request, context: RouteContext) {
       select: OWNER_INVITATION_SELECT,
     });
 
-    return NextResponse.json(invitations);
+    return NextResponse.json(invitations.map(ownerInvitationJson));
   } catch (error) {
     console.error("GET /api/projects/[id]/invitations error:", error);
     return NextResponse.json({ error: "Failed to fetch project invitations" }, { status: 500 });
@@ -48,9 +50,10 @@ export async function POST(req: Request, context: RouteContext) {
     const { id: projectId } = await context.params;
     const body = await req.json().catch(() => ({}));
     const invitedEmail = typeof body.email === "string" ? normalizeAuthEmail(body.email) : "";
+    const username = typeof body.username === "string" ? body.username.trim() : "";
     const role = parseAssignableRole(body.role);
 
-    if (!invitedEmail) return NextResponse.json({ error: "Invitee email is required" }, { status: 400 });
+    if (!invitedEmail && !username) return NextResponse.json({ error: "Invitee email is required" }, { status: 400 });
     if (!role) return NextResponse.json({ error: "Role must be Admin or Editor." }, { status: 400 });
 
     if (!canManageProjectMembers(await getProjectAccess(projectId, user.id))) {
@@ -58,6 +61,29 @@ export async function POST(req: Request, context: RouteContext) {
     }
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+
+    // By username (#393): the invitation goes to their account and email, and the inviter never sees the address.
+    if (username) {
+      const person = await findByUsername(projectId, user.id, username);
+      if (!person) return NextResponse.json({ error: "No one outside this project has that username." }, { status: 404 });
+      const account = await prisma.user.findUniqueOrThrow({ where: { id: person.id }, select: { email: true } });
+      const email = normalizeAuthEmail(account.email);
+      const check = await checkProjectInvitation({ projectId, invitedEmail: email, inviter: user });
+      if (!check.ok) return NextResponse.json({ error: check.error }, { status: check.status });
+      const invitation = await createPendingInvitation(prisma, {
+        projectId,
+        inviterUserId: user.id,
+        invitedEmail: email,
+        invitedUserId: person.id,
+        invitedUsername: person.username,
+        role,
+      });
+      await sendInvitationEmail({ req, inviter: user, invitedEmail: email, hasAccount: true, projectName: project.name });
+      return NextResponse.json(
+        { invitation: ownerInvitationJson(invitation), message: `Invitation sent to @${person.username}.` },
+        { status: 201 },
+      );
+    }
 
     const check = await checkProjectInvitation({ projectId, invitedEmail, inviter: user });
     if (!check.ok) return NextResponse.json({ error: check.error }, { status: check.status });
@@ -78,7 +104,7 @@ export async function POST(req: Request, context: RouteContext) {
       projectName: project.name,
     });
 
-    return NextResponse.json({ invitation, email, message: email.message }, { status: 201 });
+    return NextResponse.json({ invitation: ownerInvitationJson(invitation), email, message: email.message }, { status: 201 });
   } catch (error) {
     console.error("POST /api/projects/[id]/invitations error:", error);
     return NextResponse.json({ error: "Failed to create project invitation" }, { status: 500 });

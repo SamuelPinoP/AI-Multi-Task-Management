@@ -8,10 +8,20 @@ import { sendProjectInvitationEmail } from "@/lib/email";
 export const OWNER_INVITATION_SELECT = {
   id: true,
   invitedEmail: true,
+  invitedUsername: true,
   status: true,
   createdAt: true,
   role: true,
 } as const satisfies Prisma.ProjectInvitationSelect;
+
+/**
+ * An invitation as the owner and admins see it. Someone invited by username
+ * shows as their username: whoever invited them never learns their email (#393).
+ */
+export function ownerInvitationJson(invitation: Prisma.ProjectInvitationGetPayload<{ select: typeof OWNER_INVITATION_SELECT }>) {
+  const { invitedUsername, invitedEmail, ...rest } = invitation;
+  return { ...rest, invitedEmail: invitedUsername ? null : invitedEmail, invitedUsername };
+}
 
 type InvitationCheck =
   | { ok: true; invitedUserId: string | null }
@@ -49,7 +59,7 @@ export async function checkProjectInvitation({
 
 export function createPendingInvitation(
   db: Prisma.TransactionClient,
-  data: { projectId: string; inviterUserId: string; invitedEmail: string; invitedUserId: string | null; role: ProjectMemberRole },
+  data: { projectId: string; inviterUserId: string; invitedEmail: string; invitedUserId: string | null; invitedUsername?: string; role: ProjectMemberRole },
 ) {
   return db.projectInvitation.create({ data, select: OWNER_INVITATION_SELECT });
 }

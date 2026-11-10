@@ -18,7 +18,8 @@ import {
   getProjectAccessForUser,
   projectAccessWhereForProject,
 } from "@/lib/project-access";
-import { PROJECT_ROLE_LABELS } from "@/lib/project-roles";
+import { getAddableTeammates } from "@/lib/project-people";
+import { canManageMembers, PROJECT_ROLE_LABELS } from "@/lib/project-roles";
 import { markProjectOpened } from "@/lib/recent-shortcuts";
 import { describeRepeat, firstOccurrenceEnd } from "@/lib/recurrence";
 import { projectInsights } from "@/lib/project-insights";
@@ -101,6 +102,8 @@ export default async function ProjectDetailPage({
   const role = access?.accessLevel ?? "EDITOR";
   const isOwner = role === "OWNER";
   const canEdit = canEditProjectContent(access);
+  // People the owner or an admin could add from their other projects (#393).
+  const candidates = canManageMembers(role) ? await getAddableTeammates(project.id, user.id) : [];
   const timeZone = await getUserTimeZone();
   const wall = (instant: Date) => toWallClock(timeZone, instant);
   const now = wall(new Date());
@@ -209,6 +212,7 @@ export default async function ProjectDetailPage({
             name: member.user ? displayName(member.user) : member.name,
             role: member.role,
           }))}
+          candidates={candidates}
           viewerRole={role}
           currentUserId={user.id}
         />

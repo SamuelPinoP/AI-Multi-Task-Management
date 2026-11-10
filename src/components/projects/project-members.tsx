@@ -5,21 +5,22 @@
  * everyone else, each with their role as a badge under the name (none for
  * plain members) and a Message button that opens your direct chat with them
  * (#387). The owner and admins get a menu per person with what the role rules
- * allow them (src/lib/project-roles.ts) and an Invite button whose role picker
- * says what each role does (3B). The rules show through the buttons, never as
- * text.
+ * allow them (src/lib/project-roles.ts) and an Add people button (#393, 5B)
+ * whose role picker says what each role does (3B). The rules show through the
+ * buttons, never as text.
  */
 
 import { Crown, MessageCircle, MoreHorizontal, ShieldCheck, UserPlus } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PersonAvatar } from "@/components/person-avatar";
-import { uiButtonClass, uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AddPeopleDialog } from "@/components/projects/add-people-dialog";
+import { uiButtonClass, uiCardClass } from "@/components/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
+import type { Teammate } from "@/lib/direct-chats-core";
 import {
   canChangeRole,
   canManageMembers,
@@ -47,12 +48,6 @@ type Row = {
   role: ProjectRole;
   you: boolean;
 };
-
-/** One line under each role in the role picker (3B), like Asana's and Notion's. */
-const ROLE_CHOICES: { value: AssignableRole; label: string; text: string }[] = [
-  { value: "EDITOR", label: PROJECT_ROLE_LABELS.EDITOR, text: "Works on tasks, notes, events and chat." },
-  { value: "ADMIN", label: PROJECT_ROLE_LABELS.ADMIN, text: "Also adds and removes members, and makes admins." },
-];
 
 const ROLE_ORDER: Record<ProjectRole, number> = { OWNER: 0, ADMIN: 1, EDITOR: 2 };
 
@@ -82,6 +77,7 @@ export function ProjectMembers({
   projectName,
   owner,
   initialMembers,
+  candidates,
   viewerRole,
   currentUserId,
 }: {
@@ -90,6 +86,8 @@ export function ProjectMembers({
   /** The project's creator: their user id and display name. */
   owner: { id: string; name: string };
   initialMembers: ProjectMemberRow[];
+  /** For the owner and admins: people from their other projects who could be added. */
+  candidates: Teammate[];
   viewerRole: ProjectRole;
   currentUserId: string;
 }) {
@@ -103,11 +101,11 @@ export function ProjectMembers({
   }
   const [busyId, setBusyId] = useState<string | null>(null);
   const [removing, setRemoving] = useState<Row | null>(null);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<AssignableRole>("EDITOR");
-  const [inviteError, setInviteError] = useState("");
-  const [inviting, setInviting] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [added, setAdded] = useState<Set<string>>(() => new Set());
+  // Who Add people offers, fixed as it opens: someone just added stays in the
+  // results, marked Added, until it closes.
+  const [offered, setOffered] = useState<Teammate[]>([]);
   const canManage = canManageMembers(viewerRole);
 
   const rows: Row[] = [
@@ -159,32 +157,6 @@ export function ProjectMembers({
     }
   }
 
-  async function invite(event: FormEvent) {
-    event.preventDefault();
-    setInviting(true);
-    setInviteError("");
-    try {
-      const response = await fetch(`/api/projects/${projectId}/invitations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
-      });
-      const data = (await response.json().catch(() => null)) as { message?: string; error?: string } | null;
-      if (!response.ok) {
-        setInviteError(data?.error || "Could not send the invitation. Try again.");
-        return;
-      }
-      toast.success(data?.message || `Invitation sent to ${inviteEmail.trim()}`);
-      setInviteOpen(false);
-      setInviteEmail("");
-      setInviteRole("EDITOR");
-    } catch {
-      setInviteError("Could not send the invitation. Check your connection and try again.");
-    } finally {
-      setInviting(false);
-    }
-  }
-
   return (
     <section aria-labelledby="members-heading" className={cn(uiCardClass, "mt-8 p-0")}>
       <div className="flex flex-wrap items-center gap-2 px-5 pb-2 pt-4">
@@ -193,9 +165,15 @@ export function ProjectMembers({
         </h2>
         <span className="text-sm text-muted">{rows.length}</span>
         {canManage ? (
-          <button type="button" onClick={() => setInviteOpen(true)} className={cn(uiButtonClass, "ml-auto gap-1.5 border-accent px-3 py-1.5 text-sm font-semibold text-accent")}>
+          <button
+            type="button"
+            onClick={() => {
+              setOffered(candidates.filter((person) => !added.has(person.id)));
+              setAddOpen(true);
+            }}
+            className={cn(uiButtonClass, "ml-auto gap-1.5 border-accent px-3 py-1.5 text-sm font-semibold text-accent")}>
             <UserPlus aria-hidden="true" className="h-4 w-4" />
-            Invite
+            Add people
           </button>
         ) : null}
       </div>
@@ -268,55 +246,19 @@ export function ProjectMembers({
         onCancel={() => setRemoving(null)}
       />
 
-      <Dialog open={inviteOpen} onOpenChange={(open) => !inviting && setInviteOpen(open)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Invite to {projectName}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={(event) => void invite(event)} className="mt-2 grid gap-4">
-            <label className="grid gap-1.5 text-sm font-medium">
-              Email
-              <input
-                type="email"
-                required
-                value={inviteEmail}
-                onChange={(event) => setInviteEmail(event.target.value)}
-                placeholder="teammate@example.com"
-                className="rounded-xl border border-line bg-surface px-3 py-2.5 text-base text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/25 sm:text-sm"
-              />
-            </label>
-            <fieldset className="grid gap-2">
-              <legend className="mb-2 text-sm font-medium">Role</legend>
-              {ROLE_CHOICES.map((choice) => (
-                <label
-                  key={choice.value}
-                  className={cn(
-                    "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
-                    inviteRole === choice.value ? "border-accent bg-accent-soft/40" : "border-line",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="invite-role"
-                    value={choice.value}
-                    checked={inviteRole === choice.value}
-                    onChange={() => setInviteRole(choice.value)}
-                    className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
-                  />
-                  <span className="grid gap-0.5">
-                    <span className="text-sm font-semibold">{choice.label}</span>
-                    <span className="text-xs text-muted">{choice.text}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-            {inviteError ? <p className="text-sm text-danger">{inviteError}</p> : null}
-            <button type="submit" disabled={inviting} className={cn(uiPrimaryButtonClass, "w-full py-2.5")}>
-              {inviting ? "Sending..." : "Send invite"}
-            </button>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {canManage ? (
+        <AddPeopleDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          projectId={projectId}
+          projectName={projectName}
+          candidates={offered}
+          onAdded={(member) => {
+            setMembers((current) => [...current, member]);
+            if (member.userId) setAdded((current) => new Set(current).add(member.userId!));
+          }}
+        />
+      ) : null}
     </section>
   );
 }
