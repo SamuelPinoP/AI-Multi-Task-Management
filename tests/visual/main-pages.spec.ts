@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { continueAsGuest, signUpAndLogIn } from "../e2e/helpers";
+import { continueAsGuest, openAccountMenu, signUpAndLogIn } from "../e2e/helpers";
 
 /*
  * Screenshots of the main pages, compared with reference images (TEST-05, #269).
@@ -108,7 +108,8 @@ test("Tasks with the Blue accent", async ({ page }) => {
   await page.goto("/tasks");
   await expect(page.getByRole("button", { name: "Plan the next sprint", exact: true })).toBeVisible();
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: /Settings and theme$/ }).click();
+  // On a phone the profile menu is inside the menu sheet (#404), so this opens the sheet first.
+  await openAccountMenu(page);
   await expect(page.getByRole("menuitemradio", { name: "Blue" })).toHaveAttribute("aria-checked", "true");
   await expect(page).toHaveScreenshot("tasks-blue.png", { mask: changing(page) });
 });
