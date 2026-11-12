@@ -2,18 +2,40 @@
 
 import { Check } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { ProjectPhotoField } from "@/components/projects/project-photo-field";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
 import { PRIORITY_MENU_ORDER, priorityLabels, type Priority } from "@/lib/priority";
+import { KEEP_PROJECT_PHOTO, type ProjectPhotoChange } from "@/lib/project-photo-client";
 import { describeTemplateContents, PROJECT_TEMPLATES } from "@/lib/project-templates";
 
 export type ProjectStatus = "ACTIVE" | "COMPLETED" | "ARCHIVED";
 
-/** `templateId` is "" for a blank project; only new projects use it (SMART-11). */
-export type ProjectInput = { name: string; description: string; color: string; status: ProjectStatus; priority: Priority; templateId: string };
+/**
+ * `templateId` is "" for a blank project; only new projects use it (SMART-11).
+ * `photo` is what to do with the project's photo after saving (#403).
+ */
+export type ProjectInput = {
+  name: string;
+  description: string;
+  color: string;
+  status: ProjectStatus;
+  priority: Priority;
+  templateId: string;
+  photo: ProjectPhotoChange;
+};
 
-export type EditableProject = { id: string; name: string; description: string | null; color: string | null; status: ProjectStatus; priority: Priority };
+export type EditableProject = {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  status: ProjectStatus;
+  priority: Priority;
+  /** When the photo last changed, or null without one (#403). */
+  photoUpdatedAt?: string | null;
+};
 
 export const projectStatusLabels: Record<ProjectStatus, string> = { ACTIVE: "Active", COMPLETED: "Completed", ARCHIVED: "Archived" };
 
@@ -43,7 +65,15 @@ export function ProjectSheet({
   project?: EditableProject | null;
   onSubmit: (input: ProjectInput) => Promise<string | null>;
 }) {
-  const [input, setInput] = useState<ProjectInput>({ name: "", description: "", color: "", status: "ACTIVE", priority: "NONE", templateId: "" });
+  const [input, setInput] = useState<ProjectInput>({
+    name: "",
+    description: "",
+    color: "",
+    status: "ACTIVE",
+    priority: "NONE",
+    templateId: "",
+    photo: KEEP_PROJECT_PHOTO,
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
@@ -53,8 +83,16 @@ export function ProjectSheet({
     setLoadedFor(formKey);
     setInput(
       project
-        ? { name: project.name, description: project.description ?? "", color: project.color ?? "", status: project.status, priority: project.priority, templateId: "" }
-        : { name: "", description: "", color: "", status: "ACTIVE", priority: "NONE", templateId: "" },
+        ? {
+            name: project.name,
+            description: project.description ?? "",
+            color: project.color ?? "",
+            status: project.status,
+            priority: project.priority,
+            templateId: "",
+            photo: KEEP_PROJECT_PHOTO,
+          }
+        : { name: "", description: "", color: "", status: "ACTIVE", priority: "NONE", templateId: "", photo: KEEP_PROJECT_PHOTO },
     );
     setError(null);
   }
@@ -85,6 +123,13 @@ export function ProjectSheet({
           </SheetDescription>
         </SheetHeader>
         <form className="grid gap-4" onSubmit={handleSubmit}>
+          <ProjectPhotoField
+            project={project}
+            name={input.name}
+            color={input.color}
+            value={input.photo}
+            onChange={(photo) => setInput((current) => ({ ...current, photo }))}
+          />
           <label className="grid gap-1.5 text-sm font-medium">
             Name
             <input

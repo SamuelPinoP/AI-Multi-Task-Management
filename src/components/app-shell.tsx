@@ -64,6 +64,7 @@ import {
   serializeSidebarProjects,
   type SidebarProjectsOpen,
 } from "@/lib/sidebar-state";
+import { applyProjectPhotoChange } from "@/lib/project-photo-client";
 import { useCalendarView } from "@/lib/use-calendar-view";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged, OPEN_NEW_TASK_EVENT, WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
@@ -817,8 +818,11 @@ export function AppShell({
       });
       const body = (await response.json().catch(() => null)) as { id?: string; error?: string } | null;
       if (!response.ok || !body?.id) return body?.error ?? "Could not create the project.";
+      // The project exists now, so a failed photo upload is reported without undoing it (#403).
+      const photoProblem = await applyProjectPhotoChange(body.id, input.photo);
       notifyWorkspaceChanged();
       toast.success("Project created", { description: input.name });
+      if (photoProblem) toast.error("The photo wasn't saved", { description: `${photoProblem} Add it again from Edit project.` });
       router.push(`/projects/${body.id}`);
       return null;
     } catch {

@@ -32,6 +32,7 @@ export async function getChatSummaries(user: ChatUser): Promise<ChatSummary[]> {
         id: true,
         name: true,
         color: true,
+        photo: { select: { updatedAt: true } },
         userId: true,
         members: { select: { userId: true, role: true } },
         comments: {
@@ -59,6 +60,7 @@ export async function getChatSummaries(user: ChatUser): Promise<ChatSummary[]> {
         projectId: project.id,
         name: project.name,
         color: project.color,
+        photoUpdatedAt: project.photo?.updatedAt.toISOString() ?? null,
         memberCount: peopleCount(project),
         unread: unread.get(project.id) ?? 0,
         teammates: teammateCount(project, user.id),
@@ -90,6 +92,7 @@ export async function openProjectChat(projectId: string, user: ChatUser) {
       id: true,
       name: true,
       color: true,
+      photo: { select: { updatedAt: true } },
       userId: true,
       members: { select: { userId: true, role: true } },
       comments: {
@@ -108,6 +111,9 @@ export async function openProjectChat(projectId: string, user: ChatUser) {
     id: project.id,
     name: project.name,
     color: project.color,
+    photoUpdatedAt: project.photo?.updatedAt.toISOString() ?? null,
+    /** Like the name and color, only the owner changes the photo (#403). */
+    canChangePhoto: project.userId === user.id,
     memberCount: peopleCount(project),
     attachmentsDisabledMessage:
       user.isGuest && !projectChatGuestUploadsEnabled() ? PROJECT_CHAT_GUEST_UPLOADS_MESSAGE : undefined,

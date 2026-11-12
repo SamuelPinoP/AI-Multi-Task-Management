@@ -28,6 +28,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ProjectChatWorkspace } from "@/components/project-chat-workspace";
+import { ProjectAvatar } from "@/components/projects/project-avatar";
+import { ProjectPhotoButton } from "@/components/projects/project-photo-button";
 import { uiButtonClass } from "@/components/ui";
 import { toast } from "@/components/ui/toaster";
 import {
@@ -48,7 +50,6 @@ import type { OpenedProjectChat } from "@/lib/chats-data";
 import { cn } from "@/lib/cn";
 import { sharedProjectsLine, type Teammate } from "@/lib/direct-chats-core";
 import type { OpenedDirectChat } from "@/lib/direct-chats";
-import { projectColor } from "@/lib/project-color";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 export type SelectedChat = { kind: "project"; chat: OpenedProjectChat } | { kind: "person"; chat: OpenedDirectChat };
@@ -98,23 +99,13 @@ function RowText({ name, time, preview, unread, attachment }: { name: string; ti
 }
 
 /**
- * A project's chat: a square tile tinted with the project's color, its letter in
- * the text color, so it reads in both themes whatever color the project has.
- * Its visible text is its accessible name.
+ * A project's chat: the project's photo, or a square tile tinted with its color
+ * and its letter (#403). Its visible text is its accessible name.
  */
 function ProjectChatRow({ chat, selected }: { chat: ChatSummary; selected: boolean }) {
   return (
     <Link href={`/chats?project=${chat.projectId}`} scroll={false} aria-current={selected ? "true" : undefined} className={rowClass(selected)}>
-      <span
-        aria-hidden="true"
-        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border text-base font-bold text-ink"
-        style={{
-          backgroundColor: `color-mix(in srgb, ${projectColor({ id: chat.projectId, color: chat.color })} 22%, var(--surface))`,
-          borderColor: `color-mix(in srgb, ${projectColor({ id: chat.projectId, color: chat.color })} 45%, transparent)`,
-        }}
-      >
-        {chat.name.trim().charAt(0).toUpperCase()}
-      </span>
+      <ProjectAvatar project={{ id: chat.projectId, name: chat.name, color: chat.color, photoUpdatedAt: chat.photoUpdatedAt }} />
       <RowText
         name={chat.name}
         time={chat.lastMessage?.timeLabel}
@@ -393,7 +384,13 @@ export function ChatsHub({
               <span aria-hidden="true" className="hidden h-6 w-px shrink-0 bg-line lg:block" />
               {selected.kind === "project" ? (
                 <>
-                  <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded" style={{ backgroundColor: projectColor({ id: selected.chat.id, color: selected.chat.color }) }} />
+                  {/* The project's photo, not its color (#403); the owner clicks it to change it. */}
+                  <ProjectPhotoButton
+                    key={selected.chat.id}
+                    project={{ id: selected.chat.id, name: selected.chat.name, color: selected.chat.color, photoUpdatedAt: selected.chat.photoUpdatedAt }}
+                    canChange={selected.chat.canChangePhoto}
+                    className="h-9 w-9 text-sm"
+                  />
                   <div className="min-w-0 flex-1">
                     <h2 className="truncate text-base font-bold">{selected.chat.name}</h2>
                     <p className="truncate text-xs text-muted">{plural(selected.chat.memberCount, "member")}</p>

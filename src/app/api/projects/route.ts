@@ -36,16 +36,18 @@ export async function GET(req: Request) {
       include: {
         members: { where: { userId: user.id }, select: { userId: true, role: true } },
         _count: { select: { members: true, tasks: { where: { deletedAt: null, status: { not: "DONE" } } } } },
+        photo: { select: { updatedAt: true } },
       },
       orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json(projects.map((project) => {
       const access = getProjectAccessForUser(project, user.id);
-      const { members, _count, ...projectData } = project;
+      const { members, _count, photo, ...projectData } = project;
       void members;
       return {
         ...projectData,
+        photoUpdatedAt: photo?.updatedAt.toISOString() ?? null,
         accessLevel: access?.accessLevel ?? "OWNER",
         memberRole: access?.memberRole ?? "OWNER",
         openTaskCount: _count.tasks,

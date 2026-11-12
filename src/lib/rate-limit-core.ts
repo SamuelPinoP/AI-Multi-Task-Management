@@ -31,6 +31,8 @@ export const RATE_LIMITS = {
   peopleLookupUser: { name: "people-lookup-user", limit: 60, windowMs: 10 * MINUTE },
   /** Task comments (#279) per person: plenty for a discussion, not for a script. */
   taskComments: { name: "task-comments-user", limit: 60, windowMs: 10 * MINUTE },
+  /** Project photo uploads (#403) per person: enough to try a few photos, too few to fill the database. */
+  projectPhotosUser: { name: "project-photos-user", limit: 20, windowMs: 10 * MINUTE },
 } as const satisfies Record<string, RateLimitRule>;
 
 /** Start of the fixed window that `nowMs` falls in. */
