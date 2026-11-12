@@ -2,19 +2,11 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
-import { projectEditWhere } from "@/lib/project-access";
 import { parseBulkIds } from "@/lib/task-bulk";
+import { trashWhere } from "@/lib/trash";
 
 const TRASH_TYPES = ["note", "task", "event"] as const;
 type TrashType = (typeof TRASH_TYPES)[number];
-
-/**
- * Trashed items you own, plus anything trashed in a project you can edit, so
- * a teammate who deleted your task can put it back (BUG-12).
- */
-function trashWhere(userId: string) {
-  return { deletedAt: { not: null }, OR: [{ userId }, { project: projectEditWhere(userId) }] };
-}
 
 const trashSelect = {
   id: true,

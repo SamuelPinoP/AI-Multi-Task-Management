@@ -57,7 +57,7 @@ import { getSafeRedirectPath } from "@/lib/safe-redirect";
 import { isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
 import { calendarNavItem } from "@/lib/calendar-view";
 import { formatUnreadCount } from "@/lib/chats";
-import { paletteColor, projectColor } from "@/lib/project-color";
+import { avatarColor, projectColor } from "@/lib/project-color";
 import {
   SIDEBAR_COLLAPSED_COOKIE,
   SIDEBAR_PROJECTS_COOKIE,
@@ -304,6 +304,25 @@ function SidebarProject({
   );
 }
 
+/** Trash while it holds something (#404, design 2C). The command palette reaches it either way. */
+function TrashButton({ count, active, onNavigate }: { count: number; active: boolean; onNavigate?: () => void }) {
+  return (
+    <Link
+      href="/trash"
+      onClick={onNavigate}
+      aria-label={`Trash, ${count} item${count === 1 ? "" : "s"}`}
+      aria-current={active ? "page" : undefined}
+      title="Trash"
+      className={cn(
+        "grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent",
+        active && "bg-surface text-accent shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
+      )}
+    >
+      <Trash2 aria-hidden="true" className="h-4 w-4" />
+    </Link>
+  );
+}
+
 function Sidebar({
   user,
   nav,
@@ -314,6 +333,7 @@ function Sidebar({
   onToggleProject,
   onNewTask,
   onNewProject,
+  onShowShortcuts,
   onNavigate,
 }: {
   user: NonNullable<ShellUser>;
@@ -325,6 +345,7 @@ function Sidebar({
   onToggleProject: (projectId: string, open: boolean) => void;
   onNewTask: () => void;
   onNewProject: () => void;
+  onShowShortcuts: () => void;
   onNavigate?: () => void;
 }) {
   const mainItems: NavItem[] = [
@@ -353,114 +374,137 @@ function Sidebar({
   const workspaceName = user.isGuest ? "Guest workspace" : `${firstName(user)}'s workspace`;
   const linkProps = { pathname, collapsed, onNavigate };
 
-  // relative keeps the collapsed sidebar's hidden labels inside this scroller, as on main.
   return (
-    <nav aria-label="Workspace" className="relative flex h-full flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2.5 py-3 [scrollbar-width:thin]">
-      <div className={cn("flex items-center gap-2.5 px-1.5 pb-3", collapsed && "justify-center px-0")}>
-        <LogoMark className="h-8 w-8 shrink-0" />
-        {collapsed ? (
-          <span className="sr-only">AI Multi</span>
-        ) : (
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">AI Multi</p>
-            <p className="truncate text-xs text-muted">{workspaceName}</p>
-          </div>
-        )}
-      </div>
+    <div className="flex h-full flex-col">
+      {/* relative keeps the collapsed sidebar's hidden labels inside this scroller, as on main. */}
+      <nav aria-label="Workspace" className="relative flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2.5 py-3 [scrollbar-width:thin]">
+        <div className={cn("flex items-center gap-2.5 px-1.5 pb-3", collapsed && "flex-col gap-2 px-0")}>
+          <LogoMark className="h-8 w-8 shrink-0" />
+          {collapsed ? (
+            <span className="sr-only">AI Multi</span>
+          ) : (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">AI Multi</p>
+              <p className="truncate text-xs text-muted">{workspaceName}</p>
+            </div>
+          )}
+          {/* Collapse sits by the logo; the bottom bar belongs to the account (#404, design 1B). */}
+          {onToggleCollapsed ? (
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink"
+            >
+              {collapsed ? <PanelLeftOpen aria-hidden="true" className="h-4 w-4" /> : <PanelLeftClose aria-hidden="true" className="h-4 w-4" />}
+            </button>
+          ) : null}
+        </div>
 
-      <button
-        type="button"
-        onClick={onNewTask}
-        title={collapsed ? "New task" : undefined}
+        <button
+          type="button"
+          onClick={onNewTask}
+          title={collapsed ? "New task" : undefined}
+          className={cn(
+            "mb-2 flex items-center gap-2 rounded-lg bg-accent px-2.5 py-2 text-sm font-semibold text-accent-ink transition-colors hover:bg-accent-hover",
+            collapsed && "justify-center px-0",
+          )}
+        >
+          <Plus aria-hidden="true" className="h-4 w-4" />
+          {collapsed ? (
+            <span className="sr-only">New task</span>
+          ) : (
+            <>
+              New task
+              <kbd aria-hidden="true" className="ml-auto rounded border border-current px-1 font-mono text-2xs opacity-75">N</kbd>
+            </>
+          )}
+        </button>
+
+        {mainItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
+
+        <GroupLabel collapsed={collapsed}>Work</GroupLabel>
+        {workItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
+
+        <GroupLabel collapsed={collapsed}>
+          <Link href="/projects" onClick={onNavigate} className="hover:text-ink">Projects</Link>
+          <button type="button" onClick={onNewProject} className="rounded p-0.5 hover:bg-surface-hover hover:text-ink" title="Create a project">
+            <Plus aria-hidden="true" className="h-3.5 w-3.5" />
+            <span className="sr-only">Create a project</span>
+          </button>
+        </GroupLabel>
+        {collapsed ? (
+          <SidebarLink item={{ href: "/projects", label: "Projects", icon: FolderKanban }} {...linkProps} />
+        ) : nav.projects.length ? (
+          <>
+            {nav.projects.map((project) => {
+              const href = `/projects/${project.id}`;
+              const active = pathname === href || pathname.startsWith(`${href}/`);
+              // Until the user opens or closes it, a project is open while one of its pages is showing.
+              const open = projectsOpen[project.id] ?? active;
+              return (
+                <SidebarProject
+                  key={project.id}
+                  project={project}
+                  pathname={pathname}
+                  open={open}
+                  chatUnread={project.unreadChat}
+                  onToggle={() => onToggleProject(project.id, !open)}
+                  onNavigate={onNavigate}
+                />
+              );
+            })}
+            {nav.activeProjectCount > nav.projects.length ? (
+              <Link href="/projects" onClick={onNavigate} className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted hover:bg-surface-hover hover:text-ink">
+                All {nav.activeProjectCount} projects
+              </Link>
+            ) : null}
+          </>
+        ) : (
+          <button type="button" onClick={onNewProject} className="rounded-lg px-2.5 py-1.5 text-left text-xs text-muted hover:bg-surface-hover hover:text-ink">
+            No projects yet. Create one
+          </button>
+        )}
+
+        <GroupLabel collapsed={collapsed}>Tools</GroupLabel>
+        {toolItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
+      </nav>
+
+      {/* The account bar (#404, design 1B): the profile menu, the bell, then Trash while it holds
+          something (2C). It sits below the scroller, so it never scrolls away; collapsed, the three stack. */}
+      <div
         className={cn(
-          "mb-2 flex items-center gap-2 rounded-lg bg-accent px-2.5 py-2 text-sm font-semibold text-accent-ink transition-colors hover:bg-accent-hover",
-          collapsed && "justify-center px-0",
+          // relative: the collapsed profile button's hidden words stay positioned inside the bar.
+          "relative flex shrink-0 border-t border-line px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2",
+          // No gap in a row, so "Settings and theme" fits beside the bell and Trash in the 240 px sidebar.
+          collapsed ? "flex-col items-center gap-0.5" : "items-center",
         )}
       >
-        <Plus aria-hidden="true" className="h-4 w-4" />
-        {collapsed ? (
-          <span className="sr-only">New task</span>
-        ) : (
-          <>
-            New task
-            <kbd aria-hidden="true" className="ml-auto rounded border border-current px-1 font-mono text-2xs opacity-75">N</kbd>
-          </>
-        )}
-      </button>
-
-      {mainItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
-
-      <GroupLabel collapsed={collapsed}>Work</GroupLabel>
-      {workItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
-
-      <GroupLabel collapsed={collapsed}>
-        <Link href="/projects" onClick={onNavigate} className="hover:text-ink">Projects</Link>
-        <button type="button" onClick={onNewProject} className="rounded p-0.5 hover:bg-surface-hover hover:text-ink" title="Create a project">
-          <Plus aria-hidden="true" className="h-3.5 w-3.5" />
-          <span className="sr-only">Create a project</span>
-        </button>
-      </GroupLabel>
-      {collapsed ? (
-        <SidebarLink item={{ href: "/projects", label: "Projects", icon: FolderKanban }} {...linkProps} />
-      ) : nav.projects.length ? (
-        <>
-          {nav.projects.map((project) => {
-            const href = `/projects/${project.id}`;
-            const active = pathname === href || pathname.startsWith(`${href}/`);
-            // Until the user opens or closes it, a project is open while one of its pages is showing.
-            const open = projectsOpen[project.id] ?? active;
-            return (
-              <SidebarProject
-                key={project.id}
-                project={project}
-                pathname={pathname}
-                open={open}
-                chatUnread={project.unreadChat}
-                onToggle={() => onToggleProject(project.id, !open)}
-                onNavigate={onNavigate}
-              />
-            );
-          })}
-          {nav.activeProjectCount > nav.projects.length ? (
-            <Link href="/projects" onClick={onNavigate} className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted hover:bg-surface-hover hover:text-ink">
-              All {nav.activeProjectCount} projects
-            </Link>
-          ) : null}
-        </>
-      ) : (
-        <button type="button" onClick={onNewProject} className="rounded-lg px-2.5 py-1.5 text-left text-xs text-muted hover:bg-surface-hover hover:text-ink">
-          No projects yet. Create one
-        </button>
-      )}
-
-      <GroupLabel collapsed={collapsed}>Tools</GroupLabel>
-      {toolItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
-
-      {/* Trash is rarely needed, so it waits at the bottom next to Collapse (DES-13); collapsed, it stacks above it. */}
-      <div className={cn("mt-auto flex gap-0.5 pt-3", collapsed ? "flex-col" : "items-center")}>
-        <div className={cn("min-w-0", !collapsed && "flex-1")}>
-          <SidebarLink item={{ href: "/trash", label: "Trash", icon: Trash2 }} {...linkProps} />
-        </div>
-        {onToggleCollapsed ? (
-          <button
-            type="button"
-            onClick={onToggleCollapsed}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className={cn(
-              "grid shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink",
-              collapsed ? "py-2" : "h-8 w-8",
-            )}
-          >
-            {collapsed ? <PanelLeftOpen aria-hidden="true" className="h-4 w-4" /> : <PanelLeftClose aria-hidden="true" className="h-4 w-4" />}
-          </button>
-        ) : null}
+        <AccountMenu user={user} collapsed={collapsed} onShowShortcuts={onShowShortcuts} onNavigate={onNavigate} />
+        <NotificationsMenu pendingInvitations={nav.pendingInvitations} unreadNotifications={nav.unreadNotifications} onNavigate={onNavigate} />
+        {nav.trashItems ? <TrashButton count={nav.trashItems} active={pathname === "/trash"} onNavigate={onNavigate} /> : null}
       </div>
-    </nav>
+    </div>
   );
 }
 
-function UserMenu({ user, onShowShortcuts }: { user: NonNullable<ShellUser>; onShowShortcuts: () => void }) {
+/**
+ * The profile menu, opened from the sidebar's bottom bar (#404): account
+ * settings, theme, accent color, text size, shortcuts and log out, as before.
+ * The visible words are the button's name; collapsed, they stay for screen readers.
+ */
+function AccountMenu({
+  user,
+  collapsed,
+  onShowShortcuts,
+  onNavigate,
+}: {
+  user: NonNullable<ShellUser>;
+  collapsed: boolean;
+  onShowShortcuts: () => void;
+  onNavigate?: () => void;
+}) {
   const { theme, setTheme } = useTheme();
   const logoutForm = useRef<HTMLFormElement>(null);
   const installPrompt = useInstallPrompt();
@@ -470,13 +514,26 @@ function UserMenu({ user, onShowShortcuts }: { user: NonNullable<ShellUser>; onS
       <form ref={logoutForm} action="/api/auth/logout" method="post" className="hidden" />
       <DropdownMenu>
         <DropdownMenuTrigger
-          aria-label="Account menu"
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white outline-none ring-offset-2 ring-offset-surface focus-visible:ring-2 focus-visible:ring-accent"
-          style={{ backgroundColor: paletteColor(user.id) }}
+          title={collapsed ? "Settings and theme" : undefined}
+          className={cn(
+            "flex min-w-0 items-center gap-2 rounded-lg text-left outline-none transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover",
+            collapsed ? "p-1" : "flex-1 p-1",
+          )}
         >
-          {initial(user)}
+          {/* The same color as the person's avatar in Chats and members lists, dark enough for white text. */}
+          <span
+            aria-hidden="true"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
+            style={{ backgroundColor: avatarColor(user.id) }}
+          >
+            {initial(user)}
+          </span>
+          <span className={collapsed ? "sr-only" : "grid min-w-0"}>
+            <span className="truncate text-sm font-semibold text-ink">{user.isGuest ? "Guest" : user.name || user.email}</span>{" "}
+            <span className="truncate text-2xs text-muted">Settings and theme</span>
+          </span>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuContent side="top" align="start" className="w-64">
           <DropdownMenuLabel className="text-ink">
             <span className="flex items-center gap-2">
               <span className="truncate text-sm font-semibold">{user.isGuest ? "Guest workspace" : user.name || user.email}</span>
@@ -490,7 +547,7 @@ function UserMenu({ user, onShowShortcuts }: { user: NonNullable<ShellUser>; onS
           </DropdownMenuLabel>
           {user.isGuest ? null : (
             <DropdownMenuItem asChild>
-              <Link href="/account">
+              <Link href="/account" onClick={onNavigate}>
                 <CircleUserRound />
                 Account settings
               </Link>
@@ -539,31 +596,30 @@ function UserMenu({ user, onShowShortcuts }: { user: NonNullable<ShellUser>; onS
 }
 
 function TopBar({
-  user,
   nav,
   pathname,
   onOpenMenu,
   onOpenSearch,
-  onShowShortcuts,
 }: {
-  user: NonNullable<ShellUser>;
   nav: WorkspaceNav;
   pathname: string;
   onOpenMenu: () => void;
   onOpenSearch: () => void;
-  onShowShortcuts: () => void;
 }) {
   const { parent, title } = pageTitleFor(pathname, nav.projects);
+  // On phones the bell is inside the menu (#404), so the menu button shows its dot.
+  const news = nav.pendingInvitations + nav.unreadNotifications;
 
   return (
     <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface/95 px-3 backdrop-blur sm:gap-3 sm:px-5">
       <button
         type="button"
         onClick={onOpenMenu}
-        aria-label="Open navigation"
-        className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink lg:hidden"
+        aria-label={news ? `Open navigation, ${news} new notification${news === 1 ? "" : "s"}` : "Open navigation"}
+        className="relative grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink lg:hidden"
       >
         <Menu aria-hidden="true" className="h-5 w-5" />
+        {news ? <span aria-hidden="true" className="absolute right-1 top-1 h-2 w-2 rounded-full border-2 border-surface bg-project-3" /> : null}
       </button>
       <div className="flex min-w-0 items-center gap-1.5 text-sm">
         {parent ? (
@@ -592,8 +648,6 @@ function TopBar({
       >
         <Search aria-hidden="true" className="h-4 w-4" />
       </button>
-      <NotificationsMenu pendingInvitations={nav.pendingInvitations} unreadNotifications={nav.unreadNotifications} />
-      <UserMenu user={user} onShowShortcuts={onShowShortcuts} />
     </header>
   );
 }
@@ -855,6 +909,7 @@ export function AppShell({
           onToggleProject={toggleProject}
           onNewTask={openNewTask}
           onNewProject={openNewProject}
+          onShowShortcuts={() => setShortcutsOpen(true)}
         />
       </aside>
 
@@ -871,20 +926,17 @@ export function AppShell({
             onToggleProject={toggleProject}
             onNewTask={openNewTask}
             onNewProject={openNewProject}
+            onShowShortcuts={() => {
+              setMenuOpen(false);
+              setShortcutsOpen(true);
+            }}
             onNavigate={() => setMenuOpen(false)}
           />
         </SheetContent>
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar
-          user={currentUser}
-          nav={nav}
-          pathname={pathname}
-          onOpenMenu={() => setMenuOpen(true)}
-          onOpenSearch={() => setSearchOpen(true)}
-          onShowShortcuts={() => setShortcutsOpen(true)}
-        />
+        <TopBar nav={nav} pathname={pathname} onOpenMenu={() => setMenuOpen(true)} onOpenSearch={() => setSearchOpen(true)} />
         <OfflineBanner />
         {/* relative: hidden (sr-only) text is absolutely positioned, and it scrolls only inside a positioned
             scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar. */}

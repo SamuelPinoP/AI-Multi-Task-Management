@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
 import { ACCENTS } from "../../src/lib/accent";
-import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
+import { continueAsGuest, openAccountMenu, signUpAndLogIn, uniqueName } from "./helpers";
 
 // TEST-04 (#140) and DES-06 (#134): every page passes axe's WCAG 2.1 A and AA rules.
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
@@ -166,7 +166,7 @@ test("every accent palette has no WCAG A/AA violations", async ({ page, isMobile
 
       // Only the menu: while it's open, Radix hides the page behind it with aria-hidden
       // and keeps focus in the menu, which axe's aria-hidden-focus rule accepts only for dialogs.
-      await page.getByRole("button", { name: "Account menu" }).click();
+      await openAccountMenu(page);
       await expect(page.getByRole("menuitemradio", { name: "Teal" })).toBeVisible();
       found.push(...(await violations(page, `account menu (${id}, ${theme})`, '[role="menu"]')));
       await page.keyboard.press("Escape");

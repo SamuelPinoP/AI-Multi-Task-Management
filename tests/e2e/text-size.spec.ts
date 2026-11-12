@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { continueAsGuest } from "./helpers";
+import { continueAsGuest, openAccountMenu } from "./helpers";
 
 /*
  * Text size (DES-19, #338): the account menu's four sizes set the root font
@@ -30,12 +30,12 @@ test("the account menu changes the text size of the whole app, and a reload keep
   const html = page.locator("html");
   await expect(html).toHaveAttribute("data-text-size", "default");
   expect(await rootFontSize(page)).toBe(16);
-  // includeHidden: the open menu hides the rest of the page, avatar included, from role queries.
-  const topBar = page.locator("header").filter({ has: page.getByRole("button", { name: "Account menu", includeHidden: true }) });
+  // The top bar, found by its search button. includeHidden: the open menu hides the rest of the page from role queries.
+  const topBar = page.locator("header").filter({ has: page.getByRole("button", { name: /^Search/, includeHidden: true }) });
   const barHeight = () => topBar.evaluate((header) => header.getBoundingClientRect().height);
   expect(await barHeight()).toBe(56);
 
-  await page.getByRole("button", { name: "Account menu" }).click();
+  await openAccountMenu(page);
   const defaultSize = page.getByRole("menuitemradio", { name: "Default", exact: true });
   const large = page.getByRole("menuitemradio", { name: "Large", exact: true });
   await expect(defaultSize).toHaveAttribute("aria-checked", "true");
@@ -76,7 +76,7 @@ test("a saved text size applies before the app's JavaScript runs, and an unknown
 
 test("Small shrinks the text but keeps the smallest text at 11px, and phone fields at 16px", async ({ page, isMobile }) => {
   await continueAsGuest(page);
-  await page.getByRole("button", { name: "Account menu" }).click();
+  await openAccountMenu(page);
   await page.getByRole("menuitemradio", { name: "Small", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-text-size", "small");
 

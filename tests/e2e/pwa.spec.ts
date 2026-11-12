@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { expectHome, openSection, signUpAndLogIn, uniqueName } from "./helpers";
+import { expectHome, openAccountMenu, openSection, signUpAndLogIn, uniqueName } from "./helpers";
 
 // SMART-10: the installable app and offline reading.
 
@@ -114,7 +114,7 @@ test.describe("offline reading", () => {
     await expect(page.getByText(title)).toBeVisible();
     expect(await savedEntries(page)).toBeGreaterThan(0);
 
-    await page.getByRole("button", { name: "Account menu" }).click();
+    await openAccountMenu(page);
     await page.getByRole("menuitem", { name: "Log out" }).click();
     await expect(page).toHaveURL(/\/login/);
     await expect.poll(() => savedEntries(page)).toBe(0);
