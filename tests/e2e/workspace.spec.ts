@@ -106,7 +106,8 @@ test("member can create a project and upload a local video attachment", async ({
   await page.locator("#main-content").getByRole("link", { name: /^Chat$/ }).click();
   await expect(page.getByRole("heading", { name: projectName })).toBeVisible();
 
-  await page.locator('input[type="file"]').setInputFiles(videoFixturePath);
+  // The chat's attachments input; the owner's project photo picker (#403) is another file input.
+  await page.locator('input[type="file"][multiple]').setInputFiles(videoFixturePath);
   await expect(page.getByText("tiny-video.mp4")).toBeVisible();
   await page.getByPlaceholder(/share an update/i).fill(chatMessage);
 
@@ -153,7 +154,7 @@ test("chat shows several attachments and opens them in the viewer", async ({
   await page.waitForLoadState("networkidle");
 
   await page
-    .locator('input[type="file"]')
+    .locator('input[type="file"][multiple]')
     .setInputFiles([
       fixture("sample-photo.png"),
       fixture("sample-clip.webm"),

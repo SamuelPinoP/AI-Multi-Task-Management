@@ -253,8 +253,9 @@ for (const theme of ["light", "dark"] as const) {
     const found: string[] = [];
     await page.goto(`/projects/${project.id}/chat`);
     await page.waitForLoadState("networkidle");
+    // The chat's attachments input; the owner's project photo picker (#403) is another file input.
     await page
-      .locator('input[type="file"]')
+      .locator('input[type="file"][multiple]')
       .setInputFiles(["sample-photo.png", "sample-clip.webm", "sample-brief.pdf", "sample-notes.docx", "sample-tasks.csv"].map(fixture));
     await expect(page.getByRole("list", { name: "Files to send" }).getByRole("listitem")).toHaveCount(5);
     found.push(...(await violations(page, "chat composer with files")));
