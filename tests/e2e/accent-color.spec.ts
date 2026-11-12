@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { continueAsGuest } from "./helpers";
+import { continueAsGuest, openAccountMenu } from "./helpers";
 
 /*
  * Accent colors (DES-15, #321): the account menu's swatches and the command
@@ -20,7 +20,7 @@ test("the account menu switches the accent color, and a reload keeps it", async 
   const teal = await token(page, "--accent");
   const success = await token(page, "--success");
 
-  await page.getByRole("button", { name: "Account menu" }).click();
+  await openAccountMenu(page);
   const tealSwatch = page.getByRole("menuitemradio", { name: "Teal" });
   const blueSwatch = page.getByRole("menuitemradio", { name: "Blue" });
   await expect(tealSwatch).toHaveAttribute("aria-checked", "true");

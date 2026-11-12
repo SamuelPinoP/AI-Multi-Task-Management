@@ -26,9 +26,25 @@ export async function continueAsGuest(page: Page) {
 export async function openSection(page: Page, name: string) {
   const link = page.getByRole("link", { name, exact: true });
   if (!(await link.first().isVisible())) {
-    await page.getByRole("button", { name: "Open navigation" }).click();
+    // Named "Open navigation, 2 new notifications" while the bell has something (#404).
+    await page.getByRole("button", { name: /^Open navigation/ }).click();
   }
   await link.first().click();
+}
+
+/**
+ * The profile menu's button in the sidebar's bottom bar (#404). Its name is
+ * the person's name followed by "Settings and theme", the words it shows.
+ */
+export function accountMenuButton(page: Page, options: { includeHidden?: boolean } = {}) {
+  return page.getByRole("button", { name: /Settings and theme$/, ...options });
+}
+
+/** Opens the profile menu: from the sidebar on wide screens, or from inside the menu sheet on a phone. */
+export async function openAccountMenu(page: Page) {
+  const button = accountMenuButton(page);
+  if (!(await button.isVisible())) await page.getByRole("button", { name: /^Open navigation/ }).click();
+  await button.click();
 }
 
 /** Runs one query against the test database (the server's DATABASE_URL). */

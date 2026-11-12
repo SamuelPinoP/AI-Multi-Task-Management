@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { continueAsGuest, expectHome, openSection, uniqueName } from "./helpers";
+import { accountMenuButton, continueAsGuest, expectHome, openAccountMenu, openSection, queryDatabase, signUpAndLogIn, uniqueName } from "./helpers";
 
 function dateInputValue(daysFromToday: number) {
   const date = new Date();
@@ -38,11 +38,11 @@ test("New task adds a task, updates the sidebar and is found by search", async (
 test("Account menu switches the theme and logs out", async ({ page }) => {
   await continueAsGuest(page);
 
-  await page.getByRole("button", { name: "Account menu" }).click();
+  await openAccountMenu(page);
   await page.getByRole("menuitemradio", { name: /Dark/ }).click();
   await expect(page.locator("html")).toHaveClass(/dark/);
 
-  await page.getByRole("button", { name: "Account menu" }).click();
+  await openAccountMenu(page);
   await page.getByRole("menuitem", { name: "Log out" }).click();
   await expect(page).toHaveURL(/\/login/);
 });
@@ -239,8 +239,11 @@ test("Phone tabs and the menu reach every section", async ({ page, isMobile }) =
   await expect(page).toHaveURL(/\/board$/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
-  // Trash waits at the bottom of the menu.
-  await openSection(page, "Trash");
+  // Trash waits in the menu's bottom bar once it holds something (#404, design 2C).
+  const note = (await (await page.request.post("/api/notes", { data: { title: uniqueName("Phone trash"), content: "" } })).json()) as { id: string };
+  expect((await page.request.delete(`/api/notes/${note.id}`)).ok()).toBe(true);
+  await page.reload();
+  await openSection(page, "Trash, 1 item");
   await expect(page).toHaveURL(/\/trash$/);
 });
 
@@ -301,40 +304,89 @@ test("One Calendar item opens the Agenda and Month tabs and remembers the last o
   await expect(calendar).toHaveAttribute("href", "/events/calendar");
 });
 
-test("Trash sits in the sidebar footer next to Collapse, an icon with its name when collapsed", async ({ page, isMobile }) => {
+test("The sidebar's bottom bar holds the profile, the bell and Trash, which shows only while it has something", async ({ page, isMobile }) => {
   test.skip(isMobile, "The sidebar is a menu sheet on phones.");
   await continueAsGuest(page);
 
   const sidebar = page.getByRole("navigation", { name: "Workspace" });
-  const trash = sidebar.getByRole("link", { name: "Trash" });
-  const collapse = sidebar.getByRole("button", { name: "Collapse sidebar" });
+  const profile = accountMenuButton(page);
+  const bell = page.getByRole("button", { name: "Notifications", exact: true });
+  const trash = page.getByRole("link", { name: /^Trash, \d+ items?$/ });
+  const collapse = page.getByRole("button", { name: "Collapse sidebar" });
 
-  // Below the Tools group, on one line with Collapse.
-  const roadmapBox = (await sidebar.getByRole("link", { name: "Roadmap" }).boundingBox())!;
-  const trashBox = (await trash.boundingBox())!;
-  const collapseBox = (await collapse.boundingBox())!;
-  expect(trashBox.y).toBeGreaterThan(roadmapBox.y + roadmapBox.height);
-  expect(Math.abs(trashBox.y + trashBox.height / 2 - (collapseBox.y + collapseBox.height / 2))).toBeLessThan(2);
-  expect(trashBox.x + trashBox.width).toBeLessThanOrEqual(collapseBox.x);
+  // The top bar keeps only search; the profile and the bell are in the sidebar (#404).
+  const topBar = page.locator("header").filter({ has: page.getByRole("button", { name: /^Search/ }) });
+  await expect(topBar.getByRole("button", { name: /Notifications|Settings and theme/ })).toHaveCount(0);
+  await expect(profile).toHaveAccessibleName("Guest Settings and theme");
+  await expect(bell).toBeVisible();
+  // Collapse sits by the logo now, above the links.
+  expect((await collapse.boundingBox())!.y).toBeLessThan((await sidebar.getByRole("link", { name: "Home", exact: true }).boundingBox())!.y);
 
-  // It stays in the command palette.
+  // An empty Trash has no button (design 2C), but the command palette still opens it.
+  await expect(trash).toHaveCount(0);
   await page.keyboard.press("Control+K");
   await page.getByPlaceholder("Search or run a command...").fill("trash");
   await page.getByRole("option", { name: "Trash", exact: true }).click();
   await expect(page).toHaveURL(/\/trash$/);
-  await expect(trash).toHaveAttribute("aria-current", "page");
 
-  // Collapsed, only its icon shows; its name is the tooltip and the link's name.
-  await collapse.click();
-  const expand = sidebar.getByRole("button", { name: "Expand sidebar" });
-  await expect(expand).toBeVisible();
-  await expect(trash).toHaveAttribute("title", "Trash");
-  await expect(trash.getByText("Trash", { exact: true })).toHaveClass(/sr-only/);
-  const collapsedTrash = (await trash.boundingBox())!;
-  const expandBox = (await expand.boundingBox())!;
-  expect(collapsedTrash.y + collapsedTrash.height).toBeLessThanOrEqual(expandBox.y);
+  // A deleted note puts Trash on the bar: one row under the whole sidebar, profile, bell, then Trash.
+  const note = (await (await page.request.post("/api/notes", { data: { title: uniqueName("Trashed note"), content: "" } })).json()) as { id: string };
+  expect((await page.request.delete(`/api/notes/${note.id}`)).ok()).toBe(true);
   await sidebar.getByRole("link", { name: "Home", exact: true }).click();
   await expectHome(page);
+  await expect(trash).toHaveAccessibleName("Trash, 1 item");
+  const roadmapBox = (await sidebar.getByRole("link", { name: "Roadmap" }).boundingBox())!;
+  const [profileBox, bellBox, trashBox] = await Promise.all([profile, bell, trash].map(async (item) => (await item.boundingBox())!));
+  for (const box of [profileBox, bellBox, trashBox]) expect(box.y).toBeGreaterThan(roadmapBox.y + roadmapBox.height);
+  expect(Math.abs(bellBox.y + bellBox.height / 2 - (trashBox.y + trashBox.height / 2))).toBeLessThan(2);
+  expect(profileBox.x + profileBox.width).toBeLessThanOrEqual(bellBox.x);
+  expect(bellBox.x + bellBox.width).toBeLessThanOrEqual(trashBox.x);
+
   await trash.click();
   await expect(page).toHaveURL(/\/trash$/);
+  await expect(trash).toHaveAttribute("aria-current", "page");
+
+  // Collapsed, the three stack in the same order and keep their names.
+  await collapse.click();
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+  await expect(profile).toHaveAccessibleName("Guest Settings and theme");
+  const stacked = await Promise.all([profile, bell, trash].map(async (item) => (await item.boundingBox())!));
+  expect(stacked[0].y + stacked[0].height).toBeLessThanOrEqual(stacked[1].y);
+  expect(stacked[1].y + stacked[1].height).toBeLessThanOrEqual(stacked[2].y);
+  await page.getByRole("button", { name: "Expand sidebar" }).click();
+
+  // Emptying Trash takes its button away at once.
+  await page.getByRole("button", { name: "Empty Trash" }).click();
+  await page.getByRole("dialog", { name: "Empty trash?" }).getByRole("button", { name: "Empty Trash" }).click();
+  await expect(page.getByText("Trash emptied successfully.")).toBeVisible();
+  await expect(trash).toHaveCount(0);
+});
+
+test("On a phone the bar is at the bottom of the menu, and the menu button shows new notifications", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "Phones only: on wide screens the sidebar is always there.");
+  const { email } = await signUpAndLogIn(page, "E2E phone bar");
+  await queryDatabase(
+    `INSERT INTO "Notification" (id, "userId", type, title, "createdAt")
+     SELECT 'e2e_' || md5(random()::text), id, 'MENTION', 'Ana mentioned you in Launch', now() AT TIME ZONE 'utc' FROM "User" WHERE email = $1`,
+    [email],
+  );
+  await page.goto("/");
+  await expectHome(page);
+
+  const menuButton = page.getByRole("button", { name: "Open navigation, 1 new notification" });
+  await menuButton.click();
+  const sheet = page.getByRole("dialog", { name: "Navigation" });
+  const bell = sheet.getByRole("button", { name: "Notifications, 1 new" });
+  await expect(bell).toBeVisible();
+  await expect(accountMenuButton(page)).toBeVisible();
+  // The bar is the sheet's last row.
+  const sheetBox = (await sheet.boundingBox())!;
+  const bellBox = (await bell.boundingBox())!;
+  expect(sheetBox.y + sheetBox.height - (bellBox.y + bellBox.height)).toBeLessThan(60);
+
+  // Following a notification closes the menu and clears the dot.
+  await bell.click();
+  await page.getByRole("menuitem", { name: /Ana mentioned you in Launch/ }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByRole("button", { name: "Open navigation", exact: true })).toBeVisible();
 });

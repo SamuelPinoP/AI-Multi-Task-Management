@@ -59,8 +59,9 @@ async function addTeammate(page: Page, browser: Browser, baseURL: string | undef
 function changing(page: Page) {
   return [
     page.locator("time"),
-    // includeHidden: an open menu hides the rest of the page, avatar included, from role queries.
-    page.getByRole("button", { name: "Account menu", includeHidden: true }),
+    // The profile button's avatar and name differ per account (#404). includeHidden: an open menu
+    // hides the rest of the page, the button included, from role queries.
+    page.getByRole("button", { name: /Settings and theme$/, includeHidden: true }),
     page.locator("#main-content .rounded-full[style*='background-color']"),
   ];
 }
@@ -107,7 +108,7 @@ test("Tasks with the Blue accent", async ({ page }) => {
   await page.goto("/tasks");
   await expect(page.getByRole("button", { name: "Plan the next sprint", exact: true })).toBeVisible();
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: "Account menu" }).click();
+  await page.getByRole("button", { name: /Settings and theme$/ }).click();
   await expect(page.getByRole("menuitemradio", { name: "Blue" })).toHaveAttribute("aria-checked", "true");
   await expect(page).toHaveScreenshot("tasks-blue.png", { mask: changing(page) });
 });

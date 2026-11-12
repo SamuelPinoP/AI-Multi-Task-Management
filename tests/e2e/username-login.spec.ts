@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { continueAsGuest, expectHome, queryDatabase, signUpAndLogIn } from "./helpers";
+import { continueAsGuest, expectHome, openAccountMenu, queryDatabase, signUpAndLogIn } from "./helpers";
 
 // #351: log in with a username or an email, with forms that browsers' password
 // managers know how to save and fill in.
@@ -111,7 +111,7 @@ test("an account without a username adds one on the Account page, then logs in w
   const someoneElse = await signUpAndLogIn(await other.newPage(), "E2E someone else");
   await other.close();
 
-  await page.getByRole("button", { name: "Account menu" }).click();
+  await openAccountMenu(page);
   await page.getByRole("menuitem", { name: "Account settings" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Account" })).toBeVisible();
   await expect(page.getByText(email, { exact: true })).toBeVisible();
@@ -137,7 +137,7 @@ test("an account without a username adds one on the Account page, then logs in w
 
 test("guest workspaces have no username", async ({ page }) => {
   await continueAsGuest(page);
-  await page.getByRole("button", { name: "Account menu" }).click();
+  await openAccountMenu(page);
   await expect(page.getByRole("menuitem", { name: "Log out" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Account settings" })).toHaveCount(0);
   await page.keyboard.press("Escape");

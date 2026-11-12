@@ -42,11 +42,20 @@ function timeAgo(iso: string) {
 }
 
 /**
- * The bell in the top bar (SMART-08): project invitations, the inbox of
- * assignments, mentions and due-soon reminders, and the switch for browser
- * notifications on this device.
+ * The bell (SMART-08), in the sidebar's bottom bar since #404: project
+ * invitations, the inbox of assignments, mentions and due-soon reminders, and
+ * the switch for browser notifications on this device. It opens upward.
+ * `onNavigate` closes the phone menu when a link inside is followed.
  */
-export function NotificationsMenu({ pendingInvitations, unreadNotifications }: { pendingInvitations: number; unreadNotifications: number }) {
+export function NotificationsMenu({
+  pendingInvitations,
+  unreadNotifications,
+  onNavigate,
+}: {
+  pendingInvitations: number;
+  unreadNotifications: number;
+  onNavigate?: () => void;
+}) {
   const [items, setItems] = useState<InboxItem[] | null>(null);
   const [unread, setUnread] = useState(unreadNotifications);
   // null: push isn't available here (not set up on the server, or this browser can't).
@@ -116,14 +125,15 @@ export function NotificationsMenu({ pendingInvitations, unreadNotifications }: {
     >
       <DropdownMenuTrigger
         aria-label={total ? `Notifications, ${total} new` : "Notifications"}
-        className="relative grid h-8 w-8 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+        title="Notifications"
+        className="relative grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover"
       >
         <Bell aria-hidden="true" className="h-4 w-4" />
         {total ? (
-          <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border-2 border-surface bg-project-3" />
+          <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border-2 border-sunken bg-project-3" />
         ) : null}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-1rem)]">
+      <DropdownMenuContent side="top" align="start" className="w-80 max-w-[calc(100vw-1rem)]">
         <div className="flex items-center justify-between gap-2">
           <DropdownMenuLabel>Notifications</DropdownMenuLabel>
           {unread ? (
@@ -140,7 +150,7 @@ export function NotificationsMenu({ pendingInvitations, unreadNotifications }: {
         </div>
         {pendingInvitations ? (
           <DropdownMenuItem asChild>
-            <Link href="/projects">
+            <Link href="/projects" onClick={onNavigate}>
               <FolderKanban />
               {pendingInvitations} project invitation{pendingInvitations === 1 ? "" : "s"} waiting for you
             </Link>
@@ -156,7 +166,13 @@ export function NotificationsMenu({ pendingInvitations, unreadNotifications }: {
               const Icon = TYPE_ICONS[item.type];
               return (
                 <DropdownMenuItem key={item.id} asChild className="items-start">
-                  <Link href={item.url ?? "/"} onClick={() => (item.readAt ? undefined : void markRead([item.id]))}>
+                  <Link
+                    href={item.url ?? "/"}
+                    onClick={() => {
+                      if (!item.readAt) void markRead([item.id]);
+                      onNavigate?.();
+                    }}
+                  >
                     <Icon className="mt-0.5" />
                     <span className="grid min-w-0 flex-1 gap-0.5">
                       <span className={item.readAt ? "text-muted" : "font-semibold"}>{item.title}</span>
