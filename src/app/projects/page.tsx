@@ -34,6 +34,7 @@ import {
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import { projectColor } from "@/lib/project-color";
+import { applyProjectPhotoChange } from "@/lib/project-photo-client";
 import { memberRole, PROJECT_ROLE_LABELS, type ProjectRole } from "@/lib/project-roles";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
@@ -147,10 +148,16 @@ export default function ProjectsPage() {
       ),
     });
     if (!response.ok) return errorMessage(response, editing ? "Could not save the project." : "Could not create the project.");
+    // The photo goes once the project is saved (#403). Editing, a failure keeps the sheet open to try
+    // again (saving twice is harmless); a new project already exists, so it's reported instead.
+    const projectId = editing?.id ?? ((await response.json()) as { id: string }).id;
+    const photoProblem = await applyProjectPhotoChange(projectId, input.photo);
     notifyWorkspaceChanged();
     await fetchProjects();
+    if (editing && photoProblem) return photoProblem;
     if (!editing) setStatusFilter((current) => (current === "ALL" ? current : "ACTIVE"));
     toast.success(editing ? "Project saved" : "Project created", { description: input.name });
+    if (photoProblem) toast.error("The photo wasn't saved", { description: `${photoProblem} Add it again from Edit.` });
     return null;
   }
 

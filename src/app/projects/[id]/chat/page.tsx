@@ -2,6 +2,7 @@ import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProjectChatWorkspace } from "@/components/project-chat-workspace";
+import { ProjectPhotoButton } from "@/components/projects/project-photo-button";
 import { requirePageUser } from "@/lib/auth";
 import { openProjectChat } from "@/lib/chats-data";
 
@@ -33,6 +34,14 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
           >
             <ChevronLeft aria-hidden="true" className="h-5 w-5" />
           </Link>
+          {/* The project's photo (#403); the owner clicks it to change it. */}
+          <span className="mr-1.5 grid">
+            <ProjectPhotoButton
+              project={{ id: chat.id, name: chat.name, color: chat.color, photoUpdatedAt: chat.photoUpdatedAt }}
+              canChange={chat.canChangePhoto}
+              className="h-8 w-8 rounded-lg text-sm"
+            />
+          </span>
           <h1 className="truncate text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-lg">{chat.name}</h1>
         </header>
 

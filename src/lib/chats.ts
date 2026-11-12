@@ -10,6 +10,8 @@ export type ChatSummary = {
   projectId: string;
   name: string;
   color: string | null;
+  /** When the project's photo last changed (#403), or null without one: the list shows the letter tile then. */
+  photoUpdatedAt: string | null;
   /** People in the project, the owner included. */
   memberCount: number;
   /** Messages from others since the user last read this chat (SIDE-03). */

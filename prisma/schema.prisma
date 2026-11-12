@@ -400,6 +400,19 @@ model Project {
   recentShortcuts   RecentShortcut[]
   chatReads         ProjectChatRead[]
   labels            Label[]
+  photo             ProjectPhoto?
+}
+
+/// A project's photo (#403), shown in Chats. A table of its own, so project queries never load the image.
+/// The browser crops it to a 256 px square first, so a row holds about 10 to 40 KB; src/lib/project-photo.ts has the limits.
+model ProjectPhoto {
+  projectId   String   @id
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// image/webp, image/jpeg or image/png, read from the bytes when it was uploaded.
+  contentType String
+  bytes       Bytes
+  /// Goes into the photo's URL (?v=), so browsers keep each version for good and fetch a new one when it changes.
+  updatedAt   DateTime @updatedAt
 }
 
 model ProjectComment {

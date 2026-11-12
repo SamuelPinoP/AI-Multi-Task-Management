@@ -22,6 +22,7 @@ function chat(name: string, unread: number, at: string | null, text = "Hello"): 
     projectId: name.toLowerCase().replace(/\s+/g, "-"),
     name,
     color: null,
+    photoUpdatedAt: null,
     memberCount: 2,
     unread,
     teammates: 1,
