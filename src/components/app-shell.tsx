@@ -58,13 +58,13 @@ import { isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
 import { calendarNavItem } from "@/lib/calendar-view";
 import { formatUnreadCount } from "@/lib/chats";
 import { paletteColor, projectColor } from "@/lib/project-color";
-import { applyProjectPhotoChange } from "@/lib/project-photo-client";
 import {
   SIDEBAR_COLLAPSED_COOKIE,
   SIDEBAR_PROJECTS_COOKIE,
   serializeSidebarProjects,
   type SidebarProjectsOpen,
 } from "@/lib/sidebar-state";
+import { applyProjectPhotoChange } from "@/lib/project-photo-client";
 import { useCalendarView } from "@/lib/use-calendar-view";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { notifyWorkspaceChanged, OPEN_NEW_TASK_EVENT, WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
