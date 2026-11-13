@@ -83,11 +83,8 @@ test("unread messages are counted, shown first and cleared when the chat is open
   await expect(conversation.getByRole("separator", { name: "New messages" })).toBeVisible();
   await expect(conversation.getByText("Homepage copy is ready for review.")).toBeVisible();
 
-  // The open chat takes the whole width; the Chats button brings the list back beside it (#324).
-  await expect(row).toBeHidden();
-  await conversation.getByRole("button", { name: "Chats", exact: true }).click();
-
-  // Opening it marked it read: the list and the sidebar stop counting it, and it stays under Unread until a reload.
+  // On desktop the list stays beside the open chat (#416). Opening it marked it read: the list and the
+  // sidebar stop counting it, and it stays under Unread until a reload.
   await expect(row).toBeVisible();
   await expect(row).not.toHaveAccessibleName(/unread/);
   await expect(teammate.getByRole("button", { name: "Unread", exact: true })).toBeVisible();
@@ -134,8 +131,8 @@ test("a message that arrives while the chat is open counts as read", async () =>
   await expect(chatRow(teammate)).not.toHaveAccessibleName(/unread/);
 });
 
-test("on desktop an open chat hides the list until the Chats button shows it, and the choice is remembered", async () => {
-  // A second chat with a message the owner hasn't read, so the button has something to count.
+test("on desktop the list stays beside the open chat, resizes from its edge, shrinks to photos and is remembered", async () => {
+  // A second chat with a message the owner hasn't read, so the column of photos has a count to show.
   const otherName = uniqueName("Chats hub other project");
   const otherId = (await ok<{ id: string }>(await teammate.request.post("/api/projects", { data: { name: otherName } }))).id;
   await ok(await teammate.request.post(`/api/projects/${otherId}/invitations`, { data: { email: ownerEmail, role: "EDITOR" } }));
@@ -146,30 +143,47 @@ test("on desktop an open chat hides the list until the Chats button shows it, an
   await owner.goto(`/chats?project=${projectId}`);
   const conversation = owner.getByRole("region", { name: "Conversation" });
   const list = owner.getByRole("list", { name: "Project chats" });
-  const toggle = conversation.getByRole("button", { name: "Chats, 1 with new messages" });
+  const edge = owner.getByRole("separator", { name: "Resize chat list" });
+  const listBox = async () => (await owner.locator("#chat-list").boundingBox())!;
+  const width = async () => Math.round((await listBox()).width);
   await expect(conversation.getByRole("heading", { name: projectName })).toBeVisible();
-  await expect(list).toBeHidden();
-  await expect(toggle).toHaveAttribute("aria-expanded", "false");
-  // The page keeps one "Chats" heading for screen readers while its list is hidden.
-  await expect(owner.getByRole("heading", { level: 1, name: "Chats" })).toHaveCount(1);
-  const fullWidth = (await conversation.boundingBox())!.width;
 
-  // Shown: the list is back as before, and the conversation gives it the room.
-  await toggle.click();
-  await expect(list).toBeVisible();
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  // No show/hide button any more (#416): the list sits beside the chat, 310 px wide, with one "Chats" heading.
+  await expect(conversation.getByRole("button", { name: /^Chats/ })).toHaveCount(0);
   await expect(list.getByRole("link", { name: new RegExp(`^${otherName}.*1 unread message$`) })).toBeVisible();
-  expect((await conversation.boundingBox())!.width).toBeLessThan(fullWidth - 300);
+  await expect.poll(width).toBe(310);
   await expect(owner.getByRole("heading", { level: 1, name: "Chats" })).toHaveCount(1);
 
-  // The choice survives a reload, and hiding it again is remembered too.
-  await owner.reload();
-  await expect(list).toBeVisible();
-  await toggle.click();
-  await expect(list).toBeHidden();
+  // Dragging the edge widens it; past 240 px it snaps to a column of photos that keeps the unread count.
+  const box = (await edge.boundingBox())!;
+  const left = (await listBox()).x;
+  const y = box.y + box.height / 2;
+  await owner.mouse.move(box.x + box.width / 2, y);
+  await owner.mouse.down();
+  await owner.mouse.move(left + 400, y, { steps: 5 });
+  await expect.poll(width).toBe(400);
+  await owner.mouse.move(left + 60, y, { steps: 5 });
+  await owner.mouse.up();
+  await expect.poll(width).toBe(72);
+  await expect(list.getByRole("link", { name: `${otherName}, 1 unread message` })).toBeVisible();
+  await expect(list.getByRole("link", { name: projectName, exact: true })).toHaveAttribute("aria-current", "true");
+  await expect(owner.getByRole("heading", { level: 1, name: "Chats" })).toHaveCount(1);
+
+  // The column survives a reload; its magnifier opens the whole list again, at its width from before
+  // the drag, with the cursor in the search.
   await owner.reload();
   await expect(conversation.getByRole("heading", { name: projectName })).toBeVisible();
-  await expect(list).toBeHidden();
+  await expect.poll(width).toBe(72);
+  await owner.getByRole("button", { name: "Search chats" }).click();
+  await expect.poll(width).toBe(310);
+  await expect(owner.getByLabel("Search people")).toBeFocused();
+
+  // The keyboard works the edge too, and a double-click goes back to 310 px.
+  await edge.focus();
+  await owner.keyboard.press("ArrowLeft");
+  await expect.poll(width).toBe(294);
+  await edge.dblclick();
+  await expect.poll(width).toBe(310);
 
   // With no chat open, the list is the page.
   await owner.goto("/chats");

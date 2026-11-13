@@ -239,6 +239,16 @@ test("unread chat badges have no WCAG A/AA violations", async ({ page, browser, 
   await expect(page.getByRole("list", { name: "People" })).toBeVisible();
   found.push(...(await violations(page, "Chats page's people search")));
 
+  // The list shrunk to photos (#416): Home on its edge collapses it; each photo keeps its count and a tooltip.
+  await page.getByRole("separator", { name: "Resize chat list" }).focus();
+  await page.keyboard.press("Home");
+  const photos = page.getByRole("list", { name: "Project chats" });
+  await photos.getByRole("link", { name: `${projectName}, 1 unread message` }).hover();
+  await expect(page.locator("[data-tooltip]")).toContainText("1 new");
+  found.push(...(await violations(page, "Chats page's column of photos")));
+  await page.getByRole("button", { name: "Search chats" }).click();
+  await expect(page.getByLabel("Search people")).toBeFocused();
+
   await page.goto(`/chats?person=${teammateId}`);
   await page.waitForLoadState("networkidle");
   await expect(page.getByRole("region", { name: "Conversation" }).getByText("A direct message")).toBeVisible();
