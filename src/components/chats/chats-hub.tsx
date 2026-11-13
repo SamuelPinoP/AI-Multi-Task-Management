@@ -391,7 +391,8 @@ export function ChatsHub({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={searchLabel}
-                className="w-full rounded-lg border border-line bg-surface py-1.5 pl-8 pr-3 text-[0.8125rem] leading-5 text-ink outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
+                // 13 px from sm up; phones keep 16 px, or iOS zooms in on focus (#337).
+                className="w-full rounded-lg border border-line bg-surface py-1.5 pl-8 pr-3 text-[0.8125rem] leading-5 text-ink outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25 max-sm:text-base"
               />
             </label>
             <div
