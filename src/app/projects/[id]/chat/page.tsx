@@ -1,6 +1,7 @@
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ChatSearchButton, ChatSearchProvider } from "@/components/chats/chat-search";
 import { ProjectChatWorkspace } from "@/components/project-chat-workspace";
 import { ProjectPhotoButton } from "@/components/projects/project-photo-button";
 import { requirePageUser } from "@/lib/auth";
@@ -25,6 +26,8 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
     // Phones get the whole width: one slim title row, then the chat edge to edge.
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 sm:px-6 sm:py-2 lg:px-8">
       <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:gap-1.5">
+        {/* Search inside the chat (#409): the header's button, the results beside or over the chat. */}
+        <ChatSearchProvider>
         <header className="flex min-w-0 items-center gap-1 border-b border-line bg-surface px-2 py-1.5 sm:border-0 sm:bg-transparent sm:px-0">
           <Link
             href={`/projects/${chat.id}`}
@@ -42,7 +45,8 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
               className="h-8 w-8 rounded-lg text-sm"
             />
           </span>
-          <h1 className="truncate text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-lg">{chat.name}</h1>
+          <h1 className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-lg">{chat.name}</h1>
+          <ChatSearchButton />
         </header>
 
         <ProjectChatWorkspace
@@ -52,6 +56,7 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
           newSince={chat.newSince}
           initialComments={chat.initialComments}
         />
+        </ChatSearchProvider>
       </div>
     </main>
   );

@@ -13,10 +13,12 @@
  * or projects under the Projects chip.
  */
 
-import { ArrowLeft, CheckCheck, LayoutDashboard, MessagesSquare, Paperclip, Search, SquareKanban } from "lucide-react";
+import { ArrowLeft, CheckCheck, MessagesSquare, Paperclip, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { ChatSearchButton, ChatSearchProvider } from "@/components/chats/chat-search";
+import { ProjectChatMenu } from "@/components/chats/project-chat-menu";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ProjectChatWorkspace } from "@/components/project-chat-workspace";
 import { ProjectAvatar } from "@/components/projects/project-avatar";
@@ -479,10 +481,11 @@ export function ChatsHub({
 
       <section aria-label="Conversation" className={cn("min-w-0 flex-1 flex-col bg-surface lg:flex", selected ? "flex" : "hidden")}>
         {selected ? (
-          <>
+          // Search (#409) belongs to the open chat: another chat starts with it closed.
+          <ChatSearchProvider key={selectedKey}>
             {/* The page's heading lives in the list, which phones hide while a chat is open; screen readers still get it here. */}
             <h1 className="sr-only lg:hidden">Chats</h1>
-            {/* One row on phones: back, name, and the links as icons (their words come back from sm). */}
+            {/* One row on phones too: back, the name, then the header's buttons. Board and the project page are in ⋯ (#408). */}
             <div className="flex items-center gap-2 border-b border-line px-2 py-2 sm:gap-3 sm:px-5 sm:py-3">
               <Link
                 href="/chats"
@@ -507,14 +510,8 @@ export function ChatsHub({
                     <p className="truncate text-xs text-muted">{plural(selected.chat.memberCount, "member")}</p>
                   </div>
                   <div className="flex shrink-0 gap-1.5 sm:gap-2">
-                    <Link href={`/projects/${selected.chat.id}/board`} className={cn(uiButtonClass, "gap-1.5 p-2 text-xs sm:px-2.5 sm:py-1.5")}>
-                      <SquareKanban aria-hidden="true" className="h-4 w-4 text-muted sm:h-3.5 sm:w-3.5" />
-                      <span className="sr-only sm:not-sr-only">Board</span>
-                    </Link>
-                    <Link href={`/projects/${selected.chat.id}`} className={cn(uiButtonClass, "gap-1.5 p-2 text-xs sm:px-2.5 sm:py-1.5")}>
-                      <LayoutDashboard aria-hidden="true" className="h-4 w-4 text-muted sm:h-3.5 sm:w-3.5" />
-                      <span className="sr-only sm:not-sr-only">Open project</span>
-                    </Link>
+                    <ChatSearchButton />
+                    <ProjectChatMenu projectId={selected.chat.id} projectName={selected.chat.name} />
                   </div>
                 </>
               ) : (
@@ -526,6 +523,7 @@ export function ChatsHub({
                       {selected.chat.projects.length ? sharedProjectsLine(selected.chat.projects) : "No projects in common any more"}
                     </p>
                   </div>
+                  <ChatSearchButton />
                 </>
               )}
             </div>
@@ -555,7 +553,7 @@ export function ChatsHub({
                 />
               )}
             </div>
-          </>
+          </ChatSearchProvider>
         ) : (
           <div className="m-auto grid max-w-xs justify-items-center gap-2 p-6 text-center">
             <span aria-hidden="true" className="grid h-11 w-11 place-items-center rounded-xl bg-accent-soft text-accent">
