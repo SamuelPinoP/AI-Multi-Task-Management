@@ -18,7 +18,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
-  Search,
   Sparkles,
   SquareCheckBig,
   SquareKanban,
@@ -67,7 +66,7 @@ import {
 import { applyProjectPhotoChange } from "@/lib/project-photo-client";
 import { useCalendarView } from "@/lib/use-calendar-view";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
-import { notifyWorkspaceChanged, OPEN_NEW_TASK_EVENT, WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, OPEN_NEW_TASK_EVENT, OPEN_SEARCH_EVENT, WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
 import type { WorkspaceNav, WorkspaceNavProject } from "@/lib/workspace-nav";
 
 type ShellUser = {
@@ -595,59 +594,37 @@ function AccountMenu({
   );
 }
 
-function TopBar({
-  nav,
-  pathname,
-  onOpenMenu,
-  onOpenSearch,
-}: {
-  nav: WorkspaceNav;
-  pathname: string;
-  onOpenMenu: () => void;
-  onOpenSearch: () => void;
-}) {
+/**
+ * The bar above the page on phones and tablets: the menu button and where you are. Desktop has
+ * none (#410): the sidebar is always there, each page's heading says where you are, and search
+ * is Home's button or Ctrl+K.
+ */
+function TopBar({ nav, pathname, onOpenMenu }: { nav: WorkspaceNav; pathname: string; onOpenMenu: () => void }) {
   const { parent, title } = pageTitleFor(pathname, nav.projects);
   // On phones the bell is inside the menu (#404), so the menu button shows its dot.
   const news = nav.pendingInvitations + nav.unreadNotifications;
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface/95 px-3 backdrop-blur sm:gap-3 sm:px-5">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface/95 px-3 backdrop-blur sm:gap-3 sm:px-5 lg:hidden">
       <button
         type="button"
         onClick={onOpenMenu}
         aria-label={news ? `Open navigation, ${news} new notification${news === 1 ? "" : "s"}` : "Open navigation"}
-        className="relative grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink lg:hidden"
+        className="relative grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink"
       >
         <Menu aria-hidden="true" className="h-5 w-5" />
         {news ? <span aria-hidden="true" className="absolute right-1 top-1 h-2 w-2 rounded-full border-2 border-surface bg-project-3" /> : null}
       </button>
       <div className="flex min-w-0 items-center gap-1.5 text-sm">
+        {/* Tablets show a project page's place under Projects (DES-10). */}
         {parent ? (
           <>
             <Link href="/projects" className="hidden text-muted hover:text-ink sm:inline">{parent}</Link>
             <span aria-hidden="true" className="hidden text-muted sm:inline">/</span>
           </>
         ) : null}
-        {/* On desktop the page's own heading says it; nested pages keep the breadcrumb (DES-10). */}
-        <span className={cn("truncate font-bold", !parent && "lg:hidden")}>{title}</span>
+        <span className="truncate font-bold">{title}</span>
       </div>
-      <button
-        type="button"
-        onClick={onOpenSearch}
-        className="ml-auto hidden w-full max-w-xs items-center gap-2 rounded-lg border border-line bg-canvas px-2.5 py-1.5 text-sm text-muted transition-colors hover:border-zinc-300 sm:flex lg:max-w-sm dark:hover:border-zinc-700"
-      >
-        <Search aria-hidden="true" className="h-4 w-4" />
-        Search or run a command
-        <kbd className="ml-auto rounded border border-line px-1.5 font-mono text-2xs">Ctrl K</kbd>
-      </button>
-      <button
-        type="button"
-        onClick={onOpenSearch}
-        aria-label="Search"
-        className="ml-auto grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink sm:hidden"
-      >
-        <Search aria-hidden="true" className="h-4 w-4" />
-      </button>
     </header>
   );
 }
@@ -738,6 +715,13 @@ export function AppShell({
     };
     window.addEventListener(OPEN_NEW_TASK_EVENT, open);
     return () => window.removeEventListener(OPEN_NEW_TASK_EVENT, open);
+  }, []);
+
+  // Home's search button opens search (#410), as Ctrl+K and / do everywhere.
+  useEffect(() => {
+    const open = () => setSearchOpen(true);
+    window.addEventListener(OPEN_SEARCH_EVENT, open);
+    return () => window.removeEventListener(OPEN_SEARCH_EVENT, open);
   }, []);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -936,7 +920,7 @@ export function AppShell({
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar nav={nav} pathname={pathname} onOpenMenu={() => setMenuOpen(true)} onOpenSearch={() => setSearchOpen(true)} />
+        <TopBar nav={nav} pathname={pathname} onOpenMenu={() => setMenuOpen(true)} />
         <OfflineBanner />
         {/* relative: hidden (sr-only) text is absolutely positioned, and it scrolls only inside a positioned
             scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar. */}
