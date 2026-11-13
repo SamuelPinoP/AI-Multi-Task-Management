@@ -26,6 +26,37 @@ test("a new workspace shows one next step in every empty card", async ({ page })
   }
 });
 
+test("search is a button on Home, left of Plan my day, now that no page has a search bar", async ({ page, isMobile }) => {
+  await continueAsGuest(page);
+  const main = page.locator("#main-content");
+  const search = main.getByRole("button", { name: "Search", exact: true });
+  const plan = main.getByRole("link", { name: "Plan my day" });
+  await expect(search).toBeVisible();
+  // To the left of Plan my day, and as tall (#410).
+  const [searchBox, planBox] = [(await search.boundingBox())!, (await plan.boundingBox())!];
+  expect(searchBox.x + searchBox.width).toBeLessThanOrEqual(planBox.x);
+  expect(Math.abs(searchBox.height - planBox.height)).toBeLessThan(1);
+  await search.click();
+  await expect(page.getByPlaceholder("Search or run a command...")).toBeFocused();
+  await page.keyboard.press("Escape");
+
+  await page.goto("/tasks");
+  await expect(page.getByRole("heading", { level: 1, name: "Tasks" })).toBeVisible();
+  await expect(page.getByText("Search or run a command")).toHaveCount(0);
+  if (isMobile) {
+    // Phones keep a slim bar for the menu button and the page's name, without search.
+    const bar = page.getByRole("banner");
+    await expect(bar.getByRole("button", { name: /^Open navigation/ })).toBeVisible();
+    await expect(bar).toContainText("Tasks");
+    await expect(bar.getByRole("button", { name: "Search" })).toHaveCount(0);
+  } else {
+    // Desktop has no bar above the page; Ctrl+K still opens search from anywhere.
+    await expect(page.getByRole("banner")).toHaveCount(0);
+    await page.keyboard.press("Control+K");
+    await expect(page.getByPlaceholder("Search or run a command...")).toBeFocused();
+  }
+});
+
 test("quick add puts a task in Focus; completing it can be undone", async ({ page }) => {
   const title = uniqueName("Quick task");
   await continueAsGuest(page);
