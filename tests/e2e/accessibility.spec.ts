@@ -105,6 +105,16 @@ for (const theme of ["light", "dark"] as const) {
     found.push(...(await violations(page, "chat header's ⋯ menu", '[role="menu"]')));
     await page.keyboard.press("Escape");
 
+    // Search inside the chat, with results (#409).
+    expect((await page.request.post(`/api/projects/${projectId}/comments`, { multipart: { message: "The launch plan is ready." } })).ok()).toBe(true);
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("region", { name: "Conversation" }).getByRole("button", { name: "Search in this chat" }).click();
+    await page.getByRole("combobox", { name: "Search in this chat" }).fill("launch");
+    await expect(page.getByRole("option", { name: /The launch plan is ready/ })).toBeVisible();
+    found.push(...(await violations(page, "chat search with results")));
+    await page.keyboard.press("Escape");
+
     // At 320px wide, tables scroll sideways whatever the fonts; they must stay keyboard-reachable.
     const viewport = page.viewportSize();
     await page.setViewportSize({ width: 320, height: 800 });
