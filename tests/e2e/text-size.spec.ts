@@ -30,10 +30,10 @@ test("the account menu changes the text size of the whole app, and a reload keep
   const html = page.locator("html");
   await expect(html).toHaveAttribute("data-text-size", "default");
   expect(await rootFontSize(page)).toBe(16);
-  // The top bar, found by its search button. includeHidden: the open menu hides the rest of the page from role queries.
-  const topBar = page.locator("header").filter({ has: page.getByRole("button", { name: /^Search/, includeHidden: true }) });
-  const barHeight = () => topBar.evaluate((header) => header.getBoundingClientRect().height);
-  expect(await barHeight()).toBe(56);
+  // Home's search button (#410), a 2.125rem square. includeHidden: the open menu hides the rest of the page from role queries.
+  const searchButton = page.locator("#main-content").getByRole("button", { name: "Search", exact: true, includeHidden: true });
+  const buttonHeight = () => searchButton.evaluate((button) => button.getBoundingClientRect().height);
+  expect(await buttonHeight()).toBe(34);
 
   await openAccountMenu(page);
   const defaultSize = page.getByRole("menuitemradio", { name: "Default", exact: true });
@@ -45,10 +45,10 @@ test("the account menu changes the text size of the whole app, and a reload keep
   // The menu stays open for trying more sizes, and shows which one is picked.
   await expect(large).toHaveAttribute("aria-checked", "true");
   await expect(defaultSize).toHaveAttribute("aria-checked", "false");
-  // Text and spacing both grow: 14px body text becomes 15.75px, and the 56px bar 63px.
+  // Text and spacing both grow: 14px body text becomes 15.75px, and the 34px search button 38.25px.
   expect(await rootFontSize(page)).toBe(18);
   expect(await classFontSize(page, "text-sm")).toBe(15.75);
-  expect(await barHeight()).toBe(63);
+  expect(await buttonHeight()).toBe(38.25);
 
   await page.keyboard.press("Escape");
   await page.reload();

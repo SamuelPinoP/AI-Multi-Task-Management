@@ -314,9 +314,8 @@ test("The sidebar's bottom bar holds the profile, the bell and Trash, which show
   const trash = page.getByRole("link", { name: /^Trash, \d+ items?$/ });
   const collapse = page.getByRole("button", { name: "Collapse sidebar" });
 
-  // The top bar keeps only search; the profile and the bell are in the sidebar (#404).
-  const topBar = page.locator("header").filter({ has: page.getByRole("button", { name: /^Search/ }) });
-  await expect(topBar.getByRole("button", { name: /Notifications|Settings and theme/ })).toHaveCount(0);
+  // The profile and the bell are in the sidebar (#404), and desktop has no top bar at all (#410).
+  await expect(page.getByRole("banner")).toHaveCount(0);
   await expect(profile).toHaveAccessibleName("Guest Settings and theme");
   await expect(bell).toBeVisible();
   // Collapse sits by the logo now, above the links.

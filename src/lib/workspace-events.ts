@@ -14,6 +14,13 @@ export function openNewTask(draft: { projectId?: string } = {}) {
   window.dispatchEvent(new CustomEvent(OPEN_NEW_TASK_EVENT, { detail: draft }));
 }
 
+/** Asks the shell to open search, the Ctrl+K pop-up (#410): Home's search button does. */
+export const OPEN_SEARCH_EVENT = "workspace:open-search";
+
+export function openSearch() {
+  window.dispatchEvent(new Event(OPEN_SEARCH_EVENT));
+}
+
 /** Call after creating, completing, deleting or restoring a task or project. */
 export function notifyWorkspaceChanged() {
   window.dispatchEvent(new Event(WORKSPACE_CHANGED_EVENT));

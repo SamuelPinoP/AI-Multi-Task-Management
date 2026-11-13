@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AvatarStack } from "@/components/home/avatar-stack";
 import { FocusList } from "@/components/home/focus-list";
+import { HomeSearchButton } from "@/components/home/home-search-button";
 import { NowAndNext } from "@/components/home/now-and-next";
 import { QuickAdd, QuickAddFocusButton } from "@/components/home/quick-add";
 import { TeamChatList } from "@/components/home/team-chat";
@@ -185,10 +186,14 @@ export default async function HomePage() {
           <h1 className="mt-0.5 text-title">{greeting}</h1>
           <p className="mt-0.5 text-sm text-muted">{taskSummary(stats.dueToday, stats.overdue)}</p>
         </div>
-        <Link href="/planner" className={cn(uiButtonClass, "px-3 py-1.5")}>
-          <Sparkles aria-hidden="true" className="h-4 w-4 text-accent" />
-          Plan my day
-        </Link>
+        {/* Search sits left of Plan my day (#410): no page has a search bar any more. */}
+        <div className="flex items-center gap-2">
+          <HomeSearchButton />
+          <Link href="/planner" className={cn(uiButtonClass, "px-3 py-1.5")}>
+            <Sparkles aria-hidden="true" className="h-4 w-4 text-accent" />
+            Plan my day
+          </Link>
+        </div>
       </header>
 
       <NowAndNext band={home.band} now={now} eventCount={eventCount} />
