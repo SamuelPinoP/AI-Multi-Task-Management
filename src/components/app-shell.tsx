@@ -47,8 +47,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ResizeHandle } from "@/components/ui/resize-handle";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "@/components/ui/toaster";
+import { Tooltip, TooltipDetail, TooltipKey } from "@/components/ui/tooltip";
 import { isFullHeightPage, isNavItemActive, pageTitleFor, type NavMatch } from "@/lib/app-nav";
 import { authPageHref, confirmEmailHref } from "@/lib/auth-links";
 import { cn } from "@/lib/cn";
@@ -56,10 +58,12 @@ import { getSafeRedirectPath } from "@/lib/safe-redirect";
 import { isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
 import { calendarNavItem } from "@/lib/calendar-view";
 import { formatUnreadCount } from "@/lib/chats";
+import { savePanelCookies, shownWidth, SIDEBAR_LIMITS, type PanelSize } from "@/lib/panel-resize";
 import { avatarColor, projectColor } from "@/lib/project-color";
 import {
   SIDEBAR_COLLAPSED_COOKIE,
   SIDEBAR_PROJECTS_COOKIE,
+  SIDEBAR_WIDTH_COOKIE,
   serializeSidebarProjects,
   type SidebarProjectsOpen,
 } from "@/lib/sidebar-state";
@@ -143,38 +147,67 @@ function SidebarLink({
 }) {
   const active = isNavItemActive(pathname, item);
   const Icon = item.icon;
+  const name = item.badge ? `${item.label}, ${item.badge.label}` : item.count ? `${item.label}, ${item.count} open` : undefined;
+
+  if (collapsed) {
+    // The icon rail (#415, design 1A): the icon alone, its name in a tooltip, and the new-messages count on it.
+    return (
+      <Tooltip
+        content={
+          <>
+            {item.label}
+            {item.badge ? <TooltipDetail>{item.badge.value} new</TooltipDetail> : item.count ? <TooltipDetail>{item.count} open</TooltipDetail> : null}
+          </>
+        }
+      >
+        <Link
+          href={item.href}
+          onClick={onNavigate}
+          aria-current={active ? "page" : undefined}
+          aria-label={name ?? item.label}
+          className={cn(
+            "relative grid h-8 w-9 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink",
+            active && "bg-surface text-accent shadow-[0_0_0_1px_var(--line)] hover:bg-surface hover:text-accent",
+          )}
+        >
+          <Icon aria-hidden="true" className="h-4 w-4" />
+          {item.badge ? (
+            <span
+              aria-hidden="true"
+              className={cn(
+                "absolute left-[1.3125rem] top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 font-mono text-[0.625rem] font-bold leading-none tabular-nums text-accent-ink ring-2",
+                active ? "ring-surface" : "ring-sunken",
+              )}
+            >
+              {formatUnreadCount(item.badge.value)}
+            </span>
+          ) : null}
+        </Link>
+      </Tooltip>
+    );
+  }
 
   return (
     <Link
       href={item.href}
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
-      aria-label={
-        collapsed
-          ? undefined
-          : item.badge
-            ? `${item.label}, ${item.badge.label}`
-            : item.count
-              ? `${item.label}, ${item.count} open`
-              : undefined
-      }
-      title={collapsed ? item.label : undefined}
+      aria-label={name}
       className={cn(
         "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-hover",
         active && "bg-surface font-semibold shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
-        collapsed && "justify-center px-0 py-2",
       )}
     >
       <Icon aria-hidden="true" className={cn("h-4 w-4 shrink-0", active ? "text-accent" : "text-muted")} />
-      {collapsed ? <span className="sr-only">{item.label}</span> : <span className="truncate">{item.label}</span>}
-      {!collapsed && item.badge ? <Badge value={item.badge.value} /> : null}
-      {!collapsed && !item.badge && item.count ? <Count value={item.count} /> : null}
+      <span className="truncate">{item.label}</span>
+      {item.badge ? <Badge value={item.badge.value} /> : null}
+      {!item.badge && item.count ? <Count value={item.count} /> : null}
     </Link>
   );
 }
 
 function GroupLabel({ children, collapsed }: { children: React.ReactNode; collapsed: boolean }) {
-  if (collapsed) return <div className="mx-3 my-2 h-px bg-line" aria-hidden="true" />;
+  if (collapsed) return <div className="my-2 h-px w-5 shrink-0 bg-line" aria-hidden="true" />;
   return (
     <p className="flex items-center justify-between px-2.5 pb-1 pt-4 text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
       {children}
@@ -305,20 +338,28 @@ function SidebarProject({
 
 /** Trash while it holds something (#404, design 2C). The command palette reaches it either way. */
 function TrashButton({ count, active, onNavigate }: { count: number; active: boolean; onNavigate?: () => void }) {
+  const items = `${count} item${count === 1 ? "" : "s"}`;
   return (
-    <Link
-      href="/trash"
-      onClick={onNavigate}
-      aria-label={`Trash, ${count} item${count === 1 ? "" : "s"}`}
-      aria-current={active ? "page" : undefined}
-      title="Trash"
-      className={cn(
-        "grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent",
-        active && "bg-surface text-accent shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
-      )}
+    <Tooltip
+      content={
+        <>
+          Trash <TooltipDetail>{items}</TooltipDetail>
+        </>
+      }
     >
-      <Trash2 aria-hidden="true" className="h-4 w-4" />
-    </Link>
+      <Link
+        href="/trash"
+        onClick={onNavigate}
+        aria-label={`Trash, ${items}`}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent",
+          active && "bg-surface text-accent shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
+        )}
+      >
+        <Trash2 aria-hidden="true" className="h-4 w-4" />
+      </Link>
+    </Tooltip>
   );
 }
 
@@ -370,56 +411,88 @@ function Sidebar({
     { href: "/goals", label: "Goals", icon: Target },
     { href: "/roadmap", label: "Roadmap", icon: MapIcon },
   ];
-  const workspaceName = user.isGuest ? "Guest workspace" : `${firstName(user)}'s workspace`;
   const linkProps = { pathname, collapsed, onNavigate };
 
   return (
     <div className="flex h-full flex-col">
-      {/* relative keeps the collapsed sidebar's hidden labels inside this scroller, as on main. */}
-      <nav aria-label="Workspace" className="relative flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2.5 py-3 [scrollbar-width:thin]">
-        <div className={cn("flex items-center gap-2.5 px-1.5 pb-3", collapsed && "flex-col gap-2 px-0")}>
-          <LogoMark className="h-8 w-8 shrink-0" />
-          {collapsed ? (
+      {/* relative keeps the collapsed sidebar's hidden labels inside this scroller, as on main. The rail
+          centres everything on one axis and hides its scrollbar, which would push the icons off centre. */}
+      <nav
+        aria-label="Workspace"
+        className={cn(
+          "relative flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden py-3",
+          collapsed ? "items-center px-0 [scrollbar-width:none]" : "px-2.5 [scrollbar-width:thin]",
+        )}
+      >
+        {collapsed ? (
+          <>
+            {/* The rail (#415, design 1A): a smaller logo turns into the expand button on hover or focus, as in ChatGPT and Claude. */}
+            <Tooltip content="Expand sidebar">
+              <button
+                type="button"
+                onClick={onToggleCollapsed}
+                aria-label="Expand sidebar"
+                className="group/logo mb-2 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <LogoMark className="col-start-1 row-start-1 h-7 w-7 transition-opacity duration-150 group-hover/logo:opacity-0 group-focus-visible/logo:opacity-0" />
+                <PanelLeftOpen
+                  aria-hidden="true"
+                  className="col-start-1 row-start-1 h-4 w-4 opacity-0 transition-opacity duration-150 group-hover/logo:opacity-100 group-focus-visible/logo:opacity-100"
+                />
+              </button>
+            </Tooltip>
             <span className="sr-only">AI Multi</span>
-          ) : (
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">AI Multi</p>
-              <p className="truncate text-xs text-muted">{workspaceName}</p>
-            </div>
-          )}
-          {/* Collapse sits by the logo; the bottom bar belongs to the account (#404, design 1B). */}
-          {onToggleCollapsed ? (
+          </>
+        ) : (
+          <div className="flex items-center gap-2.5 px-1.5 pb-3">
+            <LogoMark className="h-8 w-8 shrink-0" />
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold">AI Multi</p>
+            {/* Collapse sits by the logo; the bottom bar belongs to the account (#404, design 1B). */}
+            {onToggleCollapsed ? (
+              <Tooltip content="Collapse sidebar">
+                <button
+                  type="button"
+                  onClick={onToggleCollapsed}
+                  aria-label="Collapse sidebar"
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink"
+                >
+                  <PanelLeftClose aria-hidden="true" className="h-4 w-4" />
+                </button>
+              </Tooltip>
+            ) : null}
+          </div>
+        )}
+
+        {collapsed ? (
+          // A square that matches the logo's; the tooltip names it and its key.
+          <Tooltip
+            content={
+              <>
+                New task <TooltipKey>N</TooltipKey>
+              </>
+            }
+          >
             <button
               type="button"
-              onClick={onToggleCollapsed}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink"
+              onClick={onNewTask}
+              aria-label="New task"
+              aria-keyshortcuts="N"
+              className="mb-2.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-accent-ink transition-colors hover:bg-accent-hover"
             >
-              {collapsed ? <PanelLeftOpen aria-hidden="true" className="h-4 w-4" /> : <PanelLeftClose aria-hidden="true" className="h-4 w-4" />}
+              <Plus aria-hidden="true" className="h-4 w-4" />
             </button>
-          ) : null}
-        </div>
-
-        <button
-          type="button"
-          onClick={onNewTask}
-          title={collapsed ? "New task" : undefined}
-          className={cn(
-            "mb-2 flex items-center gap-2 rounded-lg bg-accent px-2.5 py-2 text-sm font-semibold text-accent-ink transition-colors hover:bg-accent-hover",
-            collapsed && "justify-center px-0",
-          )}
-        >
-          <Plus aria-hidden="true" className="h-4 w-4" />
-          {collapsed ? (
-            <span className="sr-only">New task</span>
-          ) : (
-            <>
-              New task
-              <kbd aria-hidden="true" className="ml-auto rounded border border-current px-1 font-mono text-2xs opacity-75">N</kbd>
-            </>
-          )}
-        </button>
+          </Tooltip>
+        ) : (
+          <button
+            type="button"
+            onClick={onNewTask}
+            className="mb-2 flex items-center gap-2 rounded-lg bg-accent px-2.5 py-2 text-sm font-semibold text-accent-ink transition-colors hover:bg-accent-hover"
+          >
+            <Plus aria-hidden="true" className="h-4 w-4" />
+            New task
+            <kbd aria-hidden="true" className="ml-auto rounded border border-current px-1 font-mono text-2xs opacity-75">N</kbd>
+          </button>
+        )}
 
         {mainItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
 
@@ -475,9 +548,9 @@ function Sidebar({
       <div
         className={cn(
           // relative: the collapsed profile button's hidden words stay positioned inside the bar.
-          "relative flex shrink-0 border-t border-line px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2",
-          // No gap in a row, so "Settings and theme" fits beside the bell and Trash in the 240 px sidebar.
-          collapsed ? "flex-col items-center gap-0.5" : "items-center",
+          "relative flex shrink-0 border-t border-line pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2",
+          // No gap in a row, so "Settings and theme" fits beside the bell and Trash even in a narrow sidebar.
+          collapsed ? "flex-col items-center gap-1 px-0" : "items-center px-2",
         )}
       >
         <AccountMenu user={user} collapsed={collapsed} onShowShortcuts={onShowShortcuts} onNavigate={onNavigate} />
@@ -507,31 +580,48 @@ function AccountMenu({
   const { theme, setTheme } = useTheme();
   const logoutForm = useRef<HTMLFormElement>(null);
   const installPrompt = useInstallPrompt();
+  const displayName = user.isGuest ? "Guest" : user.name || user.email;
+
+  const trigger = (
+    <DropdownMenuTrigger
+      className={cn(
+        "flex min-w-0 items-center gap-2 rounded-lg text-left outline-none transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover",
+        collapsed ? "p-1" : "flex-1 p-1",
+      )}
+    >
+      {/* The same color as the person's avatar in Chats and members lists, dark enough for white text.
+          On the rail it's a little smaller, like the logo (#415). */}
+      <span
+        aria-hidden="true"
+        className={cn("grid shrink-0 place-items-center rounded-full font-bold text-white", collapsed ? "h-7 w-7 text-2xs" : "h-8 w-8 text-xs")}
+        style={{ backgroundColor: avatarColor(user.id) }}
+      >
+        {initial(user)}
+      </span>
+      <span className={collapsed ? "sr-only" : "grid min-w-0"}>
+        <span className="truncate text-sm font-semibold text-ink">{displayName}</span>{" "}
+        <span className="truncate text-2xs text-muted">Settings and theme</span>
+      </span>
+    </DropdownMenuTrigger>
+  );
 
   return (
     <>
       <form ref={logoutForm} action="/api/auth/logout" method="post" className="hidden" />
       <DropdownMenu>
-        <DropdownMenuTrigger
-          title={collapsed ? "Settings and theme" : undefined}
-          className={cn(
-            "flex min-w-0 items-center gap-2 rounded-lg text-left outline-none transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover",
-            collapsed ? "p-1" : "flex-1 p-1",
-          )}
-        >
-          {/* The same color as the person's avatar in Chats and members lists, dark enough for white text. */}
-          <span
-            aria-hidden="true"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
-            style={{ backgroundColor: avatarColor(user.id) }}
+        {collapsed ? (
+          <Tooltip
+            content={
+              <>
+                {displayName} <TooltipDetail>Settings and theme</TooltipDetail>
+              </>
+            }
           >
-            {initial(user)}
-          </span>
-          <span className={collapsed ? "sr-only" : "grid min-w-0"}>
-            <span className="truncate text-sm font-semibold text-ink">{user.isGuest ? "Guest" : user.name || user.email}</span>{" "}
-            <span className="truncate text-2xs text-muted">Settings and theme</span>
-          </span>
-        </DropdownMenuTrigger>
+            {trigger}
+          </Tooltip>
+        ) : (
+          trigger
+        )}
         <DropdownMenuContent side="top" align="start" className="w-64">
           <DropdownMenuLabel className="text-ink">
             <span className="flex items-center gap-2">
@@ -682,6 +772,7 @@ export function AppShell({
   awaitingEmailConfirmation,
   initialNav,
   initialSidebarCollapsed,
+  initialSidebarWidth,
   initialProjectsOpen,
 }: {
   children: React.ReactNode;
@@ -690,6 +781,8 @@ export function AppShell({
   awaitingEmailConfirmation: boolean;
   initialNav: WorkspaceNav | null;
   initialSidebarCollapsed: boolean;
+  /** The width the sidebar was dragged to, in rem (#415). */
+  initialSidebarWidth: number;
   initialProjectsOpen: SidebarProjectsOpen;
 }) {
   const pathname = usePathname();
@@ -700,7 +793,7 @@ export function AppShell({
   const fullHeight = isFullHeightPage(pathname);
 
   const [nav, setNav] = useState(initialNav);
-  const [collapsed, setCollapsed] = useState(initialSidebarCollapsed);
+  const [sidebar, setSidebar] = useState<PanelSize>({ width: initialSidebarWidth, collapsed: initialSidebarCollapsed });
   const [projectsOpen, setProjectsOpen] = useState(initialProjectsOpen);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -804,12 +897,15 @@ export function AppShell({
     };
   }, [router, showWorkspaceShell]);
 
+  // Dragging the edge (#415) updates the width as it goes and saves it when let go; the server reads
+  // the cookies, so the next page load starts at the same width.
+  function resizeSidebar(next: PanelSize, done: boolean) {
+    setSidebar(next);
+    if (done) savePanelCookies(SIDEBAR_WIDTH_COOKIE, SIDEBAR_COLLAPSED_COOKIE, next);
+  }
+
   function toggleCollapsed() {
-    setCollapsed((current) => {
-      const next = !current;
-      document.cookie = `${SIDEBAR_COLLAPSED_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
-      return next;
-    });
+    resizeSidebar({ ...sidebar, collapsed: !sidebar.collapsed }, true);
   }
 
   function toggleProject(projectId: string, open: boolean) {
@@ -877,23 +973,31 @@ export function AppShell({
         Skip to content
       </a>
 
+      {/* Any width from where "AI Multi" still fits to 360 px; dragged narrower it snaps to the icon rail (#415). */}
       <aside
-        className={cn(
-          "hidden shrink-0 border-r border-line bg-sunken transition-[width] duration-200 lg:block",
-          collapsed ? "w-16" : "w-60",
-        )}
+        id="app-sidebar"
+        className="relative hidden shrink-0 border-r border-line bg-sunken transition-[width] duration-200 data-[resizing]:transition-none lg:block"
+        style={{ width: `${shownWidth(sidebar, SIDEBAR_LIMITS)}rem` }}
       >
         <Sidebar
           user={currentUser}
           nav={nav}
           pathname={pathname}
-          collapsed={collapsed}
+          collapsed={sidebar.collapsed}
           projectsOpen={projectsOpen}
           onToggleCollapsed={toggleCollapsed}
           onToggleProject={toggleProject}
           onNewTask={openNewTask}
           onNewProject={openNewProject}
           onShowShortcuts={() => setShortcutsOpen(true)}
+        />
+        <ResizeHandle
+          label="Resize sidebar"
+          controls="app-sidebar"
+          size={sidebar}
+          limits={SIDEBAR_LIMITS}
+          collapsedText="Icons only"
+          onResize={resizeSidebar}
         />
       </aside>
 

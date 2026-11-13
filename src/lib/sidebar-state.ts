@@ -1,6 +1,9 @@
 /** Cookie that remembers a collapsed sidebar, so the server renders it collapsed. */
 export const SIDEBAR_COLLAPSED_COOKIE = "sidebar-collapsed";
 
+/** Cookie that remembers the width the sidebar was dragged to, in rem (#415). */
+export const SIDEBAR_WIDTH_COOKIE = "sidebar-width";
+
 /** Cookie that remembers which sidebar projects the user opened or closed, so the server renders them that way. */
 export const SIDEBAR_PROJECTS_COOKIE = "sidebar-projects";
 

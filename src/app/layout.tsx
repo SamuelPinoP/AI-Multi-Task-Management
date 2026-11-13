@@ -10,7 +10,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { UserTimeZoneProvider } from "@/components/user-time-zone";
 import { getSessionUser, mustConfirmEmail } from "@/lib/auth";
 import { siteVerification } from "@/lib/legal";
-import { parseSidebarProjects, SIDEBAR_COLLAPSED_COOKIE, SIDEBAR_PROJECTS_COOKIE } from "@/lib/sidebar-state";
+import { parseWidth, SIDEBAR_LIMITS } from "@/lib/panel-resize";
+import { parseSidebarProjects, SIDEBAR_COLLAPSED_COOKIE, SIDEBAR_PROJECTS_COOKIE, SIDEBAR_WIDTH_COOKIE } from "@/lib/sidebar-state";
 import { getUserTimeZone } from "@/lib/user-time-server";
 import { getWorkspaceNav } from "@/lib/workspace-nav";
 
@@ -54,6 +55,7 @@ export default async function RootLayout({
     getUserTimeZone(),
   ]);
   const sidebarCollapsed = cookieStore.get(SIDEBAR_COLLAPSED_COOKIE)?.value === "1";
+  const sidebarWidth = parseWidth(cookieStore.get(SIDEBAR_WIDTH_COOKIE)?.value, SIDEBAR_LIMITS);
   const sidebarProjectsOpen = parseSidebarProjects(cookieStore.get(SIDEBAR_PROJECTS_COOKIE)?.value);
 
   return (
@@ -70,6 +72,7 @@ export default async function RootLayout({
               awaitingEmailConfirmation={awaitingEmailConfirmation}
               initialNav={initialNav}
               initialSidebarCollapsed={sidebarCollapsed}
+              initialSidebarWidth={sidebarWidth}
               initialProjectsOpen={sidebarProjectsOpen}
             >
               {children}

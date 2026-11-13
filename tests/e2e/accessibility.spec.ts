@@ -223,6 +223,13 @@ test("unread chat badges have no WCAG A/AA violations", async ({ page, browser, 
   await expect(sidebar.getByRole("group", { name: `${projectName} pages` }).getByRole("link", { name: "Chat, 1 unread" })).toBeVisible();
   found.push(...(await violations(page, "project page with an unread message")));
 
+  // The icon rail (#415): the count sits on the Chats icon, and the names show as tooltips.
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await sidebar.getByRole("link", { name: "Chats, 2 with new messages" }).hover();
+  await expect(page.locator("[data-tooltip]")).toContainText("2 new");
+  found.push(...(await violations(page, "the icon rail with a tooltip")));
+  await page.getByRole("button", { name: "Expand sidebar" }).click();
+
   await page.goto("/chats");
   await page.waitForLoadState("networkidle");
   await expect(page.getByRole("list", { name: "Project chats" }).getByRole("link", { name: new RegExp(`^${projectName}.*1 unread message$`) })).toBeVisible();

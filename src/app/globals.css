@@ -509,6 +509,19 @@ body {
   from { translate: 0 100%; }
 }
 
+/* Tooltips beside icon-only controls (components/ui/tooltip.tsx, #414). */
+@keyframes ui-tooltip-in {
+  from { opacity: 0; translate: -4px -50%; }
+}
+
+/* While a panel's edge is dragged (components/ui/resize-handle.tsx, #414): the resize
+   pointer everywhere, and no text gets selected along the way. */
+html[data-panel-resizing],
+html[data-panel-resizing] * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 1ms !important;
