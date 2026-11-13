@@ -188,3 +188,32 @@ test("Mark all read clears every chat", async () => {
   await expect(teammate.getByRole("button", { name: "Mark all read" })).toBeDisabled();
   await expect(sidebar(teammate).getByRole("link", { name: "Chats", exact: true })).toBeVisible();
 });
+
+test("the chat header's ⋯ menu opens the project's board and its page", async () => {
+  await teammate.goto(`/chats?project=${projectId}`);
+  const conversation = teammate.getByRole("region", { name: "Conversation" });
+  await expect(conversation.getByRole("heading", { name: projectName })).toBeVisible();
+  // Board and Open project moved from the header into the menu (#408).
+  await expect(conversation.getByRole("link", { name: "Board", exact: true })).toHaveCount(0);
+  await expect(conversation.getByRole("link", { name: "Open project" })).toHaveCount(0);
+
+  const more = conversation.getByRole("button", { name: "More", exact: true });
+  await more.focus();
+  await teammate.keyboard.press("Enter");
+  const menu = teammate.getByRole("menu");
+  await expect(menu).toContainText(projectName);
+  await expect(menu.getByRole("menuitem")).toHaveText([/Board\s*Tasks by status/, /Project\s*Overview, people and files/]);
+  // Esc closes it and gives the focus back to ⋯.
+  await teammate.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(more).toBeFocused();
+
+  await more.click();
+  await menu.getByRole("menuitem", { name: /^Board/ }).click();
+  await expect(teammate).toHaveURL(new RegExp(`/projects/${projectId}/board$`));
+
+  await teammate.goto(`/chats?project=${projectId}`);
+  await conversation.getByRole("button", { name: "More", exact: true }).click();
+  await teammate.getByRole("menuitem", { name: /^Project/ }).click();
+  await expect(teammate).toHaveURL(new RegExp(`/projects/${projectId}$`));
+});

@@ -55,6 +55,9 @@ const PILLS = [
   ["accent-ink", "accent"],
   // A task row's Done button (#281).
   ["success-ink", "success"],
+  // Words a chat search found (#409), and the selected message's.
+  ["ink", "search-hit"],
+  ["search-hit-ink", "search-hit-strong"],
 ];
 
 function failures(colors: Record<string, string>, pairs: string[][]) {
