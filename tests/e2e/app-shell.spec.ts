@@ -60,6 +60,57 @@ test("Sidebar collapses and stays collapsed after a reload", async ({ page, isMo
   await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
 });
 
+test("Dragging the sidebar's edge resizes it, snaps it to the icon rail and remembers the width", async ({ page, isMobile }) => {
+  test.skip(isMobile, "The sidebar is a menu sheet on phones.");
+  await continueAsGuest(page);
+
+  const nav = page.getByRole("navigation", { name: "Workspace" });
+  const edge = page.getByRole("separator", { name: "Resize sidebar" });
+  const width = async () => Math.round((await page.locator("#app-sidebar").boundingBox())!.width);
+  // 224 px to start with (#415), and the edge says so to screen readers.
+  await expect.poll(width).toBe(224);
+  await expect(edge).toHaveAttribute("aria-valuenow", "224");
+
+  const box = (await edge.boundingBox())!;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + box.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(300, y, { steps: 5 });
+  await expect.poll(width).toBe(300);
+  // Short of 176 px it holds there, where "AI Multi" still fits beside the logo.
+  await page.mouse.move(150, y, { steps: 5 });
+  await expect.poll(width).toBe(176);
+  expect(await nav.getByText("AI Multi", { exact: true }).evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  // Further, it snaps to the icon rail.
+  await page.mouse.move(90, y, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+  await expect.poll(width).toBe(56);
+  await expect(edge).toHaveAttribute("aria-valuetext", "Icons only");
+
+  // The rail survives a reload, and expanding brings back the width from before the drag.
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+  await expect.poll(width).toBe(56);
+  await page.getByRole("button", { name: "Expand sidebar" }).click();
+  await expect.poll(width).toBe(224);
+
+  // The keyboard: → widens it by 16 px, Enter collapses it and opens it again, and a reload keeps it.
+  await edge.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(width).toBe(240);
+  await page.keyboard.press("Enter");
+  await expect.poll(width).toBe(56);
+  await page.keyboard.press("Enter");
+  await expect.poll(width).toBe(240);
+  await page.reload();
+  await expect.poll(width).toBe(240);
+
+  // A double-click on the edge goes back to 224 px.
+  await edge.dblclick();
+  await expect.poll(width).toBe(224);
+});
+
 test("The browser tab and the sidebar show the AI Multi mark", async ({ page, isMobile }) => {
   await continueAsGuest(page);
 
@@ -80,7 +131,8 @@ test("The browser tab and the sidebar show the AI Multi mark", async ({ page, is
   // The mark is decorative; screen readers hear the name once, even with the sidebar collapsed.
   const sidebar = page.getByRole("navigation", { name: "Workspace" });
   await expect(sidebar.getByText("AI Multi", { exact: true })).toBeVisible();
-  await expect(sidebar.getByText("Guest workspace", { exact: true })).toBeVisible();
+  // No "Guest workspace" or "<name>'s workspace" under it any more (#415).
+  await expect(sidebar.getByText(/workspace$/)).toHaveCount(0);
   await expect(sidebar.locator('svg[aria-hidden="true"]').first()).toBeVisible();
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await expect(sidebar.getByText("AI Multi", { exact: true })).toHaveClass(/sr-only/);
