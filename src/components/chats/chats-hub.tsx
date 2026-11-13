@@ -16,6 +16,7 @@ import { ArrowLeft, CheckCheck, MessagesSquare, PanelLeftClose, PanelLeftOpen, P
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { ChatSearchButton, ChatSearchProvider } from "@/components/chats/chat-search";
 import { ProjectChatMenu } from "@/components/chats/project-chat-menu";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ProjectChatWorkspace } from "@/components/project-chat-workspace";
@@ -331,7 +332,8 @@ export function ChatsHub({
 
       <section aria-label="Conversation" className={cn("min-w-0 flex-1 flex-col bg-surface lg:flex", selected ? "flex" : "hidden")}>
         {selected ? (
-          <>
+          // Search (#409) belongs to the open chat: another chat starts with it closed.
+          <ChatSearchProvider key={selectedKey}>
             {/* The page's heading lives in the list; while the list is hidden, screen readers still get it here. */}
             <h1 className={cn("sr-only", listOpen && "lg:hidden")}>Chats</h1>
             {/* One row on phones too: back, the name, then the header's buttons. Board and the project page are in ⋯ (#408). */}
@@ -387,6 +389,7 @@ export function ChatsHub({
                     <p className="truncate text-xs text-muted">{plural(selected.chat.memberCount, "member")}</p>
                   </div>
                   <div className="flex shrink-0 gap-1.5 sm:gap-2">
+                    <ChatSearchButton />
                     <ProjectChatMenu projectId={selected.chat.id} projectName={selected.chat.name} />
                   </div>
                 </>
@@ -399,6 +402,7 @@ export function ChatsHub({
                       {selected.chat.projects.length ? sharedProjectsLine(selected.chat.projects) : "No projects in common any more"}
                     </p>
                   </div>
+                  <ChatSearchButton />
                 </>
               )}
             </div>
@@ -428,7 +432,7 @@ export function ChatsHub({
                 />
               )}
             </div>
-          </>
+          </ChatSearchProvider>
         ) : (
           <div className="m-auto grid max-w-xs justify-items-center gap-2 p-6 text-center">
             <span aria-hidden="true" className="grid h-11 w-11 place-items-center rounded-xl bg-accent-soft text-accent">

@@ -46,6 +46,11 @@
   /* Text on solid success, such as a task row's Done button (#281). */
   --success-ink: #ffffff;
 
+  /* Words found by a chat search (#409): every match, and the selected message's matches. */
+  --search-hit: #fde4a7;
+  --search-hit-strong: #f4a93b;
+  --search-hit-ink: #1c1206;
+
   /* Project colors. */
   --project-1: #0f9488;
   --project-2: #d97706;
@@ -103,6 +108,10 @@
   --success-soft: #163020;
   --success-ink: #0b2414;
 
+  --search-hit: #5a4320;
+  --search-hit-strong: #f0ab5b;
+  --search-hit-ink: #1c1206;
+
   --chart-done: #1fa596;
   --chart-scope: #d95926;
 }
@@ -131,6 +140,9 @@
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-success-ink: var(--success-ink);
+  --color-search-hit: var(--search-hit);
+  --color-search-hit-strong: var(--search-hit-strong);
+  --color-search-hit-ink: var(--search-hit-ink);
   --color-project-1: var(--project-1);
   --color-project-2: var(--project-2);
   --color-project-3: var(--project-3);
@@ -507,6 +519,11 @@ body {
 
 @keyframes ui-slide-in-bottom {
   from { translate: 0 100%; }
+}
+
+/* A chat message that a search result or "jump" just brought into view (#409). */
+@keyframes chat-message-flash {
+  from { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 30%, transparent); }
 }
 
 @media (prefers-reduced-motion: reduce) {

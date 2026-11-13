@@ -1,11 +1,15 @@
 "use client";
 
-import { SendHorizontal } from "lucide-react";
-import { ChangeEvent, DragEvent, Fragment, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { ArrowDown, ChevronLeft, SendHorizontal } from "lucide-react";
+import { ChangeEvent, DragEvent, Fragment, KeyboardEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useChatSearch } from "@/components/chats/chat-search";
+import { ChatSearchPanel, Highlighted } from "@/components/chats/chat-search-panel";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AttachmentGallery, ComposerAttachmentTray } from "@/components/project-chat-attachments";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { useUserTimeZone } from "@/components/user-time-zone";
+import { searchChat } from "@/lib/chat-search";
+import { formatUnreadCount } from "@/lib/chats";
 import { cn } from "@/lib/cn";
 import { formatFileSize } from "@/lib/project-chat-attachment-display";
 import { sendsChatMessage } from "@/lib/shortcuts";
@@ -71,6 +75,21 @@ const ACCEPTED_FILE_TYPES =
 // textarea stretches to it. Phones get 16px text, so iOS doesn't zoom in when the box is tapped.
 const COMPOSER_TEXT_CLASS =
   "col-start-1 row-start-1 max-h-[min(calc(6lh+1rem),40dvh)] px-4 py-2 text-base sm:max-h-[min(calc(10lh+1rem),40dvh)] sm:text-sm";
+// From this width (in rem) search's results sit beside the chat; a narrower chat shows them in its place (#409).
+const WIDE_SEARCH_REM = 52;
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** Scrolls the thread so a message sits in its middle, without moving the page around it. */
+function scrollMessageIntoThread(thread: HTMLElement | null, id: string, smooth: boolean) {
+  const element = document.getElementById(`comment-${id}`);
+  if (!thread || !element) return;
+  const offset = element.getBoundingClientRect().top - thread.getBoundingClientRect().top;
+  const top = thread.scrollTop + offset - Math.max(16, (thread.clientHeight - element.offsetHeight) / 2);
+  thread.scrollTo({ top: Math.max(0, top), behavior: smooth && !prefersReducedMotion() ? "smooth" : "auto" });
+}
 
 function getFileExtension(fileName: string) {
   const dotIndex = fileName.lastIndexOf(".");
@@ -211,6 +230,7 @@ export function ProjectChatWorkspace({
   framed?: boolean;
 }) {
   const [comments, setComments] = useState(initialComments);
+  const currentUserEmail = currentUser.email;
   const timeZone = useUserTimeZone();
   // Fixed when the chat opens, so the line stays put while the user replies.
   const [firstNewCommentId] = useState(() => {
@@ -248,10 +268,62 @@ export function ProjectChatWorkspace({
   const lastScrollTopRef = useRef(0);
   const chatVersionRef = useRef<string | null>(null);
   const busyRef = useRef(false);
+  const commentsRef = useRef(comments);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  // Scrolled up the thread: a button back to the latest message, counting what others wrote meanwhile.
+  const awayRef = useRef(false);
+  const [awayFromLatest, setAwayFromLatest] = useState(false);
+  const [unseen, setUnseen] = useState(0);
+
+  // Search inside this chat (#409): the header's button opens it. Results come newest first.
+  const search = useChatSearch();
+  const searchOpen = Boolean(search?.open);
+  const [query, setQuery] = useState("");
+  const searchedQuery = useDeferredValue(query);
+  const results = useMemo(() => (searchOpen ? searchChat(comments, searchedQuery) : []), [comments, searchOpen, searchedQuery]);
+  const resultById = useMemo(() => new Map(results.map((result) => [result.id, result])), [results]);
+  const commentById = useMemo(() => new Map(comments.map((comment) => [comment.id, comment])), [comments]);
+  // The result picked for this query: at first the newest match, the one closest to the bottom.
+  // It stays put when later messages match too.
+  const [picked, setPicked] = useState<{ query: string; id: string | null }>({ query: "", id: null });
+  if (searchOpen && picked.query !== searchedQuery) setPicked({ query: searchedQuery, id: results[0]?.id ?? null });
+  const activeId = picked.id && resultById.has(picked.id) ? picked.id : (results[0]?.id ?? null);
+  // A wide chat shows the results beside it; a narrow one shows them in its place, then the chat at the one picked.
+  const [wide, setWide] = useState(false);
+  const [narrowView, setNarrowView] = useState<"results" | "chat">("results");
+  const [searchWasOpen, setSearchWasOpen] = useState(searchOpen);
+  if (searchWasOpen !== searchOpen) {
+    setSearchWasOpen(searchOpen);
+    setNarrowView("results");
+    if (!searchOpen) setQuery("");
+  }
+  const resultsCoverChat = searchOpen && !wide && narrowView === "results";
+  const chatShowsResult = searchOpen && (wide || narrowView === "chat");
 
   useEffect(() => {
     busyRef.current = isSubmitting || mutatingCommentId !== null;
   }, [isSubmitting, mutatingCommentId]);
+
+  useEffect(() => {
+    commentsRef.current = comments;
+  }, [comments]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      setWide(entry.contentRect.width >= WIDE_SEARCH_REM * rem);
+    });
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
+
+  // The picked result's message, in the middle of the thread. A narrow chat jumps there when it comes back.
+  useEffect(() => {
+    if (chatShowsResult && activeId) scrollMessageIntoThread(threadRef.current, activeId, wide);
+  }, [activeId, chatShowsResult, wide]);
 
   useEffect(() => {
     const ownMessageSending = comments.at(-1)?.id.startsWith("pending-");
@@ -291,6 +363,11 @@ export function ProjectChatWorkspace({
         chatVersionRef.current = data.version;
         const fresh = data.comments;
         if (!data.changed || !fresh) return;
+        if (!nearBottomRef.current) {
+          const known = new Set(commentsRef.current.map((comment) => comment.id));
+          const arrived = fresh.filter((comment) => !known.has(comment.id) && comment.author.email !== currentUserEmail).length;
+          if (arrived) setUnseen((count) => count + arrived);
+        }
         setComments((prev) => [...fresh, ...prev.filter((comment) => comment.id.startsWith("pending-"))]);
         // The reader is looking at the chat, so what just arrived counts as read (SIDE-03).
         void fetch(`${apiBase}/chat-read`, { method: "POST" }).catch(() => undefined);
@@ -306,7 +383,7 @@ export function ProjectChatWorkspace({
       window.clearInterval(timer);
       stopListening();
     };
-  }, [apiBase]);
+  }, [apiBase, currentUserEmail]);
 
   function addFiles(fileList: FileList | File[]) {
     if (!allowAttachments) return;
@@ -634,9 +711,35 @@ export function ProjectChatWorkspace({
     .slice(0, 3);
 
   function jumpToComment(commentId: string) {
-    document
-      .getElementById(`comment-${commentId}`)
-      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    scrollMessageIntoThread(threadRef.current, commentId, true);
+  }
+
+  function jumpToLatest() {
+    const thread = threadRef.current;
+    if (!thread) return;
+    // From here new messages keep the thread at the bottom, as they do for a reader who's there.
+    nearBottomRef.current = true;
+    setUnseen(0);
+    thread.scrollTo({ top: thread.scrollHeight, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  }
+
+  function moveSearchSelection(step: 1 | -1) {
+    if (!results.length) return;
+    const index = Math.max(0, results.findIndex((result) => result.id === activeId));
+    const next = results[Math.min(results.length - 1, Math.max(0, index + step))];
+    setPicked({ query: searchedQuery, id: next.id });
+  }
+
+  function pickSearchResult(id: string) {
+    setPicked({ query: searchedQuery, id });
+    if (!wide) {
+      setNarrowView("chat");
+      // On a phone the keyboard goes away, so the chat gets the whole screen.
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    } else if (id === activeId) {
+      // Picking the selected result again brings its message back into view.
+      scrollMessageIntoThread(threadRef.current, id, true);
+    }
   }
 
   async function togglePinned(comment: ProjectComment) {
@@ -681,16 +784,20 @@ export function ProjectChatWorkspace({
 
   return (
     <>
-      {/* On phones the chat runs edge to edge; the card frame starts at sm. */}
+      {/* On phones the chat runs edge to edge; the card frame starts at sm. Rows: pinned messages,
+          the thread, the message box; search's results take a second column on a wide chat (#409).
+          On a narrow one they cover the chat, which stays laid out (keeping its place) but out of reach. */}
       <div
+        ref={rootRef}
         className={cn(
-          "flex min-h-0 flex-1 flex-col overflow-hidden border-zinc-200 bg-white shadow-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none",
+          "relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-zinc-200 bg-white shadow-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none",
           framed && "sm:rounded-2xl sm:border sm:shadow-xl",
         )}
       >
         {pinnedComments.length > 0 ? (
           <section
-            className="bg-white/95 px-3 py-2 dark:bg-zinc-950 sm:px-6 sm:py-3"
+            inert={resultsCoverChat}
+            className="col-start-1 row-start-1 bg-white/95 px-3 py-2 dark:bg-zinc-950 sm:px-6 sm:py-3"
             aria-label="Pinned messages"
           >
             <div className="mx-auto max-w-5xl rounded-2xl bg-amber-50/80 p-2.5 ring-1 ring-amber-200/70 dark:bg-amber-950/20 dark:ring-amber-900/60 sm:p-3">
@@ -723,15 +830,24 @@ export function ProjectChatWorkspace({
 
         <div
           ref={threadRef}
-          className="min-h-0 flex-1 overflow-y-auto bg-zinc-100/60 px-3 py-3 dark:bg-zinc-950 sm:px-6 sm:py-4 lg:px-8"
+          inert={resultsCoverChat}
+          className="col-start-1 row-start-2 min-h-0 overflow-y-auto bg-zinc-100/60 px-3 py-3 dark:bg-zinc-950 sm:px-6 sm:py-4 lg:px-8"
           onScroll={(event) => {
             const element = event.currentTarget;
-            const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 120;
+            const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
+            const nearBottom = distance < 120;
             // Only scrolling up leaves the bottom. Browsers report a scroll in the next frame, before the
             // observer above runs, so a report can measure a thread that the message box has just made
             // shorter and that the observer hasn't scrolled yet (#377).
             if (nearBottom || element.scrollTop < lastScrollTopRef.current) nearBottomRef.current = nearBottom;
             lastScrollTopRef.current = element.scrollTop;
+            // Half a screen or more up, the jump-to-latest button shows (#409).
+            const away = distance > Math.max(240, element.clientHeight / 2);
+            if (away !== awayRef.current) {
+              awayRef.current = away;
+              setAwayFromLatest(away);
+            }
+            if (!away && unseen) setUnseen(0);
           }}
         >
           {/* An empty chat centers its hint in the space instead of hanging it from the top. */}
@@ -754,6 +870,9 @@ export function ProjectChatWorkspace({
                   comment.author.email === currentUser.email && !isPending;
                 const isEditing = editingCommentId === comment.id;
                 const isMutating = mutatingCommentId === comment.id;
+                // Search (#409): every match is marked; the picked result's message is outlined too.
+                const match = resultById.get(comment.id);
+                const isSearchPick = searchOpen && comment.id === activeId;
 
                 return (
                   <Fragment key={comment.id}>
@@ -766,13 +885,16 @@ export function ProjectChatWorkspace({
                   ) : null}
                   <article
                     id={`comment-${comment.id}`}
-                    className={`rounded-2xl bg-white/95 p-3 text-sm shadow-sm shadow-zinc-200/60 ring-1 transition dark:bg-zinc-900/80 dark:shadow-none sm:p-4 ${
+                    aria-current={isSearchPick ? "true" : undefined}
+                    className={cn(
+                      "rounded-2xl bg-white/95 p-3 text-sm shadow-sm shadow-zinc-200/60 ring-1 transition dark:bg-zinc-900/80 dark:shadow-none sm:p-4",
                       isPending
                         ? "opacity-80 ring-zinc-300 dark:ring-zinc-700"
                         : comment.pinned
                           ? "ring-amber-200 dark:ring-amber-900/70"
-                          : "ring-zinc-200/70 dark:ring-zinc-800/70"
-                    }`}
+                          : "ring-zinc-200/70 dark:ring-zinc-800/70",
+                      isSearchPick && "animate-[chat-message-flash_900ms_ease-out] ring-2 ring-accent dark:ring-accent",
+                    )}
                   >
                     <div className="flex items-start gap-2.5">
                       <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold uppercase text-white dark:bg-zinc-100 dark:text-zinc-900">
@@ -938,7 +1060,7 @@ export function ProjectChatWorkspace({
                       </div>
                     ) : comment.message ? (
                       <p className="mt-2 whitespace-pre-wrap leading-6 text-zinc-800 dark:text-zinc-200 sm:mt-3">
-                        {comment.message}
+                        {match?.ranges.length ? <Highlighted text={comment.message} ranges={match.ranges} strong={isSearchPick} /> : comment.message}
                       </p>
                     ) : null}
                     {comment.attachments.length > 0 ? (
@@ -962,9 +1084,39 @@ export function ProjectChatWorkspace({
             <div ref={messagesEndRef} />
           </div>
         </div>
+        {/* These two float over the thread: they share its grid cell. */}
+        {/* A narrow chat showing a search result: back to the list of results. */}
+        {searchOpen && !wide && narrowView === "chat" ? (
+          <button
+            type="button"
+            onClick={() => setNarrowView("results")}
+            aria-label={`Back to ${results.length === 1 ? "1 result" : `${results.length} results`}`}
+            className="z-10 col-start-1 row-start-2 mt-3 inline-flex h-9 items-center gap-1 self-start justify-self-center rounded-full border border-line bg-raised pl-2 pr-3.5 text-sm font-semibold text-ink shadow-raised hover:bg-surface-hover"
+          >
+            <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+            {results.length === 1 ? "1 result" : `${results.length} results`}
+          </button>
+        ) : null}
+        {awayFromLatest ? (
+          <button
+            type="button"
+            onClick={jumpToLatest}
+            aria-label={unseen ? `Jump to the latest message, ${formatUnreadCount(unseen)} new` : "Jump to the latest message"}
+            title="Jump to the latest message"
+            className="relative z-10 col-start-1 row-start-2 m-3 grid h-10 w-10 animate-[ui-pop-in_120ms_ease-out] place-items-center self-end justify-self-end rounded-full border border-line bg-raised text-ink shadow-raised transition-colors hover:bg-surface-hover sm:m-4 sm:mr-6 lg:mr-8"
+          >
+            <ArrowDown aria-hidden="true" className="h-4 w-4" />
+            {unseen ? (
+              <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 font-mono text-2xs font-bold tabular-nums text-accent-ink">
+                {formatUnreadCount(unseen)}
+              </span>
+            ) : null}
+          </button>
+        ) : null}
 
         <form
-          className="border-t border-zinc-200 bg-white px-3 py-2 shadow-[0_-12px_35px_rgba(24,24,27,0.08)] dark:border-zinc-800 dark:bg-zinc-950 sm:px-5 lg:px-7"
+          inert={resultsCoverChat}
+          className="col-start-1 row-start-3 border-t border-zinc-200 bg-white px-3 py-2 shadow-[0_-12px_35px_rgba(24,24,27,0.08)] dark:border-zinc-800 dark:bg-zinc-950 sm:px-5 lg:px-7"
           onSubmit={(event) => {
             event.preventDefault();
             void sendMessage();
@@ -1078,6 +1230,25 @@ export function ProjectChatWorkspace({
             ) : null}
           </div>
         </form>
+
+        {searchOpen && search ? (
+          <ChatSearchPanel
+            query={query}
+            onQueryChange={setQuery}
+            results={results}
+            messages={commentById}
+            activeId={activeId}
+            onPick={pickSearchResult}
+            onMove={moveSearchSelection}
+            onEnter={() => (wide ? moveSearchSelection(1) : activeId && pickSearchResult(activeId))}
+            onClose={search.closeSearch}
+            focusRequest={search.focusRequest}
+            currentUserEmail={currentUserEmail}
+            formatTime={(iso) => formatMessageTime(iso, timeZone)}
+            layout={wide ? "side" : "full"}
+            hidden={!wide && narrowView === "chat"}
+          />
+        ) : null}
       </div>
 
       <ConfirmDialog
