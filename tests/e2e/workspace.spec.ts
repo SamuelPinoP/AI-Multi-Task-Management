@@ -109,7 +109,7 @@ test("member can create a project and upload a local video attachment", async ({
   // The chat's attachments input; the owner's project photo picker (#403) is another file input.
   await page.locator('input[type="file"][multiple]').setInputFiles(videoFixturePath);
   await expect(page.getByText("tiny-video.mp4")).toBeVisible();
-  await page.getByPlaceholder(/share an update/i).fill(chatMessage);
+  await page.getByPlaceholder("Type here", { exact: true }).fill(chatMessage);
 
   const createCommentResponsePromise = page.waitForResponse(
     (response) =>
@@ -164,7 +164,7 @@ test("chat shows several attachments and opens them in the viewer", async ({
     ]);
   const tray = page.getByRole("list", { name: "Files to send" });
   await expect(tray.getByRole("listitem")).toHaveCount(5);
-  await page.getByPlaceholder(/share an update/i).fill(chatMessage);
+  await page.getByPlaceholder("Type here", { exact: true }).fill(chatMessage);
 
   const createCommentResponsePromise = page.waitForResponse(
     (response) =>

@@ -69,14 +69,14 @@ test("message times read the same from the server and the browser, in the reader
 
     // The chat: each message's time, and the full date and time on hover.
     errors.length = 0;
-    await open(page, `/projects/${project.id}/chat`, page.getByPlaceholder(/share an update/i), { firstVisit });
+    await open(page, `/projects/${project.id}/chat`, page.getByPlaceholder("Type here", { exact: true }), { firstVisit });
     expect(errors, `chat, ${visit}`).toEqual([]);
     await expect(time).toHaveText(messageTime);
     await expect(time).toHaveAttribute("title", inZone({ dateStyle: "medium", timeStyle: "short" }, comment.createdAt));
 
     // The same chat opened beside the list on the Chats page.
     errors.length = 0;
-    await open(page, `/chats?project=${project.id}`, page.getByPlaceholder(/share an update/i), { firstVisit });
+    await open(page, `/chats?project=${project.id}`, page.getByPlaceholder("Type here", { exact: true }), { firstVisit });
     expect(errors, `Chats page, ${visit}`).toEqual([]);
     await expect(time).toHaveText(messageTime);
 

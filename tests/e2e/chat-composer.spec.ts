@@ -30,7 +30,7 @@ async function openNewProjectChat(page: Page, messages = 0) {
     expect((await page.request.post(`/api/projects/${project.id}/comments`, { data: { message: `Update ${index}` } })).status()).toBe(201);
   }
   await page.goto(`/projects/${project.id}/chat`);
-  return page.getByPlaceholder(/share an update/i);
+  return page.getByPlaceholder("Type here", { exact: true });
 }
 
 test("the message box grows with its text up to a limit, then scrolls", async ({ page }) => {
@@ -59,19 +59,70 @@ test("the message box grows with its text up to a limit, then scrolls", async ({
   expect((await measure(box)).scrolls).toBe(true);
   await expect(latest).toBeInViewport({ ratio: 1 });
 
-  // On wider screens the buttons stay at the bottom of the box, next to the last line.
-  if (viewport.width >= 640) {
-    const boxBounds = (await box.boundingBox())!;
-    for (const name of ["Attach files", "Send message"]) {
-      const bounds = (await page.getByRole("button", { name }).boundingBox())!;
-      expect(Math.abs(bounds.y + bounds.height - (boxBounds.y + boxBounds.height)), `${name} sits at the bottom`).toBeLessThanOrEqual(2);
-    }
+  // On phones and wider screens the buttons stay at the bottom of the box, next to the last line (#419).
+  const boxBounds = (await box.boundingBox())!;
+  for (const name of ["Attach files", "Send message"]) {
+    const bounds = (await page.getByRole("button", { name }).boundingBox())!;
+    expect(Math.abs(bounds.y + bounds.height - (boxBounds.y + boxBounds.height)), `${name} sits at the bottom`).toBeLessThanOrEqual(2);
   }
 
   // Sending empties the box, and it shrinks back to one line.
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(box).toHaveValue("");
   await expect.poll(async () => (await measure(box)).height).toBeCloseTo(empty.height, 0);
+});
+
+test("the paperclip, the text and send share one box, and send turns teal once there's something to send", async ({ page }) => {
+  const box = await openNewProjectChat(page);
+  const attach = page.getByRole("button", { name: "Attach files" });
+  const send = page.getByRole("button", { name: "Send message" });
+
+  // The short hint fits on one line, on a phone too (#419). Measured once the page has streamed in.
+  await expect(box).toBeVisible();
+  const empty = await measure(box);
+  expect(empty.height).toBeCloseTo(empty.lineHeight + empty.padding, 0);
+
+  // The first framed box around the text holds both buttons, which have no frame or fill of their own.
+  // Before #419 the first frame was the whole form, with the paperclip a white square beside the text.
+  const frame = await box.evaluate(
+    (textarea, [attachButton, sendButton]) => {
+      let element = textarea.parentElement;
+      while (element && parseFloat(getComputedStyle(element).borderTopWidth) === 0) element = element.parentElement;
+      return {
+        tag: element?.tagName,
+        holdsBoth: Boolean(element && attachButton && sendButton && element.contains(attachButton) && element.contains(sendButton)),
+        radius: element ? parseFloat(getComputedStyle(element).borderTopLeftRadius) : 0,
+        attachFill: attachButton ? getComputedStyle(attachButton).backgroundColor : "",
+        attachBorder: attachButton ? parseFloat(getComputedStyle(attachButton).borderTopWidth) : -1,
+      };
+    },
+    [await attach.elementHandle(), await send.elementHandle()],
+  );
+  expect(frame.tag).toBe("DIV");
+  expect(frame.holdsBoth).toBe(true);
+  expect(frame.radius).toBeGreaterThanOrEqual(16);
+  expect(frame.attachFill).toBe("rgba(0, 0, 0, 0)");
+  expect(frame.attachBorder).toBe(0);
+
+  // Send is grey while there's nothing to send, teal with text, and grey again once the text is gone.
+  const accent = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--accent)";
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+  const fill = () => send.evaluate((element) => getComputedStyle(element).backgroundColor);
+  expect(await fill()).not.toBe(accent);
+  await box.fill("Ready to send");
+  await expect.poll(fill).toBe(accent);
+  await box.fill("");
+  await expect.poll(fill).not.toBe(accent);
+
+  // Sending with nothing in the box still says why, as before.
+  await send.click();
+  await expect(page.getByText("Add a message or attach at least one file.")).toBeVisible();
 });
 
 test("the latest message stays in view when the box grows before the thread's last scroll is reported", async ({ page, isMobile }) => {

@@ -73,8 +73,9 @@ const ACCEPTED_FILE_TYPES =
 // screens, never past 40% of the screen's height, then it scrolls. The textarea and an invisible
 // copy of its text share these classes and one grid cell, so the copy sets the height and the
 // textarea stretches to it. Phones get 16px text, so iOS doesn't zoom in when the box is tapped.
+// One line is as tall as the round buttons beside it: 24px + 12px on a phone, 20px + 12px from sm.
 const COMPOSER_TEXT_CLASS =
-  "col-start-1 row-start-1 max-h-[min(calc(6lh+1rem),40dvh)] px-4 py-2 text-base sm:max-h-[min(calc(10lh+1rem),40dvh)] sm:text-sm";
+  "col-start-1 row-start-1 max-h-[min(calc(6lh+0.75rem),40dvh)] px-1 py-1.5 text-base sm:max-h-[min(calc(10lh+0.75rem),40dvh)] sm:text-sm";
 // From this width (in rem) search's results sit beside the chat; a narrower chat shows them in its place (#409).
 const WIDE_SEARCH_REM = 52;
 
@@ -203,7 +204,7 @@ export function ProjectChatWorkspace({
   projectId,
   apiBase = `/api/projects/${projectId}`,
   allowAttachments = true,
-  placeholder = "Share an update, decision, blocker, or handoff...",
+  placeholder = "Type here",
   composerNotice,
   initialComments,
   currentUser,
@@ -782,6 +783,9 @@ export function ProjectChatWorkspace({
     }
   }
 
+  // Send turns teal once there's text or a file to send (#419).
+  const canSend = message.trim().length > 0 || selectedAttachments.length > 0;
+
   return (
     <>
       {/* On phones the chat runs edge to edge; the card frame starts at sm. Rows: pinned messages,
@@ -1137,44 +1141,55 @@ export function ProjectChatWorkspace({
               />
             ) : null}
             {composerNotice ? <p className="py-2 text-center text-sm text-muted">{composerNotice}</p> : null}
-            {/* One row at every size: attach, the message box, send. The buttons stay at the bottom as the box grows. */}
-            <div className={cn("flex items-end gap-2", composerNotice && "hidden")}>
-              {allowAttachments ? (
-                <button
-                  type="button"
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-zinc-600 shadow-sm ring-1 ring-zinc-200 transition hover:text-zinc-950 hover:ring-zinc-300 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800 dark:hover:text-zinc-50 dark:hover:ring-zinc-700 sm:h-9 sm:w-9"
-                  onClick={() => {
-                    if (attachmentsDisabledMessage) setError(attachmentsDisabledMessage);
-                    else fileInputRef.current?.click();
-                  }}
-                  disabled={isSubmitting}
-                  aria-label="Attach files"
-                  title="Attach files"
-                >
-                  <PaperclipIcon />
-                </button>
+            {/* One box at every size (#419, design 1A): the paperclip, the text and send share its background
+                and border, as in Linear and Slack. Files to send show at its top, the buttons stay beside the
+                last line as the text grows, and dropping files anywhere on it attaches them. */}
+            <div
+              className={cn(
+                "rounded-[1.375rem] border bg-canvas p-[0.1875rem] transition-[border-color,background-color,box-shadow] duration-150 motion-reduce:transition-none",
+                "focus-within:border-accent focus-within:bg-surface focus-within:ring-3 focus-within:ring-accent/15",
+                isDragging ? "border-accent bg-surface ring-4 ring-accent/25" : "border-line",
+                composerNotice && "hidden",
+              )}
+              onDragEnter={(event) => {
+                if (!allowAttachments) return;
+                event.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragOver={(event) => {
+                if (!allowAttachments) return;
+                event.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+            >
+              {selectedAttachments.length > 0 ? (
+                <ComposerAttachmentTray
+                  attachments={selectedAttachments}
+                  onRemove={removeSelectedAttachment}
+                  className="px-2 pb-1 pt-2"
+                />
               ) : null}
+              <div className="flex items-end gap-0.5">
+                {allowAttachments ? (
+                  <button
+                    type="button"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-surface-hover hover:text-ink disabled:opacity-50 sm:h-8 sm:w-8"
+                    onClick={() => {
+                      if (attachmentsDisabledMessage) setError(attachmentsDisabledMessage);
+                      else fileInputRef.current?.click();
+                    }}
+                    disabled={isSubmitting}
+                    aria-label="Attach files"
+                    title="Attach files"
+                  >
+                    <PaperclipIcon className="h-5 w-5 sm:h-[1.125rem] sm:w-[1.125rem]" />
+                  </button>
+                ) : null}
 
-              <div
-                className={`min-w-0 flex-1 rounded-2xl bg-zinc-50/80 ring-1 transition dark:bg-zinc-900/70 ${
-                  isDragging
-                    ? "ring-4 ring-zinc-300 dark:ring-zinc-700"
-                    : "ring-zinc-200 focus-within:ring-zinc-400 dark:ring-zinc-800 dark:focus-within:ring-zinc-600"
-                }`}
-                onDragEnter={(event) => {
-                  if (!allowAttachments) return;
-                  event.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragOver={(event) => {
-                  if (!allowAttachments) return;
-                  event.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-              >
-                <div className="grid grid-cols-1">
+                {/* Without the paperclip (direct messages), the text starts a little further in. */}
+                <div className={cn("grid min-w-0 flex-1 grid-cols-1", !allowAttachments && "pl-2")}>
                   <textarea
                     id="project-chat-message"
                     value={message}
@@ -1186,12 +1201,11 @@ export function ProjectChatWorkspace({
                       if (!sendsOnKeyDown(event)) return;
                       event.preventDefault();
                       // Enter in an empty box, or while a message is still sending, does nothing.
-                      if (!isSubmitting && (message.trim() || selectedAttachments.length > 0)) void sendMessage();
+                      if (!isSubmitting && canSend) void sendMessage();
                     }}
                     placeholder={placeholder}
                     rows={1}
-                    // At least two lines on a phone, so the whole hint shows; one line from sm.
-                    className={`${COMPOSER_TEXT_CLASS} min-h-[calc(2lh+1rem)] w-full resize-none rounded-2xl border-0 bg-transparent text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 sm:min-h-[calc(1lh+1rem)]`}
+                    className={`${COMPOSER_TEXT_CLASS} min-h-[calc(1lh+0.75rem)] w-full resize-none border-0 bg-transparent text-ink outline-none placeholder:text-muted`}
                   />
                   {/* The trailing space gives a final empty line its height. */}
                   <div
@@ -1201,25 +1215,22 @@ export function ProjectChatWorkspace({
                     {`${message} `}
                   </div>
                 </div>
-                {selectedAttachments.length > 0 ? (
-                  <ComposerAttachmentTray
-                    attachments={selectedAttachments}
-                    onRemove={removeSelectedAttachment}
-                  />
-                ) : null}
-              </div>
 
-              {/* An icon on phones and "Send" from sm; either way its name is "Send message". The message
-                  itself shows "Sending" while it uploads. */}
-              <button
-                type="submit"
-                className={cn(uiPrimaryButtonClass, "h-10 w-10 shrink-0 px-0 sm:h-9 sm:w-auto sm:px-4")}
-                disabled={isSubmitting}
-              >
-                <SendHorizontal aria-hidden="true" className="h-4 w-4" />
-                <span className="sr-only sm:not-sr-only">Send</span>
-                <span className="sr-only"> message</span>
-              </button>
+                {/* Grey until there's something to send, then teal; its name is "Send message" either way.
+                    The message itself shows "Sending" while it uploads. */}
+                <button
+                  type="submit"
+                  title="Send"
+                  className={cn(
+                    "grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors duration-150 disabled:opacity-60 motion-reduce:transition-none sm:h-8 sm:w-8",
+                    canSend ? "bg-accent text-accent-ink hover:bg-accent-hover" : "bg-surface-hover text-muted",
+                  )}
+                  disabled={isSubmitting}
+                >
+                  <SendHorizontal aria-hidden="true" className="h-4 w-4" />
+                  <span className="sr-only">Send message</span>
+                </button>
+              </div>
             </div>
             {error ? (
               <div className="mt-2">

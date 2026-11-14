@@ -25,7 +25,7 @@ test("a teammate's message appears in an open chat without reloading", async ({ 
   expect((await teammate.request.patch(`/api/project-invitations/${invitation.id}`, { data: { action: "ACCEPT" } })).ok()).toBe(true);
 
   await page.goto(`/projects/${project.id}/chat`);
-  await expect(page.getByPlaceholder(/share an update/i)).toBeVisible();
+  await expect(page.getByPlaceholder("Type here", { exact: true })).toBeVisible();
 
   const message = uniqueName("Live update from a teammate");
   expect((await teammate.request.post(`/api/projects/${project.id}/comments`, { data: { message } })).status()).toBe(201);
