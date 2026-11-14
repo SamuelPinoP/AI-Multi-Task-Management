@@ -11,7 +11,6 @@ import {
   LayoutDashboard,
   LogOut,
   Map as MapIcon,
-  Menu,
   MessagesSquare,
   Moon,
   NotebookPen,
@@ -28,10 +27,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { AccentMenuItems } from "@/components/accent-menu";
 import { LogoMark } from "@/components/brand/logo-mark";
 import { CommandPalette } from "@/components/command-palette";
+import { MobileMenuButton, MobileMenuContext, type MobileMenu } from "@/components/mobile-menu";
 import { NewTaskDialog, type NewTaskDraft } from "@/components/new-task-dialog";
 import { NotificationsMenu } from "@/components/notifications-menu";
 import { ProjectSheet, type ProjectInput } from "@/components/projects/project-sheet";
@@ -685,27 +685,79 @@ function AccountMenu({
 }
 
 /**
+ * Whether the page's own title, its first `h1` that takes up room, is on screen in the scrolling
+ * page. Pages stream in, so the title is looked for again as the page changes; a page that has
+ * loaded without one counts as having its title out of view. Until the page says otherwise, and
+ * right after moving to another page, the title counts as on screen.
+ */
+function usePageTitleInView(pathname: string) {
+  const [seen, setSeen] = useState({ pathname, inView: true });
+
+  useEffect(() => {
+    const main = document.getElementById("main-content");
+    if (!main) return;
+    const report = (inView: boolean) =>
+      setSeen((current) => (current.pathname === pathname && current.inView === inView ? current : { pathname, inView }));
+
+    let heading: Element | null = null;
+    let frame = 0;
+    const intersections = new IntersectionObserver((entries) => report(entries[entries.length - 1].isIntersecting), { root: main });
+    const findHeading = () => {
+      frame = 0;
+      // Skips the screen-reader-only headings (1px wide) and the hidden copy of a page still streaming in.
+      const visible = Array.from(main.querySelectorAll("h1")).find((element) => element.getBoundingClientRect().width > 1) ?? null;
+      if (visible !== heading) {
+        if (heading) intersections.unobserve(heading);
+        heading = visible;
+        if (heading) intersections.observe(heading);
+      }
+      // Loaded without a title of its own (Tree view, a task's page): the bar names the page.
+      if (!heading && !main.querySelector('[aria-busy="true"]')) report(false);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(findHeading);
+    };
+    schedule();
+    const mutations = new MutationObserver(schedule);
+    mutations.observe(main, { childList: true, subtree: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      mutations.disconnect();
+      intersections.disconnect();
+    };
+  }, [pathname]);
+
+  return seen.pathname === pathname ? seen.inView : true;
+}
+
+/**
  * The bar above the page on phones and tablets: the menu button and where you are. Desktop has
  * none (#410): the sidebar is always there, each page's heading says where you are, and search
- * is Home's button or Ctrl+K.
+ * is Home's button or Ctrl+K. A page's name shows once (#420, design 3A, like iOS large titles):
+ * while the page's own title is on screen the bar holds only the menu button, in the page's color
+ * and without a line, and the name moves in once the title has scrolled under the bar.
  */
-function TopBar({ nav, pathname, onOpenMenu }: { nav: WorkspaceNav; pathname: string; onOpenMenu: () => void }) {
+function TopBar({ nav, pathname }: { nav: WorkspaceNav; pathname: string }) {
   const { parent, title } = pageTitleFor(pathname, nav.projects);
-  // On phones the bell is inside the menu (#404), so the menu button shows its dot.
-  const news = nav.pendingInvitations + nav.unreadNotifications;
+  const titleInView = usePageTitleInView(pathname);
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface/95 px-3 backdrop-blur sm:gap-3 sm:px-5 lg:hidden">
-      <button
-        type="button"
-        onClick={onOpenMenu}
-        aria-label={news ? `Open navigation, ${news} new notification${news === 1 ? "" : "s"}` : "Open navigation"}
-        className="relative grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink"
+    <header
+      className={cn(
+        "sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b px-3 transition-colors duration-200 motion-reduce:transition-none sm:gap-3 sm:px-5 lg:hidden",
+        titleInView ? "border-transparent bg-canvas" : "border-line bg-surface/95 backdrop-blur",
+      )}
+    >
+      <MobileMenuButton />
+      {/* inert while the title is on screen: no second name for screen readers, and no hidden link to tab to. */}
+      <div
+        inert={titleInView}
+        aria-hidden={titleInView || undefined}
+        className={cn(
+          "flex min-w-0 items-center gap-1.5 text-sm transition-[opacity,translate] duration-200 motion-reduce:transition-none",
+          titleInView ? "translate-y-1 opacity-0" : "opacity-100",
+        )}
       >
-        <Menu aria-hidden="true" className="h-5 w-5" />
-        {news ? <span aria-hidden="true" className="absolute right-1 top-1 h-2 w-2 rounded-full border-2 border-surface bg-project-3" /> : null}
-      </button>
-      <div className="flex min-w-0 items-center gap-1.5 text-sm">
         {/* Tablets show a project page's place under Projects (DES-10). */}
         {parent ? (
           <>
@@ -818,6 +870,11 @@ export function AppShell({
   }, []);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // What a page needs for a menu button of its own (#420). It changes only with the count: a new value
+  // reaching a page that's still hydrating makes React throw away the server's HTML and draw it again.
+  const news = nav ? nav.pendingInvitations + nav.unreadNotifications : 0;
+  const mobileMenu = useMemo<MobileMenu>(() => ({ open: () => setMenuOpen(true), news }), [news]);
 
   useEffect(() => {
     if (!currentUser && !isPublicPage) {
@@ -1023,16 +1080,21 @@ export function AppShell({
         </SheetContent>
       </Sheet>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar nav={nav} pathname={pathname} onOpenMenu={() => setMenuOpen(true)} />
-        <OfflineBanner />
-        {/* relative: hidden (sr-only) text is absolutely positioned, and it scrolls only inside a positioned
-            scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar. */}
-        <main id="main-content" className={cn("relative min-h-0 flex-1 overflow-y-auto", !fullHeight && "pb-24 lg:pb-0")}>
-          {children}
-        </main>
-        <MobileTabs pathname={pathname} onNewTask={openNewTask} inFlow={fullHeight} />
-      </div>
+      {/* Pages reach the phone menu through this, for a menu button in a header of their own (#420).
+          On phones the bell is inside the menu (#404), so the button shows a dot for anything new. */}
+      <MobileMenuContext.Provider value={mobileMenu}>
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* The chats fill the screen with a header that never scrolls away, so it's their only bar (#420). */}
+          {fullHeight ? null : <TopBar nav={nav} pathname={pathname} />}
+          <OfflineBanner />
+          {/* relative: hidden (sr-only) text is absolutely positioned, and it scrolls only inside a positioned
+              scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar. */}
+          <main id="main-content" className={cn("relative min-h-0 flex-1 overflow-y-auto", !fullHeight && "pb-24 lg:pb-0")}>
+            {children}
+          </main>
+          <MobileTabs pathname={pathname} onNewTask={openNewTask} inFlow={fullHeight} />
+        </div>
+      </MobileMenuContext.Provider>
 
       <CommandPalette
         open={searchOpen}
