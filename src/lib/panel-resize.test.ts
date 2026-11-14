@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { clampWidth, dragTo, keyTo, parseWidth, roundRem, shownWidth, SIDEBAR_LIMITS, snapPoint, type PanelLimits } from "./panel-resize";
+import { CHAT_LIST_LIMITS, clampWidth, dragTo, keyTo, parseWidth, roundRem, shownWidth, SIDEBAR_LIMITS, snapPoint, type PanelLimits } from "./panel-resize";
 
 const limits: PanelLimits = { min: 11, max: 22.5, initial: 14, collapsed: 3.5 };
 
@@ -9,6 +9,15 @@ test("the sidebar opens at 224 px and goes from 176 to 360 px, or a 56 px rail",
     [SIDEBAR_LIMITS.initial, SIDEBAR_LIMITS.min, SIDEBAR_LIMITS.max, SIDEBAR_LIMITS.collapsed].map((rem) => rem * 16),
     [224, 176, 360, 56],
   );
+});
+
+test("the Chats list opens at 310 px and goes from 240 to 480 px, or a 72 px column of photos", () => {
+  assert.deepEqual(
+    [CHAT_LIST_LIMITS.initial, CHAT_LIST_LIMITS.min, CHAT_LIST_LIMITS.max, CHAT_LIST_LIMITS.collapsed].map((rem) => rem * 16),
+    [310, 240, 480, 72],
+  );
+  // It snaps to the photos halfway between the column and its narrowest width.
+  assert.equal(snapPoint(CHAT_LIST_LIMITS) * 16, 156);
 });
 
 test("widths round to a pixel and stay between the narrowest and the widest", () => {

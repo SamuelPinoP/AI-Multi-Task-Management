@@ -120,8 +120,7 @@ test("a new project can start with a photo, and Chats shows it instead of the co
   await expect(photo).toHaveAttribute("src", new RegExp(`^/api/projects/${projectId}/photo\\?v=\\d+$`));
   expect(await loadedWidth(photo)).toBe(256);
 
-  // The list row shows the same photo.
-  await header.getByRole("button", { name: "Chats", exact: true }).click();
+  // The list row beside the chat (#416) shows the same photo.
   await expect(chatRow(owner).locator("img")).toHaveAttribute("src", (await photo.getAttribute("src"))!);
 
   // Each version is cached for good; its address changes with the next photo.

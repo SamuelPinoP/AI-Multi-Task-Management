@@ -120,8 +120,11 @@ export function chatListView({
   return { kind: "people", people: [...chats, ...others] };
 }
 
-/** "1" while the desktop Chats page shows its list beside an open chat; the list hides by default (#324). */
-export const CHATS_LIST_COOKIE = "chats-list-open";
+/** The width the desktop Chats list was dragged to, in rem (#416). */
+export const CHATS_LIST_WIDTH_COOKIE = "chats-list-width";
+
+/** "1" while the desktop Chats list is shrunk to its column of photos (#416). */
+export const CHATS_LIST_COMPACT_COOKIE = "chats-list-compact";
 
 /** Unread chats first, then the newest message; chats without messages last, by name. */
 export function sortChatSummaries(chats: ChatSummary[]) {

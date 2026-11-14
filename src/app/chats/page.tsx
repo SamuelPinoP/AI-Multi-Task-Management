@@ -1,9 +1,10 @@
 import { cookies } from "next/headers";
 import { ChatsHub, type SelectedChat } from "@/components/chats/chats-hub";
 import { requirePageUser } from "@/lib/auth";
-import { CHATS_LIST_COOKIE, sortDirectChats } from "@/lib/chats";
+import { CHATS_LIST_COMPACT_COOKIE, CHATS_LIST_WIDTH_COOKIE, sortDirectChats } from "@/lib/chats";
 import { getChatSummaries, openProjectChat } from "@/lib/chats-data";
 import { getDirectChatSummaries, getTeammates, openDirectChat } from "@/lib/direct-chats";
+import { CHAT_LIST_LIMITS, parseWidth } from "@/lib/panel-resize";
 
 type ChatsPageProps = {
   searchParams: Promise<{ project?: string; person?: string }>;
@@ -29,8 +30,11 @@ export default async function ChatsPage({ searchParams }: ChatsPageProps) {
   }
   const [chats, teammates, cookieStore] = await Promise.all([getChatSummaries(user), getTeammates(user.id), cookies()]);
   const directs = sortDirectChats(await getDirectChatSummaries(user, teammates));
-  // Read here so the first paint already has the list shown or hidden, without a flash.
-  const listOpen = cookieStore.get(CHATS_LIST_COOKIE)?.value === "1";
+  // Read here so the first paint already has the list at its width, or as photos, without a jump (#416).
+  const list = {
+    width: parseWidth(cookieStore.get(CHATS_LIST_WIDTH_COOKIE)?.value, CHAT_LIST_LIMITS),
+    collapsed: cookieStore.get(CHATS_LIST_COMPACT_COOKIE)?.value === "1",
+  };
 
   return (
     <ChatsHub
@@ -39,7 +43,7 @@ export default async function ChatsPage({ searchParams }: ChatsPageProps) {
       teammates={teammates}
       selected={selected}
       currentUser={{ name: user.name, email: user.email }}
-      initialListOpen={listOpen}
+      initialList={list}
     />
   );
 }

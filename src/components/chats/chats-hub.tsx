@@ -2,9 +2,10 @@
 
 /**
  * The Chats hub (SIDE-02): the list on the left, the open chat on the right.
- * On phones the list and the chat are separate screens. On desktop an open
- * chat gets the whole width; its Chats button shows the list beside it again,
- * and that choice is remembered (#324).
+ * On phones the list and the chat are separate screens. On desktop the list
+ * always sits beside the open chat; its right edge drags to any width from
+ * 240 to 480 px, and past 240 px it shrinks to a column of photos, like
+ * Telegram Desktop (#416). The width is remembered.
  *
  * Since #387 the list has two sections, project chats first, then direct
  * messages, with All, Unread, People and Projects chips. The search finds
@@ -12,10 +13,10 @@
  * or projects under the Projects chip.
  */
 
-import { ArrowLeft, CheckCheck, MessagesSquare, PanelLeftClose, PanelLeftOpen, Paperclip, Search } from "lucide-react";
+import { ArrowLeft, CheckCheck, MessagesSquare, Paperclip, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChatSearchButton, ChatSearchProvider } from "@/components/chats/chat-search";
 import { ProjectChatMenu } from "@/components/chats/project-chat-menu";
 import { PersonAvatar } from "@/components/person-avatar";
@@ -23,9 +24,12 @@ import { ProjectChatWorkspace } from "@/components/project-chat-workspace";
 import { ProjectAvatar } from "@/components/projects/project-avatar";
 import { ProjectPhotoButton } from "@/components/projects/project-photo-button";
 import { uiButtonClass } from "@/components/ui";
+import { ResizeHandle } from "@/components/ui/resize-handle";
 import { toast } from "@/components/ui/toaster";
+import { Tooltip, TooltipDetail } from "@/components/ui/tooltip";
 import {
-  CHATS_LIST_COOKIE,
+  CHATS_LIST_COMPACT_COOKIE,
+  CHATS_LIST_WIDTH_COOKIE,
   chatListView,
   chatPreview,
   directChatKey,
@@ -42,6 +46,7 @@ import type { OpenedProjectChat } from "@/lib/chats-data";
 import { cn } from "@/lib/cn";
 import { sharedProjectsLine, type Teammate } from "@/lib/direct-chats-core";
 import type { OpenedDirectChat } from "@/lib/direct-chats";
+import { CHAT_LIST_LIMITS, savePanelCookies, shownWidth, type PanelSize } from "@/lib/panel-resize";
 import { notifyWorkspaceChanged } from "@/lib/workspace-events";
 
 export type SelectedChat = { kind: "project"; chat: OpenedProjectChat } | { kind: "person"; chat: OpenedDirectChat };
@@ -59,13 +64,16 @@ function plural(count: number, word: string) {
 
 const rowClass = (selected: boolean) =>
   cn(
-    "flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-surface-hover",
+    // 56 px rows with 36 px photos (#416): a little smaller than before, like the heading, search and filters.
+    "flex items-center gap-3 rounded-xl px-2.5 py-2 transition-colors hover:bg-surface-hover",
     selected && "bg-surface shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
   );
 
+const rowAvatarClass = "h-9 w-9";
+
 function UnreadBadge({ count }: { count: number }) {
   return (
-    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 font-mono text-2xs font-bold tabular-nums text-accent-ink">
+    <span className="inline-flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 font-mono text-2xs font-bold tabular-nums text-accent-ink">
       {formatUnreadCount(count)}
       <span className="sr-only"> unread message{count === 1 ? "" : "s"}</span>
     </span>
@@ -83,7 +91,7 @@ function RowText({ name, time, preview, unread, attachment }: { name: string; ti
       </span>
       <span className="flex items-center gap-1.5">
         {attachment ? <Paperclip aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted" /> : null}
-        <span className={cn("min-w-0 flex-1 truncate text-[0.8125rem]", hasUnread ? "text-ink" : "text-muted")}>{preview}</span>
+        <span className={cn("min-w-0 flex-1 truncate text-[0.8125rem] leading-[1.125rem]", hasUnread ? "text-ink" : "text-muted")}>{preview}</span>
         {hasUnread ? <UnreadBadge count={unread} /> : null}
       </span>
     </span>
@@ -97,7 +105,10 @@ function RowText({ name, time, preview, unread, attachment }: { name: string; ti
 function ProjectChatRow({ chat, selected }: { chat: ChatSummary; selected: boolean }) {
   return (
     <Link href={`/chats?project=${chat.projectId}`} scroll={false} aria-current={selected ? "true" : undefined} className={rowClass(selected)}>
-      <ProjectAvatar project={{ id: chat.projectId, name: chat.name, color: chat.color, photoUpdatedAt: chat.photoUpdatedAt }} />
+      <ProjectAvatar
+        project={{ id: chat.projectId, name: chat.name, color: chat.color, photoUpdatedAt: chat.photoUpdatedAt }}
+        className={cn(rowAvatarClass, "rounded-[0.625rem] text-[0.9375rem]")}
+      />
       <RowText
         name={chat.name}
         time={chat.lastMessage?.timeLabel}
@@ -113,7 +124,7 @@ function ProjectChatRow({ chat, selected }: { chat: ChatSummary; selected: boole
 function PersonRow({ personId, name, chat, projects, selected }: { personId: string; name: string; chat: DirectChatSummary | null; projects: string[]; selected: boolean }) {
   return (
     <Link href={`/chats?person=${personId}`} scroll={false} aria-current={selected ? "true" : undefined} className={rowClass(selected)}>
-      <PersonAvatar id={personId} name={name} />
+      <PersonAvatar id={personId} name={name} className={cn(rowAvatarClass, "text-[0.8125rem]")} />
       <RowText
         name={name}
         time={chat?.lastMessage?.timeLabel}
@@ -126,9 +137,53 @@ function PersonRow({ personId, name, chat, projects, selected }: { personId: str
 
 function SectionHeading({ id, children }: { id: string; children: string }) {
   return (
-    <h2 id={id} className="px-3 pb-1 pt-3 text-2xs font-bold uppercase tracking-wider text-muted">
+    <h2 id={id} className="px-2.5 pb-1 pt-3 text-2xs font-bold uppercase tracking-wider text-muted">
       {children}
     </h2>
+  );
+}
+
+/**
+ * A chat in the column of photos (#416, design 3A): its photo, tile or initials, the unread count on
+ * it, and its name in a tooltip. Screen readers get the name and the count from hidden words.
+ */
+function ChatPhotoLink({ href, name, unread, selected, children }: { href: string; name: string; unread: number; selected: boolean; children: ReactNode }) {
+  return (
+    <Tooltip
+      content={
+        unread ? (
+          <>
+            {name} <TooltipDetail>{unread} new</TooltipDetail>
+          </>
+        ) : (
+          name
+        )
+      }
+    >
+      <Link
+        href={href}
+        scroll={false}
+        aria-current={selected ? "true" : undefined}
+        className={cn(
+          "relative grid h-13 w-13 place-items-center rounded-[0.875rem] transition-colors hover:bg-surface-hover",
+          selected && "bg-surface shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
+        )}
+      >
+        {children}
+        <span className="sr-only">{unread ? `${name}, ${unread} unread message${unread === 1 ? "" : "s"}` : name}</span>
+        {unread ? (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "absolute right-px top-0.5 inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-accent px-1.5 font-mono text-2xs font-bold tabular-nums text-accent-ink ring-2",
+              selected ? "ring-surface" : "ring-canvas",
+            )}
+          >
+            {formatUnreadCount(unread)}
+          </span>
+        ) : null}
+      </Link>
+    </Tooltip>
   );
 }
 
@@ -138,7 +193,7 @@ export function ChatsHub({
   teammates,
   selected,
   currentUser,
-  initialListOpen,
+  initialList,
 }: {
   chats: ChatSummary[];
   directs: DirectChatSummary[];
@@ -146,11 +201,14 @@ export function ChatsHub({
   teammates: Teammate[];
   selected: SelectedChat | null;
   currentUser: { name: string | null; email: string };
-  /** Whether the list shows beside an open chat on desktop, from the CHATS_LIST_COOKIE. */
-  initialListOpen: boolean;
+  /** The desktop list's width and whether it's shrunk to photos, from its cookies (#416). */
+  initialList: PanelSize;
 }) {
   const router = useRouter();
-  const [listOpen, setListOpen] = useState(initialListOpen);
+  const [listSize, setListSize] = useState(initialList);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const filterRow = useRef<HTMLDivElement>(null);
+  const [filtersCut, setFiltersCut] = useState(false);
   const [filter, setFilter] = useState<ChatFilter>("all");
   const [query, setQuery] = useState("");
   const [markingAll, setMarkingAll] = useState(false);
@@ -177,10 +235,30 @@ export function ChatsHub({
     if (selectedKey) notifyWorkspaceChanged();
   }, [selectedKey]);
 
-  function toggleList() {
-    const next = !listOpen;
-    setListOpen(next);
-    document.cookie = `${CHATS_LIST_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+  // Below about 284 px the filters no longer fit, so they scroll sideways under a fade (#416).
+  useEffect(() => {
+    const row = filterRow.current;
+    if (!row) return;
+    const update = () => setFiltersCut(row.scrollWidth - row.scrollLeft - row.clientWidth > 1);
+    const observer = new ResizeObserver(update);
+    observer.observe(row);
+    row.addEventListener("scroll", update, { passive: true });
+    return () => {
+      observer.disconnect();
+      row.removeEventListener("scroll", update);
+    };
+  }, []);
+
+  // Dragging the edge updates the width as it goes and saves it when let go, so the server renders it next time.
+  function resizeList(next: PanelSize, done: boolean) {
+    setListSize(next);
+    if (done) savePanelCookies(CHATS_LIST_WIDTH_COOKIE, CHATS_LIST_COMPACT_COOKIE, next);
+  }
+
+  // The column's magnifier opens the whole list again, with the cursor in its search.
+  function openFullList() {
+    resizeList({ ...listSize, collapsed: false }, true);
+    window.requestAnimationFrame(() => searchInput.current?.focus());
   }
 
   async function markAllRead() {
@@ -273,69 +351,141 @@ export function ChatsHub({
     }
   }
 
+  const compact = listSize.collapsed;
+
   return (
     <div className="flex h-full min-h-0">
-      {/* Phones show the list or the chat. On desktop the list stays beside the chat only while it's open. */}
+      {/* Phones show the list or the chat. On desktop the list always sits beside the chat, at the width
+          its edge was dragged to (#416, design 2B), and never takes the conversation below 360 px. */}
       <section
         id="chat-list"
         aria-labelledby="chats-heading"
         className={cn(
-          "min-h-0 w-full flex-col bg-canvas lg:w-[22.5rem] lg:shrink-0 lg:border-r lg:border-line",
-          selected ? "hidden" : "flex",
-          selected && !listOpen ? "lg:hidden" : "lg:flex",
+          "relative min-h-0 w-full flex-col bg-canvas transition-[width] duration-200 data-[resizing]:transition-none lg:w-[var(--chat-list-width)] lg:max-w-[calc(100%-22.5rem)] lg:shrink-0 lg:border-r lg:border-line",
+          selected ? "hidden lg:flex" : "flex",
         )}
+        style={{ "--chat-list-width": `${shownWidth(listSize, CHAT_LIST_LIMITS)}rem` } as CSSProperties}
       >
-        <div className="grid gap-3 px-4 pb-3 pt-5">
-          <div className="flex items-center gap-3">
-            <h1 id="chats-heading" className="min-w-0 flex-1 text-title">Chats</h1>
-            <button
-              type="button"
-              onClick={() => void markAllRead()}
-              disabled={!unreadChats || markingAll}
-              className={cn(uiButtonClass, "gap-1.5 px-2.5 py-1.5 text-xs disabled:opacity-60")}
-            >
-              <CheckCheck aria-hidden="true" className="h-3.5 w-3.5" />
-              Mark all read
-            </button>
-          </div>
-          <label className="relative block">
-            <span className="sr-only">{searchLabel}</span>
-            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={searchLabel}
-              className="w-full rounded-lg border border-line bg-surface py-2 pl-9 pr-3 text-sm text-ink outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
-            />
-          </label>
-          <div role="group" aria-label="Show" className="flex flex-wrap gap-1.5">
-            {FILTERS.map((item) => (
+        {/* The whole list; phones keep it even while the desktop list is shrunk to photos. */}
+        <div className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", compact && "lg:hidden")}>
+          <div className="grid gap-2.5 px-4 pb-2 pt-4">
+            <div className="flex items-center gap-2">
+              {/* 16 px, a step above the sidebar's "AI Multi" (#416). */}
+              <h1 id="chats-heading" className="min-w-0 flex-1 truncate text-base font-bold">Chats</h1>
               <button
-                key={item.value}
                 type="button"
-                aria-pressed={filter === item.value}
-                onClick={() => setFilter(item.value)}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-[0.8125rem] font-semibold transition-colors",
-                  filter === item.value ? "border-accent bg-accent-soft text-accent" : "border-line bg-surface text-muted hover:text-ink",
-                )}
+                onClick={() => void markAllRead()}
+                disabled={!unreadChats || markingAll}
+                className={cn(uiButtonClass, "shrink-0 gap-1.5 px-2 py-1 text-xs disabled:opacity-60")}
               >
-                {item.label}
+                <CheckCheck aria-hidden="true" className="h-3.5 w-3.5" />
+                Mark all read
               </button>
-            ))}
+            </div>
+            <label className="relative block">
+              <span className="sr-only">{searchLabel}</span>
+              <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+              <input
+                ref={searchInput}
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={searchLabel}
+                // 13 px from sm up; phones keep 16 px, or iOS zooms in on focus (#337).
+                className="w-full rounded-lg border border-line bg-surface py-1.5 pl-8 pr-3 text-[0.8125rem] leading-5 text-ink outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25 max-sm:text-base"
+              />
+            </label>
+            <div
+              ref={filterRow}
+              role="group"
+              aria-label="Show"
+              className={cn(
+                "flex gap-1.5 overflow-x-auto [scrollbar-width:none]",
+                filtersCut && "[mask-image:linear-gradient(to_right,#000_calc(100%-1.75rem),transparent)]",
+              )}
+            >
+              {FILTERS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  aria-pressed={filter === item.value}
+                  onClick={() => setFilter(item.value)}
+                  className={cn(
+                    "shrink-0 rounded-full border px-2.5 py-1 text-[0.75rem] font-semibold leading-4 transition-colors",
+                    filter === item.value ? "border-accent bg-accent-soft text-accent" : "border-line bg-surface text-muted hover:text-ink",
+                  )}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-4">{list}</div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-4">{list}</div>
+        {/* Dragged past 240 px on desktop: a column of photos with their unread counts, like Telegram Desktop (#416, design 3A). */}
+        {compact ? (
+          <div className="hidden min-h-0 flex-1 flex-col items-center overflow-y-auto py-4 [scrollbar-width:none] lg:flex">
+            <h1 className="sr-only">Chats</h1>
+            <Tooltip content="Search chats">
+              <button
+                type="button"
+                onClick={openFullList}
+                aria-label="Search chats"
+                className="grid h-9 w-10 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink"
+              >
+                <Search aria-hidden="true" className="h-4 w-4" />
+              </button>
+            </Tooltip>
+            {orderedChats.length ? (
+              <>
+                <div aria-hidden="true" className="my-2.5 h-px w-6 shrink-0 bg-line" />
+                <ul aria-label="Project chats" className="flex flex-col items-center gap-0.5">
+                  {orderedChats.map((chat) => (
+                    <li key={chat.projectId}>
+                      <ChatPhotoLink href={`/chats?project=${chat.projectId}`} name={chat.name} unread={chat.unread} selected={isSelected(projectChatKey(chat.projectId))}>
+                        <ProjectAvatar project={{ id: chat.projectId, name: chat.name, color: chat.color, photoUpdatedAt: chat.photoUpdatedAt }} />
+                      </ChatPhotoLink>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+            {orderedDirects.length ? (
+              <>
+                <div aria-hidden="true" className="my-2.5 h-px w-6 shrink-0 bg-line" />
+                <ul aria-label="Direct messages" className="flex flex-col items-center gap-0.5">
+                  {orderedDirects.map((chat) => (
+                    <li key={chat.personId}>
+                      <ChatPhotoLink href={`/chats?person=${chat.personId}`} name={chat.name} unread={chat.unread} selected={isSelected(directChatKey(chat.personId))}>
+                        <PersonAvatar id={chat.personId} name={chat.name} />
+                      </ChatPhotoLink>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
+        <ResizeHandle
+          label="Resize chat list"
+          controls="chat-list"
+          size={listSize}
+          limits={CHAT_LIST_LIMITS}
+          collapsedText="Photos only"
+          onResize={resizeList}
+          className="hidden lg:block"
+        />
       </section>
 
       <section aria-label="Conversation" className={cn("min-w-0 flex-1 flex-col bg-surface lg:flex", selected ? "flex" : "hidden")}>
         {selected ? (
           // Search (#409) belongs to the open chat: another chat starts with it closed.
           <ChatSearchProvider key={selectedKey}>
-            {/* The page's heading lives in the list; while the list is hidden, screen readers still get it here. */}
-            <h1 className={cn("sr-only", listOpen && "lg:hidden")}>Chats</h1>
+            {/* The page's heading lives in the list, which phones hide while a chat is open; screen readers still get it here. */}
+            <h1 className="sr-only lg:hidden">Chats</h1>
             {/* One row on phones too: back, the name, then the header's buttons. Board and the project page are in ⋯ (#408). */}
             <div className="flex items-center gap-2 border-b border-line px-2 py-2 sm:gap-3 sm:px-5 sm:py-3">
               <Link
@@ -347,34 +497,6 @@ export function ChatsHub({
               >
                 <ArrowLeft aria-hidden="true" className="h-5 w-5" />
               </Link>
-              {/* Desktop: shows or hides the list beside the chat, with the count of chats that have new messages. */}
-              <button
-                type="button"
-                onClick={toggleList}
-                aria-expanded={listOpen}
-                aria-controls="chat-list"
-                aria-label={unreadChats ? `Chats, ${unreadChats} with new messages` : undefined}
-                title={listOpen ? "Hide the chat list" : "Show the chat list"}
-                className={cn(uiButtonClass, "hidden shrink-0 gap-1.5 px-2.5 py-1.5 text-xs lg:inline-flex", listOpen && "bg-surface-hover")}
-              >
-                {listOpen ? (
-                  <PanelLeftClose aria-hidden="true" className="h-4 w-4 text-muted" />
-                ) : (
-                  <PanelLeftOpen aria-hidden="true" className="h-4 w-4 text-muted" />
-                )}
-                Chats
-                {/* The space keeps the visible text "Chats 1", part of the label, as the sidebar's badge does. */}
-                {unreadChats ? " " : null}
-                {unreadChats ? (
-                  <span
-                    aria-hidden="true"
-                    className="inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-accent px-1.5 font-mono text-2xs font-bold tabular-nums text-accent-ink"
-                  >
-                    {formatUnreadCount(unreadChats)}
-                  </span>
-                ) : null}
-              </button>
-              <span aria-hidden="true" className="hidden h-6 w-px shrink-0 bg-line lg:block" />
               {selected.kind === "project" ? (
                 <>
                   {/* The project's photo, not its color (#403); the owner clicks it to change it. */}

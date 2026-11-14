@@ -74,6 +74,9 @@ test.afterAll(async () => {
 });
 
 test("search finds every match, newest first, and shows the chat at the one picked", async ({ isMobile }) => {
+  // On desktop the Chats list sits beside the open chat (#416), so the chat is wide enough for the results
+  // beside it (52 rem) on a wide screen: 1440 - 224 (sidebar) - 310 (list) = 906 px.
+  if (!isMobile) await owner.setViewportSize({ width: 1440, height: 900 });
   await owner.goto(`/chats?project=${projectId}`);
   const chat = conversation(owner);
   await expect(chat.getByRole("heading", { name: projectName })).toBeVisible();

@@ -21,6 +21,9 @@ export type PanelLimits = {
 /** The sidebar (#415): 224 px by default; 176 px still shows "AI Multi" beside the logo and Collapse. */
 export const SIDEBAR_LIMITS: PanelLimits = { min: 11, max: 22.5, initial: 14, collapsed: 3.5 };
 
+/** The Chats list (#416): 310 px by default (design 2B), 240 to 480 px, or a 72 px column of photos. */
+export const CHAT_LIST_LIMITS: PanelLimits = { min: 15, max: 30, initial: 19.375, collapsed: 4.5 };
+
 /** Where a panel is: its open width, and whether it's collapsed (the width comes back when it opens). */
 export type PanelSize = { width: number; collapsed: boolean };
 
