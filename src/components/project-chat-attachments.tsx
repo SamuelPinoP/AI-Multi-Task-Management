@@ -27,6 +27,7 @@ import {
   parseCsv,
   textFormat,
 } from "@/lib/project-chat-attachment-display";
+import { cn } from "@/lib/cn";
 import { loadPdfDocument, pdfPageAspect, renderPdfPage } from "@/lib/pdf-client";
 
 export type ChatAttachment = {
@@ -1083,12 +1084,15 @@ function localPreviewUrl(url: string) {
 export function ComposerAttachmentTray({
   attachments,
   onRemove,
+  className,
 }: {
   attachments: ComposerAttachment[];
   onRemove: (id: string) => void;
+  /** Padding around the thumbnails; keep at least pt-2 and pr-2 so the remove buttons aren't cut off. */
+  className?: string;
 }) {
   return (
-    <ul aria-label="Files to send" className="flex gap-3 overflow-x-auto px-3 pb-3 pt-2">
+    <ul aria-label="Files to send" className={cn("flex gap-3 overflow-x-auto px-3 pb-3 pt-2", className)}>
       {attachments.map(({ id, file, previewUrl }) => {
         const kind = attachmentKind(file.type, file.name);
         const preview = localPreviewUrl(previewUrl);
