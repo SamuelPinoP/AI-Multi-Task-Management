@@ -547,6 +547,10 @@ export function ChatsHub({
                   apiBase={`/api/direct-chats/${selected.chat.personId}`}
                   allowAttachments={false}
                   placeholder={`Message ${selected.chat.name.split(" ")[0]}`}
+                  emptyText={{
+                    title: "Start the conversation.",
+                    description: `Only you and ${selected.chat.name.split(" ")[0]} can see these messages.`,
+                  }}
                   composerNotice={selected.chat.canSend ? undefined : "You no longer share a project, so you can't send new messages here."}
                   currentUser={currentUser}
                   newSince={selected.chat.newSince}

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ChevronLeft, SendHorizontal } from "lucide-react";
+import { ArrowDown, ChevronLeft, MessagesSquare, SendHorizontal } from "lucide-react";
 import { ChangeEvent, DragEvent, Fragment, KeyboardEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useChatSearch } from "@/components/chats/chat-search";
 import { ChatSearchPanel, Highlighted } from "@/components/chats/chat-search-panel";
@@ -205,6 +205,7 @@ export function ProjectChatWorkspace({
   apiBase = `/api/projects/${projectId}`,
   allowAttachments = true,
   placeholder = "Type here",
+  emptyText = { title: "Start the project conversation.", description: "Post a kickoff update, decision, blocker, or handoff." },
   composerNotice,
   initialComments,
   currentUser,
@@ -219,6 +220,8 @@ export function ProjectChatWorkspace({
   /** Direct chats are text only (#387): no attach button, and dropped files are ignored. */
   allowAttachments?: boolean;
   placeholder?: string;
+  /** What an empty chat says (#421): a project's by default; a direct chat says who can read it. */
+  emptyText?: { title: string; description: string };
   /** Shown in place of the message box when nothing can be sent here, such as a direct chat with someone you no longer share a project with. */
   composerNotice?: string;
   initialComments: ProjectComment[];
@@ -857,15 +860,17 @@ export function ProjectChatWorkspace({
           {/* An empty chat centers its hint in the space instead of hanging it from the top. */}
           <div className={cn("mx-auto flex max-w-5xl flex-col gap-3 sm:gap-4", comments.length === 0 && "min-h-full justify-center")}>
             {comments.length === 0 ? (
-              <div className="rounded-2xl bg-white/80 p-5 text-center shadow-sm ring-1 ring-zinc-200/70 dark:bg-zinc-900/70 dark:ring-zinc-800/70 sm:p-8">
-                <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100 sm:text-lg">
-                  Start the project conversation.
-                </p>
-                <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                  Post a kickoff update, decision, blocker, or handoff. Use the
-                  paperclip<span className="hidden sm:inline"> or drag files into the composer</span> to share references,
-                  screenshots, PDFs, and other project artifacts.
-                </p>
+              // No card (#421, design 2B): a chat icon that floats, the same teal tile as "Pick a chat" on
+              // the Chats page, with a ring that grows from it and fades, then one line on what goes here.
+              <div className="grid justify-items-center text-center">
+                <span aria-hidden="true" className="relative mb-3.5 h-12 w-12 sm:h-13 sm:w-13">
+                  <span className="absolute inset-0 animate-[chat-empty-ring_3.2s_ease-out_infinite] rounded-[0.875rem] border-2 border-accent motion-reduce:hidden motion-reduce:animate-none" />
+                  <span className="absolute inset-0 grid animate-[chat-empty-float_3.2s_ease-in-out_infinite] place-items-center rounded-[0.875rem] bg-accent-soft text-accent motion-reduce:animate-none">
+                    <MessagesSquare className="h-5.5 w-5.5" />
+                  </span>
+                </span>
+                <p className="text-base font-bold text-ink">{emptyText.title}</p>
+                <p className="mt-0.5 max-w-[17rem] text-balance text-sm text-muted sm:max-w-[22.5rem]">{emptyText.description}</p>
               </div>
             ) : (
               comments.map((comment) => {

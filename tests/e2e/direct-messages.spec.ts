@@ -91,7 +91,12 @@ test("searching Chats finds a teammate you've never written to, and a message st
   await expect(conversation(owner).getByText(`In ${projectName}`)).toBeVisible();
   // Text only: no attach button.
   await expect(conversation(owner).getByRole("button", { name: "Attach files" })).toHaveCount(0);
+  // An empty direct chat speaks of the two of you, not of a project (#421).
+  await expect(conversation(owner).getByText("Start the conversation.", { exact: true })).toBeVisible();
+  await expect(conversation(owner).getByText(`Only you and ${teammateName.split(" ")[0]} can see these messages.`, { exact: true })).toBeVisible();
+  await expect(conversation(owner).getByText("Start the project conversation.", { exact: true })).toHaveCount(0);
   await send(owner, "Can you look at the outline tonight?");
+  await expect(conversation(owner).getByText("Start the conversation.", { exact: true })).toHaveCount(0);
 });
 
 test("the message is unread for the teammate until they open the chat, then they reply", async ({ isMobile }) => {
