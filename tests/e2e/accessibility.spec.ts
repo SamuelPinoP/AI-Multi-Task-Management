@@ -296,7 +296,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByRole("list", { name: "Files to send" }).getByRole("listitem")).toHaveCount(5);
     found.push(...(await violations(page, "chat composer with files")));
 
-    await page.getByPlaceholder(/share an update/i).fill(chatMessage);
+    await page.getByPlaceholder("Type here", { exact: true }).fill(chatMessage);
     await page.getByRole("button", { name: /send message/i }).click();
     const messageCard = page.locator("article").filter({ hasText: chatMessage });
     await expect(messageCard.getByText("Sending")).toBeHidden();
