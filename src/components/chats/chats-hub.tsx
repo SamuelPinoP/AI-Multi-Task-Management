@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChatSearchButton, ChatSearchProvider } from "@/components/chats/chat-search";
 import { ProjectChatMenu } from "@/components/chats/project-chat-menu";
+import { MobileMenuButton } from "@/components/mobile-menu";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ProjectChatWorkspace } from "@/components/project-chat-workspace";
 import { ProjectAvatar } from "@/components/projects/project-avatar";
@@ -368,8 +369,10 @@ export function ChatsHub({
       >
         {/* The whole list; phones keep it even while the desktop list is shrunk to photos. */}
         <div className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", compact && "lg:hidden")}>
-          <div className="grid gap-2.5 px-4 pb-2 pt-4">
+          <div className="grid gap-2.5 px-4 pb-2 pt-3 lg:pt-4">
             <div className="flex items-center gap-2">
+              {/* Phones and tablets have no bar above the Chats page; its menu button sits here (#420). */}
+              <MobileMenuButton className="-ml-1.5 lg:hidden" />
               {/* 16 px, a step above the sidebar's "AI Multi" (#416). */}
               <h1 id="chats-heading" className="min-w-0 flex-1 truncate text-base font-bold">Chats</h1>
               <button

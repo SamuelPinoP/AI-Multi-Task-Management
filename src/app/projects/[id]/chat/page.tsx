@@ -23,12 +23,13 @@ export default async function ProjectChatPage({ params }: ProjectChatPageProps) 
   if (!chat) notFound();
 
   return (
-    // Phones get the whole width: one slim title row, then the chat edge to edge.
+    // Phones get the whole width: one title row, then the chat edge to edge. That row is the page's only
+    // bar on phones and tablets (#420): the app's bar above it would repeat the project's name.
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 sm:px-6 sm:py-2 lg:px-8">
       <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:gap-1.5">
         {/* Search inside the chat (#409): the header's button, the results beside or over the chat. */}
         <ChatSearchProvider>
-        <header className="flex min-w-0 items-center gap-1 border-b border-line bg-surface px-2 py-1.5 sm:border-0 sm:bg-transparent sm:px-0">
+        <header className="flex min-h-14 min-w-0 items-center gap-1 border-b border-line bg-surface px-2 py-1.5 sm:min-h-0 sm:border-0 sm:bg-transparent sm:px-0">
           <Link
             href={`/projects/${chat.id}`}
             aria-label="Back to Project"

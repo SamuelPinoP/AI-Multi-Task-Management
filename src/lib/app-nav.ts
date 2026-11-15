@@ -33,7 +33,10 @@ const pageTitles: Array<[prefix: string, title: string]> = [
   ["/account", "Account"],
 ];
 
-/** Pages that fill the screen and scroll inside, like the chats: on phones the bottom tabs sit under them, not over them. */
+/**
+ * Pages that fill the screen and scroll inside, like the chats: on phones the bottom tabs sit under them,
+ * not over them, and their own header is the only bar above them (#420).
+ */
 export function isFullHeightPage(pathname: string) {
   return pathname === "/chats" || /^\/projects\/[^/]+\/chat$/.test(pathname);
 }
