@@ -8,6 +8,7 @@ import { ThemeInitScript, ThemeProvider } from "@/components/theme-provider";
 import { TimeZoneCookie } from "@/components/time-zone-cookie";
 import { Toaster } from "@/components/ui/toaster";
 import { UserTimeZoneProvider } from "@/components/user-time-zone";
+import { isAppAdmin } from "@/lib/app-admin";
 import { getSessionUser, mustConfirmEmail } from "@/lib/auth";
 import { siteVerification } from "@/lib/legal";
 import { parseWidth, SIDEBAR_LIMITS } from "@/lib/panel-resize";
@@ -48,7 +49,8 @@ export default async function RootLayout({
   const sessionUser = await getSessionUser();
   // An account whose email isn't confirmed yet only gets the "Check your email" page (#350).
   const awaitingEmailConfirmation = Boolean(sessionUser && mustConfirmEmail(sessionUser));
-  const currentUser = awaitingEmailConfirmation ? null : sessionUser;
+  // Only a yes or no reaches the browser, never ADMIN_EMAILS itself (#286).
+  const currentUser = sessionUser && !awaitingEmailConfirmation ? { ...sessionUser, isAppAdmin: isAppAdmin(sessionUser) } : null;
   const [initialNav, cookieStore, timeZone] = await Promise.all([
     currentUser ? getWorkspaceNav(currentUser) : null,
     cookies(),

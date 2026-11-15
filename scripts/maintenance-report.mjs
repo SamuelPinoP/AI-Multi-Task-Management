@@ -136,7 +136,7 @@ say("## Checklist");
 say();
 say("- [ ] The latest [CI run on main](https://github.com/" + REPO + "/actions/workflows/ci.yml?query=branch%3Amain) is green.");
 say("- [ ] Open the live app, sign in, and open a chat attachment.");
-say("- [ ] Free-tier usage is comfortably inside the limits: Vercel (Usage tab), Neon (production and preview databases), Cloudflare R2 (the app caps itself at 8 GB of the free 10 GB), and Gmail sending (about 500 emails a day; Gmail warns in the sending account's inbox when it's reached).");
+say("- [ ] Free-tier usage is comfortably inside the limits. The app's **Free-tier usage** page (`/usage`, in the profile menu of the accounts in `ADMIN_EMAILS`) shows R2 storage, the database's size and the last 24 hours' emails against their limits, and links to the rest: Vercel (Usage tab), Neon (compute hours; the preview database too), and Cloudflare R2 (operations).");
 say("- [ ] No surprise charges or new payment methods on Vercel, Neon, Cloudflare, AWS or GitHub.");
 say();
 say("When the boxes are done, close this issue. Next month's check opens a new one and closes this one if it's still open.");

@@ -12,6 +12,8 @@ const serverMode = process.env.E2E_SERVER_MODE === "start" ? "start" : "dev";
 
 const e2eEnv = {
   ...process.env,
+  // APP_ADMIN_EMAIL in tests/e2e/helpers.ts: the account that may open the free-tier usage page (#286).
+  ADMIN_EMAILS: "usage-admin@example.test",
   EMAIL_PROVIDER: "disabled",
   GUEST_LOGIN_ENABLED: "true",
   PLAYWRIGHT_BASE_URL: baseURL,

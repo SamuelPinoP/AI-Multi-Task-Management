@@ -1,4 +1,5 @@
 import "server-only";
+import { countEmail } from "@/lib/email-counts";
 import {
   brevoPayload,
   parseEmailProvider,
@@ -14,6 +15,7 @@ import {
   projectInvitationEmail,
   type EmailContent,
 } from "@/lib/email-templates";
+import { prisma } from "@/lib/prisma";
 
 const RESEND_API_URL = "https://api.resend.com/emails";
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
@@ -82,18 +84,20 @@ async function sendEmail({
     return { status: "failed", message: failureMessage };
   }
 
+  let sent = false;
   try {
-    const sent = await deliver(provider, { to, ...content });
-    return sent
-      ? { status: "sent", message: successMessage }
-      : { status: "failed", message: failureMessage };
+    sent = await deliver(provider, { to, ...content });
   } catch (error) {
     console.warn("Email request failed.", {
       provider,
       error: error instanceof Error ? error.message : "Unknown email error",
     });
-    return { status: "failed", message: failureMessage };
   }
+  // Counted against the provider's daily limit on the free-tier usage page (#286).
+  await countEmail(prisma, sent ? "sent" : "failed");
+  return sent
+    ? { status: "sent", message: successMessage }
+    : { status: "failed", message: failureMessage };
 }
 
 /** Sends through the configured provider. Returns false when it isn't set up or refuses the message. */

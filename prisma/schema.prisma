@@ -549,6 +549,15 @@ model RateLimit {
   @@index([expiresAt])
 }
 
+/// How many emails the app sent, or failed to send, in each hour, for the free-tier usage page (#286):
+/// Gmail allows about 500 a day. One row per hour that had email; the daily cleanup deletes old rows.
+model EmailHourlyCount {
+  /// The start of the hour, in UTC.
+  hour   DateTime @id
+  sent   Int      @default(0)
+  failed Int      @default(0)
+}
+
 enum ProjectChatStorageProvider {
   LOCAL
   VERCEL_BLOB

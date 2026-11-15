@@ -47,6 +47,17 @@ test("page titles prefer the longest matching prefix", () => {
   assert.deepEqual(pageTitleFor("/chats", []), { title: "Chats" });
 });
 
+test("owner-only pages get their names only for app admins (#286)", () => {
+  assert.deepEqual(pageTitleFor("/usage", [], { appAdmin: true }), { title: "Free-tier usage" });
+  // Everyone else sees the bar of a page that doesn't exist.
+  assert.deepEqual(pageTitleFor("/usage", []), { title: "" });
+  assert.deepEqual(pageTitleFor("/usage", [], { appAdmin: false }), { title: "" });
+  assert.deepEqual(pageTitleFor("/nowhere", []), { title: "" });
+  // Admins keep every other title.
+  assert.deepEqual(pageTitleFor("/tasks", [], { appAdmin: true }), { title: "Tasks" });
+  assert.deepEqual(pageTitleFor("/usagex", [], { appAdmin: true }), { title: "" });
+});
+
 test("project pages show the project's name under Projects", () => {
   const projects = [{ id: "p1", name: "Capstone demo" }];
   assert.deepEqual(pageTitleFor("/projects/p1", projects), { parent: "Projects", title: "Capstone demo" });

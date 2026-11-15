@@ -78,6 +78,18 @@ export async function confirmationLink(
   return `/api/auth/verify-email?${params}`;
 }
 
+/** The e2e server's ADMIN_EMAILS (scripts/run-playwright-e2e.mjs, playwright.config.ts): owner-only pages open for it (#286). */
+export const APP_ADMIN_EMAIL = "usage-admin@example.test";
+
+/**
+ * Signs up as the app's admin. An address has one account, so the one an earlier run made gets
+ * a throwaway address first; only the new account is an admin.
+ */
+export async function signUpAsAppAdmin(page: Page) {
+  await queryDatabase(`UPDATE "User" SET email = concat('retired-', id, '@example.test') WHERE email = $1`, [APP_ADMIN_EMAIL]);
+  return signUpAndLogIn(page, "App admin", { email: APP_ADMIN_EMAIL });
+}
+
 /**
  * Signs up a throwaway account on the local server. Sign-up ends on "Check
  * your email" (#350); unless `confirmEmail` is false, the account's link is

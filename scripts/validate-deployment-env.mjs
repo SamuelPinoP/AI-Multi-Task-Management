@@ -141,6 +141,16 @@ if (siteVerificationCode && !/^[A-Za-z0-9_-]{20,100}$/.test(siteVerificationCode
   errors.push('GOOGLE_SITE_VERIFICATION should be only the code from Search Console\'s HTML tag, the part inside content="…".');
 }
 
+// The free-tier usage page (#286) opens only for these addresses; unset, it's a 404 for everyone.
+// The count is printed, never the addresses.
+const adminEmails = (cleanEnvValue("ADMIN_EMAILS") ?? "").split(/[\s,;]+/).filter(Boolean);
+const invalidAdminEmails = adminEmails.filter((entry) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(entry));
+if (invalidAdminEmails.length > 0) {
+  errors.push(
+    `ADMIN_EMAILS has ${invalidAdminEmails.length} ${invalidAdminEmails.length === 1 ? "entry" : "entries"} that isn't an email address. List the addresses the admins log in with, separated by commas.`,
+  );
+}
+
 const cronSecret = cleanEnvValue("CRON_SECRET");
 if (cronSecret !== undefined && cronSecret.length > 0 && cronSecret.length < 16) {
   errors.push("CRON_SECRET is too short. Use at least 16 random characters, or remove it.");
