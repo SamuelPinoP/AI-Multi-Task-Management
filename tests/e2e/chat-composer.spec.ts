@@ -125,6 +125,37 @@ test("the paperclip, the text and send share one box, and send turns teal once t
   await expect(page.getByText("Add a message or attach at least one file.")).toBeVisible();
 });
 
+test("an empty chat shows a floating chat icon and one line, with no card, until the first message", async ({ page }) => {
+  const box = await openNewProjectChat(page);
+  await expect(box).toBeVisible();
+  const title = page.getByText("Start the project conversation.", { exact: true });
+  await expect(title).toBeVisible();
+  await expect(page.getByText("Post a kickoff update, decision, blocker, or handoff.", { exact: true })).toBeVisible();
+  // Only the first sentence is left (#421): nothing about the paperclip.
+  await expect(page.locator("#main-content").getByText(/paperclip/i)).toHaveCount(0);
+
+  // No card around the words: they sit on the chat's own background.
+  const wrapper = title.locator("xpath=..");
+  await expect(wrapper).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(wrapper).toHaveCSS("box-shadow", "none");
+
+  // The teal tile floats, with a ring growing from it; both keep still for people who turn off animations.
+  const tile = wrapper.locator('[class*="chat-empty-float"]');
+  const ring = wrapper.locator('[class*="chat-empty-ring"]');
+  await expect(tile).toHaveCSS("animation-name", "chat-empty-float");
+  await expect(ring).toHaveCSS("animation-name", "chat-empty-ring");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(tile).toHaveCSS("animation-name", "none");
+  await expect(ring).toBeHidden();
+  await page.emulateMedia({ reducedMotion: null });
+
+  // The first message takes its place.
+  await box.fill("Kickoff: the beta goes out Friday.");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByText("Kickoff: the beta goes out Friday.", { exact: true })).toBeVisible();
+  await expect(title).toHaveCount(0);
+});
+
 test("the latest message stays in view when the box grows before the thread's last scroll is reported", async ({ page, isMobile }) => {
   test.skip(isMobile, "A phone's box grows by 4 lines (96px) at most, less than the 120px that counts as leaving the latest message.");
   await page.route("**/api/projects/*/comments*", (route) =>
