@@ -60,6 +60,8 @@ export default defineConfig({
           ? `${nextCli} build --webpack && ${nextCli} start ${serverArgs}`
           : `${nextCli} dev --webpack ${serverArgs}`,
         env: {
+          // APP_ADMIN_EMAIL in tests/e2e/helpers.ts: the account that may open the free-tier usage page (#286).
+          ADMIN_EMAILS: "usage-admin@example.test",
           EMAIL_PROVIDER: "disabled",
           GUEST_LOGIN_ENABLED: "true",
           PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER: "local",
@@ -88,7 +90,7 @@ export default defineConfig({
       // The browser flows again on a phone-sized screen.
       name: "mobile",
       use: { ...devices["Pixel 7"] },
-      testMatch: /(workspace|app-shell|accent-color|home|tasks|quick-add|projects|notes|events|calendar|accessibility|project-insights|subtasks|goals|linked-notes|project-templates|project-github|tree|chat-composer|chat-search|phone-fields|text-size|labels|bulk-edit|tasks-by-project|task-comments|direct-messages|project-members|add-people|phone-titles)\.spec\.ts/,
+      testMatch: /(workspace|app-shell|accent-color|home|tasks|quick-add|projects|notes|events|calendar|accessibility|project-insights|subtasks|goals|linked-notes|project-templates|project-github|tree|chat-composer|chat-search|phone-fields|text-size|labels|bulk-edit|tasks-by-project|task-comments|direct-messages|project-members|add-people|phone-titles|usage)\.spec\.ts/,
     },
   ],
 });

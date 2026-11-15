@@ -6,6 +6,8 @@ import type { ProjectChatStoredAttachmentReference } from "@/lib/project-chat-st
 export const INACTIVE_GUEST_DAYS = 30;
 /** Inbox notifications (SMART-08) are kept this long, read or not. */
 export const NOTIFICATION_DAYS = 90;
+/** Hourly email counts (#286) are kept this long; the usage page shows the last 30 days. */
+export const EMAIL_COUNT_DAYS = 35;
 /** Per run, so one call stays well inside the function's time limit; the rest goes the next day. */
 const GUEST_BATCH_SIZE = 100;
 const UPLOAD_CLEANUP_ROUNDS = 8;
@@ -22,6 +24,7 @@ type CleanupDb = Pick<
   | "user"
   | "projectCommentAttachment"
   | "projectChatAttachmentUpload"
+  | "emailHourlyCount"
 >;
 
 export type DailyCleanupResult = {
@@ -30,6 +33,7 @@ export type DailyCleanupResult = {
   verificationTokens: number;
   notifications: number;
   rateLimits: number;
+  emailCounts: number;
   guests: number;
   /** Guests skipped because a stored file couldn't be deleted; they are retried the next day. */
   guestsSkipped: number;
@@ -39,7 +43,8 @@ export type DailyCleanupResult = {
 /**
  * Deletes what nobody can use any more (#132):
  * - expired sessions, used or expired password reset tokens, expired email confirmation links
- *   expired rate-limit counters and inbox notifications older than NOTIFICATION_DAYS;
+ *   expired rate-limit counters, inbox notifications older than NOTIFICATION_DAYS and hourly
+ *   email counts older than EMAIL_COUNT_DAYS;
  * - guest workspaces older than INACTIVE_GUEST_DAYS without a valid session (a guest has no
  *   password, so once its session is gone nobody can reach it), with their data and stored files;
  * - direct chat uploads that expired without being attached, with their stored files.
@@ -66,6 +71,9 @@ export async function runDailyCleanup({
   // RateLimit.expiresAt is timestamptz; compare in SQL, as src/lib/rate-limit.ts does, so the
   // database's own time zone can't shift the cutoff.
   const rateLimits = await db.$executeRaw`DELETE FROM "RateLimit" WHERE "expiresAt" < now()`;
+  const emailCounts = await db.emailHourlyCount.deleteMany({
+    where: { hour: { lt: new Date(now.getTime() - EMAIL_COUNT_DAYS * 86_400_000) } },
+  });
   const guests = await deleteInactiveGuests({ db, deleteStoredObjects, now });
 
   let uploads = 0;
@@ -81,6 +89,7 @@ export async function runDailyCleanup({
     verificationTokens: verificationTokens.count,
     notifications: notifications.count,
     rateLimits,
+    emailCounts: emailCounts.count,
     guests: guests.deleted,
     guestsSkipped: guests.skipped,
     uploads,

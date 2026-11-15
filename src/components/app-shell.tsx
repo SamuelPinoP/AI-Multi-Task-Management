@@ -6,6 +6,7 @@ import {
   CircleUserRound,
   Download,
   FolderKanban,
+  Gauge,
   House,
   Keyboard,
   LayoutDashboard,
@@ -78,6 +79,8 @@ type ShellUser = {
   name: string | null;
   email: string;
   isGuest: boolean;
+  /** Listed in ADMIN_EMAILS, so owner-only pages such as Free-tier usage open (#286). Decided on the server. */
+  isAppAdmin: boolean;
 } | null;
 
 type NavItem = NavMatch & {
@@ -642,6 +645,15 @@ function AccountMenu({
               </Link>
             </DropdownMenuItem>
           )}
+          {/* Only for the accounts in ADMIN_EMAILS; for everyone else the page is a 404 (#286). */}
+          {user.isAppAdmin ? (
+            <DropdownMenuItem asChild>
+              <Link href="/usage" onClick={onNavigate}>
+                <Gauge />
+                Free-tier usage
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuLabel>Theme</DropdownMenuLabel>
           <DropdownMenuItem onSelect={() => setTheme("light")} aria-checked={theme === "light"} role="menuitemradio">
@@ -737,8 +749,8 @@ function usePageTitleInView(pathname: string) {
  * while the page's own title is on screen the bar holds only the menu button, in the page's color
  * and without a line, and the name moves in once the title has scrolled under the bar.
  */
-function TopBar({ nav, pathname }: { nav: WorkspaceNav; pathname: string }) {
-  const { parent, title } = pageTitleFor(pathname, nav.projects);
+function TopBar({ nav, pathname, appAdmin }: { nav: WorkspaceNav; pathname: string; appAdmin: boolean }) {
+  const { parent, title } = pageTitleFor(pathname, nav.projects, { appAdmin });
   const titleInView = usePageTitleInView(pathname);
 
   return (
@@ -1085,7 +1097,7 @@ export function AppShell({
       <MobileMenuContext.Provider value={mobileMenu}>
         <div className="flex min-w-0 flex-1 flex-col">
           {/* The chats fill the screen with a header that never scrolls away, so it's their only bar (#420). */}
-          {fullHeight ? null : <TopBar nav={nav} pathname={pathname} />}
+          {fullHeight ? null : <TopBar nav={nav} pathname={pathname} appAdmin={currentUser.isAppAdmin} />}
           <OfflineBanner />
           {/* relative: hidden (sr-only) text is absolutely positioned, and it scrolls only inside a positioned
               scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar. */}

@@ -126,6 +126,15 @@ export async function projectChatS3Usage(db: QuotaDb, userId: string): Promise<P
   };
 }
 
+/** Bytes in the aws-s3 provider for everyone together, counted as projectChatS3Usage does (the usage page, #286). */
+export async function projectChatS3TotalBytes(db: QuotaDb) {
+  const [attachments, uploads] = await Promise.all([
+    db.projectCommentAttachment.aggregate({ where: { storageProvider: "AWS_S3" }, _sum: { fileSize: true } }),
+    db.projectChatAttachmentUpload.aggregate({ where: { storageProvider: "AWS_S3" }, _sum: { fileSize: true } }),
+  ]);
+  return (attachments._sum.fileSize ?? 0) + (uploads._sum.fileSize ?? 0);
+}
+
 /** Throws a ProjectChatQuotaError when the new bytes would pass either limit. */
 export async function assertProjectChatS3Quota(
   db: QuotaDb,

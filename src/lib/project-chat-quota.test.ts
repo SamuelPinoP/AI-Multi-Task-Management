@@ -15,6 +15,7 @@ import {
   ProjectChatQuotaError,
   projectChatQuotaConfig,
   projectChatQuotaRejection,
+  projectChatS3TotalBytes,
   projectChatS3Usage,
 } from "./project-chat-quota";
 
@@ -135,6 +136,16 @@ test("sums saved attachments and pending uploads stored in S3", async () => {
     { model: "upload", where: { storageProvider: "AWS_S3" } },
     { model: "upload", where: { storageProvider: "AWS_S3", userId: "user-1" } },
   ]);
+});
+
+test("the usage page's total counts the same bytes as the cap, for everyone together (#286)", async () => {
+  const { db, calls } = fakeUsageDb({ attachment: 4000, "attachment:user": 1000, upload: 600, "upload:user": 200 });
+  assert.equal(await projectChatS3TotalBytes(db), 4600);
+  assert.deepEqual(calls, [
+    { model: "attachment", where: { storageProvider: "AWS_S3" } },
+    { model: "upload", where: { storageProvider: "AWS_S3" } },
+  ]);
+  assert.equal(await projectChatS3TotalBytes(fakeUsageDb({}).db), 0);
 });
 
 test("treats an empty bucket as zero bytes", async () => {

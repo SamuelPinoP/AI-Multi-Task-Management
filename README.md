@@ -291,10 +291,28 @@ Every day at about 09:00 UTC, after the backup, Vercel Cron calls
   session (guests have no password, so nobody can open them again), with
   their tasks, notes, events, projects and stored chat files. A guest that is
   in a real user's project, or whose project has a real member, is left alone;
-- chat uploads that expired without being attached, with their stored files.
+- chat uploads that expired without being attached, with their stored files;
+- hourly email counts older than 35 days (see "Free-tier usage" below).
 
 It answers with the counts. A repeat call finds nothing new, so the route is
 safe to leave public; with `CRON_SECRET` set it is required, as for backups.
+
+## Free-tier usage
+
+The app runs on free plans, so `/usage` shows how close it is to each limit:
+chat attachments against the app's own R2 cap, everything in R2 (attachments
+plus the database backups, from one list request) against R2's free 10 GB, the
+database's size against Neon Free's storage, and emails sent in the last 24
+hours against the email provider's daily limit (`EmailHourlyCount`, written by
+every send). Bars turn amber at 70% and red at 90%. It links to the Vercel,
+Neon and Cloudflare dashboards for what the app can't read itself. The limits,
+with the day each was checked and its source, are in
+`src/lib/free-tier-limits.ts`.
+
+Only the accounts in the optional `ADMIN_EMAILS` variable (comma-separated,
+each with a confirmed email) can open it, from the profile menu. Everyone
+else, signed in or not, gets the same 404 as for a page that doesn't exist.
+The page measures when it opens and never polls.
 
 ## Tech Stack
 

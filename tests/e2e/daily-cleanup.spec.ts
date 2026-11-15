@@ -14,6 +14,7 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
   const id = (name: string) => `e2e-cleanup-${run}-${name}`;
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const files: string[] = [];
+  const emailHours: string[] = [];
   const sql = (text: string, values: unknown[] = []) => pool.query(text, values);
   const exists = async (table: string, column: string, value: string) =>
     ((await sql(`SELECT 1 FROM "${table}" WHERE "${column}" = $1`, [value])).rowCount ?? 0) > 0;
@@ -108,11 +109,25 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
       [id("rate-expired"), id("rate-live")],
     );
 
+    // Hourly email counts (#286): one from 40 days ago goes, one from two hours ago stays. Any instant
+    // works as the key, so each run adds a random few seconds and never collides with another.
+    const addEmailCount = async (interval: string) =>
+      (
+        await sql(`INSERT INTO "EmailHourlyCount" (hour, sent) VALUES (${UTC_NOW} - $1::interval, 1) RETURNING hour::text AS hour`, [
+          `${interval} ${Math.floor(Math.random() * 3600)} seconds`,
+        ])
+      ).rows[0].hour as string;
+    emailHours.push(await addEmailCount("40 days"), await addEmailCount("2 hours"));
+    const [oldEmailHour, recentEmailHour] = emailHours;
+
     const response = await request.get("/api/cron/cleanup");
     expect(response.ok(), await response.text()).toBe(true);
     const result = (await response.json()) as Record<string, number>;
     expect(result.guests).toBeGreaterThanOrEqual(1);
     expect(result.uploads).toBeGreaterThanOrEqual(1);
+    expect(result.emailCounts).toBeGreaterThanOrEqual(1);
+    expect(await exists("EmailHourlyCount", "hour", oldEmailHour)).toBe(false);
+    expect(await exists("EmailHourlyCount", "hour", recentEmailHour)).toBe(true);
 
     // Deleted, with what cascades from them.
     expect(await exists("User", "id", id("old-guest"))).toBe(false);
@@ -150,6 +165,7 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
     expect(await exists("Session", "id", id("member-session"))).toBe(true);
   } finally {
     for (const file of files) rmSync(file, { force: true });
+    await sql(`DELETE FROM "EmailHourlyCount" WHERE hour = ANY($1::timestamp[])`, [emailHours]);
     await sql(`DELETE FROM "RateLimit" WHERE key LIKE $1`, [`e2e-cleanup-${run}-%`]);
     await sql(`DELETE FROM "User" WHERE id LIKE $1`, [`e2e-cleanup-${run}-%`]);
     await pool.end();

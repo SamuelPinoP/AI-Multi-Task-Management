@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
 import { ACCENTS } from "../../src/lib/accent";
-import { continueAsGuest, openAccountMenu, signUpAndLogIn, uniqueName } from "./helpers";
+import { continueAsGuest, openAccountMenu, signUpAndLogIn, signUpAsAppAdmin, uniqueName } from "./helpers";
 
 // TEST-04 (#140) and DES-06 (#134): every page passes axe's WCAG 2.1 A and AA rules.
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
@@ -207,6 +207,20 @@ test("the Account page has no WCAG A/AA violations", async ({ page }) => {
     await page.getByRole("button", { name: "Change username" }).click();
     await expect(page.getByText("That username is reserved. Try another one.")).toBeVisible();
     found.push(...(await violations(page, `Account page with an error (${theme})`)));
+  }
+  expect(found).toEqual([]);
+});
+
+// Only the app's admins can open the free-tier usage page (#286), so its own account checks it.
+test("the free-tier usage page has no WCAG A/AA violations", async ({ page }) => {
+  await signUpAsAppAdmin(page);
+  const found: string[] = [];
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
+    await page.goto("/usage");
+    await expect(page.getByRole("heading", { level: 1, name: "Free-tier usage" }).filter({ visible: true })).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    found.push(...(await violations(page, `usage page (${theme})`)));
   }
   expect(found).toEqual([]);
 });
