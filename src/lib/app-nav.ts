@@ -34,7 +34,10 @@ const pageTitles: Array<[prefix: string, title: string]> = [
 ];
 
 /** Owner-only pages (#286). Only admins get their names, so nobody else finds one even in the hidden bar. */
-const appAdminPageTitles: Array<[prefix: string, title: string]> = [["/usage", "Free-tier usage"]];
+const appAdminPageTitles: Array<[prefix: string, title: string]> = [
+  ["/usage", "Free-tier usage"],
+  ["/users", "Users"],
+];
 
 /**
  * Pages that fill the screen and scroll inside, like the chats: on phones the bottom tabs sit under them,

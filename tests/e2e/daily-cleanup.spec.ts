@@ -120,6 +120,13 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
     emailHours.push(await addEmailCount("40 days"), await addEmailCount("2 hours"));
     const [oldEmailHour, recentEmailHour] = emailHours;
 
+    // Sign-ins are kept a year: one from 400 days ago goes, one from 300 days ago stays.
+    await sql(
+      `INSERT INTO "SignInEvent" (id, "userId", method, "createdAt")
+       VALUES ($1, $3, 'PASSWORD', ${UTC_NOW} - interval '400 days'), ($2, $3, 'PASSWORD', ${UTC_NOW} - interval '300 days')`,
+      [id("old-sign-in"), id("recent-sign-in"), id("member")],
+    );
+
     const response = await request.get("/api/cron/cleanup");
     expect(response.ok(), await response.text()).toBe(true);
     const result = (await response.json()) as Record<string, number>;
@@ -128,6 +135,9 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
     expect(result.emailCounts).toBeGreaterThanOrEqual(1);
     expect(await exists("EmailHourlyCount", "hour", oldEmailHour)).toBe(false);
     expect(await exists("EmailHourlyCount", "hour", recentEmailHour)).toBe(true);
+    expect(result.signIns).toBeGreaterThanOrEqual(1);
+    expect(await exists("SignInEvent", "id", id("old-sign-in"))).toBe(false);
+    expect(await exists("SignInEvent", "id", id("recent-sign-in"))).toBe(true);
 
     // Deleted, with what cascades from them.
     expect(await exists("User", "id", id("old-guest"))).toBe(false);

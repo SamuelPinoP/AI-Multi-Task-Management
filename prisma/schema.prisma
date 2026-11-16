@@ -28,7 +28,11 @@ model User {
   /// The secret in the user's calendar subscription link, /api/calendar/<token>.ics (SMART-09).
   /// Stored as is so the link can be copied again; "New link" replaces it.
   calendarFeedToken            String?                       @unique
+  /// When the user last used the app, to within an hour: set when they sign in, then by the requests
+  /// that already read their session (src/lib/auth.ts). Null until their first sign-in after it existed.
+  lastActiveAt                 DateTime?
   sessions                     Session[]
+  signInEvents                 SignInEvent[]
   oauthAccounts                OAuthAccount[]
   passwordResetTokens          PasswordResetToken[]
   emailVerificationTokens      EmailVerificationToken[]
@@ -69,6 +73,32 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+/// One sign-in: every new session records how it started (src/lib/sign-in-history-core.ts). Kept for
+/// SIGN_IN_HISTORY_DAYS, then the daily cleanup deletes it. No IP addresses are stored.
+model SignInEvent {
+  id         String       @id @default(cuid())
+  userId     String
+  method     SignInMethod
+  /// The session that made the account, right after signing up.
+  newAccount Boolean      @default(false)
+  /// The browser and system, such as "Chrome on Windows", read from the user agent; null when unknown.
+  device     String?
+  /// The two-letter country Vercel reports for the connection (x-vercel-ip-country); null when unknown.
+  country    String?
+  createdAt  DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+enum SignInMethod {
+  PASSWORD
+  GOOGLE
+  GUEST
 }
 
 /// An account at a sign-in provider that logs in as a user (#356), such as their Google account.

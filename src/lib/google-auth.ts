@@ -106,7 +106,7 @@ const linkedAccount = (sub: string) => ({ provider_providerAccountId: { provider
 export async function accountForGoogleIdentity(
   identity: GoogleIdentity,
   clientIp: string | null,
-): Promise<{ userId: string } | { error: GoogleSignInError } | { retryAfterSeconds: number }> {
+): Promise<{ userId: string; created: boolean } | { error: GoogleSignInError } | { retryAfterSeconds: number }> {
   const [linked, existingUser] = await Promise.all([
     prisma.oAuthAccount.findUnique({ where: linkedAccount(identity.sub), select: { id: true, userId: true, email: true } }),
     prisma.user.findUnique({ where: { email: identity.email }, select: { id: true, emailVerifiedAt: true } }),
@@ -118,7 +118,7 @@ export async function accountForGoogleIdentity(
       if (linked && linked.email !== identity.email) {
         await prisma.oAuthAccount.update({ where: { id: linked.id }, data: { email: identity.email } });
       }
-      return { userId: plan.userId };
+      return { userId: plan.userId, created: false };
 
     case "link": {
       const now = new Date();
@@ -136,7 +136,7 @@ export async function accountForGoogleIdentity(
             ]
           : []),
       ]);
-      return { userId: plan.userId };
+      return { userId: plan.userId, created: false };
     }
 
     case "create": {
@@ -152,7 +152,7 @@ export async function accountForGoogleIdentity(
           },
           select: { id: true },
         });
-        return { userId: user.id };
+        return { userId: user.id, created: true };
       } catch (error) {
         // The same sign-in finished in another tab a moment ago, or the address was just taken.
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { error: "google-failed" };

@@ -58,6 +58,14 @@ test("owner-only pages get their names only for app admins (#286)", () => {
   assert.deepEqual(pageTitleFor("/usagex", [], { appAdmin: true }), { title: "" });
 });
 
+test("the Users page and each person's page are named only for app admins", () => {
+  assert.deepEqual(pageTitleFor("/users", [], { appAdmin: true }), { title: "Users" });
+  assert.deepEqual(pageTitleFor("/users/cm123", [], { appAdmin: true }), { title: "Users" });
+  assert.deepEqual(pageTitleFor("/users", []), { title: "" });
+  assert.deepEqual(pageTitleFor("/users/cm123", [], { appAdmin: false }), { title: "" });
+  assert.deepEqual(pageTitleFor("/usersx", [], { appAdmin: true }), { title: "" });
+});
+
 test("project pages show the project's name under Projects", () => {
   const projects = [{ id: "p1", name: "Capstone demo" }];
   assert.deepEqual(pageTitleFor("/projects/p1", projects), { parent: "Projects", title: "Capstone demo" });

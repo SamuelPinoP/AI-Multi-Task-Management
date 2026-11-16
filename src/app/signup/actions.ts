@@ -84,7 +84,7 @@ export async function signUp(_previous: SignupState, formData: FormData): Promis
   // The session only reaches "Check your email" until the address is confirmed, which
   // lets that page resend the link or fix the address. If this email doesn't go out,
   // the page offers to send it again.
-  await createSession(user.id);
+  await createSession(user.id, { method: "PASSWORD", newAccount: true });
   await sendConfirmationEmail(user, { next, origin: requestHeaders.get("origin") ?? undefined });
 
   redirect(confirmEmailHref({ next }));

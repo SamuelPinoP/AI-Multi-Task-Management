@@ -32,6 +32,7 @@ export default function PrivacyPage() {
         <ul className={legalListClass}>
           <li>AI Multi collects what it needs to work: your account details and what you create in it.</li>
           <li>It doesn&apos;t sell your data, show ads, or use analytics or advertising trackers.</li>
+          <li>It records when and how you sign in, and when you last used it, but never your IP address.</li>
           <li>With Sign in with Google, it receives only your Google account&apos;s ID, name and email address.</li>
           <li>You can ask to see, export or delete your data at any time.</li>
           <li>AI Multi is for people {MINIMUM_AGE} and older.</li>
@@ -67,6 +68,12 @@ export default function PrivacyPage() {
           work the way you set it up. There are no advertising or analytics cookies.
         </p>
         <p>
+          <strong>Sign-in history.</strong> Each time you sign in, AI Multi records when, how (with a password or Google, or
+          by signing up), the kind of browser and device (such as &quot;Chrome on Windows&quot;), and the country your
+          connection comes from, as the hosting provider reports it. It keeps neither your IP address nor the rest of what
+          your browser sends. It also records when you last used the app, to the nearest hour.
+        </p>
+        <p>
           <strong>Notifications.</strong> If you turn on browser notifications, AI Multi stores the push subscription your
           browser gives it. Your browser&apos;s push service (such as Google, Mozilla or Apple) uses it to deliver them.
         </p>
@@ -85,6 +92,14 @@ export default function PrivacyPage() {
             up. There are no marketing emails.
           </li>
           <li>To keep the app and its users safe: limits on attempts, abuse prevention, and confirming that email addresses are real.</li>
+          <li>
+            To understand how AI Multi is used, so it can get better: how many people sign up, sign in and come back, and how
+            many notes, tasks, events, projects and messages each account has, never what they say.
+          </li>
+          <li>
+            To ask what you think: Samuel may email you now and then, personally, to ask for your opinion of AI Multi.
+            Answering is up to you, and if you&apos;d rather not be asked, say so and he won&apos;t ask again.
+          </li>
           <li>To recover from problems: a daily backup of the database.</li>
         </ul>
         <p>AI Multi doesn&apos;t sell or rent your data, use it for advertising, or use it to train AI models.</p>
@@ -117,6 +132,11 @@ export default function PrivacyPage() {
             events until you replace it.
           </li>
           <li>
+            <strong>Samuel, who runs AI Multi.</strong> On a page only he can open, he sees each account&apos;s name, username
+            and email address, its sign-in history, when it was last active, and how many items it has, never their content.
+            He looks at anything else only to help you, to fix a problem, or when the law requires it.
+          </li>
+          <li>
             <strong>Service providers</strong> that process data for AI Multi, under their own privacy terms: Vercel hosts
             the app; Neon holds the database; Cloudflare R2 stores uploaded files and database backups; Google sends email
             (Gmail) and runs Sign in with Google; GitHub supplies public repository details when a project links a
@@ -135,6 +155,7 @@ export default function PrivacyPage() {
           <li>Items you delete wait in Trash until you empty it or delete them for good.</li>
           <li>Guest workspaces: deleted 30 days after their last use.</li>
           <li>Sign-in sessions: they end 30 days after their last use, and a year after signing in at the latest.</li>
+          <li>Sign-in history: a year.</li>
           <li>Email confirmation links: 24 hours. Password reset links: 1 hour.</li>
           <li>Notifications in the app: 90 days.</li>
           <li>Database backups: the 30 most recent daily backups, so deleted data leaves the backups within 30 days.</li>

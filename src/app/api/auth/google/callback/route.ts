@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   if ("error" in account) return fail(account.error);
   if ("retryAfterSeconds" in account) return fail("rate-limited", account.retryAfterSeconds);
 
-  const { token, cookieExpiresAt } = await createSessionRecord(account.userId);
+  const { token, cookieExpiresAt } = await createSessionRecord(account.userId, { method: "GOOGLE", newAccount: account.created });
   const response = finish(next);
   response.cookies.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions(cookieExpiresAt));
   return response;

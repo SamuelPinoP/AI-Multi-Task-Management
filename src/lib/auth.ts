@@ -1,12 +1,14 @@
 import "server-only";
 
 import crypto from "node:crypto";
+import type { SignInMethod } from "@prisma/client";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { authPageHref, confirmEmailHref } from "@/lib/auth-links";
 import { prisma } from "@/lib/prisma";
 import { getSafeRedirectPath } from "@/lib/safe-redirect";
 import { renewedSessionEnd, sessionEndsAt, sessionLimit } from "@/lib/session-lifetime";
+import { countryFromHeader, describeDevice, isLastActiveStale, lastActiveStaleBefore } from "@/lib/sign-in-history-core";
 
 import { DEMO_USER_EMAIL, GUEST_USER_EMAIL_DOMAIN, REQUEST_PATH_HEADER, SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 
@@ -98,27 +100,51 @@ export function getSessionCookieOptions(cookieExpiresAt: Date): SessionCookieOpt
   };
 }
 
+/** How a session started, for the sign-in history on the owner-only Users page. */
+export type SignInDetails = {
+  method: SignInMethod;
+  /** The first session of an account that was just made. */
+  newAccount?: boolean;
+};
+
 // The database stores only a SHA-256 fingerprint of each session token; the
 // token itself lives in the browser cookie. A copy of the database therefore
 // can't be used to log in as anyone.
-export async function createSessionRecord(userId: string) {
+//
+// Every session also records a sign-in: when, how, the kind of device and the
+// country Vercel reports, never the IP address or the whole user agent.
+export async function createSessionRecord(userId: string, signIn: SignInDetails) {
   const token = crypto.randomBytes(32).toString("hex");
   const now = new Date();
+  const requestHeaders = await headers();
 
-  await prisma.session.create({
-    data: {
-      token: hashSecureToken(token),
-      userId,
-      createdAt: now,
-      expiresAt: sessionEndsAt(now, now),
-    },
-  });
+  await prisma.$transaction([
+    prisma.session.create({
+      data: {
+        token: hashSecureToken(token),
+        userId,
+        createdAt: now,
+        expiresAt: sessionEndsAt(now, now),
+      },
+    }),
+    prisma.signInEvent.create({
+      data: {
+        userId,
+        method: signIn.method,
+        newAccount: signIn.newAccount ?? false,
+        device: describeDevice(requestHeaders.get("user-agent")),
+        country: countryFromHeader(requestHeaders.get("x-vercel-ip-country")),
+        createdAt: now,
+      },
+    }),
+    prisma.user.update({ where: { id: userId }, data: { lastActiveAt: now } }),
+  ]);
 
   return { token, cookieExpiresAt: sessionLimit(now) };
 }
 
-export async function createSession(userId: string) {
-  const { token, cookieExpiresAt } = await createSessionRecord(userId);
+export async function createSession(userId: string, signIn: SignInDetails) {
+  const { token, cookieExpiresAt } = await createSessionRecord(userId, signIn);
 
   const cookieStore = await cookies();
   cookieStore.set(
@@ -146,7 +172,7 @@ export async function createGuestUser() {
 
 export async function createGuestSession() {
   const user = await createGuestUser();
-  await createSession(user.id);
+  await createSession(user.id, { method: "GUEST", newAccount: true });
 }
 
 export async function clearSession() {
@@ -182,7 +208,7 @@ export async function getSessionUser(): Promise<AuthUser | null> {
       id: true,
       createdAt: true,
       expiresAt: true,
-      user: { select: { id: true, name: true, email: true, isGuest: true, emailVerifiedAt: true } },
+      user: { select: { id: true, name: true, email: true, isGuest: true, emailVerifiedAt: true, lastActiveAt: true } },
     },
   });
 
@@ -194,17 +220,31 @@ export async function getSessionUser(): Promise<AuthUser | null> {
     return null;
   }
 
+  const { lastActiveAt, ...user } = session.user;
+  const writes: Promise<unknown>[] = [];
   // Using the app keeps the session going (#354), with at most one write a day. Matching
   // the old end makes simultaneous requests write it once.
   const renewedEnd = renewedSessionEnd(session, now);
   if (renewedEnd) {
-    await prisma.session.updateMany({
-      where: { id: session.id, expiresAt: session.expiresAt },
-      data: { expiresAt: renewedEnd },
-    });
+    writes.push(
+      prisma.session.updateMany({
+        where: { id: session.id, expiresAt: session.expiresAt },
+        data: { expiresAt: renewedEnd },
+      }),
+    );
   }
+  // The Users page's "last active", at most one write an hour, inside a request that's awake anyway.
+  if (isLastActiveStale(lastActiveAt, now)) {
+    writes.push(
+      prisma.user.updateMany({
+        where: { id: user.id, OR: [{ lastActiveAt: null }, { lastActiveAt: { lt: lastActiveStaleBefore(now) } }] },
+        data: { lastActiveAt: now },
+      }),
+    );
+  }
+  await Promise.all(writes);
 
-  return session.user;
+  return user;
 }
 
 /**

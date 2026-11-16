@@ -24,6 +24,7 @@ import {
   Sun,
   Target,
   Trash2,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -645,14 +646,22 @@ function AccountMenu({
               </Link>
             </DropdownMenuItem>
           )}
-          {/* Only for the accounts in ADMIN_EMAILS; for everyone else the page is a 404 (#286). */}
+          {/* Only for the accounts in ADMIN_EMAILS; for everyone else the pages are a 404 (#286). */}
           {user.isAppAdmin ? (
-            <DropdownMenuItem asChild>
-              <Link href="/usage" onClick={onNavigate}>
-                <Gauge />
-                Free-tier usage
-              </Link>
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuItem asChild>
+                <Link href="/usage" onClick={onNavigate}>
+                  <Gauge />
+                  Free-tier usage
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/users" onClick={onNavigate}>
+                  <UsersRound />
+                  Users
+                </Link>
+              </DropdownMenuItem>
+            </>
           ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuLabel>Theme</DropdownMenuLabel>
