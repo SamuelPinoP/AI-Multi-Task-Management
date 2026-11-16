@@ -292,7 +292,8 @@ Every day at about 09:00 UTC, after the backup, Vercel Cron calls
   their tasks, notes, events, projects and stored chat files. A guest that is
   in a real user's project, or whose project has a real member, is left alone;
 - chat uploads that expired without being attached, with their stored files;
-- hourly email counts older than 35 days (see "Free-tier usage" below).
+- hourly email counts older than 35 days (see "Free-tier usage" below);
+- sign-ins older than a year (see "Users" below).
 
 It answers with the counts. A repeat call finds nothing new, so the route is
 safe to leave public; with `CRON_SECRET` set it is required, as for backups.
@@ -313,6 +314,24 @@ Only the accounts in the optional `ADMIN_EMAILS` variable (comma-separated,
 each with a confirmed email) can open it, from the profile menu. Everyone
 else, signed in or not, gets the same 404 as for a page that doesn't exist.
 The page measures when it opens and never polls.
+
+## Users
+
+`/users`, behind the same `ADMIN_EMAILS` check, lists every account (guests
+left out), newest first: name, username, email, when it signed up, whether
+the email is confirmed, its sign-ins, when it was last active and how many
+tasks, notes, events, projects and chat messages it has. Each person's page
+adds the sign-in history and the kinds of things they did. It shows dates and
+counts only, never titles or messages.
+
+- Every new session writes a `SignInEvent` (`src/lib/auth.ts`): password,
+  Google or guest, whether it made the account, the browser and system
+  ("Chrome on Windows", from `src/lib/sign-in-history-core.ts`) and the
+  country from Vercel's `x-vercel-ip-country` header. No IP addresses. The
+  daily cleanup deletes sign-ins after a year.
+- `User.lastActiveAt` is set at sign-in, then refreshed by requests that
+  already read the session once it's an hour old: at most one write an hour
+  per person, never a request of its own.
 
 ## Tech Stack
 

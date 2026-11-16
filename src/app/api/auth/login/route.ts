@@ -81,7 +81,7 @@ export async function POST(request: Request) {
   // The right password, but the email isn't confirmed yet (#350): the session only reaches
   // "Check your email", which carries on to the page asked for once it is. Only someone
   // with the password gets this far, so the page gives nothing away.
-  const { token, cookieExpiresAt } = await createSessionRecord(user.id);
+  const { token, cookieExpiresAt } = await createSessionRecord(user.id, { method: "PASSWORD" });
   const response = redirectTo(request, mustConfirmEmail(user) ? confirmEmailHref({ next: nextPath }) : nextPath);
   response.cookies.set(
     SESSION_COOKIE_NAME,

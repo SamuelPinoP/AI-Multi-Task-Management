@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { cleanupExpiredProjectChatUploads } from "@/lib/project-chat-quota";
 import type { ProjectChatStoredAttachmentReference } from "@/lib/project-chat-storage";
+import { signInHistoryCutoff } from "@/lib/sign-in-history-core";
 
 /** Guests are deleted this long after they started, once nobody can sign in to them any more. */
 export const INACTIVE_GUEST_DAYS = 30;
@@ -25,6 +26,7 @@ type CleanupDb = Pick<
   | "projectCommentAttachment"
   | "projectChatAttachmentUpload"
   | "emailHourlyCount"
+  | "signInEvent"
 >;
 
 export type DailyCleanupResult = {
@@ -34,6 +36,8 @@ export type DailyCleanupResult = {
   notifications: number;
   rateLimits: number;
   emailCounts: number;
+  /** Sign-ins older than SIGN_IN_HISTORY_DAYS. */
+  signIns: number;
   guests: number;
   /** Guests skipped because a stored file couldn't be deleted; they are retried the next day. */
   guestsSkipped: number;
@@ -43,8 +47,8 @@ export type DailyCleanupResult = {
 /**
  * Deletes what nobody can use any more (#132):
  * - expired sessions, used or expired password reset tokens, expired email confirmation links
- *   expired rate-limit counters, inbox notifications older than NOTIFICATION_DAYS and hourly
- *   email counts older than EMAIL_COUNT_DAYS;
+ *   expired rate-limit counters, inbox notifications older than NOTIFICATION_DAYS, hourly
+ *   email counts older than EMAIL_COUNT_DAYS and sign-ins older than SIGN_IN_HISTORY_DAYS;
  * - guest workspaces older than INACTIVE_GUEST_DAYS without a valid session (a guest has no
  *   password, so once its session is gone nobody can reach it), with their data and stored files;
  * - direct chat uploads that expired without being attached, with their stored files.
@@ -74,6 +78,7 @@ export async function runDailyCleanup({
   const emailCounts = await db.emailHourlyCount.deleteMany({
     where: { hour: { lt: new Date(now.getTime() - EMAIL_COUNT_DAYS * 86_400_000) } },
   });
+  const signIns = await db.signInEvent.deleteMany({ where: { createdAt: { lt: signInHistoryCutoff(now) } } });
   const guests = await deleteInactiveGuests({ db, deleteStoredObjects, now });
 
   let uploads = 0;
@@ -90,6 +95,7 @@ export async function runDailyCleanup({
     notifications: notifications.count,
     rateLimits,
     emailCounts: emailCounts.count,
+    signIns: signIns.count,
     guests: guests.deleted,
     guestsSkipped: guests.skipped,
     uploads,

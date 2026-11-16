@@ -225,6 +225,25 @@ test("the free-tier usage page has no WCAG A/AA violations", async ({ page }) =>
   expect(found).toEqual([]);
 });
 
+// The Users page and a person's page are owner-only too; the admin's own account is on the list.
+test("the Users pages have no WCAG A/AA violations", async ({ page }) => {
+  const admin = await signUpAsAppAdmin(page);
+  const found: string[] = [];
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
+    await page.goto("/users");
+    await expect(page.getByRole("heading", { level: 1, name: "Users" }).filter({ visible: true })).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    found.push(...(await violations(page, `Users page (${theme})`)));
+
+    await page.getByRole("link", { name: admin.name }).filter({ visible: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: admin.name }).filter({ visible: true })).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    found.push(...(await violations(page, `a person's page (${theme})`)));
+  }
+  expect(found).toEqual([]);
+});
+
 // Unread badges only show after someone else posts, which the scans above never do.
 test("unread chat badges have no WCAG A/AA violations", async ({ page, browser, isMobile }) => {
   test.skip(isMobile, "The sidebar is a menu sheet on phones.");
