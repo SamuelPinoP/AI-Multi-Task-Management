@@ -76,6 +76,12 @@ test("an admin opens it from the profile menu and sees each limit", async ({ pag
     "href",
     "https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fusage&title=Go+to+Usage",
   );
+  // Anonymous visits (#428): Hobby's allowance, and that it pauses rather than bills.
+  await expect(dashboards.getByText("50,000 page views a month; past it, counting pauses and nothing is billed")).toBeVisible();
+  await expect(dashboards.getByRole("link", { name: "Open Web Analytics (opens in a new tab)" })).toHaveAttribute(
+    "href",
+    "https://vercel.com/d?to=%2F%5Bteam%5D%2F%5Bproject%5D%2Fanalytics&title=Go+to+Web+Analytics",
+  );
   await expect(dashboards.getByRole("link", { name: "Open Neon (opens in a new tab)" })).toHaveAttribute("href", "https://console.neon.tech/app/projects");
   await expect(dashboards.getByRole("link", { name: "Open Cloudflare R2 (opens in a new tab)" })).toHaveAttribute(
     "href",
