@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   LogOut,
   Map as MapIcon,
+  MessageSquareText,
   MessagesSquare,
   Moon,
   NotebookPen,
@@ -38,6 +39,7 @@ import { NewTaskDialog, type NewTaskDraft } from "@/components/new-task-dialog";
 import { NotificationsMenu } from "@/components/notifications-menu";
 import { ProjectSheet, type ProjectInput } from "@/components/projects/project-sheet";
 import { clearOfflineData, OfflineBanner, promptInstall, useInstallPrompt } from "@/components/pwa";
+import { FeedbackDialog } from "@/components/feedback-dialog";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { TextSizeMenuItems } from "@/components/text-size-menu";
 import { ThemeToggle, useTheme } from "@/components/theme-provider";
@@ -378,6 +380,7 @@ function Sidebar({
   onNewTask,
   onNewProject,
   onShowShortcuts,
+  onSendFeedback,
   onNavigate,
 }: {
   user: NonNullable<ShellUser>;
@@ -390,6 +393,7 @@ function Sidebar({
   onNewTask: () => void;
   onNewProject: () => void;
   onShowShortcuts: () => void;
+  onSendFeedback: () => void;
   onNavigate?: () => void;
 }) {
   const mainItems: NavItem[] = [
@@ -557,7 +561,7 @@ function Sidebar({
           collapsed ? "flex-col items-center gap-1 px-0" : "items-center px-2",
         )}
       >
-        <AccountMenu user={user} collapsed={collapsed} onShowShortcuts={onShowShortcuts} onNavigate={onNavigate} />
+        <AccountMenu user={user} collapsed={collapsed} onShowShortcuts={onShowShortcuts} onSendFeedback={onSendFeedback} onNavigate={onNavigate} />
         <NotificationsMenu pendingInvitations={nav.pendingInvitations} unreadNotifications={nav.unreadNotifications} onNavigate={onNavigate} />
         {nav.trashItems ? <TrashButton count={nav.trashItems} active={pathname === "/trash"} onNavigate={onNavigate} /> : null}
       </div>
@@ -574,11 +578,13 @@ function AccountMenu({
   user,
   collapsed,
   onShowShortcuts,
+  onSendFeedback,
   onNavigate,
 }: {
   user: NonNullable<ShellUser>;
   collapsed: boolean;
   onShowShortcuts: () => void;
+  onSendFeedback: () => void;
   onNavigate?: () => void;
 }) {
   const { theme, setTheme } = useTheme();
@@ -639,12 +645,19 @@ function AccountMenu({
             )}
           </DropdownMenuLabel>
           {user.isGuest ? null : (
-            <DropdownMenuItem asChild>
-              <Link href="/account" onClick={onNavigate}>
-                <CircleUserRound />
-                Account settings
-              </Link>
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuItem asChild>
+                <Link href="/account" onClick={onNavigate}>
+                  <CircleUserRound />
+                  Account settings
+                </Link>
+              </DropdownMenuItem>
+              {/* Send feedback (#430), design A: right under Account settings. Guests can't send. */}
+              <DropdownMenuItem onSelect={onSendFeedback}>
+                <MessageSquareText />
+                Send feedback
+              </DropdownMenuItem>
+            </>
           )}
           {/* Only for the accounts in ADMIN_EMAILS; for everyone else the pages are a 404 (#286). */}
           {user.isAppAdmin ? (
@@ -891,6 +904,7 @@ export function AppShell({
   }, []);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // What a page needs for a menu button of its own (#420). It changes only with the count: a new value
   // reaching a page that's still hydrating makes React throw away the server's HTML and draw it again.
@@ -1068,6 +1082,7 @@ export function AppShell({
           onNewTask={openNewTask}
           onNewProject={openNewProject}
           onShowShortcuts={() => setShortcutsOpen(true)}
+          onSendFeedback={() => setFeedbackOpen(true)}
         />
         <ResizeHandle
           label="Resize sidebar"
@@ -1095,6 +1110,10 @@ export function AppShell({
             onShowShortcuts={() => {
               setMenuOpen(false);
               setShortcutsOpen(true);
+            }}
+            onSendFeedback={() => {
+              setMenuOpen(false);
+              setFeedbackOpen(true);
             }}
             onNavigate={() => setMenuOpen(false)}
           />
@@ -1126,6 +1145,7 @@ export function AppShell({
       <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} draft={newTaskDraft} />
       <ProjectSheet open={newProjectOpen} onOpenChange={setNewProjectOpen} onSubmit={createProject} />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
     </div>
   );
 }

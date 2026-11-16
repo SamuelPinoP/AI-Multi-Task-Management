@@ -337,6 +337,16 @@ counts only, never titles or messages.
   and a link to their page. It runs in `after()`, once the response is on its
   way, so it never slows down or breaks a sign-up. No digest, no cron job.
 
+## Feedback
+
+Accounts (not guests) have **Send feedback** in the profile menu, right under
+Account settings (`src/components/feedback-dialog.tsx`). The message, up to
+2,000 characters, goes to `POST /api/feedback`, which emails every address in
+`ADMIN_EMAILS` with the sender's name, username and email, whether they may be
+emailed about it, and a link to their page on `/users`. Nothing is stored.
+Each person can send five an hour (`RATE_LIMITS.feedbackUser`). If no email
+reaches an admin, the dialog says so and keeps the message for another try.
+
 ## Visits
 
 Production counts page views anonymously with Vercel Web Analytics

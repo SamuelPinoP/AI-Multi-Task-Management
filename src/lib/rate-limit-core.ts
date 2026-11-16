@@ -33,6 +33,8 @@ export const RATE_LIMITS = {
   taskComments: { name: "task-comments-user", limit: 60, windowMs: 10 * MINUTE },
   /** Project photo uploads (#403) per person: enough to try a few photos, too few to fill the database. */
   projectPhotosUser: { name: "project-photos-user", limit: 20, windowMs: 10 * MINUTE },
+  /** Send feedback (#430) per person: each one is an email to every admin, so it's kept low. */
+  feedbackUser: { name: "feedback-user", limit: 5, windowMs: 60 * MINUTE },
 } as const satisfies Record<string, RateLimitRule>;
 
 /** Start of the fixed window that `nowMs` falls in. */

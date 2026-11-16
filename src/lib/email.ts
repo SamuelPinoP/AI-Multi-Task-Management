@@ -11,6 +11,7 @@ import {
 } from "@/lib/email-config";
 import {
   emailVerificationEmail,
+  feedbackEmail,
   newAccountEmail,
   passwordResetEmail,
   projectInvitationEmail,
@@ -202,6 +203,35 @@ export async function sendNewAccountEmail({
     content: newAccountEmail({ name, username, email, method, userUrl: `${getAppBaseUrl(fallbackOrigin)}/users/${encodeURIComponent(userId)}` }),
     successMessage: "New account email sent.",
     failureMessage: "The new account email could not be sent.",
+    disabledMessage: "Email sending is not configured.",
+  });
+}
+
+/** Someone's Send feedback message (#430), to one of the app's admins. */
+export async function sendFeedbackEmail({
+  to,
+  userId,
+  name,
+  username,
+  email,
+  message,
+  mayReply,
+  fallbackOrigin,
+}: {
+  to: string;
+  userId: string;
+  name: string | null;
+  username: string | null;
+  email: string;
+  message: string;
+  mayReply: boolean;
+  fallbackOrigin?: string;
+}): Promise<EmailDeliveryResult> {
+  return sendEmail({
+    to,
+    content: feedbackEmail({ name, username, email, message, mayReply, userUrl: `${getAppBaseUrl(fallbackOrigin)}/users/${encodeURIComponent(userId)}` }),
+    successMessage: "Feedback sent.",
+    failureMessage: "The feedback email could not be sent.",
     disabledMessage: "Email sending is not configured.",
   });
 }
