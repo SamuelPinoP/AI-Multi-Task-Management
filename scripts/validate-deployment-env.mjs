@@ -3,7 +3,7 @@ import "dotenv/config";
 
 const ALLOWED_STORAGE_PROVIDERS = new Set(["local", "vercel-blob", "aws-s3"]);
 const ALLOWED_EMAIL_PROVIDERS = new Set(["disabled", "resend", "smtp", "brevo"]);
-const BOOLEAN_ENV_NAMES = ["SIGNUP_ENABLED", "GUEST_LOGIN_ENABLED", "PROJECT_CHAT_GUEST_UPLOADS_ENABLED"];
+const BOOLEAN_ENV_NAMES = ["SIGNUP_ENABLED", "GUEST_LOGIN_ENABLED", "PROJECT_CHAT_GUEST_UPLOADS_ENABLED", "AI_FREE_TIER"];
 const BYTE_LIMIT_ENV_NAMES = ["PROJECT_CHAT_S3_QUOTA_BYTES", "PROJECT_CHAT_USER_QUOTA_BYTES"];
 // Cloudflare R2's free tier is 10 GB-month. Compare against decimal GB, the smaller reading.
 const R2_FREE_TIER_BYTES = 10 * 1000 ** 3;
@@ -163,6 +163,29 @@ if (Boolean(vapidPublicKey) !== Boolean(vapidPrivateKey)) {
   errors.push("Set both VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY (from `npx web-push generate-vapid-keys`), or neither to leave browser notifications off.");
 } else if (vapidPublicKey && !/^[A-Za-z0-9_-]{80,100}$/.test(vapidPublicKey)) {
   errors.push("VAPID_PUBLIC_KEY doesn't look like a web-push public key. Copy it again from `npx web-push generate-vapid-keys`.");
+}
+
+// The AI assistant (#307) is optional: without a key it's off, and the rule-based planner answers.
+const aiProvider = (cleanEnvValue("AI_PROVIDER") || "gemini").toLowerCase();
+if (!/^[a-z][a-z0-9-]*$/.test(aiProvider)) {
+  errors.push('Invalid AI_PROVIDER. Use a provider name such as "gemini", or remove it for the default.');
+} else if (aiProvider === "fake" && process.env.VERCEL === "1") {
+  errors.push('AI_PROVIDER="fake" is only for tests. Remove it from Vercel; the assistant uses "gemini".');
+} else if (aiProvider === "gemini" && process.env.VERCEL === "1" && !cleanEnvValue("GEMINI_API_KEY")) {
+  warnings.push("GEMINI_API_KEY is not set, so the AI assistant is off here and the rule-based planner answers instead.");
+}
+const aiModel = cleanEnvValue("AI_MODEL");
+if (aiModel && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(aiModel)) {
+  errors.push("Invalid AI_MODEL. Use a model code such as gemini-3.1-flash-lite, or remove it for the default.");
+}
+for (const name of ["AI_USER_DAILY_REQUESTS", "AI_APP_DAILY_REQUESTS"]) {
+  const value = cleanEnvValue(name);
+  if (value && (!/^\d+$/.test(value) || Number(value) > 1_000_000)) {
+    errors.push(`Invalid ${name}. Use a whole number of model requests a day, such as "400".`);
+  }
+}
+if (aiProvider === "gemini" && cleanEnvValue("AI_FREE_TIER") !== "false" && Number(cleanEnvValue("AI_APP_DAILY_REQUESTS") || 0) > 500) {
+  warnings.push("AI_APP_DAILY_REQUESTS is above the ~500 requests a day of Gemini's free tier. Past it, Google answers 429 and the planner takes over.");
 }
 
 // Password reset and invitation emails build their links from APP_BASE_URL.

@@ -31,6 +31,9 @@ model User {
   /// When the user last used the app, to within an hour: set when they sign in, then by the requests
   /// that already read their session (src/lib/auth.ts). Null until their first sign-in after it existed.
   lastActiveAt                 DateTime?
+  /// When the user agreed to the AI assistant's data notice (#307, #308); null until they do. Nothing is sent to
+  /// an AI provider for them before that, or once AI_NOTICE_UPDATED moves past it (src/lib/ai/notice.ts).
+  aiNoticeAcceptedAt           DateTime?
   sessions                     Session[]
   signInEvents                 SignInEvent[]
   oauthAccounts                OAuthAccount[]
@@ -60,6 +63,66 @@ model User {
   labels                       Label[]
   taskComments                 TaskComment[]
   taskEvents                   TaskEvent[]
+  agentRuns                    AgentRun[]
+}
+
+/// One message to the AI assistant (#307): who asked, what answered and how it went. It feeds the daily caps
+/// (`modelRequests`), debugging and the cost of an action. It never holds what was asked or answered, nor the
+/// tools' arguments. The daily cleanup deletes rows after AGENT_RUN_DAYS (src/lib/daily-cleanup.ts).
+model AgentRun {
+  id                 String          @id @default(cuid())
+  userId             String
+  /// When the message arrived.
+  createdAt          DateTime        @default(now())
+  /// The provider and model that answered, such as "gemini" and "gemini-3.1-flash-lite"; null when the
+  /// rule-based planner answered without asking a model.
+  provider           String?
+  model              String?
+  outcome            AgentRunOutcome
+  /// Requests sent to the model; the daily caps add these up.
+  modelRequests      Int             @default(0)
+  /// The tools the model called, in order, by name only.
+  toolCalls          String[]        @default([])
+  /// Tool calls whose arguments failed validation, so never ran.
+  validationFailures Int             @default(0)
+  inputTokens        Int             @default(0)
+  outputTokens       Int             @default(0)
+  /// From the message arriving to the last word of the answer.
+  latencyMs          Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+/// How an AI assistant message ended (src/lib/ai/chat.ts). Every outcome but ANSWERED, STEP_LIMIT,
+/// INVALID_ARGUMENTS, CANCELLED and FAILED was answered by the rule-based planner instead.
+enum AgentRunOutcome {
+  /// The model answered.
+  ANSWERED
+  /// The model wanted more tool steps than one message allows.
+  STEP_LIMIT
+  /// The model's tool arguments failed validation twice.
+  INVALID_ARGUMENTS
+  /// The provider said too many requests (HTTP 429).
+  RATE_LIMITED
+  /// The provider failed or refused the request.
+  PROVIDER_ERROR
+  /// The answer took longer than the run's deadline.
+  TIMED_OUT
+  /// The person closed the connection before the answer finished.
+  CANCELLED
+  /// The person had used their daily allowance.
+  USER_LIMIT
+  /// The whole app had used its daily allowance.
+  APP_LIMIT
+  /// No model is configured on this server (no key, or an unknown provider).
+  DISABLED
+  /// Something went wrong in AI Multi itself.
+  FAILED
+  /// The person is where the provider's free tier may not be offered (src/lib/ai/region.ts).
+  REGION
 }
 
 model Session {

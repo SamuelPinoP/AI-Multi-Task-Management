@@ -75,6 +75,9 @@ export default defineConfig({
           GOOGLE_CLIENT_ID: "e2e-client.apps.googleusercontent.com",
           GOOGLE_CLIENT_SECRET: "e2e-client-secret",
           GOOGLE_OAUTH_URL: googleStubUrl,
+          // The AI assistant answers by the fake provider's rules (#307): no test calls a real model.
+          AI_PROVIDER: "fake",
+          GEMINI_API_KEY: "",
         },
         reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "true",
         // The production build runs inside this timeout too.

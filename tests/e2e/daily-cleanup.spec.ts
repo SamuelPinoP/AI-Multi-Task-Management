@@ -127,6 +127,13 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
       [id("old-sign-in"), id("recent-sign-in"), id("member")],
     );
 
+    // The AI assistant's usage log (#307) is kept 90 days: a run from 91 days ago goes, one from 89 stays.
+    await sql(
+      `INSERT INTO "AgentRun" (id, "userId", outcome, "latencyMs", "createdAt")
+       VALUES ($1, $3, 'ANSWERED', 900, ${UTC_NOW} - interval '91 days'), ($2, $3, 'ANSWERED', 900, ${UTC_NOW} - interval '89 days')`,
+      [id("old-agent-run"), id("recent-agent-run"), id("member")],
+    );
+
     const response = await request.get("/api/cron/cleanup");
     expect(response.ok(), await response.text()).toBe(true);
     const result = (await response.json()) as Record<string, number>;
@@ -138,6 +145,9 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
     expect(result.signIns).toBeGreaterThanOrEqual(1);
     expect(await exists("SignInEvent", "id", id("old-sign-in"))).toBe(false);
     expect(await exists("SignInEvent", "id", id("recent-sign-in"))).toBe(true);
+    expect(result.agentRuns).toBeGreaterThanOrEqual(1);
+    expect(await exists("AgentRun", "id", id("old-agent-run"))).toBe(false);
+    expect(await exists("AgentRun", "id", id("recent-agent-run"))).toBe(true);
 
     // Deleted, with what cascades from them.
     expect(await exists("User", "id", id("old-guest"))).toBe(false);

@@ -35,6 +35,11 @@ export const RATE_LIMITS = {
   projectPhotosUser: { name: "project-photos-user", limit: 20, windowMs: 10 * MINUTE },
   /** Send feedback (#430) per person: each one is an email to every admin, so it's kept low. */
   feedbackUser: { name: "feedback-user", limit: 5, windowMs: 60 * MINUTE },
+  /**
+   * Messages to the AI assistant (#307) per person: a brisk conversation fits. The daily caps
+   * bound the model requests; this keeps a script from hammering the planner and the database.
+   */
+  agentChatUser: { name: "agent-chat-user", limit: 30, windowMs: 10 * MINUTE },
 } as const satisfies Record<string, RateLimitRule>;
 
 /** Start of the fixed window that `nowMs` falls in. */
