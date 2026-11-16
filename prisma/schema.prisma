@@ -121,6 +121,8 @@ enum AgentRunOutcome {
   DISABLED
   /// Something went wrong in AI Multi itself.
   FAILED
+  /// The person is where the provider's free tier may not be offered (src/lib/ai/region.ts).
+  REGION
 }
 
 model Session {

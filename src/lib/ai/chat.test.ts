@@ -38,6 +38,7 @@ async function chat({
   usedToday,
   limits,
   request = ask(),
+  country = null,
 }: {
   turns?: ScriptedTurn[];
   used?: { user: number; app: number };
@@ -46,6 +47,7 @@ async function chat({
   usedToday?: () => Promise<{ user: number; app: number }>;
   limits?: AgentLimits;
   request?: ChatRequest;
+  country?: string | null;
 }) {
   const provider = createScriptedProvider(turns);
   const events: ChatEvent[] = [];
@@ -53,10 +55,11 @@ async function chat({
   const result = await runAgentChat(
     request,
     {
-      config: { provider: "scripted", model: "test-model", caps: { userDailyRequests: 10, appDailyRequests: 100 }, disabledReason: null, ...config },
+      config: { provider: "scripted", model: "test-model", caps: { userDailyRequests: 10, appDailyRequests: 100 }, freeTier: true, disabledReason: null, ...config },
       provider: noProvider ? null : provider,
       tools: [tool],
       context,
+      country,
       usedToday: usedToday ?? (async () => used),
       planner: async () => {
         plannerCalls += 1;
@@ -141,6 +144,19 @@ test("when the whole app has used today's allowance, everyone gets the planner",
   assert.match(start.message, /^The AI assistant has reached today's limit for everyone\./);
   assert.equal(record.outcome, "APP_LIMIT");
   assert.equal(provider.requests.length, 0);
+});
+
+test("on the free tier, people in the EEA, Switzerland and the UK get the planner, and nothing is sent", async () => {
+  const { record, events, provider } = await chat({ country: "DE", turns: [{ text: "unused" }] });
+  const start = events[0];
+  assert.ok(start.type === "start" && start.mode === "planner" && start.reason === "region");
+  assert.equal(start.message, "The AI assistant isn't available in your country yet. Here's what your planner suggests instead.");
+  assert.equal(record.outcome, "REGION");
+  assert.equal(provider.requests.length, 0);
+
+  const paid = await chat({ country: "DE", config: { freeTier: false }, turns: [{ text: "Hallo." }] });
+  assert.equal(paid.record.outcome, "ANSWERED", "a paid key serves them");
+  assert.equal((await chat({ country: "US", turns: [{ text: "Hi." }] })).record.outcome, "ANSWERED");
 });
 
 test("a 429 from the provider: the person is told, and the planner answers", async () => {

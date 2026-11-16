@@ -159,6 +159,24 @@ test("a rate-limited provider: the person is told, and the planner answers", asy
   expect(await latestRun(myEmail)).toMatchObject({ outcome: "RATE_LIMITED", modelRequests: 1 });
 });
 
+test("on the free tier, a request from the EEA, Switzerland or the UK gets the planner and sends nothing", async () => {
+  // Vercel sets this header from the connection; the local server takes it as given.
+  const response = await me.post("/api/agent/chat", {
+    data: { messages: [{ role: "user", content: "list_open_tasks" }] },
+    headers: { "x-vercel-ip-country": "DE" },
+  });
+  expect(response.status()).toBe(200);
+  const events = (await response.text())
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as ChatEvent);
+  expect(events[0]).toMatchObject({ type: "start", mode: "planner", reason: "region" });
+  expect(events.some((event) => event.type === "tool")).toBe(false);
+  expect(answerText(events)).toContain(myTask);
+  expect(events.at(-1)).toMatchObject({ type: "done", outcome: "REGION" });
+  expect(await latestRun(myEmail)).toMatchObject({ outcome: "REGION", provider: null, modelRequests: 0 });
+});
+
 test("once today's allowance is used, the planner answers and says when it comes back", async () => {
   const before = await ask(me, "Hello");
   const remaining = (before.at(-1) as ChatEvent & { allowance: Allowance }).allowance.user.remaining;

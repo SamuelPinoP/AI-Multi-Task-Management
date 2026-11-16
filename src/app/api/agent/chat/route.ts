@@ -34,5 +34,10 @@ export async function POST(request: Request) {
   const limit = await consumeRateLimit(RATE_LIMITS.agentChatUser, user.id);
   if (!limit.allowed) return rateLimitedResponse("messages to the assistant", limit);
 
-  return streamAgentChat({ userId: user.id, request: parsed.request, signal: request.signal });
+  return streamAgentChat({
+    userId: user.id,
+    request: parsed.request,
+    signal: request.signal,
+    country: request.headers.get("x-vercel-ip-country"),
+  });
 }

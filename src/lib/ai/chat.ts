@@ -10,6 +10,7 @@ import { allowanceFor, exhaustedCap, type Allowance } from "@/lib/ai/allowance";
 import type { AgentConfig } from "@/lib/ai/config";
 import { fallbackMessage, type FallbackReason } from "@/lib/ai/fallback";
 import { systemPrompt } from "@/lib/ai/prompt";
+import { regionAllowed } from "@/lib/ai/region";
 import type { AgentTool, Source, ToolContext } from "@/lib/ai/tools/define";
 import type { AgentMessage, Provider, ProviderError } from "@/lib/ai/types";
 
@@ -78,6 +79,8 @@ export type ChatDependencies = {
   provider: Provider | null;
   tools: AgentTool[];
   context: ToolContext;
+  /** Where the request comes from (Vercel's `x-vercel-ip-country`), for the free tier's regions (region.ts). */
+  country: string | null;
   /** Model requests counted today (see allowance.ts): the person's, and everyone's. */
   usedToday(): Promise<{ user: number; app: number }>;
   /** The rule-based planner's answer. */
@@ -145,9 +148,12 @@ export async function runAgentChat(
   try {
     allowance = allowanceFor(await deps.usedToday(), config.caps, now);
     const cap = exhaustedCap(allowance);
-    if (!provider || config.disabledReason || cap) {
-      const reason: FallbackReason = !provider || config.disabledReason ? "disabled" : cap === "user" ? "user_limit" : "app_limit";
-      record.outcome = reason === "disabled" ? "DISABLED" : reason === "user_limit" ? "USER_LIMIT" : "APP_LIMIT";
+    const blocked = !regionAllowed(deps.country, config.freeTier);
+    if (!provider || config.disabledReason || blocked || cap) {
+      const reason: FallbackReason =
+        !provider || config.disabledReason ? "disabled" : blocked ? "region" : cap === "user" ? "user_limit" : "app_limit";
+      const outcomes: Record<string, AgentRunOutcome> = { disabled: "DISABLED", region: "REGION", user_limit: "USER_LIMIT", app_limit: "APP_LIMIT" };
+      record.outcome = outcomes[reason];
       emit({ type: "start", mode: "planner", reason, message: fallbackMessage(reason, allowance, now), allowance });
       await answerWithPlanner();
       emit({ type: "done", outcome: record.outcome, allowance });

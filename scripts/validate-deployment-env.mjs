@@ -3,7 +3,7 @@ import "dotenv/config";
 
 const ALLOWED_STORAGE_PROVIDERS = new Set(["local", "vercel-blob", "aws-s3"]);
 const ALLOWED_EMAIL_PROVIDERS = new Set(["disabled", "resend", "smtp", "brevo"]);
-const BOOLEAN_ENV_NAMES = ["SIGNUP_ENABLED", "GUEST_LOGIN_ENABLED", "PROJECT_CHAT_GUEST_UPLOADS_ENABLED"];
+const BOOLEAN_ENV_NAMES = ["SIGNUP_ENABLED", "GUEST_LOGIN_ENABLED", "PROJECT_CHAT_GUEST_UPLOADS_ENABLED", "AI_FREE_TIER"];
 const BYTE_LIMIT_ENV_NAMES = ["PROJECT_CHAT_S3_QUOTA_BYTES", "PROJECT_CHAT_USER_QUOTA_BYTES"];
 // Cloudflare R2's free tier is 10 GB-month. Compare against decimal GB, the smaller reading.
 const R2_FREE_TIER_BYTES = 10 * 1000 ** 3;
@@ -184,7 +184,7 @@ for (const name of ["AI_USER_DAILY_REQUESTS", "AI_APP_DAILY_REQUESTS"]) {
     errors.push(`Invalid ${name}. Use a whole number of model requests a day, such as "400".`);
   }
 }
-if (aiProvider === "gemini" && Number(cleanEnvValue("AI_APP_DAILY_REQUESTS") || 0) > 500) {
+if (aiProvider === "gemini" && cleanEnvValue("AI_FREE_TIER") !== "false" && Number(cleanEnvValue("AI_APP_DAILY_REQUESTS") || 0) > 500) {
   warnings.push("AI_APP_DAILY_REQUESTS is above the ~500 requests a day of Gemini's free tier. Past it, Google answers 429 and the planner takes over.");
 }
 

@@ -5,7 +5,7 @@ import { untilReset, type Allowance } from "@/lib/ai/allowance";
 import type { Source } from "@/lib/ai/tools/define";
 import type { PlannerSectionKey, PlannerSuggestion, PlannerSuggestionKind, SmartPlanner } from "@/lib/smart-planner";
 
-export type FallbackReason = "user_limit" | "app_limit" | "rate_limited" | "unavailable" | "timeout" | "disabled";
+export type FallbackReason = "user_limit" | "app_limit" | "rate_limited" | "unavailable" | "timeout" | "disabled" | "region";
 
 export function fallbackMessage(reason: FallbackReason, allowance: Allowance, now: Date) {
   switch (reason) {
@@ -21,6 +21,8 @@ export function fallbackMessage(reason: FallbackReason, allowance: Allowance, no
       return "The AI service isn't answering right now. Here's what your planner suggests instead.";
     case "disabled":
       return "The AI assistant isn't available here. Here's what your planner suggests instead.";
+    case "region":
+      return "The AI assistant isn't available in your country yet. Here's what your planner suggests instead.";
   }
 }
 

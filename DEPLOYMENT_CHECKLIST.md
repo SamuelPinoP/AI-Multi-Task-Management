@@ -108,6 +108,8 @@ The AI assistant (#307) answers through a model provider, Gemini by default. Wit
 2. In the checkout linked to Vercel, run `npx -y vercel@latest env add GEMINI_API_KEY --environment production,preview --sensitive` and paste the key when asked. It takes effect with the next deploy.
 3. Optional settings, all without code changes: `AI_MODEL` (default `gemini-3.1-flash-lite`), `AI_PROVIDER` (default `gemini`), and the daily caps on model requests, `AI_USER_DAILY_REQUESTS` (40 per person) and `AI_APP_DAILY_REQUESTS` (400 for everyone). Days run from midnight Pacific time, when Gemini resets its own quotas; keep the app's cap under the free tier's limit, about 500 requests a day on 3.1 Flash-Lite. `AI_APP_DAILY_REQUESTS="0"` switches the assistant off at once. Never set `AI_PROVIDER="fake"` on Vercel: it's for tests, and the build refuses it.
 
+While `AI_FREE_TIER` is on (the default), people in the EEA, Switzerland and the UK get the planner instead: Gemini's free terms allow only paid services there. With a paid key, set `AI_FREE_TIER="false"`.
+
 Nothing is sent for a person until they agree to the assistant's data notice. Each message is logged in the `AgentRun` table (outcome, model, tools called, tokens, latency; never the text), kept 90 days.
 
 ## Deployment environment validation

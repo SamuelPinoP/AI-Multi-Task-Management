@@ -33,6 +33,12 @@ export type AgentConfig = {
   provider: string;
   model: string;
   caps: AgentCaps;
+  /**
+   * The key is on a provider's free tier (AI_FREE_TIER, true unless "false"). Gemini's free terms
+   * keep the assistant from people in the EEA, Switzerland and the UK (region.ts), and the data
+   * notice says Google may use what's sent. Set "false" with the paid key at the flip (#432).
+   */
+  freeTier: boolean;
   disabledReason: DisabledReason | null;
 };
 
@@ -57,5 +63,5 @@ export function readAgentConfig(env: Env): AgentConfig {
   else if (spec.testOnly && env.VERCEL === "1") disabledReason = "test_provider";
   else if (spec.apiKeyEnv && !env[spec.apiKeyEnv]?.trim()) disabledReason = "missing_key";
 
-  return { provider, model, caps, disabledReason };
+  return { provider, model, caps, freeTier: env.AI_FREE_TIER?.trim().toLowerCase() !== "false", disabledReason };
 }

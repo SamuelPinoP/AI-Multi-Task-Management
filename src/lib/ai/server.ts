@@ -35,7 +35,18 @@ async function saveRun(userId: string, record: RunRecord, startedAt: Date) {
 }
 
 /** Answers one message as a stream of JSON lines (see `ChatEvent`), and logs the run when it ends. */
-export async function streamAgentChat({ userId, request, signal }: { userId: string; request: ChatRequest; signal: AbortSignal }) {
+export async function streamAgentChat({
+  userId,
+  request,
+  signal,
+  country,
+}: {
+  userId: string;
+  request: ChatRequest;
+  signal: AbortSignal;
+  /** Vercel's `x-vercel-ip-country`; Vercel sets it, so a client can't choose it. */
+  country: string | null;
+}) {
   const startedAt = new Date();
   const config = readAgentConfig(process.env);
   if (config.disabledReason && config.disabledReason !== "missing_key") {
@@ -71,6 +82,7 @@ export async function streamAgentChat({ userId, request, signal }: { userId: str
           provider: createProvider(config, process.env),
           tools: AGENT_TOOLS,
           context,
+          country,
           usedToday: () => modelRequestsToday(userId, realNow),
           planner: async () => plannerAnswer(await generateSmartPlanner(userId, now, realNow)),
           signal: gone.signal,

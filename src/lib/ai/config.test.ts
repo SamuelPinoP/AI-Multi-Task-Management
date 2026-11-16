@@ -12,9 +12,17 @@ test("Gemini 3.1 Flash-Lite by default, on when its key is set", () => {
     provider: "gemini",
     model: GEMINI_DEFAULT_MODEL,
     caps: { userDailyRequests: DEFAULT_USER_DAILY_REQUESTS, appDailyRequests: DEFAULT_APP_DAILY_REQUESTS },
+    freeTier: true,
     disabledReason: null,
   });
   assert.equal(GEMINI_DEFAULT_MODEL, "gemini-3.1-flash-lite");
+});
+
+test("the free tier is assumed until AI_FREE_TIER is \"false\"", () => {
+  assert.equal(readAgentConfig({}).freeTier, true);
+  assert.equal(readAgentConfig({ AI_FREE_TIER: "true" }).freeTier, true);
+  assert.equal(readAgentConfig({ AI_FREE_TIER: "maybe" }).freeTier, true, "anything unclear keeps the safer setting");
+  assert.equal(readAgentConfig({ AI_FREE_TIER: " FALSE " }).freeTier, false);
 });
 
 test("off without a key, and the planner answers", () => {
