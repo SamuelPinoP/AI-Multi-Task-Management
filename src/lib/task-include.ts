@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { projectAccessWhere } from "@/lib/project-access";
+import { projectAccessWhere } from "@/lib/project-access-core";
 
 /** Tasks the user can see: their own, and tasks in projects they belong to. */
 export function visibleTaskWhere(userId: string) {

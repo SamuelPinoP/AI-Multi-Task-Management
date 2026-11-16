@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { projectAccessWhere } from "@/lib/project-access";
+import { projectAccessWhere } from "@/lib/project-access-core";
 
 /** Notes the user can see: their own, and notes in projects they belong to (same as /api/notes). */
 export function visibleNoteWhere(userId: string) {

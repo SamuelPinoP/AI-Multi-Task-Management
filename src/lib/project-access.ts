@@ -1,6 +1,10 @@
-import { Prisma, type Project, type ProjectMemberRole } from "@prisma/client";
+import type { Project, ProjectMemberRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { projectAccessWhereForProject } from "@/lib/project-access-core";
 import { canManageMembers, memberRole, type ProjectRole } from "@/lib/project-roles";
+
+// The filters live in project-access-core.ts, free of server-only imports; every importer keeps using them from here.
+export { projectAccessWhere, projectAccessWhereForProject, projectEditWhere } from "@/lib/project-access-core";
 
 /** OWNER: the project's creator. ADMIN: also manages people. EDITOR: every other member. The rules are in project-roles.ts (#385). */
 export type ProjectAccessLevel = ProjectRole;
@@ -11,19 +15,6 @@ export type ProjectAccess = {
   accessLevel: ProjectAccessLevel;
   memberRole: ProjectMemberRole | null;
 };
-
-export function projectAccessWhere(userId: string): Prisma.ProjectWhereInput {
-  return { OR: [{ userId }, { members: { some: { userId } } }] };
-}
-
-/** Projects where the user can add, edit and delete content: every member edits (#385). */
-export function projectEditWhere(userId: string): Prisma.ProjectWhereInput {
-  return projectAccessWhere(userId);
-}
-
-export function projectAccessWhereForProject(projectId: string, userId: string): Prisma.ProjectWhereInput {
-  return { id: projectId, ...projectAccessWhere(userId) };
-}
 
 export function getProjectAccessForUser(project: Pick<Project, "id" | "userId"> & { members?: { userId: string | null; role: ProjectMemberRole }[] }, userId: string): ProjectAccess | null {
   if (project.userId === userId) return { projectId: project.id, userId, accessLevel: "OWNER", memberRole: "OWNER" };

@@ -30,6 +30,10 @@ const e2eEnv = {
   GOOGLE_CLIENT_ID: "e2e-client.apps.googleusercontent.com",
   GOOGLE_CLIENT_SECRET: "e2e-client-secret",
   GOOGLE_OAUTH_URL: `http://127.0.0.1:${Number(e2ePort) + 1001}`,
+  // The AI assistant (#307) answers by the fake provider's rules (src/lib/ai/providers/fake.ts),
+  // so no test calls a real model, whatever key a local .env holds.
+  AI_PROVIDER: "fake",
+  GEMINI_API_KEY: "",
 };
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

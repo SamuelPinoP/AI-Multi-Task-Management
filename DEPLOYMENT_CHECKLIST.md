@@ -100,6 +100,16 @@ In Gmail, "Show original" on a received email should report `SPF: PASS`, `DKIM: 
 
 Until the brand is verified (free, under **Branding**, but it takes a few days and needs a privacy policy link), Google's screen names the site's address instead of "AI Multi". Sign-in works either way. Google sign-in stays off on previews: their addresses change, and Google only sends people back to the redirect URIs listed in step 3.
 
+### AI assistant (optional, free tier)
+
+The AI assistant (#307) answers through a model provider, Gemini by default. Without `GEMINI_API_KEY` it's off and the rule-based planner answers instead, so the app works either way.
+
+1. Create a free key in [Google AI Studio](https://aistudio.google.com) (**Get API key**). Don't set up billing: the free tier needs no card.
+2. In the checkout linked to Vercel, run `npx -y vercel@latest env add GEMINI_API_KEY --environment production,preview --sensitive` and paste the key when asked. It takes effect with the next deploy.
+3. Optional settings, all without code changes: `AI_MODEL` (default `gemini-3.1-flash-lite`), `AI_PROVIDER` (default `gemini`), and the daily caps on model requests, `AI_USER_DAILY_REQUESTS` (40 per person) and `AI_APP_DAILY_REQUESTS` (400 for everyone). Days run from midnight Pacific time, when Gemini resets its own quotas; keep the app's cap under the free tier's limit, about 500 requests a day on 3.1 Flash-Lite. `AI_APP_DAILY_REQUESTS="0"` switches the assistant off at once. Never set `AI_PROVIDER="fake"` on Vercel: it's for tests, and the build refuses it.
+
+Nothing is sent for a person until they agree to the assistant's data notice. Each message is logged in the `AgentRun` table (outcome, model, tools called, tokens, latency; never the text), kept 90 days.
+
 ## Deployment environment validation
 
 Run the deployment validator before the first Vercel deploy and after changing environment variables:

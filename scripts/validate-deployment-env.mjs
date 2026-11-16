@@ -165,6 +165,29 @@ if (Boolean(vapidPublicKey) !== Boolean(vapidPrivateKey)) {
   errors.push("VAPID_PUBLIC_KEY doesn't look like a web-push public key. Copy it again from `npx web-push generate-vapid-keys`.");
 }
 
+// The AI assistant (#307) is optional: without a key it's off, and the rule-based planner answers.
+const aiProvider = (cleanEnvValue("AI_PROVIDER") || "gemini").toLowerCase();
+if (!/^[a-z][a-z0-9-]*$/.test(aiProvider)) {
+  errors.push('Invalid AI_PROVIDER. Use a provider name such as "gemini", or remove it for the default.');
+} else if (aiProvider === "fake" && process.env.VERCEL === "1") {
+  errors.push('AI_PROVIDER="fake" is only for tests. Remove it from Vercel; the assistant uses "gemini".');
+} else if (aiProvider === "gemini" && process.env.VERCEL === "1" && !cleanEnvValue("GEMINI_API_KEY")) {
+  warnings.push("GEMINI_API_KEY is not set, so the AI assistant is off here and the rule-based planner answers instead.");
+}
+const aiModel = cleanEnvValue("AI_MODEL");
+if (aiModel && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(aiModel)) {
+  errors.push("Invalid AI_MODEL. Use a model code such as gemini-3.1-flash-lite, or remove it for the default.");
+}
+for (const name of ["AI_USER_DAILY_REQUESTS", "AI_APP_DAILY_REQUESTS"]) {
+  const value = cleanEnvValue(name);
+  if (value && (!/^\d+$/.test(value) || Number(value) > 1_000_000)) {
+    errors.push(`Invalid ${name}. Use a whole number of model requests a day, such as "400".`);
+  }
+}
+if (aiProvider === "gemini" && Number(cleanEnvValue("AI_APP_DAILY_REQUESTS") || 0) > 500) {
+  warnings.push("AI_APP_DAILY_REQUESTS is above the ~500 requests a day of Gemini's free tier. Past it, Google answers 429 and the planner takes over.");
+}
+
 // Password reset and invitation emails build their links from APP_BASE_URL.
 const appBaseUrl = cleanEnvValue("APP_BASE_URL");
 if (isVercelProduction && !appBaseUrl) {
