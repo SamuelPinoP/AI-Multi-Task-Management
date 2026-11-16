@@ -2,6 +2,7 @@ import Link from "next/link";
 import { uiCardClass } from "@/components/ui";
 import { UserBadges } from "@/components/user-badges";
 import { requireAppAdminPage } from "@/lib/app-admin";
+import { cn } from "@/lib/cn";
 import { formatInstant } from "@/lib/user-time";
 import { getUserTimeZone } from "@/lib/user-time-server";
 import { getUserList, type UserListEntry } from "@/lib/users-admin";
@@ -63,9 +64,9 @@ export default async function UsersPage() {
       </section>
 
       {users.length === 0 ? (
-        <p className={`${uiCardClass} text-sm text-muted`}>No accounts yet.</p>
+        <p className={cn(uiCardClass, "text-sm text-muted")}>No accounts yet.</p>
       ) : (
-        <section aria-labelledby="users-list" className={`${uiCardClass} p-0`}>
+        <section aria-labelledby="users-list" className={cn(uiCardClass, "overflow-hidden p-0")}>
           <h2 id="users-list" className="sr-only">
             Accounts
           </h2>
