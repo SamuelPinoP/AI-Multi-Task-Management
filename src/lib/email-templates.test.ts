@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   emailVerificationEmail,
+  feedbackEmail,
   newAccountEmail,
   passwordResetEmail,
   projectInvitationEmail,
@@ -24,6 +25,17 @@ const emails: [string, EmailContent][] = [
   [
     "new account",
     newAccountEmail({ name: "Dana Reyes", username: "dana", email: "dana@example.com", method: "password", userUrl: `${baseUrl}/users/cm123` }),
+  ],
+  [
+    "feedback",
+    feedbackEmail({
+      name: "Dana Reyes",
+      username: "dana",
+      email: "dana@example.com",
+      message: "The calendar is great.\nCould tasks have colors?",
+      mayReply: true,
+      userUrl: `${baseUrl}/users/cm123`,
+    }),
   ],
 ];
 
@@ -106,6 +118,39 @@ test("a new account email says who signed up, how, and links to their page (#429
   assert.equal(odd.subject, "AI Multi: new account, <b>Eve</b> Bcc: x@example.com");
   assert.ok(!odd.html.includes("<b>Eve</b>"));
   assert.ok(odd.html.includes("&lt;b&gt;Eve&lt;/b&gt;"));
+});
+
+test("a feedback email carries the message, whether a reply is welcome, and who sent it (#430)", () => {
+  const [, email] = emails[5];
+  assert.equal(email.subject, "AI Multi: feedback from Dana Reyes");
+  assert.ok(email.text.startsWith("Dana Reyes sent feedback:\n\nThe calendar is great.\nCould tasks have colors?\n"));
+  assert.ok(email.text.includes("They're happy for you to email them about it at dana@example.com."));
+  for (const line of ["Name: Dana Reyes", "Username: @dana", "Email: dana@example.com"]) {
+    assert.ok(email.text.includes(line), line);
+    assert.ok(email.html.includes(line), `HTML: ${line}`);
+  }
+  // Line breaks survive in the HTML, and the only link is their page.
+  assert.ok(email.html.includes("white-space: pre-wrap;\">The calendar is great.\nCould tasks have colors?</div>"));
+  assert.deepEqual(hrefs(email.html), [`${baseUrl}/users/cm123`]);
+
+  const quiet = feedbackEmail({ name: null, username: null, email: "pat@example.org", message: "Hi", mayReply: false, userUrl: `${baseUrl}/users/cm456` });
+  assert.equal(quiet.subject, "AI Multi: feedback from pat@example.org");
+  assert.ok(quiet.text.includes("They'd rather not be emailed about it."));
+  assert.ok(!quiet.text.includes("happy for you to email"));
+
+  // The message and the name are free text: escaped in the HTML, the name on one line in the subject.
+  const odd = feedbackEmail({
+    name: "<b>Eve</b>\r\nBcc: x@example.com",
+    username: "eve",
+    email: "eve@example.com",
+    message: '<script>alert(1)</script><a href="https://evil.example">win</a>',
+    mayReply: false,
+    userUrl: `${baseUrl}/users/cm789`,
+  });
+  assert.equal(odd.subject, "AI Multi: feedback from <b>Eve</b> Bcc: x@example.com");
+  assert.ok(!odd.html.includes("<script>"));
+  assert.ok(!odd.html.includes("<b>Eve</b>"));
+  assert.deepEqual(hrefs(odd.html), [`${baseUrl}/users/cm789`]);
 });
 
 test("an invitation to a new address also offers log in", () => {

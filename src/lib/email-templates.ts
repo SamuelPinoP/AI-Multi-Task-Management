@@ -193,6 +193,49 @@ ${button("Open the Users page", userUrl)}
 }
 
 /**
+ * A message someone wrote with Send feedback (#430), for the app's admins (ADMIN_EMAILS), with
+ * whether they may be emailed about it and a link to their page on the Users page.
+ */
+export function feedbackEmail({
+  name,
+  username,
+  email,
+  message,
+  mayReply,
+  userUrl,
+}: {
+  name: string | null;
+  username: string | null;
+  email: string;
+  message: string;
+  mayReply: boolean;
+  userUrl: string;
+}): EmailContent {
+  const who = oneLine(name ?? "") || email;
+  const subject = `${APP_NAME}: feedback from ${who}`;
+  const reason = "You're getting this because your address is in ADMIN_EMAILS.";
+  const reply = mayReply ? `They're happy for you to email them about it at ${email}.` : "They'd rather not be emailed about it.";
+  const details = [
+    `Name: ${oneLine(name ?? "") || "(none)"}`,
+    `Username: ${username ? `@${username}` : "(none yet)"}`,
+    `Email: ${email}`,
+  ];
+  const text = withFooter([`${who} sent feedback:`, "", message, "", reply, "", ...details, "", "Their account is on the Users page:", userUrl], reason);
+  const html = htmlDocument(
+    subject,
+    `
+<h1 style="font-size: 20px; margin: 0 0 16px;">Feedback from ${escapeHtml(who)}</h1>
+<div style="margin: 0 0 16px; padding: 12px 16px; border: 1px solid #e4e4e7; border-radius: 8px; background: #fafafa; white-space: pre-wrap;">${escapeHtml(message)}</div>
+<p>${escapeHtml(reply)}</p>
+<p style="margin: 0 0 16px;">${details.map(escapeHtml).join("<br>")}</p>
+${button("Open their page", userUrl)}
+`,
+    reason,
+  );
+  return { subject, text, html };
+}
+
+/**
  * "Confirm your email" with a link that proves the user owns the address
  * (#130). The account can't be used until it's opened (#350).
  */

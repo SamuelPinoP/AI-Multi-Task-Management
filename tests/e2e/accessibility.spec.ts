@@ -194,6 +194,32 @@ test("every accent palette has no WCAG A/AA violations", async ({ page, isMobile
   expect(found).toEqual([]);
 });
 
+// Send feedback (#430) is for accounts only, so an account opens it, empty and then with an error showing.
+test("the Send feedback dialog has no WCAG A/AA violations", async ({ page }) => {
+  await signUpAndLogIn(page, "A11y feedback");
+  const found: string[] = [];
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
+    await page.goto("/");
+    await page.waitForLoadState("networkidle");
+    await openAccountMenu(page);
+    await page.getByRole("menuitem", { name: "Send feedback" }).click();
+    const dialog = page.getByRole("dialog", { name: "Send feedback" });
+    await expect(dialog).toBeVisible();
+    found.push(...(await violations(page, `Send feedback dialog (${theme})`)));
+
+    // A message the server refuses shows its reason in the dialog.
+    await page.route("**/api/feedback", (route) => route.fulfill({ status: 502, json: { error: "Your feedback couldn't be sent. Try again in a minute." } }));
+    await dialog.getByLabel("Your feedback").fill("Checking the error state.");
+    await dialog.getByRole("button", { name: "Send feedback" }).click();
+    await expect(dialog.getByRole("alert")).toHaveText("Your feedback couldn't be sent. Try again in a minute.");
+    found.push(...(await violations(page, `Send feedback dialog with an error (${theme})`)));
+    await page.unroute("**/api/feedback");
+    await page.keyboard.press("Escape");
+  }
+  expect(found).toEqual([]);
+});
+
 // Guests see the Account page without its form (#351), so an account checks it, with an error showing.
 test("the Account page has no WCAG A/AA violations", async ({ page }) => {
   await signUpAndLogIn(page, "A11y account");

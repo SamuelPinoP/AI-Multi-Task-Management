@@ -82,6 +82,10 @@ export default function PrivacyPage() {
           after 24 hours, and AI Multi sees only totals, never who visited.
         </p>
         <p>
+          <strong>Feedback.</strong> If you use Send feedback, your message is emailed to Samuel with your name, username
+          and email address, and whether he may email you about it. AI Multi doesn&apos;t store it; it stays in his email.
+        </p>
+        <p>
           <strong>Notifications.</strong> If you turn on browser notifications, AI Multi stores the push subscription your
           browser gives it. Your browser&apos;s push service (such as Google, Mozilla or Apple) uses it to deliver them.
         </p>
@@ -106,8 +110,9 @@ export default function PrivacyPage() {
             they say.
           </li>
           <li>
-            To ask what you think: Samuel may email you now and then, personally, to ask for your opinion of AI Multi.
-            Answering is up to you, and if you&apos;d rather not be asked, say so and he won&apos;t ask again.
+            To hear what you think: Samuel reads what you send with Send feedback, and may email you now and then,
+            personally, to ask for your opinion of AI Multi. Answering is up to you, and if you&apos;d rather not be asked,
+            say so and he won&apos;t ask again.
           </li>
           <li>To recover from problems: a daily backup of the database.</li>
         </ul>
@@ -166,6 +171,7 @@ export default function PrivacyPage() {
           <li>Guest workspaces: deleted 30 days after their last use.</li>
           <li>Sign-in sessions: they end 30 days after their last use, and a year after signing in at the latest.</li>
           <li>Sign-in history: a year.</li>
+          <li>Feedback you send: in Samuel&apos;s email until he deletes it.</li>
           <li>Visit counts: anonymous totals that Vercel keeps under its own terms; the fingerprint that tells visits apart, 24 hours.</li>
           <li>Email confirmation links: 24 hours. Password reset links: 1 hour.</li>
           <li>Notifications in the app: 90 days.</li>
