@@ -119,19 +119,19 @@ export default async function UsersPage() {
               <caption className="sr-only">Accounts, newest first</caption>
               <thead className="border-b border-line text-xs text-muted">
                 <tr>
-                  <th scope="col" className="w-[34%] px-4 py-3 font-medium">
+                  <th scope="col" className="w-[32%] py-3 pr-3 pl-4 font-medium">
                     Person
                   </th>
-                  <th scope="col" className="px-4 py-3 font-medium">
+                  <th scope="col" className="w-[18%] px-3 py-3 font-medium">
                     Signed up
                   </th>
-                  <th scope="col" className="px-4 py-3 font-medium">
+                  <th scope="col" className="w-[18%] px-3 py-3 font-medium">
                     Last active
                   </th>
-                  <th scope="col" className="w-24 px-4 py-3 text-right font-medium">
+                  <th scope="col" className="w-[11%] px-3 py-3 text-right font-medium whitespace-nowrap">
                     Sign-ins
                   </th>
-                  <th scope="col" className="w-[24%] px-4 py-3 font-medium">
+                  <th scope="col" className="w-[21%] py-3 pr-4 pl-3 font-medium">
                     Made
                   </th>
                 </tr>
@@ -139,7 +139,7 @@ export default async function UsersPage() {
               <tbody className="divide-y divide-line">
                 {users.map((user) => (
                   <tr key={user.id} className="align-top hover:bg-surface-hover">
-                    <td className="px-4 py-3">
+                    <td className="py-3 pr-3 pl-4">
                       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                         <Link href={`/users/${user.id}`} className="truncate font-semibold text-ink hover:underline">
                           {user.name || user.email}
@@ -151,14 +151,14 @@ export default async function UsersPage() {
                         {user.email}
                       </p>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <When at={user.signedUpAt} now={now} timeZone={timeZone} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <When at={user.lastActiveAt} now={now} timeZone={timeZone} />
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{user.signIns.toLocaleString("en-US")}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3 text-right tabular-nums">{user.signIns.toLocaleString("en-US")}</td>
+                    <td className="py-3 pr-4 pl-3">
                       <Made user={user} />
                     </td>
                   </tr>
