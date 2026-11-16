@@ -149,6 +149,49 @@ ${button("Reset password", resetUrl)}
   return { subject, text, html };
 }
 
+export type NewAccountMethod = "password" | "google";
+
+/**
+ * Tells the app's admins (ADMIN_EMAILS) that someone made an account (#429),
+ * with a link to their page on the owner-only Users page. Sent only when an
+ * account is created, never as a digest.
+ */
+export function newAccountEmail({
+  name,
+  username,
+  email,
+  method,
+  userUrl,
+}: {
+  name: string | null;
+  username: string | null;
+  email: string;
+  method: NewAccountMethod;
+  userUrl: string;
+}): EmailContent {
+  const who = oneLine(name ?? "") || email;
+  const subject = `${APP_NAME}: new account, ${who}`;
+  const reason = "You're getting this because your address is in ADMIN_EMAILS.";
+  const how = method === "google" ? "signed up with Google" : "signed up with a password";
+  const details = [
+    `Name: ${oneLine(name ?? "") || "(none)"}`,
+    `Username: ${username ? `@${username}` : "(none yet)"}`,
+    `Email: ${email}`,
+  ];
+  const text = withFooter([`${who} ${how}.`, "", ...details, "", "Their sign-ins and what they make are on the Users page:", userUrl], reason);
+  const html = htmlDocument(
+    subject,
+    `
+<h1 style="font-size: 20px; margin: 0 0 16px;">New account: ${escapeHtml(who)}</h1>
+<p>${escapeHtml(who)} ${how}.</p>
+<p style="margin: 0 0 16px;">${details.map(escapeHtml).join("<br>")}</p>
+${button("Open the Users page", userUrl)}
+`,
+    reason,
+  );
+  return { subject, text, html };
+}
+
 /**
  * "Confirm your email" with a link that proves the user owns the address
  * (#130). The account can't be used until it's opened (#350).

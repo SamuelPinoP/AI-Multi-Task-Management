@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { createSessionRecord, getSafeRedirectPath, getSessionCookieOptions, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { authPageHref } from "@/lib/auth-links";
 import {
@@ -10,6 +10,7 @@ import {
   readPendingSignIn,
   verifyGoogleSignIn,
 } from "@/lib/google-auth";
+import { alertAdminsOfNewAccount } from "@/lib/new-account-alert";
 import { clientIpFrom } from "@/lib/rate-limit-core";
 
 /**
@@ -49,6 +50,11 @@ export async function GET(request: NextRequest) {
   if ("retryAfterSeconds" in account) return fail("rate-limited", account.retryAfterSeconds);
 
   const { token, cookieExpiresAt } = await createSessionRecord(account.userId, { method: "GOOGLE", newAccount: account.created });
+  if (account.created) {
+    // The owner hears about it once the response is on its way (#429). Google accounts start without a username.
+    const { identity } = verified;
+    after(() => alertAdminsOfNewAccount({ id: account.userId, name: identity.name, username: null, email: identity.email }, "google", url.origin));
+  }
   const response = finish(next);
   response.cookies.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions(cookieExpiresAt));
   return response;

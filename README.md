@@ -332,6 +332,10 @@ counts only, never titles or messages.
 - `User.lastActiveAt` is set at sign-in, then refreshed by requests that
   already read the session once it's an hour old: at most one write an hour
   per person, never a request of its own.
+- Each new password or Google account emails the addresses in `ADMIN_EMAILS`
+  (`src/lib/new-account-alert.ts`): name, username, email, how they signed up
+  and a link to their page. It runs in `after()`, once the response is on its
+  way, so it never slows down or breaks a sign-up. No digest, no cron job.
 
 ## Visits
 

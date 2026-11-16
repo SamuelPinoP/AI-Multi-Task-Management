@@ -141,9 +141,10 @@ export default function PrivacyPage() {
             events until you replace it.
           </li>
           <li>
-            <strong>Samuel, who runs AI Multi.</strong> On a page only he can open, he sees each account&apos;s name, username
-            and email address, its sign-in history, when it was last active, and how many items it has, never their content.
-            He looks at anything else only to help you, to fix a problem, or when the law requires it.
+            <strong>Samuel, who runs AI Multi.</strong> He gets an email with your name, username and email address when you
+            create an account. On a page only he can open, he sees each account&apos;s name, username and email address, its
+            sign-in history, when it was last active, and how many items it has, never their content. He looks at anything
+            else only to help you, to fix a problem, or when the law requires it.
           </li>
           <li>
             <strong>Service providers</strong> that process data for AI Multi, under their own privacy terms: Vercel hosts
