@@ -44,7 +44,7 @@ Give the PR a title that says what changes for the user, in plain words.
 - **Deploy notes**, one line each, writing "None" rather than leaving a line out:
   - Migration: what it adds. Migrations stay additive.
   - New env vars: each one, and whether it's set in Vercel. The production build fails without them.
-  - Free-tier cost: extra requests, polling, storage or emails, measured against the free plans (Vercel Hobby, Neon Free, Cloudflare R2, Gmail).
+  - Free-tier cost: extra requests, polling, storage or emails, measured against the free plans (Vercel Hobby, Neon Free, Cloudflare R2, Gmail, Gemini's free tier).
   - Rollback: "Revert this PR", or what else it takes (for example, a migration that stays behind).
 
 ### 2. Testing evidence
@@ -68,6 +68,33 @@ The steps a person takes in the app to see that the PR works, each with what it 
 - Cover the main path, at least one edge case or error, and the phone layout when the UI changed.
 - Tick the steps you carried out yourself and say where: a local production build or the Vercel preview. Leave the rest unticked for the reviewer. Never sign in or create data on production.
 - When nothing in the app changes (CI, docs, scripts), give the steps that show the change works instead.
+
+## AI and paid plans
+
+Two epics hold the plan, and their issues are the source of truth for scope:
+
+- **The AI agent, #256:** build its sub-issues in the order the epic lists them, one PR each, starting with the agent core (#307).
+- **Paid plans, #432:** a 40-day free trial per account, then a monthly subscription. Build them after the AI, in the order listed (#440 to #445).
+
+How the launch works, in short:
+
+1. During early access, everything runs on free plans and costs $0 a month.
+2. When the earliest accounts have 14 days of trial left, the owner "flips" billing on (#445). This starts Vercel's 14-day Pro trial.
+3. The first subscriptions pay for Pro before its trial ends.
+
+Rules for work on either epic:
+
+- **Free until the flip.** Don't add billing accounts, paid keys or paid services. Keep the AI's caps inside Gemini's free tier.
+- **Nothing commercial in production before the flip.** Vercel Hobby is for non-commercial use, and Vercel may pause a deployment that breaks this. So while `BILLING_ENABLED` is off, no page shows a price, a trial countdown or a Subscribe button, not even a disabled one.
+  - Billing code ships behind that switch, absent rather than disabled.
+  - Test it locally and on protected previews, with test-mode keys only.
+- **No live model in tests.** Unit and e2e tests use the fake AI provider, so CI never calls a real model. Live evaluation runs (#311) are run by hand.
+- **Send models as little as possible.** On Gemini's free tier, Google may use what's sent and people may read it. Send only what a request needs, never whole workspaces, and nothing from someone who hasn't agreed to the data notice. The first PR that ships a user-facing AI feature updates the Privacy Policy.
+- **The model never decides permissions or confirms changes.**
+  - The user comes from the session.
+  - Tool arguments are validated with Zod before anything runs.
+  - Every change needs the user's own confirmation, enforced in code.
+- **No real payments in tests.** Payment tests use a local stand-in for the provider (like `tests/e2e/github-stub.ts`) and never a real card.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
