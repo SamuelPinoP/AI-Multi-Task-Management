@@ -333,6 +333,20 @@ counts only, never titles or messages.
   already read the session once it's an hour old: at most one write an hour
   per person, never a request of its own.
 
+## Visits
+
+Production counts page views anonymously with Vercel Web Analytics
+(`@vercel/analytics`, `src/components/web-analytics.tsx`): no cookies and no IP
+addresses. Each address is sent without its query string or fragment, where
+reset, confirmation and invitation links keep their secrets, and with ids
+replaced by `:id` (`src/lib/web-analytics-core.ts`). The root layout renders it
+only when `VERCEL_ENV` is `production` and never for the accounts in
+`ADMIN_EMAILS`, so previews, local servers, tests and the owner's own visits
+use none of Hobby's 50,000 events a month. At that limit Vercel pauses
+counting and bills nothing. `/usage` lists the limit and links to the project's
+Web Analytics page. Web Analytics must be turned on once in the Vercel project
+(Analytics → Enable).
+
 ## Tech Stack
 
 - Frontend: Next.js App Router, React, TypeScript, Tailwind CSS

@@ -170,6 +170,8 @@ export default async function UsagePage() {
             href={USAGE_DASHBOARDS.vercel}
             limits={[FREE_TIER_LIMITS.vercelFunctionInvocations, FREE_TIER_LIMITS.vercelActiveCpu, FREE_TIER_LIMITS.vercelFastDataTransfer]}
           />
+          {/* Anonymous visit counts (#428). Production only, never the admins' own visits. */}
+          <DashboardRow name="Web Analytics" href={USAGE_DASHBOARDS.vercelAnalytics} limits={[FREE_TIER_LIMITS.vercelWebAnalyticsEvents]} />
           <DashboardRow name="Neon" href={USAGE_DASHBOARDS.neon} limits={[FREE_TIER_LIMITS.neonCompute]} />
           <DashboardRow
             name="Cloudflare R2"

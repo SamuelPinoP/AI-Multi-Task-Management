@@ -31,7 +31,8 @@ export default function PrivacyPage() {
       <LegalSection id="summary" title="The short version">
         <ul className={legalListClass}>
           <li>AI Multi collects what it needs to work: your account details and what you create in it.</li>
-          <li>It doesn&apos;t sell your data, show ads, or use analytics or advertising trackers.</li>
+          <li>It doesn&apos;t sell your data, show ads, or use advertising trackers.</li>
+          <li>It counts visits anonymously, with no cookies and no IP addresses.</li>
           <li>It records when and how you sign in, and when you last used it, but never your IP address.</li>
           <li>With Sign in with Google, it receives only your Google account&apos;s ID, name and email address.</li>
           <li>You can ask to see, export or delete your data at any time.</li>
@@ -74,6 +75,13 @@ export default function PrivacyPage() {
           your browser sends. It also records when you last used the app, to the nearest hour.
         </p>
         <p>
+          <strong>Visits.</strong> AI Multi counts page views with Vercel Web Analytics, which sets no cookies and keeps no
+          IP addresses. Each view records the page&apos;s address (without anything after a &quot;?&quot; or &quot;#&quot;,
+          and with ids replaced), the site you came from, your approximate location (country, region and city), and your
+          browser, system and kind of device. Vercel tells visits apart by a fingerprint of the request that it discards
+          after 24 hours, and AI Multi sees only totals, never who visited.
+        </p>
+        <p>
           <strong>Notifications.</strong> If you turn on browser notifications, AI Multi stores the push subscription your
           browser gives it. Your browser&apos;s push service (such as Google, Mozilla or Apple) uses it to deliver them.
         </p>
@@ -93,8 +101,9 @@ export default function PrivacyPage() {
           </li>
           <li>To keep the app and its users safe: limits on attempts, abuse prevention, and confirming that email addresses are real.</li>
           <li>
-            To understand how AI Multi is used, so it can get better: how many people sign up, sign in and come back, and how
-            many notes, tasks, events, projects and messages each account has, never what they say.
+            To understand how AI Multi is used, so it can get better: how many people visit (as anonymous totals), sign up,
+            sign in and come back, and how many notes, tasks, events, projects and messages each account has, never what
+            they say.
           </li>
           <li>
             To ask what you think: Samuel may email you now and then, personally, to ask for your opinion of AI Multi.
@@ -138,7 +147,7 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Service providers</strong> that process data for AI Multi, under their own privacy terms: Vercel hosts
-            the app; Neon holds the database; Cloudflare R2 stores uploaded files and database backups; Google sends email
+            the app and counts visits (Web Analytics); Neon holds the database; Cloudflare R2 stores uploaded files and database backups; Google sends email
             (Gmail) and runs Sign in with Google; GitHub supplies public repository details when a project links a
             repository (AI Multi sends it only the repository&apos;s name); and your browser&apos;s push service delivers
             the notifications you turned on.
@@ -156,6 +165,7 @@ export default function PrivacyPage() {
           <li>Guest workspaces: deleted 30 days after their last use.</li>
           <li>Sign-in sessions: they end 30 days after their last use, and a year after signing in at the latest.</li>
           <li>Sign-in history: a year.</li>
+          <li>Visit counts: anonymous totals that Vercel keeps under its own terms; the fingerprint that tells visits apart, 24 hours.</li>
           <li>Email confirmation links: 24 hours. Password reset links: 1 hour.</li>
           <li>Notifications in the app: 90 days.</li>
           <li>Database backups: the 30 most recent daily backups, so deleted data leaves the backups within 30 days.</li>

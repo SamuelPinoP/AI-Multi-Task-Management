@@ -117,6 +117,16 @@ export const FREE_TIER_LIMITS = {
     source: "https://vercel.com/docs/plans/hobby",
     sourceTitle: "Vercel's Hobby plan",
   },
+  /** Shared by every project in the account. At the limit Hobby isn't billed: counting pauses until the next month. */
+  vercelWebAnalyticsEvents: {
+    plan: "Vercel Hobby",
+    value: 50_000,
+    unit: "count",
+    label: "page views a month; past it, counting pauses and nothing is billed",
+    checkedOn: "2026-11-15",
+    source: "https://vercel.com/docs/analytics/limits-and-pricing",
+    sourceTitle: "Vercel Web Analytics pricing",
+  },
 } as const satisfies Record<string, FreeTierLimit>;
 
 /**
@@ -125,6 +135,8 @@ export const FREE_TIER_LIMITS = {
  */
 export const USAGE_DASHBOARDS = {
   vercel: "https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fusage&title=Go+to+Usage",
+  /** Vercel asks which project, then opens its Web Analytics page (#428). */
+  vercelAnalytics: "https://vercel.com/d?to=%2F%5Bteam%5D%2F%5Bproject%5D%2Fanalytics&title=Go+to+Web+Analytics",
   neon: "https://console.neon.tech/app/projects",
   r2: "https://dash.cloudflare.com/?to=/:account/r2/overview",
 } as const;

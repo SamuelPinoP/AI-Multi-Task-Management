@@ -8,6 +8,7 @@ import { ThemeInitScript, ThemeProvider } from "@/components/theme-provider";
 import { TimeZoneCookie } from "@/components/time-zone-cookie";
 import { Toaster } from "@/components/ui/toaster";
 import { UserTimeZoneProvider } from "@/components/user-time-zone";
+import { WebAnalytics } from "@/components/web-analytics";
 import { isAppAdmin } from "@/lib/app-admin";
 import { getSessionUser, mustConfirmEmail } from "@/lib/auth";
 import { siteVerification } from "@/lib/legal";
@@ -82,6 +83,9 @@ export default async function RootLayout({
           </UserTimeZoneProvider>
           <Toaster />
         </ThemeProvider>
+        {/* Anonymous visit counts (#428): production only, so previews, local servers and tests use none of
+            the free 50,000 events a month, and never for the app's admins. */}
+        {process.env.VERCEL_ENV === "production" && !currentUser?.isAppAdmin ? <WebAnalytics /> : null}
       </body>
     </html>
   );
