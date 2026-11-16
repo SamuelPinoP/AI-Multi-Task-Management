@@ -11,9 +11,11 @@ import {
 } from "@/lib/email-config";
 import {
   emailVerificationEmail,
+  newAccountEmail,
   passwordResetEmail,
   projectInvitationEmail,
   type EmailContent,
+  type NewAccountMethod,
 } from "@/lib/email-templates";
 import { prisma } from "@/lib/prisma";
 
@@ -174,6 +176,33 @@ export async function sendPasswordResetEmail({ to, resetUrl }: PasswordResetEmai
     successMessage: "If an account exists, a reset link was sent.",
     failureMessage: "If an account exists, a reset link was sent.",
     disabledMessage: "If an account exists, a reset link was sent.",
+  });
+}
+
+/** Tells one of the app's admins that someone made an account, with a link to them on the Users page (#429). */
+export async function sendNewAccountEmail({
+  to,
+  userId,
+  name,
+  username,
+  email,
+  method,
+  fallbackOrigin,
+}: {
+  to: string;
+  userId: string;
+  name: string | null;
+  username: string | null;
+  email: string;
+  method: NewAccountMethod;
+  fallbackOrigin?: string;
+}): Promise<EmailDeliveryResult> {
+  return sendEmail({
+    to,
+    content: newAccountEmail({ name, username, email, method, userUrl: `${getAppBaseUrl(fallbackOrigin)}/users/${encodeURIComponent(userId)}` }),
+    successMessage: "New account email sent.",
+    failureMessage: "The new account email could not be sent.",
+    disabledMessage: "Email sending is not configured.",
   });
 }
 

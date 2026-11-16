@@ -3,10 +3,12 @@
 import { Prisma } from "@prisma/client";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { createSession, getSafeRedirectPath, hashPassword, isPublicSignupEnabled, normalizeAuthEmail } from "@/lib/auth";
 import { confirmEmailHref } from "@/lib/auth-links";
 import { isUsableEmail } from "@/lib/email-confirmation-core";
 import { sendConfirmationEmail } from "@/lib/email-verification";
+import { alertAdminsOfNewAccount } from "@/lib/new-account-alert";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { clientIpFrom, RATE_LIMITS, tooManyAttemptsMessage } from "@/lib/rate-limit-core";
@@ -86,6 +88,8 @@ export async function signUp(_previous: SignupState, formData: FormData): Promis
   // the page offers to send it again.
   await createSession(user.id, { method: "PASSWORD", newAccount: true });
   await sendConfirmationEmail(user, { next, origin: requestHeaders.get("origin") ?? undefined });
+  // The owner hears about it once the response is on its way (#429).
+  after(() => alertAdminsOfNewAccount({ id: user.id, name, username, email: user.email }, "password", requestHeaders.get("origin") ?? undefined));
 
   redirect(confirmEmailHref({ next }));
 }
