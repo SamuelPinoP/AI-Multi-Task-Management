@@ -59,15 +59,21 @@ function estimateTokens(text: string) {
   return Math.ceil(text.length / 4);
 }
 
-/** Titles (or names) of the items in a tool result, wherever its `data` lists them. */
+/** Titles (or names) of the items in a tool result, wherever its `data` lists them, with any percent done. */
 function titlesIn(content: Record<string, unknown>) {
   const data = content.data;
   if (!data || typeof data !== "object") return [];
   return Object.values(data)
     .filter(Array.isArray)
     .flat()
-    .map((item) => (item && typeof item === "object" ? ((item as { title?: unknown; name?: unknown }).title ?? (item as { name?: unknown }).name) : null))
-    .filter((title): title is string => typeof title === "string");
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const { title, name, percentDone } = item as { title?: unknown; name?: unknown; percentDone?: unknown };
+      const label = title ?? name;
+      if (typeof label !== "string") return null;
+      return typeof percentDone === "number" ? `${label} (${percentDone}%)` : label;
+    })
+    .filter((title): title is string => title !== null);
 }
 
 /**
@@ -75,7 +81,7 @@ function titlesIn(content: Record<string, unknown>) {
  * - "[429]" or "[503]" in it: fails like a rate limit or an outage;
  * - a tool's name in it (optionally followed by JSON arguments): calls that tool;
  * - otherwise: answers "You asked: …".
- * After tool results, it answers with the titles they list, or the tool's error.
+ * After tool results, it answers with the titles they list (and any percent done), or the tool's error.
  */
 export function createFakeProvider(): Provider {
   return {
