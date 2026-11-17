@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { AI_NOTICE_VERSION } from "../../src/lib/ai/notice";
 import { continueAsGuest, openAccountMenu, signUpAndLogIn } from "../e2e/helpers";
 
 /*
@@ -127,6 +128,21 @@ test("Boards", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Fix the signup form" })).toBeVisible();
   await page.waitForLoadState("networkidle");
   await expect(page).toHaveScreenshot("boards.png", { mask: changing(page) });
+});
+
+// #308: the AI page with an answer from the e2e server's fake model, which lists the tasks it looked
+// up, with links to them, and the sidebar's ✦ selected. Guests can't use the assistant, so it's an account.
+test("AI page", async ({ page }) => {
+  await signUpAndLogIn(page, "E2E user");
+  await addTasks(page);
+  expect((await page.request.post("/api/agent/notice", { data: { version: AI_NOTICE_VERSION } })).ok()).toBe(true);
+
+  await page.goto("/ai");
+  await page.getByRole("textbox", { name: "Message the AI" }).fill("What's on my plate? list_open_tasks");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.getByRole("list", { name: "Used to answer" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await expect(page).toHaveScreenshot("ai.png", { mask: changing(page) });
 });
 
 test("Calendar", async ({ page }) => {
