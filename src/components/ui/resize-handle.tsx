@@ -8,6 +8,7 @@ import { dragTo, keyTo, shownWidth, type PanelLimits, type PanelSize } from "@/l
  * The draggable right edge of a resizable panel (#414), a focusable separator after the WAI-ARIA
  * window splitter: drag it, use ← → Home End and Enter, or double-click it for the default width.
  * Put it inside the panel, which must be `relative`; it straddles the panel's right border.
+ * Panels whose limits have no collapsed width (the AI page's chats, #308) never collapse.
  *
  * `onResize` gets every new size while dragging (`done` false) and the final one (`done` true),
  * when the caller saves it.
@@ -27,8 +28,8 @@ export function ResizeHandle({
   controls: string;
   size: PanelSize;
   limits: PanelLimits;
-  /** What screen readers hear for the collapsed state, e.g. "Icons only". */
-  collapsedText: string;
+  /** What screen readers hear for the collapsed state, e.g. "Icons only"; only for panels that collapse. */
+  collapsedText?: string;
   onResize: (size: PanelSize, done: boolean) => void;
   className?: string;
 }) {
@@ -91,10 +92,10 @@ export function ResizeHandle({
       aria-orientation="vertical"
       aria-label={label}
       aria-controls={controls}
-      aria-valuemin={px(limits.collapsed)}
+      aria-valuemin={px(limits.collapsed ?? limits.min)}
       aria-valuemax={px(limits.max)}
       aria-valuenow={px(now)}
-      aria-valuetext={size.collapsed ? collapsedText : `${px(now)} pixels wide`}
+      aria-valuetext={size.collapsed && collapsedText ? collapsedText : `${px(now)} pixels wide`}
       tabIndex={0}
       title="Drag to resize. Double-click for the default width."
       onPointerDown={start}

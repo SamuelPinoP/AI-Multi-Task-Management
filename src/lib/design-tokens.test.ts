@@ -38,7 +38,10 @@ function contrast(a: string, b: string) {
 }
 
 /** What every palette sets in both themes; the light block also holds the zinc grays the two share. */
-const PALETTE = ["canvas", "surface", "raised", "sunken", "surface-hover", "ink", "muted", "line", "accent", "accent-hover", "accent-ink", "accent-soft"];
+const PALETTE = [
+  "canvas", "surface", "raised", "sunken", "surface-hover", "ink", "muted", "line", "accent", "accent-hover", "accent-ink", "accent-soft",
+  "ai-send-from", "ai-send-to", "ai-send-hover", "ai-spark",
+];
 const ZINC = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map((step) => `color-zinc-${step}`);
 
 const TEXT = ["ink", "muted", "color-zinc-500", "accent", "danger", "warning", "caution", "success"];
@@ -60,11 +63,21 @@ const PILLS = [
   ["search-hit-ink", "search-hit-strong"],
 ];
 
-function failures(colors: Record<string, string>, pairs: string[][]) {
+/**
+ * The AI's send button (#308): its arrow, in accent-ink, on every tone of its gradient and of the
+ * hover gradient. An icon in a button needs 3:1 (WCAG 1.4.11), not text's 4.5:1.
+ */
+const SEND_BUTTON = [
+  ["accent-ink", "ai-send-from"],
+  ["accent-ink", "ai-send-to"],
+  ["accent-ink", "ai-send-hover"],
+];
+
+function failures(colors: Record<string, string>, pairs: string[][], minimum = 4.5) {
   return pairs.flatMap(([fg, bg]) => {
     assert.ok(colors[fg] && colors[bg], `missing --${fg} or --${bg}`);
     const ratio = contrast(colors[fg], colors[bg]);
-    return ratio < 4.5 ? [`${fg} on ${bg}: ${ratio.toFixed(2)}:1`] : [];
+    return ratio < minimum ? [`${fg} on ${bg}: ${ratio.toFixed(2)}:1`] : [];
   });
 }
 
@@ -87,6 +100,10 @@ for (const { id, name } of ACCENTS) {
 
     test(`${name}, ${theme} theme: pills, accent-soft cards and accent buttons pass 4.5:1`, () => {
       assert.deepEqual(failures(colors, PILLS), []);
+    });
+
+    test(`${name}, ${theme} theme: the AI send button's arrow keeps 3:1 on its whole gradient`, () => {
+      assert.deepEqual(failures(colors, SEND_BUTTON, 3), []);
     });
   }
 

@@ -93,7 +93,7 @@ export default defineConfig({
       // The browser flows again on a phone-sized screen.
       name: "mobile",
       use: { ...devices["Pixel 7"] },
-      testMatch: /(workspace|app-shell|accent-color|home|tasks|quick-add|projects|notes|events|calendar|accessibility|project-insights|subtasks|goals|linked-notes|project-templates|project-github|tree|chat-composer|chat-search|phone-fields|text-size|labels|bulk-edit|tasks-by-project|task-comments|direct-messages|project-members|add-people|phone-titles|usage|users|feedback)\.spec\.ts/,
+      testMatch: /(workspace|app-shell|accent-color|home|tasks|quick-add|projects|notes|events|calendar|accessibility|project-insights|subtasks|goals|linked-notes|project-templates|project-github|tree|chat-composer|chat-search|phone-fields|text-size|labels|bulk-edit|tasks-by-project|task-comments|direct-messages|project-members|add-people|phone-titles|usage|users|feedback|ai-page)\.spec\.ts/,
     },
   ],
 });

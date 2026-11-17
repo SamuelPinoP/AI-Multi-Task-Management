@@ -35,6 +35,10 @@ export default function PrivacyPage() {
           <li>It counts visits anonymously, with no cookies and no IP addresses.</li>
           <li>It records when and how you sign in, and when you last used it, but never your IP address.</li>
           <li>With Sign in with Google, it receives only your Google account&apos;s ID, name and email address.</li>
+          <li>
+            If you ask the AI assistant something, your question and what it looks up to answer go to Google&apos;s Gemini
+            API, only after you agree to that.
+          </li>
           <li>You can ask to see, export or delete your data at any time.</li>
           <li>AI Multi is for people {MINIMUM_AGE} and older.</li>
         </ul>
@@ -82,6 +86,16 @@ export default function PrivacyPage() {
           after 24 hours, and AI Multi sees only totals, never who visited.
         </p>
         <p>
+          <strong>The AI assistant.</strong> When you agree to its notice, AI Multi records when. For each message you send
+          it, AI Multi keeps a usage record: when, which model answered, how it went, how many requests and tokens it
+          took, and the names of the lookups it made (such as &quot;open tasks&quot;), never what you asked or what it
+          answered. See{" "}
+          <a href="#ai" className={legalLinkClass}>
+            The AI assistant
+          </a>{" "}
+          below.
+        </p>
+        <p>
           <strong>Feedback.</strong> If you use Send feedback, your message is emailed to Samuel with your name, username
           and email address, and whether he may email you about it. AI Multi doesn&apos;t store it; it stays in his email.
         </p>
@@ -114,9 +128,17 @@ export default function PrivacyPage() {
             personally, to ask for your opinion of AI Multi. Answering is up to you, and if you&apos;d rather not be asked,
             say so and he won&apos;t ask again.
           </li>
+          <li>To answer what you ask the AI assistant, with Google&apos;s Gemini API.</li>
           <li>To recover from problems: a daily backup of the database.</li>
         </ul>
-        <p>AI Multi doesn&apos;t sell or rent your data, use it for advertising, or use it to train AI models.</p>
+        <p>
+          AI Multi doesn&apos;t sell or rent your data, use it for advertising, or use it to train AI models. During the
+          free beta, Google may use what the AI assistant sends it, as{" "}
+          <a href="#ai" className={legalLinkClass}>
+            The AI assistant
+          </a>{" "}
+          explains.
+        </p>
       </LegalSection>
 
       <LegalSection id="google" title="Google user data">
@@ -154,7 +176,7 @@ export default function PrivacyPage() {
           <li>
             <strong>Service providers</strong> that process data for AI Multi, under their own privacy terms: Vercel hosts
             the app and counts visits (Web Analytics); Neon holds the database; Cloudflare R2 stores uploaded files and database backups; Google sends email
-            (Gmail) and runs Sign in with Google; GitHub supplies public repository details when a project links a
+            (Gmail), runs Sign in with Google, and answers the AI assistant&apos;s questions (the Gemini API); GitHub supplies public repository details when a project links a
             repository (AI Multi sends it only the repository&apos;s name); and your browser&apos;s push service delivers
             the notifications you turned on.
           </li>
@@ -175,6 +197,10 @@ export default function PrivacyPage() {
           <li>Visit counts: anonymous totals that Vercel keeps under its own terms; the fingerprint that tells visits apart, 24 hours.</li>
           <li>Email confirmation links: 24 hours. Password reset links: 1 hour.</li>
           <li>Notifications in the app: 90 days.</li>
+          <li>
+            AI assistant usage records: 90 days. Conversations with the assistant aren&apos;t stored: a chat
+            stays in your browser tab until you reload or close it.
+          </li>
           <li>Database backups: the 30 most recent daily backups, so deleted data leaves the backups within 30 days.</li>
         </ul>
       </LegalSection>
@@ -199,17 +225,53 @@ export default function PrivacyPage() {
 
       <LegalSection id="age" title="Age">
         <p>
-          AI Multi is for people {MINIMUM_AGE} and older, partly because the AI assistant it plans to add uses a service
-          that may not be offered to anyone younger. AI Multi doesn&apos;t knowingly collect data from anyone under{" "}
+          AI Multi is for people {MINIMUM_AGE} and older, partly because its AI assistant uses a service that may not be
+          offered to anyone younger. AI Multi doesn&apos;t knowingly collect data from anyone under{" "}
           {MINIMUM_AGE}. If you believe someone under {MINIMUM_AGE} has an account, email <ContactLink /> and it will be
           deleted.
         </p>
       </LegalSection>
 
-      <LegalSection id="ai" title="The AI assistant (coming later)">
+      <LegalSection id="ai" title="The AI assistant">
         <p>
-          An AI assistant powered by Google&apos;s Gemini API is planned. Before it launches, this policy will explain what
-          it sends to Google and how Google may use it, and the app will tell you before you first use it.
+          The AI assistant answers questions about your work. It runs on Google&apos;s Gemini API. Before your first
+          question, the app tells you what it sends and asks you to agree; until you do, nothing is sent, and after that
+          nothing is sent unless you ask something.
+        </p>
+        <ul className={legalListClass}>
+          <li>
+            <strong>What is sent to Google:</strong> your question with the messages before it in that chat (up to 12 in
+            all), and what the assistant looks up in your workspace to answer it. That can be task titles, statuses,
+            priorities and due dates; event titles, dates and times; the names of the projects these belong to and how far
+            along each project is; note titles with a short excerpt; and your weekly goals. It sends only what the question
+            needs, never your whole workspace, and never your email address or password.
+          </li>
+          <li>
+            <strong>How Google may use it:</strong> during the free beta, AI Multi uses the Gemini API&apos;s free tier.
+            Under the{" "}
+            <a href="https://ai.google.dev/gemini-api/terms" className={legalLinkClass}>
+              Gemini API Additional Terms of Service
+            </a>
+            , Google may use what is sent to improve its products, and people at Google may read it. So don&apos;t include
+            passwords, health or money details, or anything confidential, in your questions or in what you ask about.
+          </li>
+          <li>
+            <strong>In the European Economic Area, Switzerland and the United Kingdom,</strong> Google&apos;s free tier may
+            not be used, so nothing is sent to Google: your planner answers instead.
+          </li>
+          <li>
+            <strong>What AI Multi keeps:</strong> when you agreed to the notice, and a usage record of each message for 90
+            days, without its content. Your conversations aren&apos;t stored: a chat stays in your browser tab until you
+            reload or close it.
+          </li>
+          <li>
+            <strong>Limits:</strong> each account may send a set number of requests a day; after that, your planner answers
+            until the next day.
+          </li>
+        </ul>
+        <p>
+          Answers can be wrong; check them before you rely on them. For now, the assistant can&apos;t change anything in
+          your workspace.
         </p>
       </LegalSection>
 

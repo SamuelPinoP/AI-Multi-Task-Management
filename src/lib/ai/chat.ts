@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { AgentRunOutcome } from "@prisma/client";
 import { runAgentLoop, type AgentLimits, type LoopEvent, type LoopResult } from "@/lib/ai/agent-loop";
 import { allowanceFor, exhaustedCap, type Allowance } from "@/lib/ai/allowance";
+import { MAX_MESSAGE_CHARS, MAX_MESSAGES, MODEL_HISTORY } from "@/lib/ai/chat-limits";
 import type { AgentConfig } from "@/lib/ai/config";
 import { fallbackMessage, type FallbackReason } from "@/lib/ai/fallback";
 import { systemPrompt } from "@/lib/ai/prompt";
@@ -14,11 +15,7 @@ import { regionAllowed } from "@/lib/ai/region";
 import type { AgentTool, Source, ToolContext } from "@/lib/ai/tools/define";
 import type { AgentMessage, Provider, ProviderError } from "@/lib/ai/types";
 
-export const MAX_MESSAGE_CHARS = 4000;
-/** Messages one request may carry: the chat panel keeps the conversation while it's open (#308). */
-export const MAX_MESSAGES = 40;
-/** How many of the latest messages the model sees. Older ones stay here: less data sent, fewer tokens. */
-export const MODEL_HISTORY = 12;
+export { MAX_MESSAGE_CHARS, MAX_MESSAGES, MODEL_HISTORY };
 
 export const chatRequestSchema = z.strictObject({
   messages: z
@@ -60,6 +57,38 @@ export type ChatEvent =
   | { type: "notice"; reason: FallbackReason; message: string }
   | { type: "error"; message: string }
   | { type: "done"; outcome: AgentRunOutcome; allowance: Allowance | null };
+
+/** Who answers the next message: a model, or the rule-based planner and why. */
+export type AnswerMode = { mode: "agent" } | { mode: "planner"; reason: FallbackReason };
+
+/**
+ * What the chat knows before the first question (#308, `GET /api/agent/status`): whether the
+ * person agreed to the data notice, today's allowance, and who would answer.
+ */
+export type AgentStatus = AnswerMode & { noticeAccepted: boolean; allowance: Allowance };
+
+/**
+ * Who answers, before anything is sent: the planner when the assistant is off (no provider or
+ * key), when the free tier doesn't serve the person's country (region.ts), or when today's
+ * allowance is used up, the person's own reported first; otherwise the model.
+ */
+export function answerMode({
+  config,
+  hasProvider,
+  country,
+  allowance,
+}: {
+  config: AgentConfig;
+  hasProvider: boolean;
+  country: string | null;
+  allowance: Allowance;
+}): AnswerMode {
+  if (!hasProvider || config.disabledReason) return { mode: "planner", reason: "disabled" };
+  if (!regionAllowed(country, config.freeTier)) return { mode: "planner", reason: "region" };
+  const cap = exhaustedCap(allowance);
+  if (cap) return { mode: "planner", reason: cap === "user" ? "user_limit" : "app_limit" };
+  return { mode: "agent" };
+}
 
 /** The usage log's row for this message (the AgentRun table), less who and when. */
 export type RunRecord = {
@@ -147,11 +176,9 @@ export async function runAgentChat(
 
   try {
     allowance = allowanceFor(await deps.usedToday(), config.caps, now);
-    const cap = exhaustedCap(allowance);
-    const blocked = !regionAllowed(deps.country, config.freeTier);
-    if (!provider || config.disabledReason || blocked || cap) {
-      const reason: FallbackReason =
-        !provider || config.disabledReason ? "disabled" : blocked ? "region" : cap === "user" ? "user_limit" : "app_limit";
+    const decided = answerMode({ config, hasProvider: provider !== null, country: deps.country, allowance });
+    if (!provider || decided.mode === "planner") {
+      const reason: FallbackReason = decided.mode === "planner" ? decided.reason : "disabled";
       const outcomes: Record<string, AgentRunOutcome> = { disabled: "DISABLED", region: "REGION", user_limit: "USER_LIMIT", app_limit: "APP_LIMIT" };
       record.outcome = outcomes[reason];
       emit({ type: "start", mode: "planner", reason, message: fallbackMessage(reason, allowance, now), allowance });
