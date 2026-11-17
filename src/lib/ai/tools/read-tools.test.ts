@@ -5,22 +5,31 @@ import { projectAccessWhere } from "../../project-access-core";
 import { visibleTaskWhere } from "../../task-include";
 import { toolDefinition, type ToolContext, type ToolDb } from "./define";
 import { AGENT_TOOLS } from "./index";
-import { excerpt, listEvents, listGoals, listOpenTasks, listProjects, MAX_TASKS, searchNotes } from "./read-tools";
+import { excerpt, listEvents, listGoals, listOpenTasks, listProjects, MAX_PROJECTS, MAX_TASKS, percentOf, searchNotes, taskStats } from "./read-tools";
 
 type Model = "task" | "event" | "project" | "note" | "weeklyGoal";
 type FindManyArgs = { where: Record<string, unknown> & { AND?: unknown[] }; take?: number; select?: unknown };
+type GroupByArgs = { by: string[]; where: FindManyArgs["where"]; _count: unknown };
+/** The rows a query gets: always the same ones, or picked by the query. */
+type Rows = unknown[] | ((args: FindManyArgs) => unknown[]);
 
-/** A stand-in database: records each query and answers with the rows given. */
-function fakeDb(rows: Partial<Record<Model, unknown[]>>) {
+/** A stand-in database: records each query and answers with the rows given (`groups` for groupBy). */
+function fakeDb(rows: Partial<Record<Model, Rows>>, groups: unknown[] = []) {
   const calls: Array<{ model: Model; args: FindManyArgs }> = [];
+  const groupCalls: GroupByArgs[] = [];
   const model = (name: Model) => ({
     findMany: async (args: FindManyArgs) => {
       calls.push({ model: name, args });
-      return rows[name] ?? [];
+      const found = rows[name] ?? [];
+      return typeof found === "function" ? found(args) : found;
+    },
+    groupBy: async (args: GroupByArgs) => {
+      groupCalls.push(args);
+      return groups;
     },
   });
   const db = { task: model("task"), event: model("event"), project: model("project"), note: model("note"), weeklyGoal: model("weeklyGoal") };
-  return { db: db as unknown as ToolDb, calls };
+  return { db: db as unknown as ToolDb, calls, groupCalls };
 }
 
 const ME = "user-from-session";
@@ -267,7 +276,7 @@ test("goals: this week's by default, the person's own only", async () => {
 
 test("every tool reads only, has a provider-safe name, and a schema without patterns", () => {
   const names = AGENT_TOOLS.map((tool) => tool.name);
-  assert.deepEqual(names, ["list_open_tasks", "list_events", "list_projects", "search_notes", "list_goals"]);
+  assert.deepEqual(names, ["list_open_tasks", "list_events", "list_projects", "task_stats", "search_notes", "list_goals"]);
   for (const tool of AGENT_TOOLS) {
     assert.equal(tool.access, "read");
     assert.match(tool.name, /^[a-z][a-z_]{2,40}$/);
@@ -275,4 +284,134 @@ test("every tool reads only, has a provider-safe name, and a schema without patt
     assert.doesNotMatch(schema, /"\$schema"|"pattern"/, tool.name);
     assert.match(schema, /"additionalProperties":false/, tool.name);
   }
+});
+
+type StatsRow = { name?: string; status?: string; total: number; done: number; toDo: number; inProgress: number; percentDone: number; percentToDo: number; overdue: number; doneLast7Days: number };
+type StatsData = { overall: StatsRow; projects: StatsRow[]; moreProjects?: number; countedUpTo?: string };
+
+/** Counts as groupBy returns them: one row per project and status. */
+const group = (projectId: string | null, status: string, count: number) => ({ projectId, status, _count: { _all: count } });
+
+/** task_stats over a stand-in database: grouped counts, overdue candidates and recently done tasks. */
+async function stats(
+  args: unknown,
+  { groups = [] as unknown[], late = [] as unknown[], recent = [] as unknown[], projects = [] as unknown[] } = {},
+) {
+  // The tool reads tasks twice: open ones due before tomorrow, then recently done ones.
+  const pick = (query: FindManyArgs) => ((query.where.AND?.[1] as { status?: unknown } | undefined)?.status === "DONE" ? recent : late);
+  const { db, calls, groupCalls } = fakeDb({ task: pick, project: projects }, groups);
+  const output = await taskStats.run(taskStats.input.parse(args), contextWith(db));
+  return { output, calls, groupCalls, data: output.data as StatsData };
+}
+
+/** Samuel's example: 33% done in AI Multi, 20% in Babel, and 75% of all tasks left. */
+const EXAMPLE = {
+  groups: [
+    group("p1", "DONE", 4),
+    group("p1", "IN_PROGRESS", 2),
+    group("p1", "TODO", 6),
+    group("p2", "DONE", 2),
+    group("p2", "TODO", 8),
+    group(null, "DONE", 1),
+    group(null, "TODO", 5),
+  ],
+  projects: [
+    { id: "p2", name: "Babel", status: "ACTIVE" },
+    { id: "p1", name: "AI Multi", status: "ACTIVE" },
+  ],
+};
+
+test("task stats: counts what the person can see, in the database, with Home's rounding", async () => {
+  const { data, groupCalls, calls, output } = await stats({}, EXAMPLE);
+
+  assert.equal(groupCalls.length, 1, "the database counts; tasks aren't read one by one");
+  assert.deepEqual(groupCalls[0].by, ["projectId", "status"]);
+  assert.deepEqual(groupCalls[0].where.AND?.[0], visibleTaskWhere(ME), "the same filter as /api/tasks, for the session's user");
+  for (const call of calls.filter((call) => call.model === "task")) {
+    assert.deepEqual((call.args.where.AND?.[0] as FindManyArgs["where"]).AND?.[0], visibleTaskWhere(ME));
+    assert.ok(call.args.take, "the day-check reads are capped");
+  }
+
+  assert.deepEqual(data.overall, { total: 28, done: 7, toDo: 21, inProgress: 2, percentDone: 25, percentToDo: 75, overdue: 0, doneLast7Days: 0 });
+  assert.deepEqual(
+    data.projects.map((row) => [row.name, row.total, row.percentDone, row.percentToDo]),
+    [
+      ["AI Multi", 12, 33, 67],
+      ["Babel", 10, 20, 80],
+      ["No project", 6, 17, 83],
+    ],
+    "most tasks first; tasks outside any project are grouped, and the shares add up to 100",
+  );
+  assert.deepEqual(data.projects[0], { name: "AI Multi", total: 12, done: 4, toDo: 8, inProgress: 2, percentDone: 33, percentToDo: 67, overdue: 0, doneLast7Days: 0 });
+  assert.deepEqual(output.sources, [
+    { kind: "project", id: "p1", title: "AI Multi", href: "/projects/p1" },
+    { kind: "project", id: "p2", title: "Babel", href: "/projects/p2" },
+  ]);
+  assert.equal(percentOf(1, 3) + (100 - percentOf(1, 3)), 100);
+  assert.equal(percentOf(0, 0), 0);
+});
+
+test("task stats: overdue and done this week are decided by day, as Home decides them", async () => {
+  const { data, calls } = await stats(
+    {},
+    {
+      ...EXAMPLE,
+      late: [
+        { projectId: "p1", dueDate: due(14) }, // 2 days late
+        { projectId: "p1", dueDate: due(16) }, // due today: not late
+        { projectId: null, dueDate: due(15) }, // yesterday
+      ],
+      recent: [
+        { projectId: "p2", completedAt: new Date(2026, 10, 10, 9, 0) }, // 6 days ago: this week
+        { projectId: "p2", completedAt: new Date(2026, 10, 9, 23, 0) }, // 7 days ago: not
+        { projectId: "p1", completedAt: new Date(2026, 10, 16, 8, 0) }, // today
+      ],
+    },
+  );
+  const [late, recent] = calls.filter((call) => call.model === "task");
+  assert.deepEqual(late.args.where.AND?.slice(1), [{ status: { not: "DONE" } }, { dueDate: { lt: due(17) } }], "a day to spare before the exact check");
+  assert.deepEqual(recent.args.where.AND?.[1], { status: "DONE" });
+
+  assert.equal(data.overall.overdue, 2);
+  assert.equal(data.overall.doneLast7Days, 2);
+  assert.deepEqual(
+    data.projects.map((row) => [row.name, row.overdue, row.doneLast7Days]),
+    [
+      ["AI Multi", 1, 1],
+      ["Babel", 0, 1],
+      ["No project", 1, 0],
+    ],
+  );
+});
+
+test("task stats: one project by name or id, its status when it isn't active, and a capped list", async () => {
+  const one = await stats({ project: "babel" }, { groups: [group("p2", "DONE", 1)], projects: [{ id: "p2", name: "Babel", status: "ARCHIVED" }] });
+  assert.deepEqual(one.groupCalls[0].where.AND?.[1], {
+    OR: [{ projectId: "babel" }, { project: { name: { contains: "babel", mode: "insensitive" } } }],
+  });
+  assert.equal(one.data.projects[0].status, "ARCHIVED");
+  assert.equal(one.data.overall.percentToDo, 0, "everything done");
+
+  const many = Array.from({ length: MAX_PROJECTS + 3 }, (_, index) => `p${index}`);
+  const capped = await stats(
+    {},
+    {
+      groups: many.map((id, index) => group(id, "TODO", index + 1)),
+      projects: many.map((id) => ({ id, name: `Project ${id}`, status: "ACTIVE" })),
+    },
+  );
+  assert.equal(capped.data.projects.length, MAX_PROJECTS);
+  assert.equal(capped.data.projects[0].name, `Project p${MAX_PROJECTS + 2}`, "the biggest first");
+  assert.equal(capped.data.moreProjects, 3);
+  assert.equal(capped.data.overall.total, ((MAX_PROJECTS + 3) * (MAX_PROJECTS + 4)) / 2, "the totals still count every project");
+
+  const empty = await stats({});
+  assert.deepEqual(empty.data, {
+    overall: { total: 0, done: 0, toDo: 0, inProgress: 0, percentDone: 0, percentToDo: 0, overdue: 0, doneLast7Days: 0 },
+    projects: [],
+  });
+  assert.equal(empty.calls.filter((call) => call.model === "project").length, 0, "no project lookup without projects");
+
+  for (const project of ["", " ", "x".repeat(121)]) assert.equal(taskStats.input.safeParse({ project }).success, false, JSON.stringify(project));
+  assert.equal(taskStats.input.safeParse({ userId: "someone-else" }).success, false, "no unknown arguments");
 });

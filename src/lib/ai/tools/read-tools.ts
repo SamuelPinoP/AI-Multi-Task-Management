@@ -1,9 +1,11 @@
 // The AI assistant's read-only tools (#307): open tasks, events in a date
-// range, projects with their health, notes by search and weekly goals. Each
+// range, projects with their health, notes by search, weekly goals and task
+// counts (#453). Each
 // one sees exactly what the matching page and API route show the person, with
 // the same filters (visibleTaskWhere, visibleEventWhere, projectAccessWhere,
 // visibleNoteWhere, and goals by owner), and sends the model only the fields a
 // question needs: no descriptions, no other people's names or emails.
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { defineTool, type Source } from "@/lib/ai/tools/define";
 import { occurrencesInRange } from "@/lib/event-occurrences";
@@ -384,6 +386,133 @@ export const listGoals = defineTool({
         })),
       },
       sources: goals.map((goal) => ({ kind: "goal", id: goal.id, title: goal.title, href: `/goals?week=${encodeURIComponent(key)}` })),
+    };
+  },
+});
+
+/** A whole-number share, rounded as Home rounds a project's progress. */
+export function percentOf(part: number, whole: number) {
+  return whole ? Math.round((part / whole) * 100) : 0;
+}
+
+/** Overdue and recently done tasks read for exact day checks; far more than anyone has. */
+const STATS_SCAN = 1000;
+
+type StatCounts = { total: number; done: number; inProgress: number; overdue: number; doneLast7Days: number };
+
+/** The person-facing numbers for one group of tasks; to-do and done shares always add up to 100. */
+function statsRow(counts: StatCounts) {
+  const percentDone = percentOf(counts.done, counts.total);
+  return {
+    total: counts.total,
+    done: counts.done,
+    toDo: counts.total - counts.done,
+    inProgress: counts.inProgress,
+    percentDone,
+    percentToDo: counts.total ? 100 - percentDone : 0,
+    overdue: counts.overdue,
+    doneLast7Days: counts.doneLast7Days,
+  };
+}
+
+export const taskStats = defineTool({
+  name: "task_stats",
+  label: "Counting your tasks",
+  description:
+    "Counts the tasks the person can see, overall and per project (most tasks first, at most 20; tasks outside any project are \"No project\"): total, done, to do (in progress included), the percent done and to do, overdue, and done in the last 7 days. Use it for progress, analytics or \"how am I doing\" questions, and repeat its numbers instead of working them out.",
+  input: z.strictObject({
+    project: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .optional()
+      .describe("Only this project: its name, part of its name, or its id from list_projects."),
+  }),
+  access: "read",
+  async run({ project }, { userId, now, realNow, timeZone, db }) {
+    const where: Prisma.TaskWhereInput = {
+      AND: [
+        visibleTaskWhere(userId),
+        project ? { OR: [{ projectId: project }, { project: { name: { contains: project, mode: "insensitive" } } }] } : {},
+      ],
+    };
+    const today = getLocalDateOnly(now);
+    const tomorrow = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() + 1));
+    // The database counts; only overdue and recently done tasks are read, for the exact day
+    // checks Home makes. Due dates are narrowed with a day to spare, as in list_open_tasks.
+    const [groups, late, recent] = await Promise.all([
+      db.task.groupBy({ by: ["projectId", "status"], where, _count: { _all: true } }),
+      db.task.findMany({
+        where: { AND: [where, { status: { not: "DONE" } }, { dueDate: { lt: tomorrow } }] },
+        select: { projectId: true, dueDate: true },
+        take: STATS_SCAN,
+      }),
+      db.task.findMany({
+        where: { AND: [where, { status: "DONE" }, { completedAt: { gte: new Date(realNow.getTime() - 8 * DAY_MS) } }] },
+        select: { projectId: true, completedAt: true },
+        take: STATS_SCAN,
+      }),
+    ]);
+
+    const byProject = new Map<string | null, StatCounts>();
+    const countsFor = (projectId: string | null) => {
+      let counts = byProject.get(projectId);
+      if (!counts) {
+        counts = { total: 0, done: 0, inProgress: 0, overdue: 0, doneLast7Days: 0 };
+        byProject.set(projectId, counts);
+      }
+      return counts;
+    };
+    for (const group of groups) {
+      const counts = countsFor(group.projectId);
+      counts.total += group._count._all;
+      if (group.status === "DONE") counts.done += group._count._all;
+      if (group.status === "IN_PROGRESS") counts.inProgress += group._count._all;
+    }
+    for (const task of late) {
+      if (task.dueDate && daysFrom(task.dueDate, now) < 0) countsFor(task.projectId).overdue += 1;
+    }
+    for (const task of recent) {
+      // "This week" as on Home: today and the 6 days before, on the person's clock.
+      if (task.completedAt && daysFrom(toWallClock(timeZone, task.completedAt), now) >= -6) countsFor(task.projectId).doneLast7Days += 1;
+    }
+
+    const ids = [...byProject.keys()].filter((id): id is string => id !== null);
+    const projects = ids.length
+      ? await db.project.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, status: true } })
+      : [];
+    const projectsById = new Map(projects.map((found) => [found.id, found]));
+    const rows = [...byProject.entries()]
+      .map(([id, counts]) => ({ id, found: id ? projectsById.get(id) : undefined, counts }))
+      .sort((a, b) => b.counts.total - a.counts.total || (a.found?.name ?? "").localeCompare(b.found?.name ?? ""));
+    const shown = rows.slice(0, MAX_PROJECTS);
+    const overall = rows.reduce(
+      (sum, row) => ({
+        total: sum.total + row.counts.total,
+        done: sum.done + row.counts.done,
+        inProgress: sum.inProgress + row.counts.inProgress,
+        overdue: sum.overdue + row.counts.overdue,
+        doneLast7Days: sum.doneLast7Days + row.counts.doneLast7Days,
+      }),
+      { total: 0, done: 0, inProgress: 0, overdue: 0, doneLast7Days: 0 },
+    );
+    const capped = late.length === STATS_SCAN || recent.length === STATS_SCAN;
+
+    return {
+      data: {
+        overall: statsRow(overall),
+        projects: shown.map(({ id, found, counts }) => ({
+          name: id ? (found?.name ?? "A project") : "No project",
+          ...(found && found.status !== "ACTIVE" ? { status: found.status } : {}),
+          ...statsRow(counts),
+        })),
+        ...(rows.length > shown.length ? { moreProjects: rows.length - shown.length } : {}),
+        ...(capped ? { countedUpTo: `Overdue and recently done tasks were counted up to ${STATS_SCAN}.` } : {}),
+      },
+      sources: shown.flatMap(({ found }): Source[] =>
+        found ? [{ kind: "project", id: found.id, title: found.name, href: `/projects/${encodeURIComponent(found.id)}` }] : [],
+      ),
     };
   },
 });

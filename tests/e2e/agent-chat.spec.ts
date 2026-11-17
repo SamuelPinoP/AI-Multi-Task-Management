@@ -198,3 +198,25 @@ test("once today's allowance is used, the planner answers and says when it comes
     await queryDatabase(`DELETE FROM "AgentRun" WHERE id = $1`, [filler]);
   }
 });
+
+// Last, so its tasks can't change what the planner tests above expect.
+test("task stats: the database counts the person's tasks per project, never another account's", async () => {
+  const name = uniqueName("E2E stats project");
+  const created = await me.post("/api/projects", { data: { name } });
+  expect(created.status()).toBe(201);
+  const projectId = ((await created.json()) as { id: string }).id;
+  for (const status of ["DONE", "TODO", "IN_PROGRESS"]) {
+    const task = await me.post("/api/tasks", { data: { title: uniqueName(`E2E stats ${status}`), projectId, status } });
+    expect(task.status()).toBe(201);
+  }
+
+  const events = await ask(me, "How am I doing? task_stats");
+  expect(events.find((event) => event.type === "tool")).toEqual({ type: "tool", name: "task_stats", label: "Counting your tasks" });
+  // The fake model lists each group with its percent done: 1 of the project's 3 tasks, and the
+  // task outside any project (from beforeAll) still open. The outsider's project never shows.
+  const text = answerText(events);
+  expect(text).toBe(`task_stats found 2: ${name} (33%); No project (0%)`);
+  const sources = events.find((event) => event.type === "sources")?.items as Array<{ title: string; href: string }>;
+  expect(sources.map((source) => [source.title, source.href])).toEqual([[name, `/projects/${projectId}`]]);
+  expect(await latestRun(myEmail)).toMatchObject({ outcome: "ANSWERED", toolCalls: ["task_stats"], modelRequests: 2, validationFailures: 0 });
+});

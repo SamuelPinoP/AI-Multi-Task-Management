@@ -102,6 +102,20 @@ test("the e2e fake calls the tool a message names, then lists what it found", as
     { role: "tool", results: [{ callId: "local-0", name: "list_open_tasks", content: { note: "n", data: { total: 2, tasks: [{ title: "A" }, { title: "B" }] } } }] },
   ]);
   assert.deepEqual(answer[0], { type: "text", text: "list_open_tasks found 2: A; B" });
+  const stats = await fakeAnswer([
+    { role: "user", content: "task_stats" },
+    {
+      role: "tool",
+      results: [
+        {
+          callId: "local-0",
+          name: "task_stats",
+          content: { note: "n", data: { overall: { percentDone: 25 }, projects: [{ name: "AI Multi", percentDone: 33 }, { name: "No project", percentDone: 0 }] } },
+        },
+      ],
+    },
+  ]);
+  assert.deepEqual(stats[0], { type: "text", text: "task_stats found 2: AI Multi (33%); No project (0%)" }, "with each item's percent done");
   assert.deepEqual((await fakeAnswer([{ role: "user", content: "Hello" }]))[0], { type: "text", text: "You asked: Hello" });
   await assert.rejects(fakeAnswer([{ role: "user", content: "[429]" }]), { name: "ProviderError", kind: "rate_limited" });
 });
