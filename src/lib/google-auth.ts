@@ -11,6 +11,7 @@ import {
   planGoogleSignIn,
   readIdToken,
 } from "@/lib/google-auth-core";
+import { upgradeGuest } from "@/lib/guest-upgrade";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { RATE_LIMITS } from "@/lib/rate-limit-core";
@@ -106,6 +107,8 @@ const linkedAccount = (sub: string) => ({ provider_providerAccountId: { provider
 export async function accountForGoogleIdentity(
   identity: GoogleIdentity,
   clientIp: string | null,
+  /** The guest workspace this browser is in, which a new account keeps (#459). */
+  guestId: string | null = null,
 ): Promise<{ userId: string; created: boolean } | { error: GoogleSignInError } | { retryAfterSeconds: number }> {
   const [linked, existingUser] = await Promise.all([
     prisma.oAuthAccount.findUnique({ where: linkedAccount(identity.sub), select: { id: true, userId: true, email: true } }),
@@ -143,15 +146,14 @@ export async function accountForGoogleIdentity(
       const limit = await consumeRateLimit(RATE_LIMITS.signupIp, clientIp);
       if (!limit.allowed) return { retryAfterSeconds: limit.retryAfterSeconds };
       try {
-        const user = await prisma.user.create({
-          data: {
-            email: identity.email,
-            name: identity.name,
-            emailVerifiedAt: new Date(),
-            oauthAccounts: { create: { provider: GOOGLE_PROVIDER, providerAccountId: identity.sub, email: identity.email } },
-          },
-          select: { id: true },
-        });
+        const details = {
+          email: identity.email,
+          name: identity.name,
+          emailVerifiedAt: new Date(),
+          oauthAccounts: { create: { provider: GOOGLE_PROVIDER, providerAccountId: identity.sub, email: identity.email } },
+        };
+        // A guest who continues with Google keeps the guest workspace (#459).
+        const user = (guestId ? await upgradeGuest(guestId, details) : null) ?? (await prisma.user.create({ data: details, select: { id: true } }));
         return { userId: user.id, created: true };
       } catch (error) {
         // The same sign-in finished in another tab a moment ago, or the address was just taken.

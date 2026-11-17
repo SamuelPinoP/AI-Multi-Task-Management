@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type APIResponse, type BrowserContext, type Page } from "@playwright/test";
-import { expectHome, queryDatabase, signUpAndLogIn } from "./helpers";
+import { continueAsGuest, expectHome, queryDatabase, signUpAndLogIn } from "./helpers";
 import { googleStubUrl } from "./google-stub";
 
 // #356: "Continue with Google" signs in, and the first time it creates the
@@ -71,6 +71,28 @@ test("the first Continue with Google creates the account; later ones log in to i
   await expectHome(page);
   expect(await userFor(renamed.email)).toBeUndefined();
   expect(await googleLinks(user.id)).toEqual([{ providerAccountId: account.sub, email: renamed.email }]);
+});
+
+// #459: from a guest workspace, the new account is that workspace, with everything made in it.
+test("a guest who continues with Google keeps the guest workspace", async ({ page, context }) => {
+  await continueAsGuest(page);
+  const title = `Made as a guest ${randomUUID().slice(0, 8)}`;
+  expect((await page.request.post("/api/tasks", { data: { title } })).status()).toBe(201);
+  const { rows: made } = await queryDatabase<{ userId: string }>(`SELECT "userId" FROM "Task" WHERE title = $1`, [title]);
+
+  const account = googleAccount();
+  await atGoogle(context, { account });
+  await continueWithGoogle(page, "/signup");
+  await expectHome(page);
+
+  const user = await userFor(account.email);
+  expect(user.id).toBe(made[0].userId);
+  expect(user.emailVerifiedAt).not.toBeNull();
+  const { rows } = await queryDatabase<{ isGuest: boolean }>(`SELECT "isGuest" FROM "User" WHERE id = $1`, [user.id]);
+  expect(rows[0].isGuest).toBe(false);
+  expect(await googleLinks(user.id)).toEqual([{ providerAccountId: account.sub, email: account.email }]);
+  await page.goto("/tasks");
+  await expect(page.getByText(title)).toBeVisible();
 });
 
 test("Google sign-in continues to the page it was headed for", async ({ page, context }) => {

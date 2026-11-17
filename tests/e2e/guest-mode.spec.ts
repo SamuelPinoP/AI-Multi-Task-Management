@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
-import { continueAsGuest, expectHome, openAccountMenu, signUpAndLogIn } from "./helpers";
+import { confirmationLink, continueAsGuest, expectHome, openAccountMenu, queryDatabase, signUpAndLogIn, uniqueName } from "./helpers";
 
 /*
  * Guest mode (#458): a guest workspace holds 5 tasks, 2 events, 3 notes and 1 project of its own,
@@ -156,5 +157,34 @@ test("accounts have no guest limits", async ({ page }) => {
   await addTasks(page, 6);
   expect((await post(page, "/api/projects", { name: "First" })).status()).toBe(201);
   expect((await post(page, "/api/projects", { name: "Second" })).status()).toBe(201);
+  await expect(page.getByRole("region", { name: "Guest workspace" })).toHaveCount(0);
+});
+
+// #459: signing up turns the guest workspace into the account, with everything made in it.
+test("signing up keeps the guest's work", async ({ page }) => {
+  await continueAsGuest(page);
+  const title = uniqueName("Made as a guest");
+  expect((await post(page, "/api/tasks", { title })).status()).toBe(201);
+  const { rows: made } = await queryDatabase<{ userId: string }>(`SELECT "userId" FROM "Task" WHERE title = $1`, [title]);
+
+  await page.goto("/signup");
+  await expect(page.getByText("Everything in your guest workspace comes with you.")).toBeVisible();
+  const id = randomUUID().slice(0, 8);
+  const email = `e2e-former-guest-${id}@example.test`;
+  const password = `e2e-${randomUUID()}`;
+  await page.getByLabel("Name", { exact: true }).fill("Former guest");
+  await page.getByLabel("Username").fill(`former_${id}`);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByLabel("Confirm password").fill(password);
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+
+  await page.goto(await confirmationLink(email));
+  await expectHome(page);
+  const { rows: account } = await queryDatabase<{ id: string; isGuest: boolean }>(`SELECT id, "isGuest" FROM "User" WHERE email = $1`, [email]);
+  expect(account).toEqual([{ id: made[0].userId, isGuest: false }]);
+  await page.goto("/tasks");
+  await expect(page.getByText(title)).toBeVisible();
   await expect(page.getByRole("region", { name: "Guest workspace" })).toHaveCount(0);
 });
