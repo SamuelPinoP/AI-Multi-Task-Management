@@ -19,6 +19,19 @@ export function hasAcceptedNotice(acceptedAt: Date | null | undefined, noticeUpd
 
 export const NOTICE_REQUIRED_MESSAGE = "Before you use the AI assistant, read and agree to what it sends and to whom.";
 
+/**
+ * What the chat shows before the first question (#308; the round-3 design's words). It promises
+ * what is sent, to whom and how it may be used, so a change to it needs a new AI_NOTICE_VERSION,
+ * and the Privacy Policy's "The AI assistant" section says the same at more length.
+ */
+export const AI_NOTICE_TEXT = {
+  title: "Before your first question",
+  paragraphs: [
+    "To answer, the Work Agent sends your question and the items it looks up, such as task titles and dates, to Google Gemini.",
+    "During the free beta, Google may use them to improve its products, and people at Google may read them. Don't share passwords, health or money details.",
+  ],
+} as const;
+
 /** An agreement names the notice version the person was shown; an older page gets an error, not a record. */
 export function parseNoticeAgreement(body: unknown): { ok: true } | { error: string } {
   const version = typeof body === "object" && body !== null ? (body as { version?: unknown }).version : undefined;

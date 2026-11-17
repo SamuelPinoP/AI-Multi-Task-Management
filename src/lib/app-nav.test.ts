@@ -25,14 +25,21 @@ test("extra paths count as the item", () => {
   assert.equal(isNavItemActive("/tasks", boards), false);
 });
 
-test("only the chat views are full-height pages", () => {
+test("only the chat views and the AI page are full-height pages", () => {
   assert.equal(isFullHeightPage("/chats"), true);
   assert.equal(isFullHeightPage("/projects/p1/chat"), true);
+  assert.equal(isFullHeightPage("/ai"), true);
   assert.equal(isFullHeightPage("/projects/p1"), false);
   assert.equal(isFullHeightPage("/projects/p1/board"), false);
   assert.equal(isFullHeightPage("/projects/p1/chat/extra"), false);
   assert.equal(isFullHeightPage("/chatsx"), false);
+  assert.equal(isFullHeightPage("/aim"), false);
   assert.equal(isFullHeightPage("/tasks"), false);
+});
+
+test("the AI page is called AI (#308)", () => {
+  assert.deepEqual(pageTitleFor("/ai", []), { title: "AI" });
+  assert.deepEqual(pageTitleFor("/aim", []), { title: "" });
 });
 
 test("page titles prefer the longest matching prefix", () => {

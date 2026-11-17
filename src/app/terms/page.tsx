@@ -82,15 +82,16 @@ export default function TermsPage() {
 
       <LegalSection id="ai" title="AI features">
         <p>
-          AI features, when they&apos;re available, can give wrong or incomplete answers. Check them before you rely on them,
-          and don&apos;t share sensitive information with them.
+          The AI assistant can give wrong or incomplete answers. Check them before you rely on them, and don&apos;t share
+          sensitive information with it. It runs on Google&apos;s Gemini API, each account may send it a set number of
+          requests a day, and the Privacy Policy explains what it sends to Google.
         </p>
       </LegalSection>
 
       <LegalSection id="third-parties" title="Other companies' services">
         <p>
-          Sign in with Google, linked GitHub repositories and browser notifications are provided by other companies, under
-          their own terms.
+          Sign in with Google, the AI assistant&apos;s model (Google&apos;s Gemini API), linked GitHub repositories and
+          browser notifications are provided by other companies, under their own terms.
         </p>
       </LegalSection>
 

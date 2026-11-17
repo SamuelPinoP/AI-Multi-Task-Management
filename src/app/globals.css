@@ -30,6 +30,15 @@
   --accent-ink: #ffffff;
   --accent-soft: #dcefeb;
 
+  /* The AI (#308): the send button's gradient once something is typed, the
+     start of its hover gradient, and the small star of the ✦ (the big one is
+     the accent). Each accent palette has its own, picked on the round-3 canvas;
+     the accent-ink arrow keeps 3:1 on every tone, WCAG's minimum for buttons. */
+  --ai-send-from: #26a198;
+  --ai-send-to: #027e76;
+  --ai-send-hover: #00877e;
+  --ai-spark: #3fc2b4;
+
   /* Priority high, overdue, at risk, destructive actions. */
   --danger: #b3361f;
   --danger-soft: #f7e0d9;
@@ -98,6 +107,12 @@
   --accent-ink: #06201d;
   --accent-soft: #143532;
 
+  /* In dark mode the send button runs from accent-hover to accent, and hover starts a step lighter. */
+  --ai-send-from: #5fd3c6;
+  --ai-send-to: #3fc2b4;
+  --ai-send-hover: #6de0d3;
+  --ai-spark: #5fd3c6;
+
   --danger: #f08b75;
   --danger-soft: #3b1f19;
   --warning: #f0ab5b;
@@ -131,6 +146,7 @@
   --color-accent-hover: var(--accent-hover);
   --color-accent-ink: var(--accent-ink);
   --color-accent-soft: var(--accent-soft);
+  --color-ai-spark: var(--ai-spark);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-warning: var(--warning);
@@ -274,6 +290,10 @@ html[data-text-size="larger"] {
   --accent-hover: #085c56;
   --accent-ink: #ffffff;
   --accent-soft: #dcefeb;
+  --ai-send-from: #26a198;
+  --ai-send-to: #027e76;
+  --ai-send-hover: #00877e;
+  --ai-spark: #3fc2b4;
   --color-zinc-50: #f6f8f7;
   --color-zinc-100: #edf1f0;
   --color-zinc-200: #dee5e2;
@@ -301,6 +321,10 @@ html[data-text-size="larger"] {
   --accent-hover: #5fd3c6;
   --accent-ink: #06201d;
   --accent-soft: #143532;
+  --ai-send-from: #5fd3c6;
+  --ai-send-to: #3fc2b4;
+  --ai-send-hover: #6de0d3;
+  --ai-spark: #5fd3c6;
   --color-zinc-500: #8b9995;
 }
 
@@ -317,6 +341,10 @@ html[data-text-size="larger"] {
   --accent-hover: #0f4ea3;
   --accent-ink: #ffffff;
   --accent-soft: #e0ecfe;
+  --ai-send-from: #428fff;
+  --ai-send-to: #006be7;
+  --ai-send-hover: #1073f1;
+  --ai-spark: #75aef5;
   --color-zinc-50: #f6f8fa;
   --color-zinc-100: #eef0f4;
   --color-zinc-200: #dee4ea;
@@ -344,6 +372,10 @@ html[data-text-size="larger"] {
   --accent-hover: #92c1fd;
   --accent-ink: #081629;
   --accent-soft: #172b49;
+  --ai-send-from: #92c1fd;
+  --ai-send-to: #75aef5;
+  --ai-send-hover: #a7ceff;
+  --ai-spark: #92c1fd;
   --color-zinc-500: #8d96a3;
 }
 
@@ -360,6 +392,10 @@ html[data-text-size="larger"] {
   --accent-hover: #5432b2;
   --accent-ink: #ffffff;
   --accent-soft: #eae8ff;
+  --ai-send-from: #937dff;
+  --ai-send-to: #7a4bff;
+  --ai-send-hover: #7f58ff;
+  --ai-spark: #ad9ffa;
   --color-zinc-50: #f7f7f9;
   --color-zinc-100: #f0eff4;
   --color-zinc-200: #e3e2ea;
@@ -387,6 +423,10 @@ html[data-text-size="larger"] {
   --accent-hover: #c0b6ff;
   --accent-ink: #161229;
   --accent-soft: #2b244b;
+  --ai-send-from: #c0b6ff;
+  --ai-send-to: #ad9ffa;
+  --ai-send-hover: #cdc6ff;
+  --ai-spark: #c0b6ff;
   --color-zinc-500: #9593a2;
 }
 
@@ -403,6 +443,10 @@ html[data-text-size="larger"] {
   --accent-hover: #7a2667;
   --accent-ink: #ffffff;
   --accent-soft: #fae4f2;
+  --ai-send-from: #de63bf;
+  --ai-send-to: #b9409d;
+  --ai-send-hover: #c248a5;
+  --ai-spark: #de97c6;
   --color-zinc-50: #f9f7f8;
   --color-zinc-100: #f3eff1;
   --color-zinc-200: #e8e1e5;
@@ -430,6 +474,10 @@ html[data-text-size="larger"] {
   --accent-hover: #ecaed7;
   --accent-ink: #210f1b;
   --accent-soft: #3d2034;
+  --ai-send-from: #ecaed7;
+  --ai-send-to: #de97c6;
+  --ai-send-hover: #fabbe4;
+  --ai-spark: #ecaed7;
   --color-zinc-500: #9e9199;
 }
 
@@ -446,6 +494,10 @@ html[data-text-size="larger"] {
   --accent-hover: #181b1f;
   --accent-ink: #ffffff;
   --accent-soft: #e8ebf1;
+  --ai-send-from: #5c646f;
+  --ai-send-to: #292e35;
+  --ai-send-hover: #363e48;
+  --ai-spark: #8b9098;
   --color-zinc-50: #f7f7f8;
   --color-zinc-100: #eff0f1;
   --color-zinc-200: #e1e3e6;
@@ -473,9 +525,35 @@ html[data-text-size="larger"] {
   --accent-hover: #eff2f5;
   --accent-ink: #151617;
   --accent-soft: #272c31;
+  --ai-send-from: #eff2f5;
+  --ai-send-to: #dadee3;
+  --ai-send-hover: #fafcfe;
+  --ai-spark: #eff2f5;
   --color-zinc-500: #92969a;
 }
 /* End of the accent palettes. */
+
+/*
+ * The AI's send button once something is typed (#308, the "Gradient" look
+ * picked on the round-3 canvas): a 135° fade in the accent with the accent-ink
+ * arrow, and in light mode a soft shadow in the end color. A layer below the
+ * utilities, so a class such as disabled:opacity-60 still applies.
+ */
+@layer components {
+  .ai-send {
+    background-image: linear-gradient(135deg, var(--ai-send-from), var(--ai-send-to));
+    color: var(--accent-ink);
+    box-shadow: 0 2px 6px -2px color-mix(in srgb, var(--ai-send-to) 55%, transparent);
+  }
+
+  .ai-send:hover {
+    background-image: linear-gradient(135deg, var(--ai-send-hover), var(--ai-send-to));
+  }
+
+  .dark .ai-send {
+    box-shadow: none;
+  }
+}
 
 body {
   background: var(--canvas);

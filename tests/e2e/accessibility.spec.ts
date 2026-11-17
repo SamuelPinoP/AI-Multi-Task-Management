@@ -90,7 +90,7 @@ for (const theme of ["light", "dark"] as const) {
 
     const found: string[] = [];
     // "/login?email=…" for another address shows "Switch accounts?".
-    for (const path of ["/", "/today", "/login?email=a11y-other%40example.test", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/tree", treePath, "/planner", "/goals", "/roadmap", "/trash", "/account"]) {
+    for (const path of ["/", "/today", "/login?email=a11y-other%40example.test", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/tree", treePath, "/planner", "/goals", "/roadmap", "/trash", "/account", "/ai"]) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
       found.push(...(await violations(page, path)));
@@ -162,6 +162,37 @@ for (const theme of ["light", "dark"] as const) {
 }
 
 // DES-15 (#321): Home and the account menu that picks the color, in every accent palette and both themes.
+// The AI page (#308) for an account (guests get a short message, checked above): a new chat, the
+// data notice, and an answer with links to what it used, from the e2e server's fake model.
+for (const theme of ["light", "dark"] as const) {
+  test(`the AI page has no WCAG A/AA violations (${theme})`, async ({ page, isMobile }) => {
+    await signUpAndLogIn(page, "A11y AI");
+    expect((await page.request.post("/api/tasks", { data: { title: "Rotate the API keys" } })).status()).toBe(201);
+    await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
+
+    const found: string[] = [];
+    await page.goto("/ai");
+    await page.waitForLoadState("networkidle");
+    found.push(...(await violations(page, "AI page, new chat")));
+
+    await page.getByRole("textbox", { name: "Message the AI" }).fill("What's on my plate? list_open_tasks");
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Before your first question" })).toBeVisible();
+    found.push(...(await violations(page, "AI page, data notice")));
+
+    await page.getByRole("button", { name: "Agree and continue" }).click();
+    await expect(page.getByRole("list", { name: "Used to answer" })).toBeVisible();
+    found.push(...(await violations(page, "AI page, an answer with its sources")));
+
+    if (isMobile) {
+      await page.getByRole("button", { name: "Your chats" }).click();
+      await expect(page.getByRole("region", { name: "Chats", exact: true })).toBeVisible();
+      found.push(...(await violations(page, "AI page, the list of chats on a phone")));
+    }
+    expect(found).toEqual([]);
+  });
+}
+
 test("every accent palette has no WCAG A/AA violations", async ({ page, isMobile }) => {
   test.skip(isMobile, "The palettes don't depend on the screen size.");
   test.setTimeout(120_000);

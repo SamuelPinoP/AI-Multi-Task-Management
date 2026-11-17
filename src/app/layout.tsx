@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { cookies } from "next/headers";
 import "./globals.css";
+import { AiChatProvider } from "@/components/ai/ai-chat-provider";
 import { AppShell } from "@/components/app-shell";
 import { ServiceWorkerRegistration } from "@/components/pwa";
 import { ThemeInitScript, ThemeProvider } from "@/components/theme-provider";
@@ -70,16 +71,19 @@ export default async function RootLayout({
         <ThemeProvider>
           {/* Times render in the reader's zone, the same on the server and in the browser (#381). */}
           <UserTimeZoneProvider timeZone={timeZone}>
-            <AppShell
-              currentUser={currentUser}
-              awaitingEmailConfirmation={awaitingEmailConfirmation}
-              initialNav={initialNav}
-              initialSidebarCollapsed={sidebarCollapsed}
-              initialSidebarWidth={sidebarWidth}
-              initialProjectsOpen={sidebarProjectsOpen}
-            >
-              {children}
-            </AppShell>
+            {/* The AI chat (#308) sits above every page, so a conversation stays as people move around. Guests can't use it. */}
+            <AiChatProvider enabled={Boolean(currentUser && !currentUser.isGuest)}>
+              <AppShell
+                currentUser={currentUser}
+                awaitingEmailConfirmation={awaitingEmailConfirmation}
+                initialNav={initialNav}
+                initialSidebarCollapsed={sidebarCollapsed}
+                initialSidebarWidth={sidebarWidth}
+                initialProjectsOpen={sidebarProjectsOpen}
+              >
+                {children}
+              </AppShell>
+            </AiChatProvider>
           </UserTimeZoneProvider>
           <Toaster />
         </ThemeProvider>

@@ -9,6 +9,12 @@
 // teal neutral's OKLCH lightness and chroma and turn its hue, so text keeps the
 // contrast the teal tokens were checked for. Their accents are picked by hand,
 // and design-tokens.test.ts checks every palette for 4.5:1.
+//
+// The AI's colors (#308) are picked by hand for every palette too, from the
+// round-3 canvas: the send button's gradient (ai-send-from to ai-send-to, its
+// hover starting at ai-send-hover) and the ✦'s small star (ai-spark; the main
+// star is the accent). In light mode each tone keeps 3:1 against the white
+// arrow; in dark mode the gradient runs from accent-hover to accent.
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -17,7 +23,10 @@ const BEGIN = "/* Accent palettes (DES-15): written by scripts/generate-accent-p
 const END = "/* End of the accent palettes. */";
 
 /** The colors every palette sets, in both themes. */
-const PALETTE = ["canvas", "surface", "raised", "sunken", "surface-hover", "ink", "muted", "line", "accent", "accent-hover", "accent-ink", "accent-soft"];
+const PALETTE = [
+  "canvas", "surface", "raised", "sunken", "surface-hover", "ink", "muted", "line", "accent", "accent-hover", "accent-ink", "accent-soft",
+  "ai-send-from", "ai-send-to", "ai-send-hover", "ai-spark",
+];
 const ZINC = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map((step) => `color-zinc-${step}`);
 
 /*
@@ -28,28 +37,55 @@ const PALETTES = {
   blue: {
     hue: 255,
     tint: 1.25,
-    light: { accent: [0.5, 0.165, 258], "accent-hover": [0.44, 0.15, 258], "accent-ink": "#ffffff", "accent-soft": [0.94, 0.03, 258] },
-    dark: { accent: [0.74, 0.12, 255], "accent-hover": [0.8, 0.1, 255], "accent-ink": [0.2, 0.042, 255], "accent-soft": [0.29, 0.06, 258] },
+    light: {
+      accent: [0.5, 0.165, 258], "accent-hover": [0.44, 0.15, 258], "accent-ink": "#ffffff", "accent-soft": [0.94, 0.03, 258],
+      "ai-send-from": "#428fff", "ai-send-to": "#006be7", "ai-send-hover": "#1073f1", "ai-spark": "#75aef5",
+    },
+    dark: {
+      accent: [0.74, 0.12, 255], "accent-hover": [0.8, 0.1, 255], "accent-ink": [0.2, 0.042, 255], "accent-soft": [0.29, 0.06, 258],
+      "ai-send-from": "#92c1fd", "ai-send-to": "#75aef5", "ai-send-hover": "#a7ceff", "ai-spark": "#92c1fd",
+    },
   },
   violet: {
     hue: 290,
     tint: 1.25,
-    light: { accent: [0.5, 0.2, 288], "accent-hover": [0.44, 0.19, 288], "accent-ink": "#ffffff", "accent-soft": [0.94, 0.035, 290] },
-    dark: { accent: [0.75, 0.13, 290], "accent-hover": [0.81, 0.11, 290], "accent-ink": [0.2, 0.045, 290], "accent-soft": [0.29, 0.07, 290] },
+    light: {
+      accent: [0.5, 0.2, 288], "accent-hover": [0.44, 0.19, 288], "accent-ink": "#ffffff", "accent-soft": [0.94, 0.035, 290],
+      "ai-send-from": "#937dff", "ai-send-to": "#7a4bff", "ai-send-hover": "#7f58ff", "ai-spark": "#ad9ffa",
+    },
+    dark: {
+      accent: [0.75, 0.13, 290], "accent-hover": [0.81, 0.11, 290], "accent-ink": [0.2, 0.045, 290], "accent-soft": [0.29, 0.07, 290],
+      "ai-send-from": "#c0b6ff", "ai-send-to": "#ad9ffa", "ai-send-hover": "#cdc6ff", "ai-spark": "#c0b6ff",
+    },
   },
   plum: {
     hue: 340,
     tint: 1.15,
-    light: { accent: [0.48, 0.15, 338], "accent-hover": [0.42, 0.14, 338], "accent-ink": "#ffffff", "accent-soft": [0.94, 0.03, 340] },
-    dark: { accent: [0.76, 0.105, 340], "accent-hover": [0.82, 0.09, 340], "accent-ink": [0.2, 0.037, 340], "accent-soft": [0.29, 0.055, 340] },
+    light: {
+      accent: [0.48, 0.15, 338], "accent-hover": [0.42, 0.14, 338], "accent-ink": "#ffffff", "accent-soft": [0.94, 0.03, 340],
+      "ai-send-from": "#de63bf", "ai-send-to": "#b9409d", "ai-send-hover": "#c248a5", "ai-spark": "#de97c6",
+    },
+    dark: {
+      accent: [0.76, 0.105, 340], "accent-hover": [0.82, 0.09, 340], "accent-ink": [0.2, 0.037, 340], "accent-soft": [0.29, 0.055, 340],
+      "ai-send-from": "#ecaed7", "ai-send-to": "#de97c6", "ai-send-hover": "#fabbe4", "ai-spark": "#ecaed7",
+    },
   },
   // Near-black buttons on near-neutral grays. Its soft color has the others'
   // lightness: muted text sits on it in cards like Home's "Suggested next".
+  // Its send button runs from slate to charcoal (a lighter gray would read as
+  // disabled), and the ✦'s small star is a mid gray, since the dark accent
+  // would vanish on white.
   graphite: {
     hue: 255,
     tint: 0.45,
-    light: { accent: [0.3, 0.012, 255], "accent-hover": [0.22, 0.01, 255], "accent-ink": "#ffffff", "accent-soft": [0.94, 0.008, 255] },
-    dark: { accent: [0.9, 0.008, 255], "accent-hover": [0.96, 0.005, 255], "accent-ink": [0.2, 0.003, 255], "accent-soft": [0.29, 0.012, 255] },
+    light: {
+      accent: [0.3, 0.012, 255], "accent-hover": [0.22, 0.01, 255], "accent-ink": "#ffffff", "accent-soft": [0.94, 0.008, 255],
+      "ai-send-from": "#5c646f", "ai-send-to": "#292e35", "ai-send-hover": "#363e48", "ai-spark": "#8b9098",
+    },
+    dark: {
+      accent: [0.9, 0.008, 255], "accent-hover": [0.96, 0.005, 255], "accent-ink": [0.2, 0.003, 255], "accent-soft": [0.29, 0.012, 255],
+      "ai-send-from": "#eff2f5", "ai-send-to": "#dadee3", "ai-send-hover": "#fafcfe", "ai-spark": "#eff2f5",
+    },
   },
 };
 

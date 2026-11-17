@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CHAT_LIST_LIMITS, clampWidth, dragTo, keyTo, parseWidth, roundRem, shownWidth, SIDEBAR_LIMITS, snapPoint, type PanelLimits } from "./panel-resize";
+import { AI_CHAT_LIST_LIMITS, CHAT_LIST_LIMITS, clampWidth, dragTo, keyTo, parseWidth, roundRem, shownWidth, SIDEBAR_LIMITS, snapPoint, type PanelLimits } from "./panel-resize";
 
 const limits: PanelLimits = { min: 11, max: 22.5, initial: 14, collapsed: 3.5 };
 
@@ -16,8 +16,8 @@ test("the Chats list opens at 310 px and goes from 240 to 480 px, or a 72 px col
     [CHAT_LIST_LIMITS.initial, CHAT_LIST_LIMITS.min, CHAT_LIST_LIMITS.max, CHAT_LIST_LIMITS.collapsed].map((rem) => rem * 16),
     [310, 240, 480, 72],
   );
-  // It snaps to the photos halfway between the column and its narrowest width.
-  assert.equal(snapPoint(CHAT_LIST_LIMITS) * 16, 156);
+  // It snaps to the photos halfway between the column and its narrowest width: 156 px.
+  assert.equal(snapPoint(CHAT_LIST_LIMITS), 156 / 16);
 });
 
 test("widths round to a pixel and stay between the narrowest and the widest", () => {
@@ -66,4 +66,31 @@ test("a width cookie is read back within the limits, and anything else opens at 
 test("a collapsed panel shows its collapsed width and keeps its open one", () => {
   assert.equal(shownWidth({ width: 16, collapsed: true }, limits), 3.5);
   assert.equal(shownWidth({ width: 16, collapsed: false }, limits), 16);
+});
+
+test("the AI page's chats open at 264 px and go from 220 to 360 px, never collapsing", () => {
+  const { initial, min, max, collapsed } = AI_CHAT_LIST_LIMITS;
+  assert.deepEqual([initial, min, max].map((rem) => rem * 16), [264, 220, 360]);
+  assert.equal(collapsed, undefined);
+  assert.equal(snapPoint(AI_CHAT_LIST_LIMITS), null);
+});
+
+test("a panel that never collapses stops at its narrowest, whatever the pointer or keys do", () => {
+  const list = AI_CHAT_LIST_LIMITS;
+  assert.deepEqual(dragTo(18, list, 16.5), { width: 18, collapsed: false });
+  assert.deepEqual(dragTo(2, list, 16.5), { width: 13.75, collapsed: false });
+  assert.deepEqual(dragTo(-40, list, 16.5), { width: 13.75, collapsed: false });
+  assert.deepEqual(dragTo(40, list, 16.5), { width: 22.5, collapsed: false });
+
+  const open = { width: 16.5, collapsed: false };
+  assert.deepEqual(keyTo("ArrowLeft", open, list), { width: 15.5, collapsed: false });
+  assert.deepEqual(keyTo("ArrowLeft", { width: 13.75, collapsed: false }, list), { width: 13.75, collapsed: false });
+  assert.deepEqual(keyTo("ArrowRight", open, list), { width: 17.5, collapsed: false });
+  assert.deepEqual(keyTo("Home", open, list), { width: 13.75, collapsed: false });
+  assert.deepEqual(keyTo("End", open, list), { width: 22.5, collapsed: false });
+  // Enter brings back the width it opens at, like a double-click on the edge.
+  assert.deepEqual(keyTo("Enter", { width: 20, collapsed: false }, list), { width: 16.5, collapsed: false });
+  assert.equal(keyTo("a", open, list), null);
+  // A stray "collapsed" (from an old cookie, say) never hides it.
+  assert.equal(shownWidth({ width: 18, collapsed: true }, list), 18);
 });

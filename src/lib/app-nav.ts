@@ -17,6 +17,7 @@ export function isNavItemActive(pathname: string, item: NavMatch) {
 
 // Longer prefixes first, so /tasks/board wins over /tasks.
 const pageTitles: Array<[prefix: string, title: string]> = [
+  ["/ai", "AI"],
   ["/today", "My day"],
   ["/chats", "Chats"],
   ["/tasks/board", "Boards"],
@@ -40,11 +41,11 @@ const appAdminPageTitles: Array<[prefix: string, title: string]> = [
 ];
 
 /**
- * Pages that fill the screen and scroll inside, like the chats: on phones the bottom tabs sit under them,
- * not over them, and their own header is the only bar above them (#420).
+ * Pages that fill the screen and scroll inside, like the chats and the AI page (#308): on phones the
+ * bottom tabs sit under them, not over them, and their own header is the only bar above them (#420).
  */
 export function isFullHeightPage(pathname: string) {
-  return pathname === "/chats" || /^\/projects\/[^/]+\/chat$/.test(pathname);
+  return pathname === "/chats" || pathname === "/ai" || /^\/projects\/[^/]+\/chat$/.test(pathname);
 }
 
 /** The top bar's title; project pages show "Projects / <name>". */

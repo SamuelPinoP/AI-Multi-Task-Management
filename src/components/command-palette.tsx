@@ -22,7 +22,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType } from "react";
+import { AiSpark } from "@/components/ai/ai-spark";
 import { useTheme } from "@/components/theme-provider";
 import {
   Command,
@@ -48,8 +49,9 @@ type SearchData = {
 
 const emptyResults: SearchData = { projects: [], notes: [], tasks: [], events: [] };
 
-const pages: Array<{ href: string; label: string; icon: LucideIcon; keywords?: string }> = [
+const pages: Array<{ href: string; label: string; icon: LucideIcon | ComponentType<{ className?: string }>; keywords?: string }> = [
   { href: "/", label: "Home", icon: House, keywords: "dashboard" },
+  { href: "/ai", label: "AI", icon: AiSpark, keywords: "ask ai multi assistant chat question work agent" },
   { href: "/today", label: "My day", icon: Sun, keywords: "today focus" },
   { href: "/chats", label: "Chats", icon: MessagesSquare, keywords: "messages discussion unread" },
   { href: "/tasks", label: "Tasks", icon: SquareCheckBig },
