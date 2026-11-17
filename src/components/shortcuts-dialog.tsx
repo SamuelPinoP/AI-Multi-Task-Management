@@ -18,6 +18,7 @@ function Keys({ keys }: { keys: string[] }) {
 
 const general: Array<{ label: string; keys: string[] }> = [
   { label: "Search or run a command", keys: ["Ctrl K"] },
+  { label: "Ask AI Multi", keys: ["Ctrl J"] },
   { label: "Search", keys: ["/"] },
   { label: "Search in the open chat", keys: ["Ctrl F"] },
   { label: "New task", keys: ["N"] },

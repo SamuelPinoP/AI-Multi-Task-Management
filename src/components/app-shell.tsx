@@ -32,6 +32,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { AccentMenuItems } from "@/components/accent-menu";
+import { AiDock } from "@/components/ai/ai-dock";
 import { AiSpark } from "@/components/ai/ai-spark";
 import { LogoMark } from "@/components/brand/logo-mark";
 import { CommandPalette } from "@/components/command-palette";
@@ -349,7 +350,13 @@ function SidebarProject({
  */
 function AiTile({ active, onNavigate, className }: { active: boolean; onNavigate?: () => void; className?: string }) {
   return (
-    <Tooltip content="Ask AI Multi">
+    <Tooltip
+      content={
+        <>
+          Ask AI Multi <TooltipKey>Ctrl J</TooltipKey>
+        </>
+      }
+    >
       <Link
         href="/ai"
         onClick={onNavigate}
@@ -917,6 +924,9 @@ export function AppShell({
   const isPublicPage = publicPaths.has(pathname) || isLoggedOutLanding;
   const showWorkspaceShell = Boolean(currentUser && initialNav && !isPublicPage);
   const fullHeight = isFullHeightPage(pathname);
+  // The AI bar (#308): on every page but the AI page, which has its own message box. The chats have
+  // theirs too, so there it waits as the ✦ button. Guests can't use the assistant.
+  const aiDock = !currentUser || currentUser.isGuest || pathname === "/ai" ? null : fullHeight ? "button" : "bar";
 
   const [nav, setNav] = useState(initialNav);
   const [sidebar, setSidebar] = useState<PanelSize>({ width: initialSidebarWidth, collapsed: initialSidebarCollapsed });
@@ -1163,15 +1173,21 @@ export function AppShell({
       {/* Pages reach the phone menu through this, for a menu button in a header of their own (#420).
           On phones the bell is inside the menu (#404), so the button shows a dot for anything new. */}
       <MobileMenuContext.Provider value={mobileMenu}>
-        <div className="flex min-w-0 flex-1 flex-col">
+        {/* relative: the AI bar floats at the bottom of this column, centred over the page (#308). */}
+        <div className="relative flex min-w-0 flex-1 flex-col">
           {/* The chats fill the screen with a header that never scrolls away, so it's their only bar (#420). */}
           {fullHeight ? null : <TopBar nav={nav} pathname={pathname} appAdmin={currentUser.isAppAdmin} />}
           <OfflineBanner />
           {/* relative: hidden (sr-only) text is absolutely positioned, and it scrolls only inside a positioned
-              scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar. */}
-          <main id="main-content" className={cn("relative min-h-0 flex-1 overflow-y-auto", !fullHeight && "pb-24 lg:pb-0")}>
+              scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar.
+              Pages end above the AI bar, and on phones above the bar and the tabs. */}
+          <main
+            id="main-content"
+            className={cn("relative min-h-0 flex-1 overflow-y-auto", !fullHeight && (aiDock === "bar" ? "pb-36 lg:pb-24" : "pb-24 lg:pb-0"))}
+          >
             {children}
           </main>
+          {aiDock ? <AiDock variant={aiDock} /> : null}
           <MobileTabs pathname={pathname} onNewTask={openNewTask} inFlow={fullHeight} />
         </div>
       </MobileMenuContext.Provider>

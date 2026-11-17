@@ -5,7 +5,7 @@
 // server code, so they're unit tested on their own; the chat's state lives in
 // src/components/ai/ai-chat-provider.tsx.
 import type { Allowance } from "@/lib/ai/allowance";
-import type { ChatEvent } from "@/lib/ai/chat";
+import type { AgentStatus, ChatEvent } from "@/lib/ai/chat";
 import { MAX_MESSAGE_CHARS, MAX_MESSAGES } from "@/lib/ai/chat-limits";
 import type { Source } from "@/lib/ai/tools/define";
 
@@ -83,6 +83,16 @@ export function allowanceIn(event: ChatEvent): Allowance | null {
 /** "38 of 40 left today": the person's own model requests (a question takes one, or two with a lookup). */
 export function allowanceText(allowance: Allowance) {
   return `${allowance.user.remaining} of ${allowance.user.limit} left today`;
+}
+
+/**
+ * The allowance as the chat shows it under its message box, or null: before the status arrives, and
+ * when the planner answers whatever the allowance (no model here, or the person's country).
+ */
+export function allowanceLine(status: AgentStatus | null) {
+  if (!status) return null;
+  if (status.mode === "planner" && (status.reason === "region" || status.reason === "disabled")) return null;
+  return allowanceText(status.allowance);
 }
 
 const PAST_TENSE: Record<string, string> = { Checking: "Checked", Counting: "Counted", Searching: "Searched", Looking: "Looked", Reading: "Read" };
