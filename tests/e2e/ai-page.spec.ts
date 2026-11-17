@@ -34,7 +34,10 @@ async function agentRuns(email: string) {
 test("a guest is told the assistant needs an account", async ({ page, playwright, baseURL }) => {
   await continueAsGuest(page);
   await page.goto("/ai");
-  await expect(page.getByText("The AI assistant needs an account")).toBeVisible();
+  // The sign-up pop-up opens as if the AI had been clicked (#458); behind it, what the AI answers.
+  await expect(page.getByRole("dialog", { name: "The AI needs a free account" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByText("Ask AI Multi about your work")).toBeVisible();
   await expect(messageBox(page)).toHaveCount(0);
 
   // The status the chat reads before a first question is for accounts only.

@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator } from "@playwright/test";
-import { continueAsGuest, uniqueName } from "./helpers";
+import { signUpAndLogIn, uniqueName } from "./helpers";
 
 /**
  * Selects `text` in the note editor the way a person would (the selection fires keyup too).
@@ -30,7 +30,8 @@ async function selectInEditor(editor: Locator, text: string) {
 }
 
 test("linked notes: [[links]], backlinks, tasks from a selection and meeting notes (SMART-05)", async ({ page }) => {
-  await continueAsGuest(page);
+  // An account: it makes more notes and events than a guest workspace holds (#458).
+  await signUpAndLogIn(page, "Linked notes");
   const plan = uniqueName("Launch plan");
   const budget = uniqueName("Budget");
   const missing = uniqueName("Venue ideas");

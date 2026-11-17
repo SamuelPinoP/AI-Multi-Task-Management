@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { continueAsGuest, uniqueName } from "./helpers";
+import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
 
 // The New task pop-up (#362, design 3A) and the quick add's buttons.
 
@@ -11,7 +11,8 @@ function dateInputValue(daysFromToday: number) {
 }
 
 async function setUp(page: Page) {
-  await continueAsGuest(page);
+  // An account: it adds a member, which guests can't (#458).
+  await signUpAndLogIn(page, "New task pop-up");
   const post = async <T>(url: string, data: Record<string, unknown>) => (await (await page.request.post(url, { data })).json()) as T;
   const project = await post<{ id: string; name: string }>("/api/projects", { name: uniqueName("Popup project") });
   expect((await page.request.post(`/api/projects/${project.id}/members`, { data: { name: "Dana Lee", role: "EDITOR" } })).ok()).toBe(true);

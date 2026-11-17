@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, request as playwrightRequest, test } from "@playwright/test";
-import { continueAsGuest, uniqueName } from "./helpers";
+import { signUpAndLogIn, uniqueName } from "./helpers";
 
 // SMART-09: a private link calendar apps subscribe to, showing events and due tasks.
 
@@ -12,7 +12,8 @@ function dateInputValue(days: number) {
 }
 
 test("the calendar link serves events and due tasks until it's replaced or turned off", async ({ page, baseURL }) => {
-  await continueAsGuest(page);
+  // An account: guests can't link a calendar (#458).
+  await signUpAndLogIn(page, "Calendar link");
   const meeting = uniqueName("Weekly sync");
   const holiday = uniqueName("Team day off");
   const dueTask = uniqueName("Send the report");

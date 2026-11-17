@@ -403,7 +403,7 @@ test("The sidebar's bottom bar holds the profile, the bell and Trash, which show
   // Collapsed, the three stack in the same order and keep their names.
   await collapse.click();
   await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
-  await expect(profile).toHaveAccessibleName("Guest Settings and theme");
+  await expect(profile).toHaveAccessibleName(`${name} Settings and theme`);
   const stacked = await Promise.all([profile, bell, trash].map(async (item) => (await item.boundingBox())!));
   expect(stacked[0].y + stacked[0].height).toBeLessThanOrEqual(stacked[1].y);
   expect(stacked[1].y + stacked[1].height).toBeLessThanOrEqual(stacked[2].y);
