@@ -46,7 +46,7 @@ import { describeRepeat, normalizeRecurrence, storedDayKey } from "@/lib/recurre
 import { formatTaskDayKey, getLocalDateOnly } from "@/lib/task-date-buckets";
 import { isPressingPriority, priorityLabels } from "@/lib/priority";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
-import { notifyWorkspaceChanged } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, openGuestSignupForResponse } from "@/lib/workspace-events";
 
 const AGENDA_DAYS = 60;
 const PAST_LIMIT = 30;
@@ -539,6 +539,7 @@ export default function EventsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: `Notes: ${event.title}`, content: "", projectId: event.projectId ?? null }),
       });
+      if (await openGuestSignupForResponse(created)) return;
       const note = (await created.json().catch(() => null)) as { id?: string } | null;
       if (!created.ok || !note?.id) throw new Error();
       const linked = await fetch(`/api/notes/${note.id}/event`, {
@@ -560,6 +561,7 @@ export default function EventsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(eventRequestBody(input)),
     });
+    if (await openGuestSignupForResponse(response)) return null;
     if (!response.ok) return errorMessage(response, editing ? "Could not save the event." : "Could not create the event.");
     notifyWorkspaceChanged();
     await fetchEvents();

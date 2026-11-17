@@ -42,8 +42,10 @@ test("Account menu switches the theme and logs out", async ({ page }) => {
   await page.getByRole("menuitemradio", { name: /Dark/ }).click();
   await expect(page.locator("html")).toHaveClass(/dark/);
 
+  // A guest workspace has no password, so leaving it asks first (#458).
   await openAccountMenu(page);
-  await page.getByRole("menuitem", { name: "Log out" }).click();
+  await page.getByRole("menuitem", { name: "Leave guest workspace" }).click();
+  await page.getByRole("dialog", { name: "Leave the guest workspace?" }).getByRole("button", { name: "Leave" }).click();
   await expect(page).toHaveURL(/\/login/);
 });
 
@@ -358,7 +360,8 @@ test("One Calendar item opens the Agenda and Month tabs and remembers the last o
 
 test("The sidebar's bottom bar holds the profile, the bell and Trash, which shows only while it has something", async ({ page, isMobile }) => {
   test.skip(isMobile, "The sidebar is a menu sheet on phones.");
-  await continueAsGuest(page);
+  // An account: a guest has the guest profile there instead (#458; guest-mode.spec.ts).
+  const { name } = await signUpAndLogIn(page, "Bottom bar");
 
   const sidebar = page.getByRole("navigation", { name: "Workspace" });
   const profile = accountMenuButton(page);
@@ -368,7 +371,7 @@ test("The sidebar's bottom bar holds the profile, the bell and Trash, which show
 
   // The profile and the bell are in the sidebar (#404), and desktop has no top bar at all (#410).
   await expect(page.getByRole("banner")).toHaveCount(0);
-  await expect(profile).toHaveAccessibleName("Guest Settings and theme");
+  await expect(profile).toHaveAccessibleName(`${name} Settings and theme`);
   await expect(bell).toBeVisible();
   // Collapse sits by the logo now, above the links.
   expect((await collapse.boundingBox())!.y).toBeLessThan((await sidebar.getByRole("link", { name: "Home", exact: true }).boundingBox())!.y);

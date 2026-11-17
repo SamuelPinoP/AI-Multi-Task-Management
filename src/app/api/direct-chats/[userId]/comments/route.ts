@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
+import { accountRequiredResponse } from "@/lib/guest-limits";
 import {
   DIRECT_MESSAGE_MAX,
   DIRECT_MESSAGE_SELECT,
@@ -46,6 +47,8 @@ export async function POST(req: Request, context: RouteContext) {
   try {
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    const accountOnly = accountRequiredResponse(user, "messages");
+    if (accountOnly) return accountOnly;
     const { userId: personId } = await context.params;
 
     if (!req.headers.get("content-type")?.includes("application/json")) {

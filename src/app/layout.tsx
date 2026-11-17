@@ -17,6 +17,7 @@ import { parseWidth, SIDEBAR_LIMITS } from "@/lib/panel-resize";
 import { parseSidebarProjects, SIDEBAR_COLLAPSED_COOKIE, SIDEBAR_PROJECTS_COOKIE, SIDEBAR_WIDTH_COOKIE } from "@/lib/sidebar-state";
 import { getUserTimeZone } from "@/lib/user-time-server";
 import { getWorkspaceNav } from "@/lib/workspace-nav";
+import { isGoogleSignInEnabled } from "@/lib/google-auth";
 
 export const metadata: Metadata = {
   title: "AI Multi",
@@ -80,6 +81,7 @@ export default async function RootLayout({
                 initialSidebarCollapsed={sidebarCollapsed}
                 initialSidebarWidth={sidebarWidth}
                 initialProjectsOpen={sidebarProjectsOpen}
+                googleSignIn={Boolean(currentUser?.isGuest) && isGoogleSignInEnabled()}
               >
                 {children}
               </AppShell>

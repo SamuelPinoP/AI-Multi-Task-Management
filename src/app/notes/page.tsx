@@ -25,7 +25,7 @@ import { relativeTime } from "@/lib/home-summary";
 import { taskFromSelection } from "@/lib/note-links";
 import { projectColor } from "@/lib/project-color";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
-import { notifyWorkspaceChanged } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, openGuestSignupFor, openGuestSignupForResponse } from "@/lib/workspace-events";
 
 type Project = { id: string; name: string; color: string | null };
 
@@ -343,6 +343,7 @@ export default function NotesPage() {
         body: JSON.stringify({ ...selectedTask, noteId: editingNoteId }),
       });
       const body = (await response.json().catch(() => null)) as { id?: string; error?: string } | null;
+      if (openGuestSignupFor(body)) return;
       if (!response.ok || !body?.id) throw new Error(body?.error ?? "Could not create the task.");
       const taskId = body.id;
       setLinksVersion((value) => value + 1);
@@ -379,6 +380,7 @@ export default function NotesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, content: "", projectId: editProjectId || null }),
       });
+      if (await openGuestSignupForResponse(response)) return;
       if (!response.ok) throw new Error();
       const note = (await response.json()) as Note;
       setNotes((current) => [note, ...current]);

@@ -138,7 +138,7 @@ test("an account without a username adds one on the Account page, then logs in w
 test("guest workspaces have no username", async ({ page }) => {
   await continueAsGuest(page);
   await openAccountMenu(page);
-  await expect(page.getByRole("menuitem", { name: "Log out" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Leave guest workspace" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Account settings" })).toHaveCount(0);
   await page.keyboard.press("Escape");
 

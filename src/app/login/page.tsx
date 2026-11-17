@@ -43,8 +43,9 @@ export default async function LoginPage({
   // Filled in from links that know the address, such as invitation emails.
   const email = emailParam ? normalizeAuthEmail(emailParam) : "";
 
+  // A guest may log in from inside the guest workspace (#458); anyone else signed in goes on.
   const currentUser = await getCurrentUser();
-  if (currentUser) {
+  if (currentUser && !currentUser.isGuest) {
     if (!email || email === normalizeAuthEmail(currentUser.email)) redirect(nextPath);
     return (
       <SignedInAsOtherAccount

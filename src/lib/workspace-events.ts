@@ -1,3 +1,5 @@
+import { guestRefusalReason, type GuestSignupReason } from "@/lib/guest-limits-core";
+
 /**
  * Window events that keep the app shell's sidebar counts in sync with changes
  * made on a page (the shell refetches /api/workspace-nav when they fire).
@@ -19,6 +21,30 @@ export const OPEN_SEARCH_EVENT = "workspace:open-search";
 
 export function openSearch() {
   window.dispatchEvent(new Event(OPEN_SEARCH_EVENT));
+}
+
+/** Asks the shell to open the guest's sign-up pop-up (#458), saying why: `detail` is a GuestSignupReason. */
+export const OPEN_GUEST_SIGNUP_EVENT = "workspace:open-guest-signup";
+
+export function openGuestSignup(reason: GuestSignupReason = "signup") {
+  window.dispatchEvent(new CustomEvent<GuestSignupReason>(OPEN_GUEST_SIGNUP_EVENT, { detail: reason }));
+}
+
+/**
+ * When an API answer says a guest reached a limit or needs an account, opens the sign-up pop-up
+ * instead of an error message, and says so; false for any other answer.
+ */
+export function openGuestSignupFor(body: unknown) {
+  const reason = guestRefusalReason(body);
+  if (!reason) return false;
+  openGuestSignup(reason);
+  return true;
+}
+
+/** openGuestSignupFor for a failed fetch, read from a copy so the caller can still read the answer. */
+export async function openGuestSignupForResponse(response: Response) {
+  if (response.status !== 403) return false;
+  return openGuestSignupFor(await response.clone().json().catch(() => null));
 }
 
 /** Call after creating, completing, deleting or restoring a task or project. */

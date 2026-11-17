@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
+import { accountRequiredResponse } from "@/lib/guest-limits";
 import { pushConfig } from "@/lib/notifications";
 import { isValidPushSubscription } from "@/lib/notifications-core";
 import { prisma } from "@/lib/prisma";
@@ -18,6 +19,8 @@ export async function GET() {
 export async function POST(req: Request) {
   const user = await requireApiUser();
   if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  const accountOnly = accountRequiredResponse(user, "notifications");
+  if (accountOnly) return accountOnly;
   if (!pushConfig()) return NextResponse.json({ error: "Browser notifications aren't set up on this server." }, { status: 503 });
   const body: unknown = await req.json().catch(() => null);
   if (!isValidPushSubscription(body)) return NextResponse.json({ error: "Invalid push subscription" }, { status: 400 });

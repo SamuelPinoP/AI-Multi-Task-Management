@@ -620,6 +620,44 @@ body {
   from { opacity: 0; translate: -4px -50%; }
 }
 
+/* Sign up free, for guests (#458): a sweep of light, twice when it appears and again on hover. It ends
+   within 5 seconds, so it needs no pause control, and it never runs for people who turn off animations. */
+.shine {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.shine::after {
+  content: "";
+  position: absolute;
+  inset: -0.125rem auto -0.125rem 0;
+  width: 55%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.5), transparent);
+  transform: skewX(-14deg);
+  translate: -140% 0;
+  animation: shine-sweep 2.1s ease-in-out 0.6s 2 both;
+}
+
+.shine:hover::after {
+  animation: shine-sweep-once 0.9s ease-in-out both;
+}
+
+@keyframes shine-sweep {
+  0% { translate: -140% 0; }
+  50%, to { translate: 260% 0; }
+}
+
+@keyframes shine-sweep-once {
+  from { translate: -140% 0; }
+  to { translate: 260% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shine::after { display: none; }
+}
+
 /* While a panel's edge is dragged (components/ui/resize-handle.tsx, #414): the resize
    pointer everywhere, and no text gets selected along the way. */
 html[data-panel-resizing],

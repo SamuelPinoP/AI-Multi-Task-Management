@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeAuthEmail, requireApiUser } from "@/lib/auth";
+import { accountRequiredResponse } from "@/lib/guest-limits";
 import { canManageProjectMembers, getProjectAccess } from "@/lib/project-access";
 import { displayName } from "@/lib/direct-chats-core";
 import { sharedProjects } from "@/lib/direct-chats";
@@ -49,6 +50,8 @@ export async function POST(req: Request, context: RouteContext) {
     if (!user) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
+    const accountOnly = accountRequiredResponse(user, "people");
+    if (accountOnly) return accountOnly;
 
     const { id: projectId } = await context.params;
     const body = await req.json();

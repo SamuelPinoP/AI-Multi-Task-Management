@@ -11,7 +11,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import { formatTaskDayKey } from "@/lib/task-date-buckets";
-import { notifyWorkspaceChanged } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, openGuestSignupForResponse } from "@/lib/workspace-events";
 
 type ProjectSummary = { id: string; name: string; color: string | null };
 type QuickAction = "NOTE" | "TASK" | "EVENT";
@@ -57,6 +57,7 @@ export function ProjectQuickActions({ project }: { project: ProjectSummary }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(taskRequestBody(input)),
     });
+    if (await openGuestSignupForResponse(response)) return null;
     if (!response.ok) return errorMessage(response, "Could not create the task.");
     showCreated("Task", input.title);
     return null;
@@ -68,6 +69,7 @@ export function ProjectQuickActions({ project }: { project: ProjectSummary }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(eventRequestBody(input)),
     });
+    if (await openGuestSignupForResponse(response)) return null;
     if (!response.ok) return errorMessage(response, "Could not create the event.");
     showCreated("Event", input.title);
     return null;
@@ -140,6 +142,10 @@ function NoteSheet({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, content, projectId: project.id }),
       });
+      if (await openGuestSignupForResponse(response)) {
+        onOpenChange(false);
+        return;
+      }
       if (!response.ok) {
         setError(await errorMessage(response, "Could not create the note."));
         return;

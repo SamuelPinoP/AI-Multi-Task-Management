@@ -49,7 +49,7 @@ import { expandRecurringEventsForRange, normalizeRecurrence, storedDayKey } from
 import { useShowTasks } from "@/lib/show-tasks";
 import { getLocalDateOnly } from "@/lib/task-date-buckets";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
-import { notifyWorkspaceChanged } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, openGuestSignupForResponse } from "@/lib/workspace-events";
 
 /** Sentinel value for the "show items from every project" filter option. */
 const ALL_PROJECTS_FILTER = "ALL";
@@ -345,6 +345,7 @@ export default function EventsCalendarPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(eventRequestBody(input)),
     });
+    if (await openGuestSignupForResponse(res)) return null;
     if (!res.ok) {
       const data = await res.json().catch(() => null);
       return (data?.error as string | undefined) ?? "Could not create the event.";

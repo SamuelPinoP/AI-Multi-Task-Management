@@ -231,7 +231,8 @@ export async function notifyMentions({
 export async function sendDueReminders(now = new Date()) {
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const tasks = await prisma.task.findMany({
-    where: { deletedAt: null, status: { not: "DONE" }, dueDate: { gte: today, lt: new Date(today.getTime() + 2 * DAY_MS) } },
+    // Guests get no reminders (#458): their workspaces come and go, and their sample tasks are always due.
+    where: { deletedAt: null, status: { not: "DONE" }, dueDate: { gte: today, lt: new Date(today.getTime() + 2 * DAY_MS) }, user: { isGuest: false } },
     take: 2000,
     select: {
       id: true,

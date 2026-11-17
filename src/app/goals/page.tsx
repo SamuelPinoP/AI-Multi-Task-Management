@@ -18,13 +18,15 @@ import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import type { GoalsWeek } from "@/lib/goals";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
-import { notifyWorkspaceChanged } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, openGuestSignupFor } from "@/lib/workspace-events";
 
 type Goal = GoalsWeek["goals"][number];
 type WeekTask = Goal["tasks"][number];
 
 const fieldClass =
   "w-full min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25 disabled:opacity-60";
+
+class GuestSignupOpened extends Error {}
 
 async function send(url: string, method: string, body?: unknown) {
   const response = await fetch(url, {
@@ -33,6 +35,8 @@ async function send(url: string, method: string, body?: unknown) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = (await response.json().catch(() => null)) as { error?: string } | null;
+  // A guest past their tasks gets the sign-up pop-up instead of an error (#458).
+  if (!response.ok && openGuestSignupFor(data)) throw new GuestSignupOpened();
   if (!response.ok) throw new Error(data?.error ?? "Something went wrong. Try again.");
   return data;
 }
@@ -80,7 +84,7 @@ function GoalCard({
       await onChanged();
       return true;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong.");
+      if (!(error instanceof GuestSignupOpened)) toast.error(error instanceof Error ? error.message : "Something went wrong.");
       return false;
     } finally {
       setBusy(false);

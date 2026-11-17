@@ -17,6 +17,7 @@ import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import { nameMatches, sharedProjectsLine, type Teammate } from "@/lib/direct-chats-core";
 import { PROJECT_ROLE_LABELS, type AssignableRole } from "@/lib/project-roles";
+import { openGuestSignupFor } from "@/lib/workspace-events";
 import type { ProjectMemberRow } from "@/components/projects/project-members";
 
 /** One line under each role, like Asana's and Notion's role pickers (3B). */
@@ -104,6 +105,11 @@ export function AddPeopleDialog({
         body: JSON.stringify({ userId: person.id, role }),
       });
       const data = (await response.json().catch(() => null)) as { member?: ProjectMemberRow; error?: string } | null;
+      // Guests can't add people; they get the sign-up pop-up instead (#458).
+      if (openGuestSignupFor(data)) {
+        onOpenChange(false);
+        return;
+      }
       if (!response.ok || !data?.member) throw new Error(data?.error || "Could not add them. Try again.");
       onAdded(data.member);
       setDone((current) => ({ ...current, [person.id]: "added" }));
@@ -126,6 +132,10 @@ export function AddPeopleDialog({
         body: JSON.stringify("email" in target ? { email: target.email, role } : { username: target.username, role }),
       });
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (openGuestSignupFor(data)) {
+        onOpenChange(false);
+        return;
+      }
       if (!response.ok) throw new Error(data?.error || "Could not send the invitation. Try again.");
       if ("email" in target) setEmail("");
       else setDone((current) => ({ ...current, [target.id]: "invited" }));

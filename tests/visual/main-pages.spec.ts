@@ -7,7 +7,8 @@ import { continueAsGuest, openAccountMenu, signUpAndLogIn } from "../e2e/helpers
  * unread message in Team chat (DES-11), and Tasks with the Blue accent and the
  * account menu open (DES-15).
  *
- * Each test signs in as a new guest and adds the same data. Due dates are
+ * Each test signs up a new account and adds the same data (guest workspaces
+ * hold too little for it since #458; the last test shows the guest profile). Due dates are
  * yesterday, today and tomorrow, which the pages show as words, so the images
  * don't change from day to day. The month calendar runs on a fixed clock
  * instead. What still changes between runs is masked: the greeting, times, and
@@ -77,20 +78,20 @@ async function screenshotHome(page: Page, name: string) {
 }
 
 test("Home", async ({ page, browser, baseURL }) => {
-  await continueAsGuest(page);
+  await signUpAndLogIn(page, "E2E visual");
   await addTeammate(page, browser, baseURL, await addTasks(page));
   await screenshotHome(page, "home.png");
 });
 
 test("Home in dark mode", async ({ page, browser, baseURL }) => {
-  await continueAsGuest(page);
+  await signUpAndLogIn(page, "E2E visual");
   await addTeammate(page, browser, baseURL, await addTasks(page));
   await page.evaluate(() => localStorage.setItem("ai-multi-theme", "dark"));
   await screenshotHome(page, "home-dark.png");
 });
 
 test("Tasks", async ({ page }) => {
-  await continueAsGuest(page);
+  await signUpAndLogIn(page, "E2E visual");
   await addTasks(page);
 
   await page.goto("/tasks");
@@ -101,7 +102,7 @@ test("Tasks", async ({ page }) => {
 
 // DES-15: another accent palette, with the account menu open on its swatches.
 test("Tasks with the Blue accent", async ({ page }) => {
-  await continueAsGuest(page);
+  await signUpAndLogIn(page, "E2E visual");
   await addTasks(page);
   await page.evaluate(() => localStorage.setItem("ai-multi-accent", "blue"));
 
@@ -115,7 +116,7 @@ test("Tasks with the Blue accent", async ({ page }) => {
 });
 
 test("Boards", async ({ page }) => {
-  await continueAsGuest(page);
+  await signUpAndLogIn(page, "E2E visual");
   // The board shows due dates as calendar dates, so these tasks have none.
   const project = await post(page, "/api/projects", { name: "Launch website", color: "#0f9488" });
   await post(page, "/api/tasks", { title: "Write the launch post", priority: "HIGH", projectId: project.id });
@@ -130,7 +131,7 @@ test("Boards", async ({ page }) => {
 });
 
 test("Calendar", async ({ page }) => {
-  await continueAsGuest(page);
+  await signUpAndLogIn(page, "E2E visual");
   // The month grid is drawn in the browser, so a fixed clock fixes the month.
   await page.clock.setFixedTime(new Date("2026-03-11T12:00:00Z"));
   await post(page, "/api/events", { title: "Team standup", startDate: "2026-03-02", startTime: "09:00", endDate: "2026-03-02", endTime: "09:30", recurrence: "WEEKLY" });
@@ -142,4 +143,17 @@ test("Calendar", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "March 2026" })).toBeVisible();
   await page.waitForLoadState("networkidle");
   await expect(page).toHaveScreenshot("calendar.png", { mask: changing(page) });
+});
+
+// The guest profile (#458, design 2C) where an account's row sits: at the bottom of the sidebar, and of the
+// menu sheet on a phone. The avatar's color comes from the random id, so it's masked.
+test("Guest profile", async ({ page }) => {
+  await continueAsGuest(page);
+  await post(page, "/api/tasks", { title: "Plan the next sprint", priority: "LOW" });
+  await page.goto("/");
+  await page.waitForLoadState("networkidle");
+  const profile = page.getByRole("region", { name: "Guest workspace" });
+  if (!(await profile.isVisible())) await page.getByRole("button", { name: /^Open navigation/ }).click();
+  await expect(profile.getByText("4 left")).toBeVisible();
+  await expect(profile).toHaveScreenshot("guest-profile.png", { mask: [profile.locator("[style*='background-color']")] });
 });

@@ -9,6 +9,7 @@ import { projectAccessWhere, getProjectAccessForUser } from "@/lib/project-acces
 import { findProjectTemplate, planTemplate } from "@/lib/project-templates";
 import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
 import { getUserNow } from "@/lib/user-time-server";
+import { guestLimitResponse } from "@/lib/guest-limits";
 
 // About 20 inserts for the largest template; Prisma's 5-second default is tight on a cold database.
 const TEMPLATE_TRANSACTION = { maxWait: 10_000, timeout: 20_000 };
@@ -76,6 +77,8 @@ export async function POST(req: Request) {
     if (body.priority !== undefined && !isPriority(body.priority)) {
       return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
     }
+    const guestLimit = await guestLimitResponse(user, "projects");
+    if (guestLimit) return guestLimit;
 
     // A template (SMART-11) adds starter tasks and check-ins, dated from today in the user's time zone.
     const template = body.templateId ? findProjectTemplate(body.templateId) : null;
@@ -106,7 +109,9 @@ export async function POST(req: Request) {
             completedAt: task.status === "DONE" ? new Date() : null,
             userId: user.id,
             projectId: created.id,
-            subtasks: { create: task.subtasks.map((title) => ({ title, userId: user.id, projectId: created.id })) },
+            // The template's, not typed by the person, so a guest's limits leave them out (#458).
+            isStarter: true,
+            subtasks: { create: task.subtasks.map((title) => ({ title, userId: user.id, projectId: created.id, isStarter: true })) },
           },
         });
       }
@@ -124,6 +129,7 @@ export async function POST(req: Request) {
             repeatUntil: repeatUntil.value ?? null,
             userId: user.id,
             projectId: created.id,
+            isStarter: true,
           },
         });
       }

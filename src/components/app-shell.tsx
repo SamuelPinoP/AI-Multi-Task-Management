@@ -19,6 +19,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Settings,
   Sparkles,
   SquareCheckBig,
   SquareKanban,
@@ -30,10 +31,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AccentMenuItems } from "@/components/accent-menu";
 import { LogoMark } from "@/components/brand/logo-mark";
 import { CommandPalette } from "@/components/command-palette";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { GuestProfileCard, GuestProfileRail } from "@/components/guest/guest-profile";
+import { GuestSignupDialog } from "@/components/guest/guest-signup-dialog";
 import { MobileMenuButton, MobileMenuContext, type MobileMenu } from "@/components/mobile-menu";
 import { NewTaskDialog, type NewTaskDraft } from "@/components/new-task-dialog";
 import { NotificationsMenu } from "@/components/notifications-menu";
@@ -74,7 +78,15 @@ import {
 import { applyProjectPhotoChange } from "@/lib/project-photo-client";
 import { useCalendarView } from "@/lib/use-calendar-view";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
-import { notifyWorkspaceChanged, OPEN_NEW_TASK_EVENT, OPEN_SEARCH_EVENT, WORKSPACE_CHANGED_EVENT } from "@/lib/workspace-events";
+import { guestHasRoom, type GuestLimitKind, type GuestSignupReason } from "@/lib/guest-limits-core";
+import {
+  notifyWorkspaceChanged,
+  OPEN_GUEST_SIGNUP_EVENT,
+  OPEN_NEW_TASK_EVENT,
+  OPEN_SEARCH_EVENT,
+  openGuestSignup,
+  WORKSPACE_CHANGED_EVENT,
+} from "@/lib/workspace-events";
 import type { WorkspaceNav, WorkspaceNavProject } from "@/lib/workspace-nav";
 
 type ShellUser = {
@@ -420,6 +432,18 @@ function Sidebar({
     { href: "/roadmap", label: "Roadmap", icon: MapIcon },
   ];
   const linkProps = { pathname, collapsed, onNavigate };
+  const trash = nav.trashItems ? <TrashButton count={nav.trashItems} active={pathname === "/trash"} onNavigate={onNavigate} /> : null;
+  const guestProfile =
+    user.isGuest && nav.guest
+      ? {
+          userId: user.id,
+          usage: nav.guest,
+          trash,
+          settings: (
+            <AccountMenu user={user} collapsed={false} variant="gear" onShowShortcuts={onShowShortcuts} onSendFeedback={onSendFeedback} onNavigate={onNavigate} />
+          ),
+        }
+      : null;
 
   return (
     <div className="flex h-full flex-col">
@@ -551,20 +575,28 @@ function Sidebar({
         {toolItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
       </nav>
 
-      {/* The account bar (#404, design 1B): the profile menu, the bell, then Trash while it holds
-          something (2C). It sits below the scroller, so it never scrolls away; collapsed, the three stack. */}
-      <div
-        className={cn(
-          // relative: the collapsed profile button's hidden words stay positioned inside the bar.
-          "relative flex shrink-0 border-t border-line pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2",
-          // No gap in a row, so "Settings and theme" fits beside the bell and Trash even in a narrow sidebar.
-          collapsed ? "flex-col items-center gap-1 px-0" : "items-center px-2",
-        )}
-      >
-        <AccountMenu user={user} collapsed={collapsed} onShowShortcuts={onShowShortcuts} onSendFeedback={onSendFeedback} onNavigate={onNavigate} />
-        <NotificationsMenu pendingInvitations={nav.pendingInvitations} unreadNotifications={nav.unreadNotifications} onNavigate={onNavigate} />
-        {nav.trashItems ? <TrashButton count={nav.trashItems} active={pathname === "/trash"} onNavigate={onNavigate} /> : null}
-      </div>
+      {guestProfile ? (
+        // A guest's profile (#458, design 2C) takes the account bar's place: what the workspace holds
+        // and how to keep it, with settings and Trash beside the name. Guests get no bell.
+        <div className={cn("flex shrink-0 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1", collapsed ? "justify-center px-0" : "px-2")}>
+          {collapsed ? <GuestProfileRail {...guestProfile} /> : <GuestProfileCard {...guestProfile} className="flex-1" />}
+        </div>
+      ) : (
+        /* The account bar (#404, design 1B): the profile menu, the bell, then Trash while it holds
+           something (2C). It sits below the scroller, so it never scrolls away; collapsed, the three stack. */
+        <div
+          className={cn(
+            // relative: the collapsed profile button's hidden words stay positioned inside the bar.
+            "relative flex shrink-0 border-t border-line pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2",
+            // No gap in a row, so "Settings and theme" fits beside the bell and Trash even in a narrow sidebar.
+            collapsed ? "flex-col items-center gap-1 px-0" : "items-center px-2",
+          )}
+        >
+          <AccountMenu user={user} collapsed={collapsed} onShowShortcuts={onShowShortcuts} onSendFeedback={onSendFeedback} onNavigate={onNavigate} />
+          <NotificationsMenu pendingInvitations={nav.pendingInvitations} unreadNotifications={nav.unreadNotifications} onNavigate={onNavigate} />
+          {trash}
+        </div>
+      )}
     </div>
   );
 }
@@ -573,16 +605,19 @@ function Sidebar({
  * The profile menu, opened from the sidebar's bottom bar (#404): account
  * settings, theme, accent color, text size, shortcuts and log out, as before.
  * The visible words are the button's name; collapsed, they stay for screen readers.
+ * In a guest's profile (#458) a gear opens it, and leaving the workspace asks first.
  */
 function AccountMenu({
   user,
   collapsed,
+  variant = "row",
   onShowShortcuts,
   onSendFeedback,
   onNavigate,
 }: {
   user: NonNullable<ShellUser>;
   collapsed: boolean;
+  variant?: "row" | "gear";
   onShowShortcuts: () => void;
   onSendFeedback: () => void;
   onNavigate?: () => void;
@@ -590,9 +625,21 @@ function AccountMenu({
   const { theme, setTheme } = useTheme();
   const logoutForm = useRef<HTMLFormElement>(null);
   const installPrompt = useInstallPrompt();
+  const [leaving, setLeaving] = useState(false);
   const displayName = user.isGuest ? "Guest" : user.name || user.email;
+  const logOut = () => {
+    // Saved offline copies go before the session does.
+    void clearOfflineData().finally(() => logoutForm.current?.requestSubmit());
+  };
 
-  const trigger = (
+  const trigger = variant === "gear" ? (
+    <DropdownMenuTrigger
+      aria-label="Settings and theme"
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover max-lg:h-11 max-lg:w-11"
+    >
+      <Settings aria-hidden="true" className="h-4 w-4" />
+    </DropdownMenuTrigger>
+  ) : (
     <DropdownMenuTrigger
       className={cn(
         "flex min-w-0 items-center gap-2 rounded-lg text-left outline-none transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover",
@@ -619,7 +666,9 @@ function AccountMenu({
     <>
       <form ref={logoutForm} action="/api/auth/logout" method="post" className="hidden" />
       <DropdownMenu>
-        {collapsed ? (
+        {variant === "gear" ? (
+          <Tooltip content="Settings and theme">{trigger}</Tooltip>
+        ) : collapsed ? (
           <Tooltip
             content={
               <>
@@ -639,7 +688,7 @@ function AccountMenu({
               {user.isGuest ? <span className="rounded-full bg-warning-soft px-2 py-0.5 text-2xs font-semibold text-warning">Guest</span> : null}
             </span>
             {user.isGuest ? (
-              <span className="mt-0.5 block text-xs font-normal text-muted">Keep this browser session to keep access.</span>
+              <span className="mt-0.5 block text-xs font-normal text-muted">Saved on this browser for 30 days after your last visit.</span>
             ) : (
               <span className="mt-0.5 block truncate text-xs font-normal text-muted">{user.email}</span>
             )}
@@ -703,17 +752,24 @@ function AccountMenu({
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={() => {
-              // Saved offline copies go before the session does.
-              void clearOfflineData().finally(() => logoutForm.current?.requestSubmit());
-            }}
-          >
+          {/* A guest workspace has no password, so leaving it is for good (#458): it asks first. */}
+          <DropdownMenuItem onSelect={user.isGuest ? () => setLeaving(true) : logOut}>
             <LogOut />
-            Log out
+            {user.isGuest ? "Leave guest workspace" : "Log out"}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {user.isGuest ? (
+        <ConfirmDialog
+          open={leaving}
+          kind="confirm"
+          title="Leave the guest workspace?"
+          message="A guest workspace has no password, so you can't come back to it after you leave. Sign up free first to keep your work."
+          confirmLabel="Leave"
+          onConfirm={logOut}
+          onCancel={() => setLeaving(false)}
+        />
+      ) : null}
     </>
   );
 }
@@ -860,6 +916,7 @@ export function AppShell({
   initialSidebarCollapsed,
   initialSidebarWidth,
   initialProjectsOpen,
+  googleSignIn,
 }: {
   children: React.ReactNode;
   currentUser: ShellUser;
@@ -870,6 +927,8 @@ export function AppShell({
   /** The width the sidebar was dragged to, in rem (#415). */
   initialSidebarWidth: number;
   initialProjectsOpen: SidebarProjectsOpen;
+  /** Whether Sign in with Google is set up, for the guest's sign-up pop-up (#458). */
+  googleSignIn: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -885,16 +944,33 @@ export function AppShell({
   const [searchOpen, setSearchOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [newTaskDraft, setNewTaskDraft] = useState<NewTaskDraft>({});
+  const [signup, setSignup] = useState<{ open: boolean; reason: GuestSignupReason }>({ open: false, reason: "signup" });
+
+  // A guest past a limit gets the sign-up pop-up instead of the form (#458).
+  const guestUsage = currentUser?.isGuest ? (nav?.guest ?? null) : null;
+  const guestFull = useCallback((kind: GuestLimitKind) => Boolean(guestUsage && !guestHasRoom(guestUsage, kind)), [guestUsage]);
+
+  // The sign-up pop-up opens from anywhere: the guest profile, the AI, an API answer past a limit.
+  useEffect(() => {
+    const open = (event: Event) => {
+      setMenuOpen(false);
+      setNewTaskOpen(false);
+      setSignup({ open: true, reason: (event as CustomEvent<GuestSignupReason>).detail ?? "signup" });
+    };
+    window.addEventListener(OPEN_GUEST_SIGNUP_EVENT, open);
+    return () => window.removeEventListener(OPEN_GUEST_SIGNUP_EVENT, open);
+  }, []);
 
   // Pages open the same pop-up, sometimes in a project (the Tasks page's project cards).
   useEffect(() => {
     const open = (event: Event) => {
+      if (guestFull("tasks")) return openGuestSignup("tasks");
       setNewTaskDraft((event as CustomEvent<NewTaskDraft>).detail ?? {});
       setNewTaskOpen(true);
     };
     window.addEventListener(OPEN_NEW_TASK_EVENT, open);
     return () => window.removeEventListener(OPEN_NEW_TASK_EVENT, open);
-  }, []);
+  }, [guestFull]);
 
   // Home's search button opens search (#410), as Ctrl+K and / do everywhere.
   useEffect(() => {
@@ -977,7 +1053,8 @@ export function AppShell({
       } else if (action.type === "search") {
         setSearchOpen(true);
       } else if (action.type === "new-task") {
-        setNewTaskOpen(true);
+        if (guestFull("tasks")) openGuestSignup("tasks");
+        else setNewTaskOpen(true);
       } else if (action.type === "help") {
         setShortcutsOpen(true);
       }
@@ -987,7 +1064,7 @@ export function AppShell({
       window.clearTimeout(goTimer);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [router, showWorkspaceShell]);
+  }, [guestFull, router, showWorkspaceShell]);
 
   // Dragging the edge (#415) updates the width as it goes and saves it when let go; the server reads
   // the cookies, so the next page load starts at the same width.
@@ -1025,12 +1102,14 @@ export function AppShell({
 
   const openNewTask = () => {
     setMenuOpen(false);
+    if (guestFull("tasks")) return openGuestSignup("tasks");
     setNewTaskDraft({});
     setNewTaskOpen(true);
   };
 
   const openNewProject = () => {
     setMenuOpen(false);
+    if (guestFull("projects")) return openGuestSignup("projects");
     setNewProjectOpen(true);
   };
 
@@ -1146,6 +1225,14 @@ export function AppShell({
       <ProjectSheet open={newProjectOpen} onOpenChange={setNewProjectOpen} onSubmit={createProject} />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
+      {currentUser.isGuest ? (
+        <GuestSignupDialog
+          open={signup.open}
+          reason={signup.reason}
+          googleSignIn={googleSignIn}
+          onOpenChange={(open) => setSignup((current) => ({ ...current, open }))}
+        />
+      ) : null}
     </div>
   );
 }

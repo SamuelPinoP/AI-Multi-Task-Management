@@ -8,6 +8,10 @@ import { prisma } from "@/lib/prisma";
 import { projectAccessWhereForProject } from "@/lib/project-access";
 import { generateSmartPlanner, type PlannerPriority, type PlannerSuggestion } from "@/lib/smart-planner";
 import { getUserNow } from "@/lib/user-time-server";
+import { redirect } from "next/navigation";
+import { OpenGuestSignup } from "@/components/guest/open-guest-signup";
+import { getGuestUsage } from "@/lib/guest-limits";
+import { guestHasRoom } from "@/lib/guest-limits-core";
 
 function priorityClass(priority: PlannerPriority) {
   if (priority === "HIGH") return "bg-danger-soft text-danger";
@@ -31,6 +35,10 @@ async function createTaskFromSuggestion(formData: FormData) {
     const project = await prisma.project.findFirst({ where: projectAccessWhereForProject(projectId, user.id), select: { id: true } });
     if (!project) return;
   }
+
+  // A guest past their tasks gets the sign-up pop-up instead (#458).
+  const usage = await getGuestUsage(user);
+  if (usage && !guestHasRoom(usage, "tasks")) redirect("/planner?guestLimit=tasks");
 
   const task = await prisma.task.create({
     data: { title, description: description || null, priority, status: TaskStatus.TODO, recurrence: Recurrence.NONE, userId: user.id, projectId },
@@ -80,13 +88,15 @@ function SuggestionCard({ suggestion }: { suggestion: PlannerSuggestion }) {
   );
 }
 
-export default async function PlannerPage() {
+export default async function PlannerPage({ searchParams }: { searchParams: Promise<{ guestLimit?: string }> }) {
   const user = await requirePageUser();
   const planner = await generateSmartPlanner(user.id, await getUserNow());
   const hasSuggestions = planner.sections.some((section) => section.suggestions.length > 0);
+  const { guestLimit } = await searchParams;
 
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6 lg:px-8">
+      {user.isGuest && guestLimit === "tasks" ? <OpenGuestSignup reason="tasks" /> : null}
       <div className="mx-auto max-w-7xl space-y-8">
         <header className="overflow-hidden rounded-2xl border border-zinc-200 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.92),rgba(244,244,245,0.78))] p-6 shadow-sm dark:border-zinc-800 dark:bg-[radial-gradient(circle_at_top_left,rgba(96,165,250,0.16),transparent_34%),linear-gradient(135deg,rgba(24,24,27,0.95),rgba(9,9,11,0.82))] sm:p-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
