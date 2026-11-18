@@ -68,7 +68,7 @@ export function GuestProfileCard({
       <div className="flex items-center gap-1.5 max-lg:gap-2">
         <GuestAvatar userId={userId} className="h-6 w-6 text-2xs max-lg:h-8 max-lg:w-8 max-lg:text-xs" />
         <div className="grid min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold leading-5">Guest workspace</p>
+          <p className="truncate text-[0.8125rem] font-semibold leading-5 max-lg:text-sm">Guest workspace</p>
           <p className="truncate text-2xs leading-4 text-muted max-lg:text-xs">Saved on this browser</p>
         </div>
         {trash}
