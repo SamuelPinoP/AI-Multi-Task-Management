@@ -12,8 +12,8 @@ import { continueAsGuest, openAccountMenu, signUpAndLogIn } from "../e2e/helpers
  * hold too little for it since #458; the last test shows the guest profile). Due dates are
  * yesterday, today and tomorrow, which the pages show as words, so the images
  * don't change from day to day. The month calendar runs on a fixed clock
- * instead. What still changes between runs is masked: the greeting, times, and
- * avatar colors (they come from random user ids).
+ * instead. What still changes between runs is masked: the greeting, times,
+ * avatar colors (they come from random user ids), and the account's name and email.
  */
 
 function dateInputValue(daysFromToday: number) {
@@ -65,6 +65,8 @@ function changing(page: Page) {
     // hides the rest of the page, the button included, from role queries.
     page.getByRole("button", { name: /Settings and theme$/, includeHidden: true }),
     page.locator("#main-content .rounded-full[style*='background-color']"),
+    // An open profile menu starts with the account's name and email, random in every run (#458).
+    page.getByRole("menu").getByText(/ [0-9a-f]{8}$|@example\.test$/),
   ];
 }
 
