@@ -44,6 +44,12 @@ test("names each limit in the pop-up, in the singular for one", () => {
   assert.match(guestSignupCopy("tasks").description, /as many as you like/);
 });
 
+test("tells guests their work comes with them when they sign up (#459)", () => {
+  assert.match(guestSignupCopy("tasks").description, /Everything you made here comes with you\./);
+  assert.match(guestSignupCopy("signup").description, /everything you made here comes with you\./);
+  assert.match(guestSignupCopy("ai").description, /everything you made here comes with you\./);
+});
+
 test("says what only accounts can do", () => {
   assert.equal(guestSignupCopy("ai").title, "The AI needs a free account");
   assert.equal(guestSignupCopy("people").title, "Inviting people needs a free account");
