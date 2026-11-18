@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { continueAsGuest, uniqueName } from "./helpers";
+import { signUpAndLogIn, uniqueName } from "./helpers";
 
 test("quick add reads dates, #project, !priority and @person before saving", async ({ page }) => {
-  await continueAsGuest(page);
+  // An account: it adds a member, which guests can't (#458).
+  await signUpAndLogIn(page, "Quick add");
   const projectName = uniqueName("Capstone");
   const project = (await (await page.request.post("/api/projects", { data: { name: projectName } })).json()) as { id: string };
   expect(

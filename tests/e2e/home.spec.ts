@@ -81,7 +81,8 @@ test("quick add puts a task in Focus; completing it can be undone", async ({ pag
 });
 
 test("Focus orders overdue work first and project health flags it", async ({ page }) => {
-  await continueAsGuest(page);
+  // An account: it makes more projects than a guest workspace holds (#458).
+  await signUpAndLogIn(page, "Focus order");
   const late = uniqueName("Late task");
   const later = uniqueName("Later task");
   const project = (await (

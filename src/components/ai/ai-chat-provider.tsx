@@ -35,8 +35,8 @@ type AiChatContextValue = {
   /** An answer is arriving. */
   busy: boolean;
   /**
-   * For screen readers, in a polite status region: "Answering…", then the whole answer once it has
-   * arrived. The streamed pieces themselves aren't announced one by one.
+   * For screen readers, in a polite status region: "AI Multi is answering…", then "AI Multi: " and
+   * the whole answer once it has arrived. The streamed pieces aren't announced one by one.
    */
   announcement: string;
   /** The message box's text, shared wherever the chat shows. */
@@ -132,7 +132,7 @@ export function AiChatProvider({ enabled, children }: { enabled: boolean; childr
     async (question: string, retryOf?: { chatId: string; turnId: string }) => {
       busyRef.current = true;
       setBusy(true);
-      setAnnouncement("Answering…");
+      setAnnouncement("AI Multi is answering…");
 
       const turnId = newId();
       const turn: ChatTurn = { id: turnId, question, answer: emptyAnswer() };
@@ -219,7 +219,7 @@ export function AiChatProvider({ enabled, children }: { enabled: boolean; childr
         streams.current.delete(controller);
         busyRef.current = false;
         setBusy(false);
-        setAnnouncement(latest.error ?? [latest.notice, latest.text].filter(Boolean).join(" "));
+        setAnnouncement(`AI Multi: ${latest.error ?? [latest.notice, latest.text].filter(Boolean).join(" ")}`);
       }
     },
     [learn, showChat],
