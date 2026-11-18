@@ -33,6 +33,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AccentMenuItems } from "@/components/accent-menu";
+import { useAiDock } from "@/components/ai/ai-chat-provider";
 import { AiDock } from "@/components/ai/ai-dock";
 import { AiSpark } from "@/components/ai/ai-spark";
 import { LogoMark } from "@/components/brand/logo-mark";
@@ -992,6 +993,9 @@ export function AppShell({
   // The AI bar (#308): on every page but the AI page, which has its own message box. The chats have
   // theirs too, so there it waits as the ✦ button. Guests can't use the assistant.
   const aiDock = !currentUser || currentUser.isGuest || pathname === "/ai" ? null : fullHeight ? "button" : "bar";
+  // Hidden from pages, it leaves nothing to make room for.
+  const { dock } = useAiDock();
+  const aiBarShown = aiDock === "bar" && dock !== "hidden";
 
   const [nav, setNav] = useState(initialNav);
   const [sidebar, setSidebar] = useState<PanelSize>({ width: initialSidebarWidth, collapsed: initialSidebarCollapsed });
@@ -1281,7 +1285,7 @@ export function AppShell({
               Pages end above the AI bar, and on phones above the bar and the tabs. */}
           <main
             id="main-content"
-            className={cn("relative min-h-0 flex-1 overflow-y-auto", !fullHeight && (aiDock === "bar" ? "pb-36 lg:pb-24" : "pb-24 lg:pb-0"))}
+            className={cn("relative min-h-0 flex-1 overflow-y-auto", !fullHeight && (aiBarShown ? "pb-36 lg:pb-24" : "pb-24 lg:pb-0"))}
           >
             {children}
           </main>

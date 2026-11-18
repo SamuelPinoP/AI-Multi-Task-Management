@@ -1,12 +1,16 @@
 "use client";
 
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, ChevronDown, EyeOff, Minimize2, X } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { AiChatPanel } from "@/components/ai/ai-chat-panel";
-import { useAiChat } from "@/components/ai/ai-chat-provider";
+import { useAiChat, useAiDock } from "@/components/ai/ai-chat-provider";
 import { AI_PLACEHOLDER, AI_PLACEHOLDER_SHORT } from "@/components/ai/ai-composer";
 import { AiSpark } from "@/components/ai/ai-spark";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { toast } from "@/components/ui/toaster";
 import { MAX_MESSAGE_CHARS } from "@/lib/ai/chat-limits";
 import { CHAT_SIZE, CHAT_SIZE_KEY, dragChatSize, keyChatSize, parseChatSize, type ChatEdge, type ChatSize } from "@/lib/ai/chat-size";
 import { cn } from "@/lib/cn";
@@ -56,14 +60,45 @@ const FLOAT_CLASS = "absolute bottom-6 left-1/2 z-30 -translate-x-1/2";
 const BAR_SHADOW = "shadow-[0_1px_2px_rgb(16_26_25/0.06),0_10px_28px_-10px_rgb(16_26_25/0.22)]";
 
 /**
+ * After hiding the AI bar: a small note where the ✦ button was, "Moved to AI page | Undo"
+ * (round 3). It closes after about 6 seconds, and stays while the pointer is on it (Sonner).
+ */
+function MovedToast({ id, onUndo }: { id: string | number; onUndo: () => void }) {
+  return (
+    <div className="ml-auto flex h-9 w-fit items-center gap-1 rounded-[0.625rem] border border-line bg-raised pl-3 pr-1 text-[0.8125rem] text-muted shadow-raised">
+      <span>Moved to</span>
+      <Link href="/ai" onClick={() => toast.dismiss(id)} className="font-semibold text-accent underline-offset-2 hover:underline">
+        AI page
+      </Link>
+      <span aria-hidden="true" className="ml-1.5 mr-1 h-4 w-px bg-line" />
+      <button
+        type="button"
+        onClick={() => {
+          toast.dismiss(id);
+          onUndo();
+        }}
+        className="rounded-md px-2 py-1 font-semibold text-ink transition-colors hover:bg-surface-hover"
+      >
+        Undo
+      </button>
+    </div>
+  );
+}
+
+/**
  * The AI on every page (#308, round 3's quiet bar, no chips): one line at the bottom of the page.
  * Sending a question, the ✦ or Ctrl J (Cmd J on a Mac) opens the chat above it, 760 × 560 px to
  * start, resized from its top edge and top corners and remembered on this device. On phones the
  * bar sits above the tabs and the chat opens full screen. `button` is for pages with their own
  * message box, the chats: the AI waits there as the ✦ button instead of a second box.
+ *
+ * The person can minimize it to the ✦ button or hide it from pages (it then waits on the AI
+ * page); that choice is saved per account (`dock`).
  */
 export function AiDock({ variant }: { variant: "bar" | "button" }) {
-  const { draft, setDraft, ask, busy, loadStatus, announcement } = useAiChat();
+  const { draft, setDraft, ask, busy, loadStatus, announcement, current } = useAiChat();
+  const { dock, setDock } = useAiDock();
+  const router = useRouter();
   const wide = useWideScreen();
   const [expanded, setExpanded] = useState(false);
   const [size, setSize] = useState<ChatSize>(CHAT_SIZE.initial);
@@ -104,27 +139,55 @@ export function AiDock({ variant }: { variant: "bar" | "button" }) {
     if (wide) composer.current?.focus();
   }, [expanded, wide, loadStatus]);
 
-  // Toasts appear above the bar while it's there (globals.css), not over it.
+  // Toasts appear above the bar or the ✦ button while either is there (globals.css), not over them.
+  // Once the AI is hidden they come back down, so "Moved to AI page" shows where the button was.
+  const shown = dock !== "hidden";
   useEffect(() => {
+    if (!shown) return;
     document.documentElement.dataset.aiBar = "";
     return () => {
       delete document.documentElement.dataset.aiBar;
     };
-  }, []);
+  }, [shown]);
 
   // Ctrl J or Cmd J, from anywhere but a dialog: opens the chat, or brings the cursor back to it,
-  // or, from inside it, closes it again.
+  // or, from inside it, closes it again. While the AI is hidden from pages, it goes to the AI page.
+  const dockRef = useRef(dock);
+  useEffect(() => {
+    dockRef.current = dock;
+  }, [dock]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isAskAiShortcut(event) || document.querySelector('[role="dialog"][aria-modal="true"], [role="alertdialog"]')) return;
       event.preventDefault();
-      if (!expandedRef.current) open();
+      if (dockRef.current === "hidden" && !expandedRef.current) router.push("/ai");
+      else if (!expandedRef.current) open();
       else if (card.current?.contains(document.activeElement)) collapse(true);
       else composer.current?.focus();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, collapse]);
+  }, [open, collapse, router]);
+
+  /** Hides the AI from pages, with Undo in the note that says where it went. */
+  function hide() {
+    const before = dock;
+    collapse();
+    setDock("hidden");
+    toast.custom((id) => <MovedToast id={id} onUndo={() => setDock(before)} />, { duration: 6000 });
+  }
+
+  function minimize() {
+    collapse();
+    setDock("minimized");
+  }
+
+  /** The ✦ button: the bar comes back, and with it the conversation if there is one. */
+  function reopen() {
+    if (variant === "bar") setDock("open");
+    if (current?.turns.length || variant === "button" || !wide) open();
+    else window.requestAnimationFrame(() => barInput.current?.focus());
+  }
 
   // A drag cut short (the page changes, say) still lets go of the pointer and the cursor.
   useEffect(
@@ -184,6 +247,22 @@ export function AiDock({ variant }: { variant: "bar" | "button" }) {
   }
 
   const heightPx = Math.round(size.height * 16);
+
+  // In the chat's ⋯ menu, after "Open on the AI page". Minimizing makes sense only for the bar.
+  const menuItems = (
+    <>
+      {variant === "bar" && dock === "open" ? (
+        <DropdownMenuItem onSelect={minimize}>
+          <Minimize2 />
+          Minimize to a button
+        </DropdownMenuItem>
+      ) : null}
+      <DropdownMenuItem onSelect={hide}>
+        <EyeOff />
+        Hide from pages
+      </DropdownMenuItem>
+    </>
+  );
 
   return (
     <>
@@ -248,7 +327,7 @@ export function AiDock({ variant }: { variant: "bar" | "button" }) {
           >
             <span aria-hidden="true" className="h-1 w-10 rounded-full bg-line transition-colors group-hover:bg-muted/50 group-focus-visible:bg-accent group-active:bg-accent" />
           </div>
-          <AiChatPanel onCollapse={() => collapse(true)} composerRef={composer} announce={false} />
+          <AiChatPanel onCollapse={() => collapse(true)} composerRef={composer} announce={false} menuItems={menuItems} />
         </section>
       ) : null}
 
@@ -271,25 +350,46 @@ export function AiDock({ variant }: { variant: "bar" | "button" }) {
           <SheetTitle className="sr-only">AI chat</SheetTitle>
           <SheetDescription className="sr-only">Ask about your tasks, events and projects.</SheetDescription>
           <span aria-hidden="true" className="mx-auto mb-1 h-1 w-10 shrink-0 rounded-full bg-line" />
-          <AiChatPanel onCollapse={() => collapse()} onNavigate={() => collapse()} composerRef={composer} />
+          <AiChatPanel onCollapse={() => collapse()} onNavigate={() => collapse()} composerRef={composer} menuItems={menuItems} />
         </SheetContent>
       </Sheet>
 
-      {variant === "button" && !expanded ? (
-        // On the chats, which have their own message box, the AI waits as the ✦ button, above that box.
-        <button
-          type="button"
-          onClick={open}
-          aria-label="Ask AI Multi"
-          aria-keyshortcuts="Control+J"
-          title="Ask AI Multi (Ctrl J)"
-          className="absolute bottom-24 right-6 z-30 grid h-14 w-14 place-items-center rounded-full border border-line bg-raised shadow-raised transition-colors hover:bg-surface-hover max-lg:fixed max-lg:bottom-[calc(8.75rem+max(0.5rem,env(safe-area-inset-bottom)))] max-lg:right-3"
+      {/* The ✦ button: minimized, or on the chats, which have their own message box (above that box there). */}
+      {!expanded && ((variant === "button" && shown) || (variant === "bar" && dock === "minimized")) ? (
+        <div
+          className={cn(
+            "group/bubble z-30 h-14 w-14",
+            variant === "button"
+              ? "absolute bottom-24 right-6 max-lg:fixed max-lg:bottom-[calc(8.75rem+max(0.5rem,env(safe-area-inset-bottom)))] max-lg:right-3"
+              : "absolute bottom-6 right-6 max-lg:fixed max-lg:bottom-[calc(3.9375rem+max(0.5rem,env(safe-area-inset-bottom)))] max-lg:right-3",
+          )}
         >
-          <AiSpark className="h-6 w-6" />
-        </button>
+          <button
+            type="button"
+            onClick={reopen}
+            aria-label="Ask AI Multi"
+            aria-keyshortcuts="Control+J"
+            title="Ask AI Multi (Ctrl J)"
+            className="grid h-14 w-14 place-items-center rounded-full border border-line bg-raised shadow-raised transition-colors hover:bg-surface-hover"
+          >
+            <AiSpark className="h-6 w-6" />
+          </button>
+          {/* A small × on its right, on hover or focus; phones, without hover, hide it from the chat's ⋯ menu. */}
+          <button
+            type="button"
+            onClick={hide}
+            aria-label="Hide from pages"
+            title="Hide from pages"
+            className="absolute -right-2 -top-2 hidden h-6 w-6 place-items-center opacity-0 transition-opacity focus-visible:opacity-100 group-hover/bubble:opacity-100 group-focus-within/bubble:opacity-100 lg:grid"
+          >
+            <span className="grid h-4.5 w-4.5 place-items-center rounded-full border border-line bg-raised text-muted shadow-sm transition-colors hover:bg-surface-hover hover:text-ink">
+              <X aria-hidden="true" className="h-2.5 w-2.5" strokeWidth={3} />
+            </span>
+          </button>
+        </div>
       ) : null}
 
-      {variant === "bar" && !expanded ? (
+      {variant === "bar" && dock === "open" && !expanded ? (
         <>
           <form
             aria-label="Ask AI Multi"
@@ -329,6 +429,15 @@ export function AiDock({ variant }: { variant: "bar" | "button" }) {
             )}
             <button type="submit" aria-label="Send" title="Send" disabled={busy} className={cn(sendButtonClass(ready), "disabled:opacity-60")}>
               <ArrowUp aria-hidden="true" className="h-4.5 w-4.5" strokeWidth={2.25} />
+            </button>
+            <button
+              type="button"
+              onClick={minimize}
+              aria-label="Minimize to a button"
+              title="Minimize"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink"
+            >
+              <ChevronDown aria-hidden="true" className="h-4.5 w-4.5" />
             </button>
           </form>
 
