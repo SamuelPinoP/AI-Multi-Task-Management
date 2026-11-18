@@ -478,7 +478,7 @@ test("The AI's sparkle sits beside New task, never scrolls away, and opens the A
   await expect(sidebar.getByRole("link", { name: "Planner" }).locator("svg.lucide-compass")).toHaveCount(1);
 
   await ai.hover();
-  await expect(page.locator("[data-tooltip]")).toHaveText("Ask AI Multi");
+  await expect(page.locator("[data-tooltip]")).toHaveText("Ask AI Multi Ctrl J");
   await ai.click();
   await expect(page).toHaveURL(/\/ai$/);
   await expect(ai).toHaveAttribute("aria-current", "page");
