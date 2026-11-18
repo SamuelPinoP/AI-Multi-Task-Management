@@ -114,17 +114,22 @@ test("a new chat starts empty, and the list switches between chats and finds the
   await shown(page.getByRole("button", { name: "New chat" })).click();
   await expect(page.getByRole("button", { name: "What's overdue?" })).toBeVisible();
   await expect(messageBox(page)).toBeFocused();
-  await ask(page, "Is anything due this week?");
-  await expect(conversation(page).getByText("You asked: Is anything due this week?")).toBeVisible();
+  await ask(page, "Is anything due this week for the launch website?");
+  await expect(conversation(page).getByText("You asked: Is anything due this week for the launch website?")).toBeVisible();
   await expect(conversation(page).getByText("You asked: What analytics can you give?")).toHaveCount(0);
 
   let chats = await openChats(page, isMobile);
   await expect(chats.getByRole("listitem")).toHaveCount(2);
-  // The latest first.
-  await expect(chats.getByRole("listitem").first()).toHaveText("Is anything due this week?");
+  // The latest first, named after its first question, cut at a word.
+  const latest = chats.getByRole("listitem").first();
+  await expect(latest).toHaveText("Is anything due this week for the launch…");
+  // A long title ends in an ellipsis inside the list, never past its edge.
+  const listBox = (await chats.boundingBox())!;
+  const itemBox = (await latest.getByRole("button").boundingBox())!;
+  expect(itemBox.x + itemBox.width).toBeLessThanOrEqual(listBox.x + listBox.width);
   await chats.getByRole("button", { name: "What analytics can you give?" }).click();
   await expect(conversation(page).getByText("You asked: What analytics can you give?")).toBeVisible();
-  await expect(conversation(page).getByText("You asked: Is anything due this week?")).toHaveCount(0);
+  await expect(conversation(page).getByText("You asked: Is anything due this week for the launch website?")).toHaveCount(0);
 
   chats = await openChats(page, isMobile);
   await chats.getByRole("searchbox", { name: "Search chats" }).fill("due this");

@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { Compass } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { QuickAddFocusButton } from "@/components/home/quick-add";
@@ -136,7 +136,7 @@ export function NowAndNext({ band, now, eventCount }: { band: HomeData["band"]; 
       <Part
         label={
           <span className="flex items-center gap-1.5 text-accent">
-            <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />
+            <Compass aria-hidden="true" className="h-3.5 w-3.5" />
             Suggested next
           </span>
         }
