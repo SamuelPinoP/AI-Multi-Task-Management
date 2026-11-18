@@ -20,6 +20,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Search,
   Settings,
   SquareCheckBig,
   SquareKanban,
@@ -39,7 +40,7 @@ import { AiSpark } from "@/components/ai/ai-spark";
 import { LogoMark } from "@/components/brand/logo-mark";
 import { CommandPalette } from "@/components/command-palette";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { GuestProfileCard, GuestProfileRail } from "@/components/guest/guest-profile";
+import { GuestProfileCard, GuestProfileChip, GuestProfileRail } from "@/components/guest/guest-profile";
 import { GuestSignupDialog } from "@/components/guest/guest-signup-dialog";
 import { MobileMenuButton, MobileMenuContext, type MobileMenu } from "@/components/mobile-menu";
 import { NewTaskDialog, type NewTaskDraft } from "@/components/new-task-dialog";
@@ -58,6 +59,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { uiPrimaryButtonClass } from "@/components/ui";
 import { ResizeHandle } from "@/components/ui/resize-handle";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "@/components/ui/toaster";
@@ -88,6 +90,7 @@ import {
   OPEN_NEW_TASK_EVENT,
   OPEN_SEARCH_EVENT,
   openGuestSignup,
+  openSearch,
   WORKSPACE_CHANGED_EVENT,
 } from "@/lib/workspace-events";
 import type { WorkspaceNav, WorkspaceNavProject } from "@/lib/workspace-nav";
@@ -665,13 +668,17 @@ function AccountMenu({
   user,
   collapsed,
   variant = "row",
+  folded = false,
   onShowShortcuts,
   onSendFeedback,
   onNavigate,
 }: {
   user: NonNullable<ShellUser>;
   collapsed: boolean;
-  variant?: "row" | "gear";
+  /** `chip`: the phone top bar's picture and name beside the menu button (#461, design A). */
+  variant?: "row" | "gear" | "chip";
+  /** The chip's name folds into the picture while the page's name is in the bar. */
+  folded?: boolean;
   onShowShortcuts: () => void;
   onSendFeedback: () => void;
   onNavigate?: () => void;
@@ -692,6 +699,31 @@ function AccountMenu({
       className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover max-lg:h-11 max-lg:w-11"
     >
       <Settings aria-hidden="true" className="h-4 w-4" />
+    </DropdownMenuTrigger>
+  ) : variant === "chip" ? (
+    <DropdownMenuTrigger
+      className={cn(
+        "flex h-10 min-w-0 shrink-0 items-center gap-2 rounded-[0.625rem] pl-1 text-left outline-none transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover",
+        folded ? "pr-1" : "pr-2.5",
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-2xs font-bold text-white"
+        style={{ backgroundColor: avatarColor(user.id) }}
+      >
+        {initial(user)}
+      </span>
+      {/* Folded, the name stays for screen readers: the button keeps its name. */}
+      <span
+        className={cn(
+          "truncate text-[0.8125rem] font-semibold text-ink transition-[max-width,opacity] duration-200 motion-reduce:transition-none",
+          folded ? "max-w-0 opacity-0" : "max-w-40 opacity-100",
+        )}
+      >
+        {displayName}
+      </span>
+      <span className="sr-only"> Settings and theme</span>
     </DropdownMenuTrigger>
   ) : (
     <DropdownMenuTrigger
@@ -735,7 +767,7 @@ function AccountMenu({
         ) : (
           trigger
         )}
-        <DropdownMenuContent side="top" align="start" className="w-64">
+        <DropdownMenuContent side={variant === "chip" ? "bottom" : "top"} align="start" className="w-64">
           <DropdownMenuLabel className="text-ink">
             <span className="flex items-center gap-2">
               <span className="truncate text-sm font-semibold">{user.isGuest ? "Guest workspace" : user.name || user.email}</span>
@@ -878,27 +910,57 @@ function usePageTitleInView(pathname: string) {
  * The bar above the page on phones and tablets: the menu button and where you are. Desktop has
  * none (#410): the sidebar is always there, each page's heading says where you are, and search
  * is Home's button or Ctrl+K. A page's name shows once (#420, design 3A, like iOS large titles):
- * while the page's own title is on screen the bar holds only the menu button, in the page's color
- * and without a line, and the name moves in once the title has scrolled under the bar.
+ * while the page's own title is on screen the bar holds the menu button and the profile, in the
+ * page's color and without a line, and the name moves in once the title has scrolled under the bar.
+ * The profile sits beside the menu button (#461, design A): a guest's avatar and tasks left, or an
+ * account's picture and name, which fold into the picture while the page's name is in the bar.
+ * At the right, a guest gets Sign up free and an account gets search.
  */
-function TopBar({ nav, pathname, appAdmin }: { nav: WorkspaceNav; pathname: string; appAdmin: boolean }) {
-  const { parent, title } = pageTitleFor(pathname, nav.projects, { appAdmin });
+function TopBar({
+  user,
+  nav,
+  pathname,
+  onShowShortcuts,
+  onSendFeedback,
+}: {
+  user: NonNullable<ShellUser>;
+  nav: WorkspaceNav;
+  pathname: string;
+  onShowShortcuts: () => void;
+  onSendFeedback: () => void;
+}) {
+  const { parent, title } = pageTitleFor(pathname, nav.projects, { appAdmin: user.isAppAdmin });
   const titleInView = usePageTitleInView(pathname);
+  const folded = !titleInView;
+  const settings = (
+    <AccountMenu user={user} collapsed={false} variant="gear" onShowShortcuts={onShowShortcuts} onSendFeedback={onSendFeedback} />
+  );
 
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b px-3 transition-colors duration-200 motion-reduce:transition-none sm:gap-3 sm:px-5 lg:hidden",
+        "sticky top-0 z-30 flex h-14 shrink-0 items-center gap-1.5 border-b px-3 transition-colors duration-200 motion-reduce:transition-none sm:gap-3 sm:px-5 lg:hidden",
         titleInView ? "border-transparent bg-canvas" : "border-line bg-surface/95 backdrop-blur",
       )}
     >
       <MobileMenuButton />
+      {user.isGuest && nav.guest ? (
+        <GuestProfileChip
+          userId={user.id}
+          usage={nav.guest}
+          settings={settings}
+          trash={nav.trashItems ? <TrashButton count={nav.trashItems} active={pathname === "/trash"} /> : undefined}
+          folded={folded}
+        />
+      ) : (
+        <AccountMenu user={user} collapsed={false} variant="chip" folded={folded} onShowShortcuts={onShowShortcuts} onSendFeedback={onSendFeedback} />
+      )}
       {/* inert while the title is on screen: no second name for screen readers, and no hidden link to tab to. */}
       <div
         inert={titleInView}
         aria-hidden={titleInView || undefined}
         className={cn(
-          "flex min-w-0 items-center gap-1.5 text-sm transition-[opacity,translate] duration-200 motion-reduce:transition-none",
+          "flex min-w-0 flex-1 items-center gap-1.5 text-sm transition-[opacity,translate] duration-200 motion-reduce:transition-none",
           titleInView ? "translate-y-1 opacity-0" : "opacity-100",
         )}
       >
@@ -911,6 +973,25 @@ function TopBar({ nav, pathname, appAdmin }: { nav: WorkspaceNav; pathname: stri
         ) : null}
         <span className="truncate font-bold">{title}</span>
       </div>
+      {user.isGuest ? (
+        <button
+          type="button"
+          onClick={() => openGuestSignup("signup")}
+          className={cn(uiPrimaryButtonClass, "shine h-9 shrink-0 px-3 text-[0.8125rem] font-semibold")}
+        >
+          Sign up free
+        </button>
+      ) : (
+        // On phones, search was only on Home (#410); the bar keeps it on every page.
+        <button
+          type="button"
+          onClick={openSearch}
+          aria-label="Search"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink"
+        >
+          <Search aria-hidden="true" className="h-5 w-5" />
+        </button>
+      )}
     </header>
   );
 }
@@ -1278,7 +1359,15 @@ export function AppShell({
         {/* relative: the AI bar floats at the bottom of this column, centred over the page (#308). */}
         <div className="relative flex min-w-0 flex-1 flex-col">
           {/* The chats fill the screen with a header that never scrolls away, so it's their only bar (#420). */}
-          {fullHeight ? null : <TopBar nav={nav} pathname={pathname} appAdmin={currentUser.isAppAdmin} />}
+          {fullHeight ? null : (
+            <TopBar
+              user={currentUser}
+              nav={nav}
+              pathname={pathname}
+              onShowShortcuts={() => setShortcutsOpen(true)}
+              onSendFeedback={() => setFeedbackOpen(true)}
+            />
+          )}
           <OfflineBanner />
           {/* relative: hidden (sr-only) text is absolutely positioned, and it scrolls only inside a positioned
               scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar.

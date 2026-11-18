@@ -33,14 +33,17 @@ export async function openSection(page: Page, name: string) {
 }
 
 /**
- * The profile menu's button in the sidebar's bottom bar (#404). Its name is
- * the person's name followed by "Settings and theme", the words it shows.
+ * The profile menu's button: in the sidebar's bottom bar (#404), or in a phone's top bar (#461).
+ * Its name is the person's name followed by "Settings and theme", the words it shows.
  */
 export function accountMenuButton(page: Page, options: { includeHidden?: boolean } = {}) {
   return page.getByRole("button", { name: /Settings and theme$/, ...options });
 }
 
-/** Opens the profile menu: from the sidebar on wide screens, or from inside the menu sheet on a phone. */
+/**
+ * Opens the profile menu: from the sidebar on wide screens, from the top bar on a phone (#461), or from
+ * inside the menu sheet on the pages that have no top bar, such as the AI page and chats.
+ */
 export async function openAccountMenu(page: Page) {
   const button = accountMenuButton(page);
   if (!(await button.isVisible())) await page.getByRole("button", { name: /^Open navigation/ }).click();
@@ -94,11 +97,16 @@ export async function signUpAsAppAdmin(page: Page) {
  * Signs up a throwaway account on the local server. Sign-up ends on "Check
  * your email" (#350); unless `confirmEmail` is false, the account's link is
  * then opened in the same browser, which signs it in, as a person would.
- * `email` picks the address, such as a Gmail one for Google sign-in tests.
+ * `email` picks the address, such as a Gmail one for Google sign-in tests, and
+ * `name` the whole name, which unlike the email needn't be unique.
  */
-export async function signUpAndLogIn(page: Page, label = "E2E user", { confirmEmail = true, email: chosenEmail }: { confirmEmail?: boolean; email?: string } = {}) {
+export async function signUpAndLogIn(
+  page: Page,
+  label = "E2E user",
+  { confirmEmail = true, email: chosenEmail, name: chosenName }: { confirmEmail?: boolean; email?: string; name?: string } = {},
+) {
   const id = randomUUID().slice(0, 8);
-  const name = `${label} ${id}`;
+  const name = chosenName ?? `${label} ${id}`;
   const username = `e2e_${id}`;
   const email = chosenEmail ?? `e2e-${id}@example.test`;
   const password = `e2e-${randomUUID()}`;
