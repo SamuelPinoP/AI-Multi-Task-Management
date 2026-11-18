@@ -63,12 +63,13 @@ export function GuestProfileCard({
   const pathname = usePathname();
 
   return (
-    <section aria-label="Guest workspace" className={cn("@container grid gap-2.5 rounded-xl border border-line bg-surface p-3 shadow-card", className)}>
-      <div className="flex items-center gap-2.5">
-        <GuestAvatar userId={userId} className="h-8 w-8 text-xs" />
+    <section aria-label="Guest workspace" className={cn("@container grid gap-2.5 rounded-xl border border-line bg-surface px-2.5 py-3 shadow-card max-lg:px-3", className)}>
+      {/* Sized so "Guest workspace" and its line fit the sidebar's default 224 px width. */}
+      <div className="flex items-center gap-1.5 max-lg:gap-2">
+        <GuestAvatar userId={userId} className="h-6 w-6 text-2xs max-lg:h-8 max-lg:w-8 max-lg:text-xs" />
         <div className="grid min-w-0 flex-1">
           <p className="truncate text-sm font-semibold leading-5">Guest workspace</p>
-          <p className="truncate text-xs leading-4 text-muted">Saved on this browser</p>
+          <p className="truncate text-2xs leading-4 text-muted max-lg:text-xs">Saved on this browser</p>
         </div>
         {trash}
         {settings}
