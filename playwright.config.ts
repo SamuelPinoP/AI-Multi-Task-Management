@@ -27,6 +27,12 @@ export default defineConfig({
   // One worker: a cold dev server compiling routes for two workers at once
   // aborts navigations, and the suite is small.
   workers: 1,
+  // On CI a failed test runs once more, so one slow moment on the runner
+  // doesn't block a merge. A test that passes only on its retry still counts
+  // as flaky: the GitHub reporter marks it with an error annotation and the
+  // run summary counts it, so it gets fixed rather than hidden (#466).
+  // Locally, a failure fails at once.
+  retries: isCI ? 1 : 0,
   expect: { timeout: 10_000 },
   reporter: isCI
     ? [["list"], ["github"], ["html", { open: "never" }]]
