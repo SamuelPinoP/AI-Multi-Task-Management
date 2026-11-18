@@ -122,7 +122,7 @@ test.describe("on a computer", () => {
     await add.focus();
     await openWithShortcut(page);
     await expect(chatBox(page)).toBeFocused();
-    await page.keyboard.type("Hello there");
+    await page.keyboard.type("Hello there, is anything due this week for the launch website?");
     await page.keyboard.press("Enter");
     await expect(chat(page).getByText("You asked: Hello there")).toBeVisible();
     // Ctrl J inside the chat closes it, and the bar keeps the cursor.
@@ -134,7 +134,13 @@ test.describe("on a computer", () => {
     // The chat's history lists this tab's chats.
     await page.keyboard.press("Control+j");
     await chat(page).getByRole("button", { name: "Chat history" }).click();
-    await expect(chat(page).getByRole("list", { name: "Chats" }).getByRole("button", { name: "Hello there" })).toHaveAttribute("aria-current", "true");
+    const listed = chat(page).getByRole("list", { name: "Chats" }).getByRole("button", { name: "Hello there" });
+    await expect(listed).toHaveAttribute("aria-current", "true");
+    // Its long title ends in an ellipsis inside the chat, never past its edge.
+    await expect(listed).toHaveText("Hello there, is anything due this week for…");
+    const cardBox = (await chat(page).boundingBox())!;
+    const listedBox = (await listed.boundingBox())!;
+    expect(listedBox.x + listedBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
 
     // The shortcut is listed with the others.
     await page.keyboard.press("Escape");

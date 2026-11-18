@@ -117,8 +117,9 @@ export function AiChatPanel({
 
       {view === "history" ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+          {/* grid-cols-1: an auto column would grow to the longest title and push it past the chat. */}
           {chats.length ? (
-            <ul aria-label="Chats" className="grid gap-px">
+            <ul aria-label="Chats" className="grid grid-cols-1 gap-px">
               {chats.map((item) => (
                 <li key={item.id}>
                   <button
