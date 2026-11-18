@@ -11,6 +11,7 @@ import { TeamChatList } from "@/components/home/team-chat";
 import { WeekBars } from "@/components/home/week-bars";
 import { cookies } from "next/headers";
 import { GuestStart } from "@/components/guest/guest-start";
+import { LegalLinks } from "@/components/legal";
 import { uiButtonClass } from "@/components/ui";
 import { getSessionUser, isGuestLoginEnabled, mustConfirmEmail, SIGNED_IN_BEFORE_COOKIE } from "@/lib/auth";
 import { confirmEmailHref } from "@/lib/auth-links";
@@ -362,6 +363,16 @@ export default async function HomePage() {
           ) : null}
         </div>
       </div>
+
+      {/* Google's sign-in branding names this page as the app's home page, which must link the privacy
+          policy (#358). Visitors land here as guests (#460), so a guest's Home ends with the footer the
+          landing page had. Accounts reach both documents from Account settings. */}
+      {user.isGuest ? (
+        <footer className="flex flex-col gap-2 border-t border-line pt-4 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+          <p>AI Multi, a free app by Samuel Pino.</p>
+          <LegalLinks />
+        </footer>
+      ) : null}
     </div>
   );
 }
