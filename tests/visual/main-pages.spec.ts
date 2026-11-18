@@ -110,7 +110,7 @@ test("Tasks with the Blue accent", async ({ page }) => {
   await page.goto("/tasks");
   await expect(page.getByRole("button", { name: "Plan the next sprint", exact: true })).toBeVisible();
   await page.waitForLoadState("networkidle");
-  // On a phone the profile menu is inside the menu sheet (#404), so this opens the sheet first.
+  // On a phone the profile menu opens from the top bar (#461), beside the menu button.
   await openAccountMenu(page);
   await expect(page.getByRole("menuitemradio", { name: "Blue" })).toHaveAttribute("aria-checked", "true");
   await expect(page).toHaveScreenshot("tasks-blue.png", { mask: changing(page) });

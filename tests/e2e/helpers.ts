@@ -33,14 +33,17 @@ export async function openSection(page: Page, name: string) {
 }
 
 /**
- * The profile menu's button in the sidebar's bottom bar (#404). Its name is
- * the person's name followed by "Settings and theme", the words it shows.
+ * The profile menu's button: in the sidebar's bottom bar (#404), or in a phone's top bar (#461).
+ * Its name is the person's name followed by "Settings and theme", the words it shows.
  */
 export function accountMenuButton(page: Page, options: { includeHidden?: boolean } = {}) {
   return page.getByRole("button", { name: /Settings and theme$/, ...options });
 }
 
-/** Opens the profile menu: from the sidebar on wide screens, or from inside the menu sheet on a phone. */
+/**
+ * Opens the profile menu: from the sidebar on wide screens, from the top bar on a phone (#461), or from
+ * inside the menu sheet on the pages that have no top bar, such as the AI page and chats.
+ */
 export async function openAccountMenu(page: Page) {
   const button = accountMenuButton(page);
   if (!(await button.isVisible())) await page.getByRole("button", { name: /^Open navigation/ }).click();
