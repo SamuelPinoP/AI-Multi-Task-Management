@@ -1,8 +1,8 @@
 "use client";
 
-import { ChevronLeft, History, Search, SquarePen } from "lucide-react";
+import { ChevronDown, ChevronLeft, EyeOff, History, Maximize2, Minimize2, Search, SquarePen, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { useAiChat } from "@/components/ai/ai-chat-provider";
+import { useAiChat, useAiDock } from "@/components/ai/ai-chat-provider";
 import { AiComposer } from "@/components/ai/ai-composer";
 import { AiNotice } from "@/components/ai/ai-notice";
 import { AiSpark } from "@/components/ai/ai-spark";
@@ -10,8 +10,10 @@ import { AI_SUGGESTIONS } from "@/components/ai/ai-suggestions";
 import { AiThread } from "@/components/ai/ai-thread";
 import { MobileMenuButton } from "@/components/mobile-menu";
 import { uiPrimaryButtonClass } from "@/components/ui";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ResizeHandle } from "@/components/ui/resize-handle";
 import { allowanceLine } from "@/lib/ai/chat-client";
+import type { AiDock } from "@/lib/ai/dock";
 import { cn } from "@/lib/cn";
 import { AI_CHAT_LIST_LIMITS, AI_CHAT_LIST_WIDTH_COOKIE, savePanelWidthCookie, type PanelSize } from "@/lib/panel-resize";
 import { isAskAiShortcut } from "@/lib/shortcuts";
@@ -64,6 +66,74 @@ function GuestAiPage() {
 
 const iconButtonClass =
   "grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink max-lg:h-11 max-lg:w-11";
+
+const DOCK_TEXT: Record<AiDock, { label: string; about: string }> = {
+  open: { label: "AI bar: on every page", about: "The AI bar is at the bottom of every page." },
+  minimized: { label: "AI bar: minimized", about: "The AI bar is a ✦ button at the bottom right of every page." },
+  hidden: { label: "AI bar hidden", about: "The AI bar is hidden from your pages." },
+};
+
+/**
+ * Where the AI bar is (#308, round 3): a pill in the header that says so, with a gray ✦ while it's
+ * hidden, and a menu to show it on every page again, minimize it or hide it. An icon on phones.
+ */
+function AiBarMenu({ compact = false }: { compact?: boolean }) {
+  const { dock, setDock } = useAiDock();
+  const text = DOCK_TEXT[dock];
+  const hidden = dock === "hidden";
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={compact ? text.label : undefined}
+        title={compact ? text.label : undefined}
+        className={cn(
+          "outline-none focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover",
+          compact
+            ? iconButtonClass
+            : cn(
+                "inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 text-[0.8125rem] font-medium transition-colors hover:bg-surface-hover",
+                hidden ? "border-dashed border-line bg-canvas text-muted" : "border-line bg-surface text-ink",
+              ),
+        )}
+      >
+        <AiSpark muted={hidden} />
+        {compact ? null : (
+          <>
+            {text.label}
+            <ChevronDown aria-hidden="true" className="h-4 w-4 text-muted" />
+          </>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuLabel className="whitespace-normal font-normal text-muted">{text.about}</DropdownMenuLabel>
+        {hidden ? (
+          <DropdownMenuItem onSelect={() => setDock("open")} className="font-semibold text-accent">
+            <Undo2 />
+            Show on every page
+          </DropdownMenuItem>
+        ) : (
+          <>
+            {dock === "minimized" ? (
+              <DropdownMenuItem onSelect={() => setDock("open")}>
+                <Maximize2 />
+                Show the whole bar
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onSelect={() => setDock("minimized")}>
+                <Minimize2 />
+                Minimize to a button
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onSelect={() => setDock("hidden")}>
+              <EyeOff />
+              Hide from pages
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 /**
  * The AI page (#308, the classic layout picked on the round-3 canvas): this tab's chats on the
@@ -200,6 +270,12 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
             <span className="max-lg:hidden">{title}</span>
           </p>
           {allowance ? <span className="whitespace-nowrap text-xs text-muted max-lg:hidden">{allowance}</span> : null}
+          <span className="max-lg:hidden">
+            <AiBarMenu />
+          </span>
+          <span className="lg:hidden">
+            <AiBarMenu compact />
+          </span>
           <button type="button" onClick={() => setShowList(true)} aria-label="Your chats" title="Your chats" className={cn(iconButtonClass, "lg:hidden")}>
             <History aria-hidden="true" className="h-4.5 w-4.5" />
           </button>

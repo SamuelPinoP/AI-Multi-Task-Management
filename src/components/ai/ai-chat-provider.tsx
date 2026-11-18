@@ -14,7 +14,9 @@ import {
   type ChatAnswer,
   type ChatTurn,
 } from "@/lib/ai/chat-client";
+import { toast } from "@/components/ui/toaster";
 import { MAX_MESSAGE_CHARS } from "@/lib/ai/chat-limits";
+import type { AiDock } from "@/lib/ai/dock";
 import { AI_NOTICE_VERSION } from "@/lib/ai/notice";
 
 /** A conversation with the assistant. Until chat history is stored (#452), they last as long as the tab. */
@@ -57,7 +59,18 @@ type AiChatContextValue = {
   loadStatus: () => void;
 };
 
+/**
+ * Where the AI bar shows on the person's pages, saved per account (#308). A context of its own, so
+ * the app shell, which needs only this, doesn't render again for every word of an answer.
+ */
+type AiDockContextValue = {
+  dock: AiDock;
+  /** Changes it at once and saves it; if saving fails, it goes back to what's saved and says so. */
+  setDock: (dock: AiDock) => void;
+};
+
 const AiChatContext = createContext<AiChatContextValue | null>(null);
+const AiDockContext = createContext<AiDockContextValue | null>(null);
 
 let lastId = 0;
 function newId() {
@@ -69,12 +82,17 @@ const CLOSED_NOTICE: AiNoticeState = { open: false, agreeing: false, error: null
 
 /**
  * The AI assistant's chat (#308), around the app shell in the root layout, so the conversation
- * stays as people move between pages. The AI page shows it, and so will the AI bar on every page.
+ * stays as people move between pages. The AI page and the AI bar on every other page show it.
  * It talks to POST /api/agent/chat, folding the streamed events into the answer
- * (src/lib/ai/chat-client.ts).
+ * (src/lib/ai/chat-client.ts). It also holds where the AI bar is (`useAiDock()`).
  */
-export function AiChatProvider({ enabled, children }: { enabled: boolean; children: ReactNode }) {
+export function AiChatProvider({ enabled, initialDock, children }: { enabled: boolean; initialDock: AiDock; children: ReactNode }) {
   const [chats, setChats] = useState<AiChat[]>([]);
+  const [dock, setDockState] = useState<AiDock>(initialDock);
+  const dockRef = useRef(initialDock);
+  // What the server has, and the saves in order, so the last choice is the one that sticks.
+  const savedDock = useRef(initialDock);
+  const dockSaves = useRef<Promise<void>>(Promise.resolve());
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -313,6 +331,29 @@ export function AiChatProvider({ enabled, children }: { enabled: boolean; childr
     })();
   }, [enabled]);
 
+  const setDock = useCallback((next: AiDock) => {
+    if (next === dockRef.current) return;
+    dockRef.current = next;
+    setDockState(next);
+    dockSaves.current = dockSaves.current.then(async () => {
+      try {
+        const response = await fetch("/api/agent/dock", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dock: next }),
+        });
+        if (!response.ok) throw new Error(String(response.status));
+        savedDock.current = next;
+      } catch {
+        // Unless a later choice already replaced this one, show what's saved again.
+        if (dockRef.current !== next) return;
+        dockRef.current = savedDock.current;
+        setDockState(savedDock.current);
+        toast.error("The AI bar's place wasn't saved", { description: "Check your connection and try again." });
+      }
+    });
+  }, []);
+
   const current = chats.find((chat) => chat.id === currentId) ?? null;
   const value = useMemo<AiChatContextValue>(
     () => ({
@@ -335,8 +376,19 @@ export function AiChatProvider({ enabled, children }: { enabled: boolean; childr
     }),
     [enabled, chats, current, status, busy, announcement, draft, ask, retry, newChat, openChat, notice, agree, putBack, loadStatus],
   );
+  const dockValue = useMemo<AiDockContextValue>(() => ({ dock, setDock }), [dock, setDock]);
 
-  return <AiChatContext.Provider value={value}>{children}</AiChatContext.Provider>;
+  return (
+    <AiDockContext.Provider value={dockValue}>
+      <AiChatContext.Provider value={value}>{children}</AiChatContext.Provider>
+    </AiDockContext.Provider>
+  );
+}
+
+export function useAiDock() {
+  const context = useContext(AiDockContext);
+  if (!context) throw new Error("useAiDock must be used inside AiChatProvider");
+  return context;
 }
 
 export function useAiChat() {

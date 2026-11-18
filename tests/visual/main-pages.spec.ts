@@ -164,6 +164,8 @@ test("Calendar", async ({ page }) => {
 // The guest profile (#458, design 2C) where an account's row sits: at the bottom of the sidebar, and of the
 // menu sheet on a phone. The avatar's color comes from the random id, so it's masked.
 test("Guest profile", async ({ page }) => {
+  // Reduced motion hides Sign up free's sweep of light, which a picture could catch mid-way.
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await continueAsGuest(page);
   await post(page, "/api/tasks", { title: "Plan the next sprint", priority: "LOW" });
   await page.goto("/");

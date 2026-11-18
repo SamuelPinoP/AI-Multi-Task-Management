@@ -10,6 +10,7 @@ import { TimeZoneCookie } from "@/components/time-zone-cookie";
 import { Toaster } from "@/components/ui/toaster";
 import { UserTimeZoneProvider } from "@/components/user-time-zone";
 import { WebAnalytics } from "@/components/web-analytics";
+import { aiDockFromStored } from "@/lib/ai/dock";
 import { isAppAdmin } from "@/lib/app-admin";
 import { getSessionUser, mustConfirmEmail } from "@/lib/auth";
 import { siteVerification } from "@/lib/legal";
@@ -73,7 +74,7 @@ export default async function RootLayout({
           {/* Times render in the reader's zone, the same on the server and in the browser (#381). */}
           <UserTimeZoneProvider timeZone={timeZone}>
             {/* The AI chat (#308) sits above every page, so a conversation stays as people move around. Guests can't use it. */}
-            <AiChatProvider enabled={Boolean(currentUser && !currentUser.isGuest)}>
+            <AiChatProvider enabled={Boolean(currentUser && !currentUser.isGuest)} initialDock={aiDockFromStored(sessionUser?.aiDock)}>
               <AppShell
                 currentUser={currentUser}
                 awaitingEmailConfirmation={awaitingEmailConfirmation}
