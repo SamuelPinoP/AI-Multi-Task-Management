@@ -42,6 +42,10 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
             {signupEnabled && googleEnabled ? "Continue with Google, or sign up" : "Sign up"} with your name, a username, your email and a password.
           </p>
+          {/* Signing up from a guest workspace keeps it (#459). */}
+          {currentUser?.isGuest && signupEnabled ? (
+            <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm text-ink">Everything in your guest workspace comes with you.</p>
+          ) : null}
         </div>
 
         {signupEnabled ? (

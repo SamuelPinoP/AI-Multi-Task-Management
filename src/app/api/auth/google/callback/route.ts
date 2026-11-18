@@ -1,5 +1,5 @@
 import { after, NextResponse, type NextRequest } from "next/server";
-import { createSessionRecord, getSafeRedirectPath, getSessionCookieOptions, SESSION_COOKIE_NAME } from "@/lib/auth";
+import { createSessionRecord, getSafeRedirectPath, getSessionCookieOptions, getSessionUser, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { authPageHref } from "@/lib/auth-links";
 import {
   accountForGoogleIdentity,
@@ -45,7 +45,9 @@ export async function GET(request: NextRequest) {
   const verified = await verifyGoogleSignIn(config, { code, redirectUri: googleRedirectUri(url.origin), pending });
   if ("error" in verified) return fail(verified.error);
 
-  const account = await accountForGoogleIdentity(verified.identity, clientIpFrom(request.headers));
+  // From a guest workspace, a new account keeps it (#459).
+  const current = await getSessionUser();
+  const account = await accountForGoogleIdentity(verified.identity, clientIpFrom(request.headers), current?.isGuest ? current.id : null);
   if ("error" in account) return fail(account.error);
   if ("retryAfterSeconds" in account) return fail("rate-limited", account.retryAfterSeconds);
 

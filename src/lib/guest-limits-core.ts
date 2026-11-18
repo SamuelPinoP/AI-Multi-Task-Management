@@ -57,13 +57,14 @@ export function isGuestLimitKind(value: unknown): value is GuestLimitKind {
 
 /** The sign-up pop-up's heading and line for each reason. */
 export function guestSignupCopy(reason: GuestSignupReason): { title: string; description: string } {
-  const description = "It's free and takes a few seconds.";
+  // Signing up turns the guest workspace into the account (#459), so nothing made here is lost.
+  const description = "It's free, and everything you made here comes with you.";
   if (reason === "signup") return { title: "Keep your work with a free account", description };
   if (isGuestLimitKind(reason)) {
     const limit = GUEST_LIMITS[reason];
     return {
       title: limit === 1 ? `Guest workspaces have ${counted(reason, 1)}` : `You've used your ${limit} guest ${NOUNS[reason][1]}`,
-      description: `Sign up for as many as you like. ${description}`,
+      description: "Sign up free for as many as you like. Everything you made here comes with you.",
     };
   }
   return { title: ACCOUNT_ONLY[reason].title, description };

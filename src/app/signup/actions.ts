@@ -4,7 +4,8 @@ import { Prisma } from "@prisma/client";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import { createSession, getSafeRedirectPath, hashPassword, isPublicSignupEnabled, normalizeAuthEmail } from "@/lib/auth";
+import { createSession, getSafeRedirectPath, getSessionUser, hashPassword, isPublicSignupEnabled, normalizeAuthEmail } from "@/lib/auth";
+import { upgradeGuest } from "@/lib/guest-upgrade";
 import { confirmEmailHref } from "@/lib/auth-links";
 import { isUsableEmail } from "@/lib/email-confirmation-core";
 import { sendConfirmationEmail } from "@/lib/email-verification";
@@ -69,12 +70,16 @@ export async function signUp(_previous: SignupState, formData: FormData): Promis
   const alreadyTaken = await taken();
   if (alreadyTaken) return alreadyTaken;
 
+  // A guest who signs up keeps the guest workspace (#459): the guest becomes the account, with
+  // everything they made in it.
+  const current = await getSessionUser();
+  const details = { name, username, email, passwordHash: hashPassword(password) };
+
   let user: { id: string; email: string };
   try {
-    user = await prisma.user.create({
-      data: { name, username, email, passwordHash: hashPassword(password) },
-      select: { id: true, email: true },
-    });
+    user =
+      (current?.isGuest ? await upgradeGuest(current.id, details) : null) ??
+      (await prisma.user.create({ data: details, select: { id: true, email: true } }));
   } catch (error) {
     // Someone took the email or username between the check and now.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
