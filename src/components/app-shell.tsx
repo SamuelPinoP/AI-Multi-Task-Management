@@ -695,7 +695,7 @@ function AccountMenu({
   const trigger = variant === "gear" ? (
     <DropdownMenuTrigger
       aria-label="Settings and theme"
-      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover max-lg:h-11 max-lg:w-11"
+      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover max-lg:h-11 max-lg:w-11"
     >
       <Settings aria-hidden="true" className="h-4 w-4" />
     </DropdownMenuTrigger>
