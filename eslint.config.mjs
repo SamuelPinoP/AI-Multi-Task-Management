@@ -30,6 +30,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Playwright's output. A run that records traces copies Playwright's bundled
+    // trace viewer into the report, which isn't this project's code (#473).
+    "playwright-report/**",
+    "test-results/**",
   ]),
 ]);
 
