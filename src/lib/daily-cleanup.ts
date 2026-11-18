@@ -11,6 +11,8 @@ export const NOTIFICATION_DAYS = 90;
 export const EMAIL_COUNT_DAYS = 35;
 /** The AI assistant's usage log (#307) is kept this long: enough for the caps, debugging and monthly costs. */
 export const AGENT_RUN_DAYS = 90;
+/** An AI assistant chat nobody opened or wrote in for this long is deleted (#452; Samuel, November 17). */
+export const AGENT_CHAT_DAYS = 90;
 /** Per run, so one call stays well inside the function's time limit; the rest goes the next day. */
 const GUEST_BATCH_SIZE = 100;
 const UPLOAD_CLEANUP_ROUNDS = 8;
@@ -30,6 +32,7 @@ type CleanupDb = Pick<
   | "emailHourlyCount"
   | "signInEvent"
   | "agentRun"
+  | "agentChat"
 >;
 
 export type DailyCleanupResult = {
@@ -43,6 +46,8 @@ export type DailyCleanupResult = {
   signIns: number;
   /** AI assistant runs older than AGENT_RUN_DAYS. */
   agentRuns: number;
+  /** AI assistant chats nobody opened for AGENT_CHAT_DAYS. */
+  agentChats: number;
   guests: number;
   /** Guests skipped because a stored file couldn't be deleted; they are retried the next day. */
   guestsSkipped: number;
@@ -53,8 +58,8 @@ export type DailyCleanupResult = {
  * Deletes what nobody can use any more (#132):
  * - expired sessions, used or expired password reset tokens, expired email confirmation links
  *   expired rate-limit counters, inbox notifications older than NOTIFICATION_DAYS, hourly
- *   email counts older than EMAIL_COUNT_DAYS, sign-ins older than SIGN_IN_HISTORY_DAYS and AI
- *   assistant runs older than AGENT_RUN_DAYS;
+ *   email counts older than EMAIL_COUNT_DAYS, sign-ins older than SIGN_IN_HISTORY_DAYS, AI
+ *   assistant runs older than AGENT_RUN_DAYS and AI chats nobody opened for AGENT_CHAT_DAYS;
  * - guest workspaces older than INACTIVE_GUEST_DAYS without a valid session (a guest has no
  *   password, so once its session is gone nobody can reach it), with their data and stored files;
  * - direct chat uploads that expired without being attached, with their stored files.
@@ -88,6 +93,10 @@ export async function runDailyCleanup({
   const agentRuns = await db.agentRun.deleteMany({
     where: { createdAt: { lt: new Date(now.getTime() - AGENT_RUN_DAYS * 86_400_000) } },
   });
+  // Their messages go with them (a cascade).
+  const agentChats = await db.agentChat.deleteMany({
+    where: { openedAt: { lt: new Date(now.getTime() - AGENT_CHAT_DAYS * 86_400_000) } },
+  });
   const guests = await deleteInactiveGuests({ db, deleteStoredObjects, now });
 
   let uploads = 0;
@@ -106,6 +115,7 @@ export async function runDailyCleanup({
     emailCounts: emailCounts.count,
     signIns: signIns.count,
     agentRuns: agentRuns.count,
+    agentChats: agentChats.count,
     guests: guests.deleted,
     guestsSkipped: guests.skipped,
     uploads,

@@ -185,7 +185,7 @@ export function AiDock({ variant }: { variant: "bar" | "button" }) {
   /** The ✦ button: the bar comes back, and with it the conversation if there is one. */
   function reopen() {
     if (variant === "bar") setDock("open");
-    if (current?.turns.length || variant === "button" || !wide) open();
+    if (current?.turns?.length || variant === "button" || !wide) open();
     else window.requestAnimationFrame(() => barInput.current?.focus());
   }
 

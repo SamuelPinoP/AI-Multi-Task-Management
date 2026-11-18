@@ -1,12 +1,15 @@
 // One message to the AI assistant, from request to usage record (#307): check
 // the daily caps, run the agent loop, and fall back to the rule-based planner
-// (saying why) when no model can answer. Everything it touches comes in as a
+// (saying why) when no model can answer. Then store the question and its answer
+// in the person's chat history (#452). Everything it touches comes in as a
 // dependency, so the whole flow is unit tested with a fake provider; the
 // server wiring is in ./server.ts and the route in src/app/api/agent/chat.
 import { z } from "zod";
 import type { AgentRunOutcome } from "@prisma/client";
 import { runAgentLoop, type AgentLimits, type LoopEvent, type LoopResult } from "@/lib/ai/agent-loop";
 import { allowanceFor, exhaustedCap, type Allowance } from "@/lib/ai/allowance";
+import { applyChatEvent, emptyAnswer } from "@/lib/ai/chat-client";
+import type { ChatRole, ChatSummary } from "@/lib/ai/chat-history-core";
 import { MAX_MESSAGE_CHARS, MAX_MESSAGES, MODEL_HISTORY } from "@/lib/ai/chat-limits";
 import type { AgentConfig } from "@/lib/ai/config";
 import { fallbackMessage, type FallbackReason } from "@/lib/ai/fallback";
@@ -17,26 +20,26 @@ import type { AgentMessage, Provider, ProviderError } from "@/lib/ai/types";
 
 export { MAX_MESSAGE_CHARS, MAX_MESSAGES, MODEL_HISTORY };
 
+/**
+ * `{ message, chatId? }`: the person's question, and the stored chat it continues (#452). The
+ * browser sends only the question: the earlier messages the model sees come from the database.
+ */
 export const chatRequestSchema = z.strictObject({
-  messages: z
-    .array(
-      z.strictObject({
-        role: z.enum(["user", "assistant"]),
-        content: z
-          .string()
-          .trim()
-          .min(1, "Messages can't be empty.")
-          .max(MAX_MESSAGE_CHARS, `Keep each message under ${MAX_MESSAGE_CHARS.toLocaleString("en-US")} characters.`),
-      }),
-    )
-    .min(1, "Send a message.")
-    .max(MAX_MESSAGES, `Start a new chat: one can hold up to ${MAX_MESSAGES} messages.`)
-    .refine((messages) => messages.at(-1)?.role === "user", "The last message must be yours."),
+  chatId: z.string().trim().min(1).max(64).optional(),
+  message: z
+    .string({ error: "Send a message." })
+    .trim()
+    .min(1, "Messages can't be empty.")
+    .max(MAX_MESSAGE_CHARS, `Keep each message under ${MAX_MESSAGE_CHARS.toLocaleString("en-US")} characters.`),
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
 
+/** For a page loaded before #452, which still sends the whole conversation. */
+export const OUTDATED_PAGE_MESSAGE = "AI Multi has been updated. Reload the page and ask again.";
+
 export function parseChatRequest(body: unknown): { request: ChatRequest } | { error: string } {
+  if (body && typeof body === "object" && "messages" in body) return { error: OUTDATED_PAGE_MESSAGE };
   const parsed = chatRequestSchema.safeParse(body);
   return parsed.success ? { request: parsed.data } : { error: parsed.error.issues[0]?.message ?? "Invalid request." };
 }
@@ -48,7 +51,8 @@ export function parseChatRequest(body: unknown): { request: ChatRequest } | { er
  * - `text` pieces of the answer;
  * - `notice` when the model fails midway and the planner takes over;
  * - `error` when something in AI Multi failed;
- * - `done` last, with the outcome and the allowance after this message.
+ * - `done` last, with the outcome, the allowance after this message, and the stored chat the
+ *   question and its answer are now in (#452), or null when they weren't stored.
  */
 export type ChatEvent =
   | { type: "start"; mode: "agent"; model: string; allowance: Allowance }
@@ -56,7 +60,7 @@ export type ChatEvent =
   | LoopEvent
   | { type: "notice"; reason: FallbackReason; message: string }
   | { type: "error"; message: string }
-  | { type: "done"; outcome: AgentRunOutcome; allowance: Allowance | null };
+  | { type: "done"; outcome: AgentRunOutcome; allowance: Allowance | null; chat: ChatSummary | null };
 
 /** Who answers the next message: a model, or the rule-based planner and why. */
 export type AnswerMode = { mode: "agent" } | { mode: "planner"; reason: FallbackReason };
@@ -117,13 +121,26 @@ export type ChatDependencies = {
   /** Aborted when the person goes away. */
   signal: AbortSignal;
   limits?: AgentLimits;
+  /**
+   * Stores the question with its answer, once the answer has arrived in full (#452), and returns the
+   * chat they're now in: a new one, or the one they continue. Null when that chat is gone.
+   */
+  save(answer: StoredAnswer): Promise<ChatSummary | null>;
 };
+
+/** An answer as the chat history keeps it: what the person saw, and who wrote it. */
+export type StoredAnswer = { role: Exclude<ChatRole, "USER">; content: string; sources: Source[] };
+
+/** A message to answer: the question, and the stored chat's latest messages, oldest first ([] for a new chat). */
+export type ChatInput = { question: string; history: Array<{ role: ChatRole; content: string }> };
 
 export type ChatResult = {
   record: RunRecord;
   /** For the server log. */
   providerError?: ProviderError;
   failure?: unknown;
+  /** The answer went out, but storing it failed. */
+  saveFailure?: unknown;
 };
 
 const LOOP_OUTCOMES: Record<Exclude<LoopResult["outcome"], "provider_error">, AgentRunOutcome> = {
@@ -142,15 +159,31 @@ function fallbackFor(loop: LoopResult): FallbackReason | null {
   return loop.error.kind === "timeout" ? "timeout" : "unavailable";
 }
 
-/** The latest messages, starting with one of the person's, as every provider expects. */
-export function modelMessages(request: ChatRequest): AgentMessage[] {
-  const messages = request.messages.slice(-MODEL_HISTORY);
-  while (messages[0]?.role === "assistant") messages.shift();
-  return messages.map((message) => ({ role: message.role, content: message.content }));
+/**
+ * What the model sees (#452): the stored chat's question-and-answer pairs, never the browser's copy,
+ * then the new question; the latest MODEL_HISTORY messages, starting with one of the person's, as
+ * every provider expects. The planner's answers count as the assistant's: they're what the person
+ * was told. Each message is cut to MAX_MESSAGE_CHARS, as the endpoint once required.
+ */
+export function modelMessages(history: ChatInput["history"], question: string): AgentMessage[] {
+  const messages: AgentMessage[] = [];
+  let asked: string | null = null;
+  for (const message of history) {
+    if (message.role === "USER") {
+      asked = message.content;
+    } else if (asked !== null) {
+      messages.push({ role: "user", content: asked.slice(0, MAX_MESSAGE_CHARS) }, { role: "assistant", content: message.content.slice(0, MAX_MESSAGE_CHARS) });
+      asked = null;
+    }
+  }
+  messages.push({ role: "user", content: question });
+  const latest = messages.slice(-MODEL_HISTORY);
+  while (latest[0]?.role === "assistant") latest.shift();
+  return latest;
 }
 
 export async function runAgentChat(
-  request: ChatRequest,
+  input: ChatInput,
   deps: ChatDependencies,
   emit: (event: ChatEvent) => void,
 ): Promise<ChatResult> {
@@ -167,11 +200,31 @@ export async function runAgentChat(
     outputTokens: 0,
   };
   let allowance: Allowance | null = null;
+  // The answer as the person sees it, folded from the same events the browser gets, to store it.
+  let shown = emptyAnswer();
+  let byPlanner = false;
+  const send = (event: ChatEvent) => {
+    shown = applyChatEvent(shown, event);
+    emit(event);
+  };
 
   const answerWithPlanner = async () => {
+    byPlanner = true;
     const answer = await deps.planner();
-    if (answer.sources.length) emit({ type: "sources", items: answer.sources });
-    emit({ type: "text", text: answer.text });
+    if (answer.sources.length) send({ type: "sources", items: answer.sources });
+    send({ type: "text", text: answer.text });
+  };
+
+  let saveFailure: unknown;
+  /** Stores a complete answer, never a partial one or one the person left before it finished. */
+  const save = async (outcome: AgentRunOutcome): Promise<ChatSummary | null> => {
+    if (outcome === "CANCELLED" || deps.signal.aborted || shown.error || !shown.text.trim()) return null;
+    try {
+      return await deps.save({ role: byPlanner ? "PLANNER" : "ASSISTANT", content: shown.text, sources: shown.sources });
+    } catch (error) {
+      saveFailure = error;
+      return null;
+    }
   };
 
   try {
@@ -181,25 +234,25 @@ export async function runAgentChat(
       const reason: FallbackReason = decided.mode === "planner" ? decided.reason : "disabled";
       const outcomes: Record<string, AgentRunOutcome> = { disabled: "DISABLED", region: "REGION", user_limit: "USER_LIMIT", app_limit: "APP_LIMIT" };
       record.outcome = outcomes[reason];
-      emit({ type: "start", mode: "planner", reason, message: fallbackMessage(reason, allowance, now), allowance });
+      send({ type: "start", mode: "planner", reason, message: fallbackMessage(reason, allowance, now), allowance });
       await answerWithPlanner();
-      emit({ type: "done", outcome: record.outcome, allowance });
-      return { record };
+      send({ type: "done", outcome: record.outcome, allowance, chat: await save(record.outcome) });
+      return { record, saveFailure };
     }
 
     record.provider = provider.name;
     record.model = config.model;
-    emit({ type: "start", mode: "agent", model: config.model, allowance });
+    send({ type: "start", mode: "agent", model: config.model, allowance });
     const loop = await runAgentLoop({
       provider,
       model: config.model,
       system: systemPrompt({ realNow: now, timeZone: context.timeZone }),
-      messages: modelMessages(request),
+      messages: modelMessages(input.history, input.question),
       tools: deps.tools,
       context,
       signal: deps.signal,
       limits: deps.limits,
-      emit,
+      emit: send,
     });
     record.modelRequests = loop.modelRequests;
     record.toolCalls = loop.toolCalls;
@@ -217,15 +270,15 @@ export async function runAgentChat(
     );
     const fallback = fallbackFor(loop);
     if (fallback) {
-      emit({ type: "notice", reason: fallback, message: fallbackMessage(fallback, allowance, now) });
+      send({ type: "notice", reason: fallback, message: fallbackMessage(fallback, allowance, now) });
       await answerWithPlanner();
     }
-    emit({ type: "done", outcome: record.outcome, allowance });
-    return { record, providerError: loop.error };
+    send({ type: "done", outcome: record.outcome, allowance, chat: await save(record.outcome) });
+    return { record, providerError: loop.error, saveFailure };
   } catch (failure) {
     record.outcome = "FAILED";
     emit({ type: "error", message: "Something went wrong on our side. Try again in a moment." });
-    emit({ type: "done", outcome: "FAILED", allowance });
+    emit({ type: "done", outcome: "FAILED", allowance, chat: null });
     return { record, failure };
   }
 }

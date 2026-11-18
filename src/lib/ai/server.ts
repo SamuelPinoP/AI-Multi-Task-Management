@@ -1,9 +1,11 @@
 import "server-only";
 
 // The AI assistant on the server (#307): the real database, provider and
-// planner behind runAgentChat, the streamed response, and the usage log.
+// planner behind runAgentChat, the streamed response, the usage log, and the
+// chat history the question and its answer are stored in (#452).
 import { quotaDayStart } from "@/lib/ai/allowance";
-import { runAgentChat, type ChatEvent, type ChatRequest, type RunRecord } from "@/lib/ai/chat";
+import { runAgentChat, type ChatEvent, type RunRecord } from "@/lib/ai/chat";
+import { saveExchange, type ContinuedChat } from "@/lib/ai/chat-history";
 import { readAgentConfig } from "@/lib/ai/config";
 import { plannerAnswer } from "@/lib/ai/fallback";
 import { createProvider } from "@/lib/ai/providers";
@@ -34,15 +36,21 @@ async function saveRun(userId: string, record: RunRecord, startedAt: Date) {
   }
 }
 
-/** Answers one message as a stream of JSON lines (see `ChatEvent`), and logs the run when it ends. */
+/**
+ * Answers one message as a stream of JSON lines (see `ChatEvent`), stores it with its answer in the
+ * person's chat history, and logs the run when it ends.
+ */
 export async function streamAgentChat({
   userId,
-  request,
+  question,
+  chat,
   signal,
   country,
 }: {
   userId: string;
-  request: ChatRequest;
+  question: string;
+  /** The stored chat this question continues, already checked to be the person's; null for a new chat. */
+  chat: ContinuedChat | null;
   signal: AbortSignal;
   /** Vercel's `x-vercel-ip-country`; Vercel sets it, so a client can't choose it. */
   country: string | null;
@@ -75,8 +83,8 @@ export async function streamAgentChat({
         }
       };
 
-      const { record, providerError, failure } = await runAgentChat(
-        request,
+      const { record, providerError, failure, saveFailure } = await runAgentChat(
+        { question, history: chat?.history ?? [] },
         {
           config,
           provider: createProvider(config, process.env),
@@ -86,6 +94,7 @@ export async function streamAgentChat({
           usedToday: () => modelRequestsToday(userId, realNow),
           planner: async () => plannerAnswer(await generateSmartPlanner(userId, now, realNow)),
           signal: gone.signal,
+          save: (answer) => saveExchange({ userId, chatId: chat?.id ?? null, question, askedAt: startedAt, answer }),
         },
         emit,
       );
@@ -99,12 +108,13 @@ export async function streamAgentChat({
         });
       }
       // Names and codes only: a database error's message can quote the query, and with it what was searched for.
-      if (failure) {
-        console.error("agent_chat_failed", {
-          error: failure instanceof Error ? failure.name : "UnknownError",
-          code: typeof (failure as { code?: unknown })?.code === "string" ? (failure as { code: string }).code : null,
-        });
-      }
+      const describe = (error: unknown) => ({
+        error: error instanceof Error ? error.name : "UnknownError",
+        code: typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : null,
+      });
+      if (failure) console.error("agent_chat_failed", describe(failure));
+      // The person saw the answer; it's missing from their chat history.
+      if (saveFailure) console.error("agent_chat_save_failed", describe(saveFailure));
 
       // Written before the stream closes, so the row exists once the answer has fully arrived.
       await saveRun(userId, record, startedAt);

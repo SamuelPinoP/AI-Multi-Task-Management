@@ -3,9 +3,10 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { AI_NOTICE_VERSION } from "../../src/lib/ai/notice";
 import { continueAsGuest, queryDatabase, signUpAndLogIn, uniqueName } from "./helpers";
 
-// The AI page (#308), end to end against the real endpoint and database. The server runs with
-// AI_PROVIDER="fake" (src/lib/ai/providers/fake.ts): a message naming a tool calls it, "[429]" fails
-// like a rate limit, and anything else is answered "You asked: …". It runs on phones too.
+// The AI page (#308) and its stored chats (#452), end to end against the real endpoint and database.
+// The server runs with AI_PROVIDER="fake" (src/lib/ai/providers/fake.ts): a message naming a tool
+// calls it, "[429]" fails like a rate limit, "[history]" lists the earlier messages it was given, and
+// anything else is answered "You asked: …". It runs on phones too.
 
 const conversation = (page: Page) => page.getByRole("region", { name: "Conversation" });
 const messageBox = (page: Page) => page.getByRole("textbox", { name: "Message the AI" });
@@ -186,6 +187,105 @@ test("an answer that couldn't arrive can be asked again", async ({ page, context
   await expect(conversation(page).getByText("Couldn't reach AI Multi.", { exact: false })).toHaveCount(0);
   // The question shows once.
   await expect(conversation(page).getByText("You: Are you there?", { exact: true })).toHaveCount(1);
+});
+
+test("chats are kept after a reload: the list groups them by day, and an opened chat carries on where it was (#452)", async ({ page, isMobile }) => {
+  const { email } = await signUpAndLogIn(page, "E2E AI history");
+  expect((await page.request.post("/api/agent/notice", { data: { version: AI_NOTICE_VERSION } })).status()).toBe(200);
+  // A chat from three days ago whose answer came from the planner, made directly in the database.
+  const old = `e2e-ai-history-${randomUUID()}`;
+  await queryDatabase(
+    `WITH chat AS (
+       INSERT INTO "AgentChat" (id, "userId", title, "createdAt", "updatedAt", "openedAt")
+       SELECT $1, id, 'Plan for the offsite', t, t, t FROM "User", (SELECT (now() AT TIME ZONE 'utc') - interval '3 days' AS t) AS at WHERE email = $2
+       RETURNING id, "createdAt"
+     )
+     INSERT INTO "AgentChatMessage" (id, "chatId", role, content, "createdAt")
+     SELECT $1 || '-q', id, 'USER'::"AgentChatRole", 'Plan for the offsite', "createdAt" FROM chat
+     UNION ALL SELECT $1 || '-a', id, 'PLANNER'::"AgentChatRole", '- Book the venue: Due Friday', "createdAt" + interval '1 second' FROM chat`,
+    [old, email],
+  );
+
+  await page.goto("/ai");
+  await ask(page, "Remember the launch checklist");
+  await expect(conversation(page).getByText("You asked: Remember the launch checklist")).toBeVisible();
+
+  await page.reload();
+  let chats = await openChats(page, isMobile);
+  await expect(chats.getByRole("list", { name: "Today" }).getByRole("listitem")).toHaveText(["Remember the launch checklist"]);
+  await expect(chats.getByRole("list", { name: "Previous 7 days" }).getByRole("listitem")).toHaveText(["Plan for the offsite"]);
+  await expect(chats.getByText("Your last 20 chats are kept.")).toBeVisible();
+
+  // The planner's stored answer says who gave it.
+  await chats.getByRole("button", { name: "Plan for the offsite" }).click();
+  await expect(conversation(page).getByRole("listitem").filter({ hasText: "Book the venue: Due Friday" })).toBeVisible();
+  await expect(conversation(page).getByText("Your planner answered this one instead of the AI.")).toBeVisible();
+
+  // Opening a stored chat and asking again continues it, with the earlier messages from the server.
+  chats = await openChats(page, isMobile);
+  await chats.getByRole("button", { name: "Remember the launch checklist" }).click();
+  await expect(conversation(page).getByText("You asked: Remember the launch checklist")).toBeVisible();
+  await ask(page, "[history] What came before?");
+  await expect(
+    conversation(page).getByText("Earlier messages: user: Remember the launch checklist | assistant: You asked: Remember the launch checklist"),
+  ).toBeVisible();
+  // Still one chat, now the newest.
+  chats = await openChats(page, isMobile);
+  await expect(chats.getByRole("list", { name: "Today" }).getByRole("listitem")).toHaveText(["Remember the launch checklist"]);
+});
+
+test("a chat is renamed and deleted from its ⋯ menu, and every chat with Delete all chats (#452)", async ({ page, isMobile }) => {
+  await signUpAndLogIn(page, "E2E AI tidy");
+  expect((await page.request.post("/api/agent/notice", { data: { version: AI_NOTICE_VERSION } })).status()).toBe(200);
+  await page.goto("/ai");
+  await expect(page.getByRole("button", { name: "Chat options" })).toHaveCount(0);
+  await ask(page, "First question");
+  await expect(conversation(page).getByText("You asked: First question")).toBeVisible();
+
+  // Rename: the header and the list take the new name, and it's kept.
+  await page.getByRole("button", { name: "Chat options" }).click();
+  await page.getByRole("menuitem", { name: "Rename" }).click();
+  const rename = page.getByRole("dialog", { name: "Rename chat" });
+  await expect(rename.getByRole("textbox", { name: "Chat name" })).toHaveValue("First question");
+  await rename.getByRole("textbox", { name: "Chat name" }).fill("Launch week");
+  await rename.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Chat renamed")).toBeVisible();
+  await expect(rename).toBeHidden();
+  await expect(page.getByRole("region", { name: "Conversation" }).getByText("Launch week", { exact: true }).filter({ visible: true })).toBeVisible();
+  await page.reload();
+  let chats = await openChats(page, isMobile);
+  await expect(chats.getByRole("button", { name: "Launch week" })).toBeVisible();
+
+  // Delete one: it leaves the list, and a new chat opens.
+  await chats.getByRole("button", { name: "Launch week" }).click();
+  await expect(conversation(page).getByText("You asked: First question")).toBeVisible();
+  await page.getByRole("button", { name: "Chat options" }).click();
+  await page.getByRole("menuitem", { name: "Delete chat" }).click();
+  const confirmOne = page.getByRole("dialog", { name: "Delete this chat?" });
+  await expect(confirmOne).toContainText("“Launch week” and its messages will be deleted for good.");
+  await confirmOne.getByRole("button", { name: "Delete chat" }).click();
+  await expect(page.getByText("Chat deleted")).toBeVisible();
+  await expect(page.getByRole("button", { name: "What's overdue?" })).toBeVisible();
+  chats = await openChats(page, isMobile);
+  await expect(chats.getByText("Your chats will show here.")).toBeVisible();
+  await expect(chats.getByRole("button", { name: "Delete all chats" })).toHaveCount(0);
+  if (isMobile) await page.getByRole("button", { name: "Back to the chat" }).click();
+
+  // Delete all, after two more.
+  await ask(page, "Second question");
+  await expect(conversation(page).getByText("You asked: Second question")).toBeVisible();
+  await shown(page.getByRole("button", { name: "New chat" })).click();
+  await ask(page, "Third question");
+  await expect(conversation(page).getByText("You asked: Third question")).toBeVisible();
+  chats = await openChats(page, isMobile);
+  await chats.getByRole("button", { name: "Delete all chats" }).click();
+  const confirmAll = page.getByRole("dialog", { name: "Delete all chats?" });
+  await expect(confirmAll).toContainText("Every chat in your list will be deleted for good.");
+  await confirmAll.getByRole("button", { name: "Delete all chats" }).click();
+  await expect(page.getByText("All chats deleted")).toBeVisible();
+  await page.reload();
+  chats = await openChats(page, isMobile);
+  await expect(chats.getByText("Your chats will show here.")).toBeVisible();
 });
 
 test("the chats list resizes from 220 to 360 px, like the sidebar, and keeps its width", async ({ page, isMobile }) => {

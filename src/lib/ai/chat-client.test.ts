@@ -2,21 +2,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Allowance } from "./allowance";
 import type { ChatEvent } from "./chat";
-import { MAX_MESSAGE_CHARS, MAX_MESSAGES } from "./chat-limits";
 import {
   allowanceIn,
   allowanceLine,
   allowanceText,
   answerBlocks,
   applyChatEvent,
+  chatGroups,
   chatTitle,
   createEventReader,
   emptyAnswer,
   finishedStep,
-  requestMessages,
+  PLANNER_NOTE,
   textRuns,
-  type ChatTurn,
+  turnsFromMessages,
 } from "./chat-client";
+import type { StoredMessage } from "./chat-history-core";
+import type { Source } from "./tools/define";
 
 const allowance: Allowance = {
   user: { used: 2, limit: 40, remaining: 38 },
@@ -31,10 +33,6 @@ function fold(events: ChatEvent[]) {
   return events.reduce(applyChatEvent, emptyAnswer());
 }
 
-function turn(question: string, text: string, extra: Partial<ChatTurn["answer"]> = {}): ChatTurn {
-  return { id: question, question, answer: { ...emptyAnswer(), text, done: true, ...extra } };
-}
-
 test("a model's answer collects its lookups, sources and text as they stream in", () => {
   const answer = fold([
     { type: "start", mode: "agent", model: "fake", allowance },
@@ -44,7 +42,7 @@ test("a model's answer collects its lookups, sources and text as they stream in"
     { type: "sources", items: [project, task] },
     { type: "text", text: "One task is " },
     { type: "text", text: "overdue." },
-    { type: "done", outcome: "ANSWERED", allowance },
+    { type: "done", outcome: "ANSWERED", allowance, chat: { id: "chat-1", title: "Rotate the API keys", updatedAt: "2026-11-16T14:30:02.000Z" } },
   ]);
   assert.deepEqual(answer, {
     steps: ["Checking your open tasks", "Checking your projects"],
@@ -66,7 +64,7 @@ test("the planner's answer says why it answers instead", () => {
   const answer = fold([
     { type: "start", mode: "planner", reason: "user_limit", message: "You've used today's AI allowance.", allowance },
     { type: "text", text: "- Rotate the API keys: overdue" },
-    { type: "done", outcome: "USER_LIMIT", allowance },
+    { type: "done", outcome: "USER_LIMIT", allowance, chat: null },
   ]);
   assert.equal(answer.notice, "You've used today's AI allowance.");
   assert.equal(answer.text, "- Rotate the API keys: overdue");
@@ -80,7 +78,7 @@ test("when the model fails partway, the planner's answer replaces the partial on
     { type: "notice", reason: "rate_limited", message: "The AI service is busy right now." },
     { type: "sources", items: [task] },
     { type: "text", text: "- Rotate the API keys" },
-    { type: "done", outcome: "RATE_LIMITED", allowance },
+    { type: "done", outcome: "RATE_LIMITED", allowance, chat: null },
   ]);
   assert.equal(answer.notice, "The AI service is busy right now.");
   assert.equal(answer.text, "- Rotate the API keys");
@@ -90,7 +88,7 @@ test("when the model fails partway, the planner's answer replaces the partial on
 test("an error from AI Multi is kept for the chat to show", () => {
   const answer = fold([
     { type: "error", message: "Something went wrong on our side. Try again in a moment." },
-    { type: "done", outcome: "FAILED", allowance: null },
+    { type: "done", outcome: "FAILED", allowance: null, chat: null },
   ]);
   assert.equal(answer.error, "Something went wrong on our side. Try again in a moment.");
   assert.equal(answer.done, true);
@@ -103,8 +101,8 @@ test("events of a kind the chat doesn't know leave the answer as it was", () => 
 
 test("the allowance comes from the first and the last event", () => {
   assert.equal(allowanceIn({ type: "start", mode: "agent", model: "fake", allowance }), allowance);
-  assert.equal(allowanceIn({ type: "done", outcome: "ANSWERED", allowance }), allowance);
-  assert.equal(allowanceIn({ type: "done", outcome: "FAILED", allowance: null }), null);
+  assert.equal(allowanceIn({ type: "done", outcome: "ANSWERED", allowance, chat: null }), allowance);
+  assert.equal(allowanceIn({ type: "done", outcome: "FAILED", allowance: null, chat: null }), null);
   assert.equal(allowanceIn({ type: "text", text: "Hi" }), null);
   assert.equal(allowanceText(allowance), "38 of 40 left today");
 });
@@ -144,37 +142,69 @@ test("lines that aren't events are skipped", () => {
   assert.deepEqual(reader.push('not json\n42\nnull\n{"no":"type"}\n{"type":"text","text":"ok"}\n'), [{ type: "text", text: "ok" }]);
 });
 
-test("a new question goes with the finished exchanges before it", () => {
-  const turns = [
-    turn("What's overdue?", "Rotate the API keys."),
-    // A failed answer leaves its question out, so the roles keep alternating.
-    turn("And Whitewall?", "", { error: "Something went wrong." }),
-    // So does one still arriving.
-    { id: "x", question: "Still going", answer: { ...emptyAnswer(), text: "Partial" } },
-    turn("What analytics can you give?", "You've done 33%."),
-  ];
-  assert.deepEqual(requestMessages(turns, "  Thanks! "), [
-    { role: "user", content: "What's overdue?" },
-    { role: "assistant", content: "Rotate the API keys." },
-    { role: "user", content: "What analytics can you give?" },
-    { role: "assistant", content: "You've done 33%." },
-    { role: "user", content: "Thanks!" },
+const stored = (id: string, role: StoredMessage["role"], content: string, sources: Source[] = []): StoredMessage => ({
+  id,
+  role,
+  content,
+  sources,
+  createdAt: "2026-11-18T10:00:00.000Z",
+});
+
+test("a stored chat becomes its questions and answers again, the planner's marked as such (#452)", () => {
+  const turns = turnsFromMessages([
+    stored("m1", "USER", "What's overdue?"),
+    stored("m2", "ASSISTANT", "Rotate the API keys.", [task]),
+    stored("m3", "USER", "[429] And next?"),
+    stored("m4", "PLANNER", "- Whitewall: due Friday", [project]),
+  ]);
+  const answer = (text: string, sources: Source[], notice: string | null) => ({ steps: [], sources, text, notice, error: null, done: true });
+  assert.deepEqual(turns, [
+    { id: "m1", question: "What's overdue?", answer: answer("Rotate the API keys.", [task], null) },
+    // The planner's reason at the time (a busy model, a cap since reset) would be out of date.
+    { id: "m3", question: "[429] And next?", answer: answer("- Whitewall: due Friday", [project], PLANNER_NOTE) },
   ]);
 });
 
-test("a long chat sends only as many whole exchanges as one request may carry", () => {
-  const turns = Array.from({ length: 30 }, (_, index) => turn(`Question ${index}`, `Answer ${index}`));
-  const messages = requestMessages(turns, "Last one");
-  assert.ok(messages.length <= MAX_MESSAGES);
-  assert.equal(messages.length % 2, 1);
-  assert.deepEqual(messages[0], { role: "user", content: "Question 11" });
-  assert.deepEqual(messages.at(-1), { role: "user", content: "Last one" });
+test("a question without its answer, or an answer without its question, is left out", () => {
+  const turns = turnsFromMessages([
+    stored("a0", "ASSISTANT", "Nobody asked"),
+    stored("q1", "USER", "Never answered"),
+    stored("q2", "USER", "Answered"),
+    stored("a2", "ASSISTANT", "Yes"),
+  ]);
+  assert.deepEqual(
+    turns.map((item) => [item.question, item.answer.text]),
+    [["Answered", "Yes"]],
+  );
 });
 
-test("every message is cut to what the endpoint accepts", () => {
-  const long = "x".repeat(MAX_MESSAGE_CHARS + 50);
-  const messages = requestMessages([turn("Q", long)], long);
-  assert.ok(messages.every((message) => message.content.length <= MAX_MESSAGE_CHARS));
+test("chats group by the day of their latest message, in the person's time zone (#452)", () => {
+  // 10 AM in New York.
+  const now = new Date("2026-11-18T15:00:00.000Z");
+  const chats = [
+    { id: "today", updatedAt: "2026-11-18T14:00:00.000Z" },
+    // 10 PM on the 17th in New York, but already the 18th in UTC.
+    { id: "last-night", updatedAt: "2026-11-18T03:00:00.000Z" },
+    { id: "yesterday", updatedAt: "2026-11-17T12:00:00.000Z" },
+    { id: "this-week", updatedAt: "2026-11-12T12:00:00.000Z" },
+    { id: "this-month", updatedAt: "2026-10-25T12:00:00.000Z" },
+    { id: "older", updatedAt: "2026-08-30T12:00:00.000Z" },
+  ];
+  const groups = (timeZone: string | null) => chatGroups(chats, timeZone, now).map((group) => [group.label, group.chats.map((chat) => chat.id)]);
+  assert.deepEqual(groups("America/New_York"), [
+    ["Today", ["today"]],
+    ["Yesterday", ["last-night", "yesterday"]],
+    ["Previous 7 days", ["this-week"]],
+    ["Previous 30 days", ["this-month"]],
+    ["Older", ["older"]],
+  ]);
+  assert.deepEqual(groups(null)[0], ["Today", ["today", "last-night"]], "without a zone, days are UTC's");
+  // A clock a little ahead of the browser's still says today, and empty groups are left out.
+  assert.deepEqual(
+    chatGroups([{ id: "ahead", updatedAt: "2026-11-18T15:00:05.000Z" }], "UTC", now).map((group) => group.label),
+    ["Today"],
+  );
+  assert.deepEqual(chatGroups([], "UTC", now), []);
 });
 
 test("a chat is named after its first question, cut at a word", () => {
