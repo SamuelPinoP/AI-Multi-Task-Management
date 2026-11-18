@@ -27,7 +27,8 @@ Every issue is a ticket someone else could pick up without asking questions. The
 - **Owner:** every open issue has an assignee.
 - **Closing:**
   - A PR that finishes an issue says `Fixes #N`.
-  - When closing by hand, start the body with a "Resolution" note naming the PRs and anything left undone. Leftover work gets its own issue, linked from the note.
+  - Close an issue as soon as the PR that finishes it merges and deploys green. Never keep one open for manual testing or QA: the owner tests PRs as they go. The same goes for the last `Part of #N` PR, and for an epic once its last piece merges.
+  - When closing by hand, start the body with a "Resolution" note naming the PRs and anything left undone. Leftover work gets its own issue, linked from the note. A step left for the owner outside the code, such as an environment variable to set, goes in the note and the handoff, not in an open issue.
   - Close dropped work as "not planned".
 
 ## Pull requests
