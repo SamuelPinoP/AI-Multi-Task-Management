@@ -1,7 +1,7 @@
 import "server-only";
 
 import crypto from "node:crypto";
-import type { SignInMethod } from "@prisma/client";
+import type { AiDockState, SignInMethod } from "@prisma/client";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { authPageHref, confirmEmailHref } from "@/lib/auth-links";
@@ -210,9 +210,11 @@ export function mustConfirmEmail(user: Pick<AuthUser, "isGuest" | "emailVerified
 /**
  * Whoever the session cookie belongs to, whether or not their email is
  * confirmed. Only the "Check your email" page and its routes need the
- * unconfirmed ones; everything else calls getCurrentUser().
+ * unconfirmed ones; everything else calls getCurrentUser(). It also brings
+ * where the AI bar shows (#308), which the root layout needs on every page,
+ * so that costs no second query.
  */
-export async function getSessionUser(): Promise<AuthUser | null> {
+export async function getSessionUser(): Promise<(AuthUser & { aiDock: AiDockState | null }) | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
@@ -223,7 +225,7 @@ export async function getSessionUser(): Promise<AuthUser | null> {
       id: true,
       createdAt: true,
       expiresAt: true,
-      user: { select: { id: true, name: true, email: true, isGuest: true, emailVerifiedAt: true, lastActiveAt: true } },
+      user: { select: { id: true, name: true, email: true, isGuest: true, emailVerifiedAt: true, lastActiveAt: true, aiDock: true } },
     },
   });
 
