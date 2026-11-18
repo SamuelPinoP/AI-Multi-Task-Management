@@ -68,7 +68,8 @@ test("New task: every property from its buttons, then the task's page shows them
 
   await dialog.getByLabel("Title").press("ControlOrMeta+Enter");
   await expect(dialog).toBeHidden();
-  await page.getByRole("button", { name: "Open" }).click();
+  // The toast's Open; an account also has the AI bar's "Open the AI chat".
+  await page.getByRole("button", { name: "Open", exact: true }).click();
   await expect(page.getByLabel("Title")).toHaveValue(title);
   const properties = page.getByRole("complementary", { name: "Properties" });
   await expect(properties.getByRole("button", { name: "Status: In progress" })).toBeVisible();

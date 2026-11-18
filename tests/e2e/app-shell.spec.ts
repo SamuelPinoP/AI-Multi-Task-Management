@@ -455,7 +455,8 @@ test("The AI's sparkle sits beside New task, never scrolls away, and opens the A
   test.skip(isMobile, "The sidebar is a menu sheet on phones; the next test covers it.");
   // Short enough that the sidebar's list scrolls.
   await page.setViewportSize({ width: 1280, height: 520 });
-  await continueAsGuest(page);
+  // An account: a guest's ✦ opens the sign-up pop-up instead (#458; guest-mode.spec.ts).
+  await signUpAndLogIn(page, "Sparkle");
 
   const sidebar = page.getByRole("navigation", { name: "Workspace" });
   const ai = sidebar.getByRole("link", { name: "AI", exact: true });
@@ -501,7 +502,7 @@ test("The AI's sparkle sits beside New task, never scrolls away, and opens the A
 
 test("On a phone the sparkle is pinned beside New task at the top of the menu (#308)", async ({ page, isMobile }) => {
   test.skip(!isMobile, "Phones only.");
-  await continueAsGuest(page);
+  await signUpAndLogIn(page, "Sparkle");
   await page.getByRole("button", { name: "Open navigation", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Navigation" });
   const ai = sheet.getByRole("link", { name: "AI", exact: true });
