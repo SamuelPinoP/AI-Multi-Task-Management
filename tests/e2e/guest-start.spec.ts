@@ -48,6 +48,21 @@ test("without scripts, / only shows the start page and makes no workspace", asyn
   }
 });
 
+test("with guest workspaces off, / offers sign-up and log-in instead of a log-in wall", async ({ page }) => {
+  // The server shows this when GUEST_LOGIN_ENABLED is off, as on previews until it's turned on; the
+  // browser falls back to it when the start route says guests were switched off meanwhile.
+  await page.route("**/api/auth/guest/start", (route) => route.fulfill({ status: 403, json: { error: "guest-disabled" } }));
+  await page.goto("/");
+  await expect(page.getByRole("link", { name: "Sign up free" })).toHaveAttribute("href", "/signup");
+  await expect(page.getByRole("link", { name: "Log in", exact: true })).toHaveAttribute("href", "/login");
+  await expect(page.getByRole("link", { name: "Privacy Policy" })).toBeVisible();
+  await expect(page.getByText("Setting up your workspace…")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/$/);
+
+  await page.getByRole("link", { name: "Sign up free" }).click();
+  await expect(page.getByRole("button", { name: "Create account" })).toBeVisible();
+});
+
 test("the start route refuses other sites, automated visitors and a second workspace", async ({ page, request }) => {
   // No browser headers saying it's this site: refused, so another site can't swap someone's session.
   const bare = await request.post("/api/auth/guest/start", { data: {} });

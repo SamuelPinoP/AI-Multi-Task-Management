@@ -13,7 +13,7 @@ import { cookies } from "next/headers";
 import { GuestStart } from "@/components/guest/guest-start";
 import { LegalLinks } from "@/components/legal";
 import { uiButtonClass } from "@/components/ui";
-import { getSessionUser, isGuestLoginEnabled, mustConfirmEmail, SIGNED_IN_BEFORE_COOKIE } from "@/lib/auth";
+import { getSessionUser, isGuestLoginEnabled, isPublicSignupEnabled, mustConfirmEmail, SIGNED_IN_BEFORE_COOKIE } from "@/lib/auth";
 import { confirmEmailHref } from "@/lib/auth-links";
 import { getChatSummaries } from "@/lib/chats-data";
 import { cn } from "@/lib/cn";
@@ -159,10 +159,10 @@ export default async function HomePage() {
   if (user && mustConfirmEmail(user)) redirect(confirmEmailHref());
   if (!user) {
     // Visitors land in the app (#460): a new one gets a guest workspace with sample content, started
-    // from the browser; one that has signed in here before goes to log in.
-    const signedInBefore = (await cookies()).has(SIGNED_IN_BEFORE_COOKIE);
-    if (signedInBefore || !isGuestLoginEnabled()) redirect("/login");
-    return <GuestStart />;
+    // from the browser; one that has signed in here before goes to log in. With guest workspaces off,
+    // the start page offers sign-up and log-in instead, so "/" stays public either way (#358).
+    if ((await cookies()).has(SIGNED_IN_BEFORE_COOKIE)) redirect("/login");
+    return <GuestStart guests={isGuestLoginEnabled()} signup={isPublicSignupEnabled()} />;
   }
 
   // The user's wall clock, so "today" follows their time zone, not the server's (#125).

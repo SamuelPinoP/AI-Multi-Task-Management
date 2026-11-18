@@ -4,12 +4,15 @@ import { expect, test } from "@playwright/test";
 // database. Keep them read-only: no sign-ups, no sign-ins, no writes.
 
 // With scripts on, "/" starts a guest workspace (#460), a write; with them off it only shows the start page.
+// With guest workspaces switched off, as on previews until they're turned on, the same page offers
+// sign-up and log-in. Either way "/" is public, never a log-in wall (Google's sign-in branding, #358).
 test.describe("the start page", () => {
   test.use({ javaScriptEnabled: false });
 
   test("the start page loads", { tag: "@smoke" }, async ({ page }) => {
     const response = await page.goto("/");
     expect(response?.status()).toBe(200);
+    await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("heading", { level: 1, name: "AI Multi" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Log in" })).toBeVisible();
     // Google's sign-in review looks for the Privacy Policy on the home page (#358).

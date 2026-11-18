@@ -68,6 +68,13 @@ test("public pages have no WCAG A/AA violations", async ({ page, browser }) => {
     found.push(...(await violations(page, path)));
   }
 
+  // With guest workspaces off, "/" offers sign-up and log-in instead (#460).
+  await page.unroute("**/api/auth/guest/start");
+  await page.route("**/api/auth/guest/start", (route) => route.fulfill({ status: 403, json: { error: "guest-disabled" } }));
+  await page.goto("/");
+  await expect(page.getByRole("link", { name: "Sign up free" })).toBeVisible();
+  found.push(...(await violations(page, "/ with guest workspaces off")));
+
   // Sign-up errors show on the form (#351); this one has a "Log in instead" link.
   const other = await browser.newContext();
   const existing = await signUpAndLogIn(await other.newPage(), "A11y existing");
