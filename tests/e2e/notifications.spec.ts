@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, request as playwrightRequest, test, type APIRequestContext, type APIResponse } from "@playwright/test";
-import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
+import { signUpAndLogIn, uniqueName } from "./helpers";
 
 // SMART-08: the inbox behind the bell (assignments, mentions, due-soon
 // reminders) and the browser-push switch.
@@ -116,7 +116,8 @@ test("assignments and @mentions reach the teammate's inbox", async ({ browser })
 });
 
 test("the daily reminders flag tasks due today and tomorrow, once", async ({ page }) => {
-  await continueAsGuest(page);
+  // An account: guests get no reminders (#458).
+  await signUpAndLogIn(page, "Reminders");
   const today = uniqueName("Pay the invoice");
   const tomorrow = uniqueName("Book the room");
   const later = uniqueName("Plan the offsite");
@@ -136,7 +137,8 @@ test("the daily reminders flag tasks due today and tomorrow, once", async ({ pag
 });
 
 test("push stays off until the server has VAPID keys; the inbox needs a session", async ({ page, baseURL }) => {
-  await continueAsGuest(page);
+  // An account: guests can't turn on notifications at all (#458; guest-mode.spec.ts).
+  await signUpAndLogIn(page, "Push");
   expect(await json<{ publicKey: string | null }>(await page.request.get("/api/push"))).toEqual({ publicKey: null });
   const subscription = { endpoint: "https://push.example/abc", keys: { p256dh: "BNcRdreALRFXTkOOUHK1EtK2", auth: "tBHItJI5svbpez7KI4CCXg" } };
   expect((await page.request.post("/api/push", { data: subscription })).status()).toBe(503);

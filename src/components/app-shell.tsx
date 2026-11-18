@@ -1005,6 +1005,13 @@ export function AppShell({
   // A guest past a limit gets the sign-up pop-up instead of the form (#458).
   const guestUsage = currentUser?.isGuest ? (nav?.guest ?? null) : null;
   const guestFull = useCallback((kind: GuestLimitKind) => Boolean(guestUsage && !guestHasRoom(guestUsage, kind)), [guestUsage]);
+  // The window listeners below are set up once and read the latest counts through this: setting them
+  // up again whenever the counts refresh would drop a half-typed "g then a letter" shortcut.
+  const latestGuestFull = useRef(guestFull);
+  useEffect(() => {
+    latestGuestFull.current = guestFull;
+  }, [guestFull]);
+  const isGuest = Boolean(currentUser?.isGuest);
 
   // The sign-up pop-up opens from anywhere: the guest profile, the AI, an API answer past a limit.
   useEffect(() => {
@@ -1020,13 +1027,13 @@ export function AppShell({
   // Pages open the same pop-up, sometimes in a project (the Tasks page's project cards).
   useEffect(() => {
     const open = (event: Event) => {
-      if (guestFull("tasks")) return openGuestSignup("tasks");
+      if (latestGuestFull.current("tasks")) return openGuestSignup("tasks");
       setNewTaskDraft((event as CustomEvent<NewTaskDraft>).detail ?? {});
       setNewTaskOpen(true);
     };
     window.addEventListener(OPEN_NEW_TASK_EVENT, open);
     return () => window.removeEventListener(OPEN_NEW_TASK_EVENT, open);
-  }, [guestFull]);
+  }, []);
 
   // Home's search button opens search (#410), as Ctrl+K and / do everywhere.
   useEffect(() => {
@@ -1092,7 +1099,7 @@ export function AppShell({
         return;
       }
       // Ctrl J asks the AI (#308); a guest gets the sign-up pop-up instead (#458), outside other dialogs.
-      if (guestUsage && isAskAiShortcut(event) && !document.querySelector('[role="dialog"][aria-modal="true"], [role="alertdialog"]')) {
+      if (isGuest && isAskAiShortcut(event) && !document.querySelector('[role="dialog"][aria-modal="true"], [role="alertdialog"]')) {
         event.preventDefault();
         openGuestSignup("ai");
         return;
@@ -1115,7 +1122,7 @@ export function AppShell({
       } else if (action.type === "search") {
         setSearchOpen(true);
       } else if (action.type === "new-task") {
-        if (guestFull("tasks")) openGuestSignup("tasks");
+        if (latestGuestFull.current("tasks")) openGuestSignup("tasks");
         else setNewTaskOpen(true);
       } else if (action.type === "help") {
         setShortcutsOpen(true);
@@ -1126,7 +1133,7 @@ export function AppShell({
       window.clearTimeout(goTimer);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [guestFull, guestUsage, router, showWorkspaceShell]);
+  }, [isGuest, router, showWorkspaceShell]);
 
   // Dragging the edge (#415) updates the width as it goes and saves it when let go; the server reads
   // the cookies, so the next page load starts at the same width.
