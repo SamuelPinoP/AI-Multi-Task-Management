@@ -31,6 +31,11 @@ test("notes: a link opens the editor; project changes save; delete moves to Tras
   await card.click();
   await page.getByRole("dialog").getByRole("button", { name: "Delete note" }).click();
   await page.getByRole("dialog", { name: "Delete this note?" }).getByRole("button", { name: "Delete" }).click();
+  // The toast shows once the server has moved the note. The check after it
+  // can't tell: while the dialog is open, the list behind it is hidden from
+  // getByRole, so it passes at once, and Trash could open before the delete
+  // lands (#466).
+  await expect(page.getByText("Moved to Trash", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: title })).toHaveCount(0);
 
   await page.goto("/trash");

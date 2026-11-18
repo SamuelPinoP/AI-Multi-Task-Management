@@ -48,6 +48,9 @@ test("events: quick entry opens the sheet; repeats and multi-day events show on 
   await tomorrow.getByRole("button", { name: `More actions for ${meeting}` }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("dialog", { name: "Delete this event?" }).getByRole("button", { name: "Move to Trash" }).click();
+  // Wait for the server's answer before opening Trash (#466): the toast, since
+  // the check after it passes at once while the dialog hides the page.
+  await expect(page.getByText("Moved to Trash", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: meeting, exact: true })).toHaveCount(0);
   await page.goto("/trash");
   await expect(page.getByText(meeting)).toBeVisible();
