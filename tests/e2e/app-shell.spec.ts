@@ -42,8 +42,10 @@ test("Account menu switches the theme and logs out", async ({ page }) => {
   await page.getByRole("menuitemradio", { name: /Dark/ }).click();
   await expect(page.locator("html")).toHaveClass(/dark/);
 
+  // A guest workspace has no password, so leaving it asks first (#458).
   await openAccountMenu(page);
-  await page.getByRole("menuitem", { name: "Log out" }).click();
+  await page.getByRole("menuitem", { name: "Leave guest workspace" }).click();
+  await page.getByRole("dialog", { name: "Leave the guest workspace?" }).getByRole("button", { name: "Leave" }).click();
   await expect(page).toHaveURL(/\/login/);
 });
 
@@ -359,7 +361,8 @@ test("One Calendar item opens the Agenda and Month tabs and remembers the last o
 
 test("The sidebar's bottom bar holds the profile, the bell and Trash, which shows only while it has something", async ({ page, isMobile }) => {
   test.skip(isMobile, "The sidebar is a menu sheet on phones.");
-  await continueAsGuest(page);
+  // An account: a guest has the guest profile there instead (#458; guest-mode.spec.ts).
+  const { name } = await signUpAndLogIn(page, "Bottom bar");
 
   const sidebar = page.getByRole("navigation", { name: "Workspace" });
   const profile = accountMenuButton(page);
@@ -369,7 +372,7 @@ test("The sidebar's bottom bar holds the profile, the bell and Trash, which show
 
   // The profile and the bell are in the sidebar (#404), and desktop has no top bar at all (#410).
   await expect(page.getByRole("banner")).toHaveCount(0);
-  await expect(profile).toHaveAccessibleName("Guest Settings and theme");
+  await expect(profile).toHaveAccessibleName(`${name} Settings and theme`);
   await expect(bell).toBeVisible();
   // Collapse sits by the logo now, above the links.
   expect((await collapse.boundingBox())!.y).toBeLessThan((await sidebar.getByRole("link", { name: "Home", exact: true }).boundingBox())!.y);
@@ -401,7 +404,7 @@ test("The sidebar's bottom bar holds the profile, the bell and Trash, which show
   // Collapsed, the three stack in the same order and keep their names.
   await collapse.click();
   await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
-  await expect(profile).toHaveAccessibleName("Guest Settings and theme");
+  await expect(profile).toHaveAccessibleName(`${name} Settings and theme`);
   const stacked = await Promise.all([profile, bell, trash].map(async (item) => (await item.boundingBox())!));
   expect(stacked[0].y + stacked[0].height).toBeLessThanOrEqual(stacked[1].y);
   expect(stacked[1].y + stacked[1].height).toBeLessThanOrEqual(stacked[2].y);
@@ -452,7 +455,8 @@ test("The AI's sparkle sits beside New task, never scrolls away, and opens the A
   test.skip(isMobile, "The sidebar is a menu sheet on phones; the next test covers it.");
   // Short enough that the sidebar's list scrolls.
   await page.setViewportSize({ width: 1280, height: 520 });
-  await continueAsGuest(page);
+  // An account: a guest's ✦ opens the sign-up pop-up instead (#458; guest-mode.spec.ts).
+  await signUpAndLogIn(page, "Sparkle");
 
   const sidebar = page.getByRole("navigation", { name: "Workspace" });
   const ai = sidebar.getByRole("link", { name: "AI", exact: true });
@@ -498,7 +502,7 @@ test("The AI's sparkle sits beside New task, never scrolls away, and opens the A
 
 test("On a phone the sparkle is pinned beside New task at the top of the menu (#308)", async ({ page, isMobile }) => {
   test.skip(!isMobile, "Phones only.");
-  await continueAsGuest(page);
+  await signUpAndLogIn(page, "Sparkle");
   await page.getByRole("button", { name: "Open navigation", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Navigation" });
   const ai = sheet.getByRole("link", { name: "AI", exact: true });

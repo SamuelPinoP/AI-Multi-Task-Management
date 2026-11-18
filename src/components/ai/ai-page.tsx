@@ -9,6 +9,7 @@ import { AiSpark } from "@/components/ai/ai-spark";
 import { AI_SUGGESTIONS } from "@/components/ai/ai-suggestions";
 import { AiThread } from "@/components/ai/ai-thread";
 import { MobileMenuButton } from "@/components/mobile-menu";
+import { uiPrimaryButtonClass } from "@/components/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ResizeHandle } from "@/components/ui/resize-handle";
 import { allowanceLine } from "@/lib/ai/chat-client";
@@ -16,6 +17,52 @@ import type { AiDock } from "@/lib/ai/dock";
 import { cn } from "@/lib/cn";
 import { AI_CHAT_LIST_LIMITS, AI_CHAT_LIST_WIDTH_COOKIE, savePanelWidthCookie, type PanelSize } from "@/lib/panel-resize";
 import { isAskAiShortcut } from "@/lib/shortcuts";
+import { openGuestSignup } from "@/lib/workspace-events";
+
+/**
+ * The AI page for a guest (#458): what the assistant answers, and the sign-up pop-up, which opens on
+ * arrival as if the AI had been clicked. Any question opens it again.
+ */
+function GuestAiPage() {
+  useEffect(() => {
+    // After this commit: the page's effects run before the app shell's, which listens for the event.
+    const timer = window.setTimeout(() => openGuestSignup("ai"), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-surface">
+      <h1 className="sr-only">AI</h1>
+      {/* Phones and tablets have no bar above this page; its menu button sits here (#420). */}
+      <div className="flex h-14 shrink-0 items-center border-b border-line pl-1.5 pr-1 lg:hidden">
+        <MobileMenuButton className="mr-1 max-lg:h-11 max-lg:w-11" />
+        <p className="text-[0.9375rem] font-semibold">AI</p>
+      </div>
+      <div className="m-auto flex w-full flex-col items-center gap-4 px-4 py-6 text-center sm:px-6">
+        <AiSpark className="h-10 w-10" />
+        <p className="text-[1.625rem] font-semibold leading-tight tracking-[-0.02em]">Ask AI Multi about your work</p>
+        <p className="max-w-[28rem] text-sm text-muted">It answers from your tasks, calendar and projects. It needs a free account.</p>
+        <ul className="grid w-full max-w-[32.5rem] gap-1.5">
+          {AI_SUGGESTIONS.map(({ text, icon: Icon }) => (
+            <li key={text}>
+              <button
+                type="button"
+                onClick={() => openGuestSignup("ai")}
+                className="flex w-full items-center gap-2.5 rounded-xl border border-line bg-surface px-3 py-2.5 text-left text-[0.84375rem] text-ink transition-colors hover:bg-surface-hover max-lg:min-h-11"
+              >
+                <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" />
+                {text}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <button type="button" onClick={() => openGuestSignup("ai")} className={cn(uiPrimaryButtonClass, "shine mt-1 font-semibold max-lg:min-h-11")}>
+          Sign up free to use the AI
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const iconButtonClass =
   "grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink max-lg:h-11 max-lg:w-11";
@@ -144,18 +191,7 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
     if (done) savePanelWidthCookie(AI_CHAT_LIST_WIDTH_COOKIE, next.width);
   }
 
-  if (!enabled) {
-    return (
-      <div className="grid h-full place-items-center p-6">
-        <h1 className="sr-only">AI</h1>
-        <div className="grid max-w-sm justify-items-center gap-3 text-center">
-          <AiSpark className="h-10 w-10" />
-          <p className="text-base font-semibold">The AI assistant needs an account</p>
-          <p className="text-sm text-muted">Guest workspaces can&apos;t use it. Create an account to ask about your work.</p>
-        </div>
-      </div>
-    );
-  }
+  if (!enabled) return <GuestAiPage />;
 
   return (
     <div className="flex h-full min-h-0">

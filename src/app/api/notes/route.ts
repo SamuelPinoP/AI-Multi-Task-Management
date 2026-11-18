@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
+import { guestLimitResponse } from "@/lib/guest-limits";
 import {
   projectAccessWhere,
   getProjectAccess,
@@ -71,6 +72,8 @@ export async function POST(req: Request) {
         { error: "Authentication required" },
         { status: 401 },
       );
+    const guestLimit = await guestLimitResponse(user, "notes");
+    if (guestLimit) return guestLimit;
 
     if (projectId) {
       const access = await getProjectAccess(projectId, user.id);

@@ -11,6 +11,7 @@ import { resolveTaskLabelIds } from "@/lib/labels-server";
 import { TASK_TITLE_MAX } from "@/lib/task-history";
 import { recordTaskCreated } from "@/lib/task-history-server";
 import { notifyTaskAssigned } from "@/lib/notifications";
+import { guestLimitResponse } from "@/lib/guest-limits";
 
 
 function isValidStatus(value: unknown): value is TaskStatus {
@@ -75,6 +76,8 @@ export async function POST(req: Request) {
 
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    const guestLimit = await guestLimitResponse(user, "tasks");
+    if (guestLimit) return guestLimit;
 
     // A subtask (SMART-02) goes in its parent's project, one level deep.
     if (parentId) {

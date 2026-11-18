@@ -275,6 +275,8 @@ model Note {
   deletedAt   DateTime?
   /// Who moved it to the trash; they can restore it even if they don't own it (BUG-12).
   deletedById String?
+  /// Added by the app, not typed by the person: a project template's items, or a guest's sample workspace. Guest limits don't count it (#458).
+  isStarter   Boolean   @default(false)
 
   userId          String
   projectId       String?
@@ -308,6 +310,8 @@ model Task {
   deletedAt   DateTime?
   /// Who moved it to the trash; they can restore it even if they don't own it (BUG-12).
   deletedById String?
+  /// Added by the app, not typed by the person: a project template's items, or a guest's sample workspace. Guest limits don't count it (#458).
+  isStarter   Boolean     @default(false)
   recurrence  Recurrence  @default(NONE)
   /// The weekly goal this task moves forward (SMART-04).
   goalId      String?
@@ -465,6 +469,8 @@ model Event {
   deletedAt    DateTime?
   /// Who moved it to the trash; they can restore it even if they don't own it (BUG-12).
   deletedById  String?
+  /// Added by the app, not typed by the person: a project template's items, or a guest's sample workspace. Guest limits don't count it (#458).
+  isStarter    Boolean    @default(false)
   recurrence   Recurrence @default(NONE)
   /// The last day a repeat can start on (empty: keeps repeating). endTime is the first occurrence's end.
   repeatUntil  DateTime?  @db.Date
@@ -490,6 +496,8 @@ model Project {
   priority    Priority      @default(NONE)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  /// Added by the app, not typed by the person: a project template's items, or a guest's sample workspace. Guest limits don't count it (#458).
+  isStarter   Boolean       @default(false)
   /// "owner/name" of a public GitHub repository shown on the project (SMART-12).
   githubRepo  String?
 

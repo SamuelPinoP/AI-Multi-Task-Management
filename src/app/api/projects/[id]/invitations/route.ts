@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeAuthEmail, requireApiUser } from "@/lib/auth";
+import { accountRequiredResponse } from "@/lib/guest-limits";
 import { consumeRateLimit, rateLimitedResponse } from "@/lib/rate-limit";
 import { RATE_LIMITS } from "@/lib/rate-limit-core";
 import {
@@ -44,6 +45,9 @@ export async function POST(req: Request, context: RouteContext) {
   try {
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    // Invitations send email from the app's own address, so an open guest workspace mustn't (#458).
+    const accountOnly = accountRequiredResponse(user, "people");
+    if (accountOnly) return accountOnly;
     const inviteLimit = await consumeRateLimit(RATE_LIMITS.invitationsUser, user.id);
     if (!inviteLimit.allowed) return rateLimitedResponse("invitations", inviteLimit);
 

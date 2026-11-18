@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
+import { accountRequiredResponse } from "@/lib/guest-limits";
 import { calendarFeedPath, newCalendarFeedToken } from "@/lib/calendar-feed";
 import { prisma } from "@/lib/prisma";
 
@@ -18,6 +19,9 @@ export async function POST() {
   try {
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    // Calendar apps keep polling a feed, which would keep the database awake for a workspace nobody can reopen (#458).
+    const accountOnly = accountRequiredResponse(user, "calendar-feed");
+    if (accountOnly) return accountOnly;
     const token = newCalendarFeedToken();
     await prisma.user.update({ where: { id: user.id }, data: { calendarFeedToken: token } });
     return NextResponse.json({ path: calendarFeedPath(token) }, { status: 201 });

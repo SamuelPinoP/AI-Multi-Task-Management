@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
-import { continueAsGuest, uniqueName } from "./helpers";
+import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
 
 function dateInputValue(daysFromToday: number) {
   const date = new Date();
@@ -11,7 +11,8 @@ test("events: quick entry opens the sheet; repeats and multi-day events show on 
   const meeting = uniqueName("Planning meeting");
   const standup = uniqueName("Daily stand-up");
   const trip = uniqueName("Field trip");
-  await continueAsGuest(page);
+  // An account: it makes more events than a guest workspace holds (#458).
+  await signUpAndLogIn(page, "Event entry");
 
   for (const data of [
     { title: standup, startDate: dateInputValue(-7), startTime: "09:00", recurrence: "DAILY" },

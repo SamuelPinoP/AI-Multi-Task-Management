@@ -10,12 +10,14 @@ const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 /** axe's WCAG violations on the page, or only inside `include` (a CSS selector). */
 async function violations(page: Page, label: string, include?: string) {
   // Let open/close animations finish, so colors are measured at full opacity.
-  // Loading spinners loop forever, so skip animations that never end.
+  // Loading spinners loop forever, so skip animations that never end, and the
+  // sweep of light over a guest's Sign up free (#458), which changes no color.
   await page.evaluate(() =>
     Promise.all(
       document
         .getAnimations()
         .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+        .filter((animation) => !(animation instanceof CSSAnimation && animation.animationName.startsWith("shine-")))
         .map((animation) => animation.finished.catch(() => undefined)),
     ),
   );
@@ -307,7 +309,8 @@ test("unread chat badges have no WCAG A/AA violations", async ({ page, browser, 
   const teammateContext = await browser.newContext();
   const teammatePage = await teammateContext.newPage();
   const teammate = await signUpAndLogIn(teammatePage, "A11y teammate");
-  await continueAsGuest(page);
+  // An account: guests can't invite people (#458).
+  await signUpAndLogIn(page, "A11y owner");
 
   const projectName = uniqueName("A11y shared project");
   const project = (await (await page.request.post("/api/projects", { data: { name: projectName } })).json()) as { id: string; userId: string };

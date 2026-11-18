@@ -4,7 +4,7 @@ import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { useTodayKey } from "@/components/user-time-zone";
 import { formatTaskDueDate, getLocalDateOnly } from "@/lib/task-date-buckets";
 import { useEffect, useMemo, useState } from "react";
-import { notifyWorkspaceChanged } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, openGuestSignupFor } from "@/lib/workspace-events";
 import { BlockedBadge, ProgressRing } from "@/components/tasks/task-badges";
 import { LabelChips } from "@/components/tasks/label-chip";
 import { LabelFilter } from "@/components/tasks/label-filter";
@@ -151,6 +151,7 @@ export function ProjectKanbanBoard({ projectId = null, projectName, initialTasks
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
+        if (openGuestSignupFor(data)) return;
         throw new Error(data?.error || "Failed to create task.");
       }
       const createdTask = (await res.json()) as Task;

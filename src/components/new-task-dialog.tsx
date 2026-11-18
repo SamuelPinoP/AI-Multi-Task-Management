@@ -19,7 +19,7 @@ import { cn } from "@/lib/cn";
 import { PRIORITY_MENU_ORDER, priorityLabels, type Priority } from "@/lib/priority";
 import { projectColor } from "@/lib/project-color";
 import { TASK_TITLE_MAX } from "@/lib/task-history";
-import { notifyWorkspaceChanged, TASK_CREATED_EVENT } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, openGuestSignupFor, TASK_CREATED_EVENT } from "@/lib/workspace-events";
 
 type ProjectOption = { id: string; name: string; color: string | null; status?: string };
 
@@ -170,6 +170,11 @@ export function NewTaskDialog({
       });
       const body = (await response.json().catch(() => null)) as { id?: string; error?: string } | null;
       if (!response.ok || !body?.id) {
+        // A guest past their tasks gets the sign-up pop-up in place of this one (#458).
+        if (openGuestSignupFor(body)) {
+          onOpenChange(false);
+          return;
+        }
         setError(body?.error ?? "Could not create the task. Try again.");
         return;
       }

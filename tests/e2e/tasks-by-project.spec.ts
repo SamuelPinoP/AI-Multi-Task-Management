@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { continueAsGuest, uniqueName } from "./helpers";
+import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
 
 // The Tasks page groups tasks by project (#348, design 1B).
 test("tasks: one card per project, no project first, then by priority", async ({ page }) => {
-  await continueAsGuest(page);
+  // An account: it makes more projects than a guest workspace holds (#458).
+  await signUpAndLogIn(page, "Tasks by project");
   const post = async <T>(url: string, data: Record<string, unknown>) => (await (await page.request.post(url, { data })).json()) as T;
   const low = await post<{ id: string; name: string }>("/api/projects", { name: uniqueName("Low project"), priority: "LOW" });
   const urgent = await post<{ id: string; name: string }>("/api/projects", { name: uniqueName("Urgent project"), priority: "URGENT" });

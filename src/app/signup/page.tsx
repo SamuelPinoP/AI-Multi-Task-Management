@@ -15,8 +15,9 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
   const invitedEmail = email ? normalizeAuthEmail(email) : "";
   const nextPath = getSafeRedirectPath(next);
 
+  // A guest may sign up from inside the guest workspace (#458); anyone else signed in goes on.
   const currentUser = await getCurrentUser();
-  if (currentUser) {
+  if (currentUser && !currentUser.isGuest) {
     if (!invitedEmail || invitedEmail === normalizeAuthEmail(currentUser.email)) redirect(nextPath);
     return (
       <SignedInAsOtherAccount

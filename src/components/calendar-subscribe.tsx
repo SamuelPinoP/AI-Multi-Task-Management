@@ -6,6 +6,7 @@ import { uiButtonClass, uiDangerButtonClass, uiPrimaryButtonClass } from "@/comp
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
+import { openGuestSignupFor } from "@/lib/workspace-events";
 
 const subscribeNever = () => () => {};
 
@@ -39,6 +40,7 @@ export function CalendarSubscribe() {
     try {
       const response = await fetch("/api/calendar-feed", { method });
       const body = (await response.json().catch(() => null)) as { path?: string | null; error?: string } | null;
+      if (openGuestSignupFor(body)) return;
       if (!response.ok) throw new Error(body?.error ?? "Couldn't change the calendar link.");
       setPath(body?.path ?? null);
       if (method === "DELETE") toast.success("Calendar link turned off", { description: "Calendars using it stop updating." });

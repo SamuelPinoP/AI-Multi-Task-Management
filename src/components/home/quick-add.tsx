@@ -16,7 +16,7 @@ import { isPressingPriority, PRIORITY_MENU_ORDER, priorityLabels, type Priority 
 import { projectColor } from "@/lib/project-color";
 import { parseQuickAdd, type QuickAddKind, type QuickAddResult } from "@/lib/quick-add-parse";
 import { TASK_TITLE_MAX } from "@/lib/task-history";
-import { notifyWorkspaceChanged } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, openGuestSignupFor } from "@/lib/workspace-events";
 
 export const QUICK_ADD_INPUT_ID = "quick-add-input";
 
@@ -172,6 +172,8 @@ export function QuickAdd({
       });
       const body = (await response.json().catch(() => null)) as { id?: string; error?: string } | null;
       if (!response.ok || !body?.id) {
+        // A guest past a limit gets the sign-up pop-up instead (#458).
+        if (openGuestSignupFor(body)) return;
         toast.error(body?.error ?? "Could not add it. Try again.");
         return;
       }

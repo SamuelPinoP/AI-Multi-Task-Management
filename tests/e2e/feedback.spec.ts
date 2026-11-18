@@ -39,7 +39,7 @@ test("someone sends feedback from the profile menu", async ({ page }) => {
 test("a guest has no Send feedback, and the address refuses them", async ({ page }) => {
   await continueAsGuest(page);
   await openAccountMenu(page);
-  await expect(page.getByRole("menuitem", { name: "Log out" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Leave guest workspace" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Send feedback" })).toHaveCount(0);
   await page.keyboard.press("Escape");
 

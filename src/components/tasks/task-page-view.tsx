@@ -36,7 +36,7 @@ import { projectColor } from "@/lib/project-color";
 import { formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { TASK_TITLE_MAX } from "@/lib/task-history";
 import { openBlockers, subtaskProgress } from "@/lib/task-relations";
-import { notifyWorkspaceChanged } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, openGuestSignupForResponse } from "@/lib/workspace-events";
 import { dueDayName, DueDatePicker } from "./due-date-picker";
 import { LabelChip } from "./label-chip";
 import { LabelPicker } from "./label-picker";
@@ -265,6 +265,7 @@ export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Ta
       body: JSON.stringify({ title: next, parentId: task.id }),
     });
     if (!response.ok) {
+      if (await openGuestSignupForResponse(response)) return;
       toast.error(await errorMessage(response, "Could not add the sub-task."));
       return;
     }

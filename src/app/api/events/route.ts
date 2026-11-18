@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import { visibleNoteWhere } from "@/lib/note-access";
+import { guestLimitResponse } from "@/lib/guest-limits";
 
 function parseProjectId(input: unknown): string | null {
   if (input === null || input === undefined) return null;
@@ -37,6 +38,8 @@ export async function POST(req: Request) {
 
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    const guestLimit = await guestLimitResponse(user, "events");
+    if (guestLimit) return guestLimit;
     if (body.recurrence && !isValidRecurrence(body.recurrence)) return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
     const recurrence = normalizeRecurrence(body.recurrence);
     const repeatUntil = parseRepeatUntil(body, recurrence !== "NONE");

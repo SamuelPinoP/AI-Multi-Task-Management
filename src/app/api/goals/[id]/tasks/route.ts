@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
 import { requireApiUser } from "@/lib/auth";
 import { editableTaskWhere } from "@/lib/goals";
+import { guestLimitResponse } from "@/lib/guest-limits";
 import { prisma } from "@/lib/prisma";
 import { projectAccessWhere } from "@/lib/project-access";
 
@@ -25,6 +26,8 @@ export async function POST(req: Request, context: RouteContext) {
     const taskId = typeof body?.taskId === "string" ? body.taskId : "";
 
     if (title) {
+      const guestLimit = await guestLimitResponse(user, "tasks");
+      if (guestLimit) return guestLimit;
       const task = await prisma.task.create({ data: { title, userId: user.id, goalId: goal.id }, select: { id: true, title: true } });
       await createActivity({ userId: user.id, action: "CREATED_TASK", message: `Created task: “${task.title}”`, entityType: "TASK", entityId: task.id });
       return NextResponse.json(task, { status: 201 });
