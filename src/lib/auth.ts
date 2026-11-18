@@ -152,6 +152,21 @@ export async function createSession(userId: string, signIn: SignInDetails) {
     token,
     getSessionCookieOptions(cookieExpiresAt),
   );
+  if (signIn.method !== "GUEST") cookieStore.set(...signedInBeforeCookie());
+}
+
+/**
+ * Remembers that this browser has signed in to an account (#460), so `/` sends it to log in
+ * instead of making a new guest workspace when its session has ended. It holds no identity.
+ */
+export const SIGNED_IN_BEFORE_COOKIE = "ai_multi_signed_in_before";
+
+export function signedInBeforeCookie() {
+  return [
+    SIGNED_IN_BEFORE_COOKIE,
+    "1",
+    { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 400 * 24 * 60 * 60 },
+  ] as const;
 }
 
 export async function createGuestUser() {

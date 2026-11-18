@@ -60,11 +60,20 @@ async function seedWorkspace(page: Page) {
 
 test("public pages have no WCAG A/AA violations", async ({ page, browser }) => {
   const found: string[] = [];
+  // "/" starts a guest workspace (#460); held back here, its start page stays put for the scan.
+  await page.route("**/api/auth/guest/start", (route) => route.fulfill({ status: 403, json: { error: "automated" } }));
   for (const path of ["/", "/login", "/login?error=invalid", "/signup", "/forgot-password", "/verify-email", "/verify-email?status=invalid", "/privacy", "/terms"]) {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
     found.push(...(await violations(page, path)));
   }
+
+  // With guest workspaces off, "/" offers sign-up and log-in instead (#460).
+  await page.unroute("**/api/auth/guest/start");
+  await page.route("**/api/auth/guest/start", (route) => route.fulfill({ status: 403, json: { error: "guest-disabled" } }));
+  await page.goto("/");
+  await expect(page.getByRole("link", { name: "Sign up free" })).toBeVisible();
+  found.push(...(await violations(page, "/ with guest workspaces off")));
 
   // Sign-up errors show on the form (#351); this one has a "Log in instead" link.
   const other = await browser.newContext();

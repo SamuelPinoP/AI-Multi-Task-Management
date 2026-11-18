@@ -39,8 +39,10 @@ test("both documents open signed out, dated, with the contact address", async ({
 });
 
 test("the home page, log in and sign up link to both", async ({ page }) => {
-  // The home page that Google's Branding page names: its footer links the privacy policy.
+  // The home page that Google's Branding page names must link the privacy policy. A visitor lands in a
+  // guest workspace there (#460), and a guest's Home ends with a footer that links both.
   await page.goto("/");
+  await expect(page.getByRole("button", { name: "New task", exact: true }).first()).toBeVisible();
   const footer = page.locator("footer");
   await expect(footer.getByText("AI Multi, a free app by Samuel Pino.")).toBeVisible();
   await expectLegalLinks(page, footer);

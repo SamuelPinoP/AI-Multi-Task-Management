@@ -69,8 +69,14 @@ export default function PrivacyPage() {
         <p>
           <strong>Signing in and preferences.</strong> A session cookie keeps you signed in; AI Multi stores only a SHA-256
           fingerprint of its secret. Other cookies and your browser&apos;s local storage remember your time zone, theme,
-          accent color, text size, and how you left the sidebar, chats and calendar. All of these are needed for the app to
-          work the way you set it up. There are no advertising or analytics cookies.
+          accent color, text size, how you left the sidebar, chats and calendar, and whether this browser has signed in to
+          an account before, so it opens the log-in page instead of a guest workspace. All of these are needed for the app
+          to work the way you set it up. There are no advertising or analytics cookies.
+        </p>
+        <p>
+          <strong>Trying it without an account.</strong> If you open AI Multi without an account, it makes a guest
+          workspace with a few sample items. What you add stays in it, reachable only from this browser, until 30 days
+          after your last visit. If you sign up from it, the guest workspace becomes your account.
         </p>
         <p>
           <strong>Sign-in history.</strong> Each time you sign in, AI Multi records when, how (with a password or Google, or

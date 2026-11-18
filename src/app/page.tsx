@@ -9,9 +9,11 @@ import { NowAndNext } from "@/components/home/now-and-next";
 import { QuickAdd, QuickAddFocusButton } from "@/components/home/quick-add";
 import { TeamChatList } from "@/components/home/team-chat";
 import { WeekBars } from "@/components/home/week-bars";
-import { LandingPage } from "@/components/landing-page";
+import { cookies } from "next/headers";
+import { GuestStart } from "@/components/guest/guest-start";
+import { LegalLinks } from "@/components/legal";
 import { uiButtonClass } from "@/components/ui";
-import { getSessionUser, isGuestLoginEnabled, isPublicSignupEnabled, mustConfirmEmail } from "@/lib/auth";
+import { getSessionUser, isGuestLoginEnabled, isPublicSignupEnabled, mustConfirmEmail, SIGNED_IN_BEFORE_COOKIE } from "@/lib/auth";
 import { confirmEmailHref } from "@/lib/auth-links";
 import { getChatSummaries } from "@/lib/chats-data";
 import { cn } from "@/lib/cn";
@@ -156,7 +158,11 @@ export default async function HomePage() {
   // Signed up, but the email isn't confirmed yet (#350): back to "Check your email".
   if (user && mustConfirmEmail(user)) redirect(confirmEmailHref());
   if (!user) {
-    return <LandingPage signupEnabled={isPublicSignupEnabled()} guestLoginEnabled={isGuestLoginEnabled()} />;
+    // Visitors land in the app (#460): a new one gets a guest workspace with sample content, started
+    // from the browser; one that has signed in here before goes to log in. With guest workspaces off,
+    // the start page offers sign-up and log-in instead, so "/" stays public either way (#358).
+    if ((await cookies()).has(SIGNED_IN_BEFORE_COOKIE)) redirect("/login");
+    return <GuestStart guests={isGuestLoginEnabled()} signup={isPublicSignupEnabled()} />;
   }
 
   // The user's wall clock, so "today" follows their time zone, not the server's (#125).
@@ -357,6 +363,16 @@ export default async function HomePage() {
           ) : null}
         </div>
       </div>
+
+      {/* Google's sign-in branding names this page as the app's home page, which must link the privacy
+          policy (#358). Visitors land here as guests (#460), so a guest's Home ends with the footer the
+          landing page had. Accounts reach both documents from Account settings. */}
+      {user.isGuest ? (
+        <footer className="flex flex-col gap-2 border-t border-line pt-4 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+          <p>AI Multi, a free app by Samuel Pino.</p>
+          <LegalLinks />
+        </footer>
+      ) : null}
     </div>
   );
 }
