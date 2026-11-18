@@ -65,8 +65,9 @@ function changing(page: Page) {
     // hides the rest of the page, the button included, from role queries.
     page.getByRole("button", { name: /Settings and theme$/, includeHidden: true }),
     page.locator("#main-content .rounded-full[style*='background-color']"),
-    // An open profile menu starts with the account's name and email, random in every run (#458).
-    page.getByRole("menu").getByText(/ [0-9a-f]{8}$|@example\.test$/),
+    // An open profile menu starts with the account's name and email, random in every run (#458). The
+    // mask covers the label holding both (the email's parent), whose size doesn't change with them.
+    page.getByRole("menu").getByText(/@example\.test$/).locator(".."),
   ];
 }
 
