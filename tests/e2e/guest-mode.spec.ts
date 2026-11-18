@@ -65,7 +65,7 @@ test("past the limit, New task opens the sign-up pop-up instead", async ({ page,
   await page.getByRole("button", { name: "New task", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "You've used your 5 guest tasks" });
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText("Sign up for as many as you like.");
+  await expect(dialog).toContainText("Sign up free for as many as you like. Everything you made here comes with you.");
   await expect(page.getByRole("dialog", { name: "New task" })).toHaveCount(0);
   await dialog.getByRole("button", { name: "Close" }).click();
   await expect(dialog).toHaveCount(0);
