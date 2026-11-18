@@ -128,8 +128,8 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
           />
         </label>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-1">
+          {/* grid-cols-1: an auto column would grow to the longest title and push it past the list. */}
           {matches.length ? (
-            {/* grid-cols-1: an auto column would grow to the longest title and push it past the list. */}
             <ul className="grid grid-cols-1 gap-px">
               {matches.map((item) => (
                 <li key={item.id}>
