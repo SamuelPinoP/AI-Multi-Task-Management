@@ -158,3 +158,19 @@ test("accounts have no guest limits", async ({ page }) => {
   expect((await post(page, "/api/projects", { name: "Second" })).status()).toBe(201);
   await expect(page.getByRole("region", { name: "Guest workspace" })).toHaveCount(0);
 });
+
+test("a guest's ✦ and Ctrl J open the sign-up pop-up where they are", async ({ page, isMobile }) => {
+  await continueAsGuest(page);
+  if (isMobile) await page.getByRole("button", { name: /^Open navigation/ }).click();
+  await page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "AI", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "The AI needs a free account" });
+  await expect(dialog).toBeVisible();
+  await expect(page).not.toHaveURL(/\/ai$/);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+
+  if (!isMobile) {
+    await page.keyboard.press("Control+j");
+    await expect(dialog).toBeVisible();
+  }
+});
