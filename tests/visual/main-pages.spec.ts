@@ -8,18 +8,26 @@ import { continueAsGuest, openAccountMenu, signUpAndLogIn } from "../e2e/helpers
  * unread message in Team chat (DES-11), and Tasks with the Blue accent and the
  * account menu open (DES-15).
  *
- * Each test signs up a new account and adds the same data (guest workspaces
- * hold too little for it since #458; the last test shows the guest profile). Due dates are
+ * Each test signs up a new account, always named "E2E visual", and adds the same data (guest
+ * workspaces hold too little for it since #458; the last test shows the guest profile). Due dates are
  * yesterday, today and tomorrow, which the pages show as words, so the images
  * don't change from day to day. The month calendar runs on a fixed clock
  * instead. What still changes between runs is masked: the greeting, times,
- * avatar colors (they come from random user ids), and the account's name and email.
+ * avatar colors (they come from random user ids), and the account's email.
  */
 
 function dateInputValue(daysFromToday: number) {
   const date = new Date();
   date.setDate(date.getDate() + daysFromToday);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * A new account for the test. Its name is the same in every run: a phone's top bar sizes the profile
+ * button to the name (#461), and a mask as wide as a random name changed size from run to run.
+ */
+function signUp(page: Page) {
+  return signUpAndLogIn(page, "E2E visual", { name: "E2E visual" });
 }
 
 async function post(page: Page, url: string, data: Record<string, unknown>) {
@@ -61,12 +69,12 @@ async function addTeammate(page: Page, browser: Browser, baseURL: string | undef
 function changing(page: Page) {
   return [
     page.locator("time"),
-    // The profile button's avatar and name differ per account (#404). includeHidden: an open menu
+    // The profile button's avatar color differs per account (#404). includeHidden: an open menu
     // hides the rest of the page, the button included, from role queries.
     page.getByRole("button", { name: /Settings and theme$/, includeHidden: true }),
     page.locator("#main-content .rounded-full[style*='background-color']"),
-    // An open profile menu starts with the account's name and email, random in every run (#458). The
-    // mask covers the label holding both (the email's parent), whose size doesn't change with them.
+    // An open profile menu starts with the account's name and email, which is random in every run
+    // (#458). The mask covers the label holding both (the email's parent), whose size doesn't change.
     page.getByRole("menu").getByText(/@example\.test$/).locator(".."),
   ];
 }
@@ -82,20 +90,20 @@ async function screenshotHome(page: Page, name: string) {
 }
 
 test("Home", async ({ page, browser, baseURL }) => {
-  await signUpAndLogIn(page, "E2E visual");
+  await signUp(page);
   await addTeammate(page, browser, baseURL, await addTasks(page));
   await screenshotHome(page, "home.png");
 });
 
 test("Home in dark mode", async ({ page, browser, baseURL }) => {
-  await signUpAndLogIn(page, "E2E visual");
+  await signUp(page);
   await addTeammate(page, browser, baseURL, await addTasks(page));
   await page.evaluate(() => localStorage.setItem("ai-multi-theme", "dark"));
   await screenshotHome(page, "home-dark.png");
 });
 
 test("Tasks", async ({ page }) => {
-  await signUpAndLogIn(page, "E2E visual");
+  await signUp(page);
   await addTasks(page);
 
   await page.goto("/tasks");
@@ -106,7 +114,7 @@ test("Tasks", async ({ page }) => {
 
 // DES-15: another accent palette, with the account menu open on its swatches.
 test("Tasks with the Blue accent", async ({ page }) => {
-  await signUpAndLogIn(page, "E2E visual");
+  await signUp(page);
   await addTasks(page);
   await page.evaluate(() => localStorage.setItem("ai-multi-accent", "blue"));
 
@@ -120,7 +128,7 @@ test("Tasks with the Blue accent", async ({ page }) => {
 });
 
 test("Boards", async ({ page }) => {
-  await signUpAndLogIn(page, "E2E visual");
+  await signUp(page);
   // The board shows due dates as calendar dates, so these tasks have none.
   const project = await post(page, "/api/projects", { name: "Launch website", color: "#0f9488" });
   await post(page, "/api/tasks", { title: "Write the launch post", priority: "HIGH", projectId: project.id });
@@ -150,7 +158,7 @@ test("AI page", async ({ page }) => {
 });
 
 test("Calendar", async ({ page }) => {
-  await signUpAndLogIn(page, "E2E visual");
+  await signUp(page);
   // The month grid is drawn in the browser, so a fixed clock fixes the month.
   await page.clock.setFixedTime(new Date("2026-03-11T12:00:00Z"));
   await post(page, "/api/events", { title: "Team standup", startDate: "2026-03-02", startTime: "09:00", endDate: "2026-03-02", endTime: "09:30", recurrence: "WEEKLY" });
