@@ -1,4 +1,4 @@
-import { NotebookPen, Sparkles } from "lucide-react";
+import { Compass, NotebookPen } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
@@ -190,7 +190,7 @@ export default async function HomePage() {
         <div className="flex items-center gap-2">
           <HomeSearchButton />
           <Link href="/planner" className={cn(uiButtonClass, "px-3 py-1.5")}>
-            <Sparkles aria-hidden="true" className="h-4 w-4 text-accent" />
+            <Compass aria-hidden="true" className="h-4 w-4 text-accent" />
             Plan my day
           </Link>
         </div>

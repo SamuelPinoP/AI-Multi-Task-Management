@@ -36,6 +36,14 @@ export function resolveShortcut(key: string, goPending: boolean): ShortcutAction
   return null;
 }
 
+/**
+ * Ctrl J, or Cmd J on a Mac: Ask AI Multi (#308). Like Ctrl K it works while typing in a field.
+ * Shift, Alt or Option with it means something else.
+ */
+export function isAskAiShortcut(press: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">) {
+  return press.key.toLowerCase() === "j" && (press.ctrlKey || press.metaKey) && !press.altKey && !press.shiftKey;
+}
+
 /** Shortcuts never fire while the user types in a field. */
 export function isTypingTarget(target: EventTarget | null) {
   if (!target || typeof (target as Element).closest !== "function") return false;

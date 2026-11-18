@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
-import { continueAsGuest, uniqueName } from "./helpers";
+import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
 
 function dateInputValue(daysFromToday: number) {
   const date = new Date();
@@ -11,7 +11,8 @@ test("events: quick entry opens the sheet; repeats and multi-day events show on 
   const meeting = uniqueName("Planning meeting");
   const standup = uniqueName("Daily stand-up");
   const trip = uniqueName("Field trip");
-  await continueAsGuest(page);
+  // An account: it makes more events than a guest workspace holds (#458).
+  await signUpAndLogIn(page, "Event entry");
 
   for (const data of [
     { title: standup, startDate: dateInputValue(-7), startTime: "09:00", recurrence: "DAILY" },
@@ -48,6 +49,9 @@ test("events: quick entry opens the sheet; repeats and multi-day events show on 
   await tomorrow.getByRole("button", { name: `More actions for ${meeting}` }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("dialog", { name: "Delete this event?" }).getByRole("button", { name: "Move to Trash" }).click();
+  // Wait for the server's answer before opening Trash (#466): the toast, since
+  // the check after it passes at once while the dialog hides the page.
+  await expect(page.getByText("Moved to Trash", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: meeting, exact: true })).toHaveCount(0);
   await page.goto("/trash");
   await expect(page.getByText(meeting)).toBeVisible();

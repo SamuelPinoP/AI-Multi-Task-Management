@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { goTargets, resolveShortcut, sendsChatMessage } from "./shortcuts";
+import { goTargets, isAskAiShortcut, resolveShortcut, sendsChatMessage } from "./shortcuts";
 
 /** A key press in a chat message box: Enter, unless overridden. */
 function press(overrides: Partial<Parameters<typeof sendsChatMessage>[0]> = {}) {
@@ -58,4 +58,15 @@ test("on a touch screen, Enter starts a new line and Ctrl or ⌘+Enter sends", (
   assert.equal(sendsChatMessage(press({ shiftKey: true }), true), false);
   assert.equal(sendsChatMessage(press({ ctrlKey: true }), true), true);
   assert.equal(sendsChatMessage(press({ metaKey: true }), true), true);
+});
+
+test("Ctrl J or Cmd J asks AI Multi (#308), but not with Shift or Alt", () => {
+  const key = (overrides: Partial<Parameters<typeof isAskAiShortcut>[0]>) => ({ key: "j", ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...overrides });
+  assert.equal(isAskAiShortcut(key({ ctrlKey: true })), true);
+  assert.equal(isAskAiShortcut(key({ metaKey: true })), true);
+  assert.equal(isAskAiShortcut(key({ key: "J", ctrlKey: true })), true);
+  assert.equal(isAskAiShortcut(key({})), false);
+  assert.equal(isAskAiShortcut(key({ ctrlKey: true, shiftKey: true })), false);
+  assert.equal(isAskAiShortcut(key({ ctrlKey: true, altKey: true })), false);
+  assert.equal(isAskAiShortcut(key({ key: "k", ctrlKey: true })), false);
 });

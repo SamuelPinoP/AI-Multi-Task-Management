@@ -5,6 +5,7 @@ import type { ChatEvent } from "./chat";
 import { MAX_MESSAGE_CHARS, MAX_MESSAGES } from "./chat-limits";
 import {
   allowanceIn,
+  allowanceLine,
   allowanceText,
   answerBlocks,
   applyChatEvent,
@@ -106,6 +107,17 @@ test("the allowance comes from the first and the last event", () => {
   assert.equal(allowanceIn({ type: "done", outcome: "FAILED", allowance: null }), null);
   assert.equal(allowanceIn({ type: "text", text: "Hi" }), null);
   assert.equal(allowanceText(allowance), "38 of 40 left today");
+});
+
+test("the allowance shows under the box unless the planner answers whatever it is", () => {
+  assert.equal(allowanceLine(null), null);
+  assert.equal(allowanceLine({ mode: "agent", noticeAccepted: true, allowance }), "38 of 40 left today");
+  // Used up: it still says so.
+  const used = { ...allowance, user: { used: 40, limit: 40, remaining: 0 } };
+  assert.equal(allowanceLine({ mode: "planner", reason: "user_limit", noticeAccepted: true, allowance: used }), "0 of 40 left today");
+  // No model here, or the person's country: the allowance means nothing.
+  assert.equal(allowanceLine({ mode: "planner", reason: "region", noticeAccepted: true, allowance }), null);
+  assert.equal(allowanceLine({ mode: "planner", reason: "disabled", noticeAccepted: false, allowance }), null);
 });
 
 test("a finished step reads in the past tense", () => {

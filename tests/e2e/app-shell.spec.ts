@@ -227,12 +227,13 @@ test("Long pages scroll inside the main area, never the whole window", async ({ 
     expect(await main.evaluate((element) => element.scrollHeight > element.clientHeight * 2), path).toBe(true);
   }
 
-  // The collapsed sidebar's labels are hidden text too, below the fold on a short window.
+  // The collapsed sidebar's labels are hidden text too, below the fold on a short window. Its list
+  // scrolls under the pinned top (#308), and the window still doesn't.
   await page.setViewportSize({ width: 1280, height: 420 });
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
-  const nav = page.getByRole("navigation", { name: "Workspace" });
-  expect(await nav.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  const list = page.getByRole("navigation", { name: "Workspace" }).locator("div.overflow-y-auto");
+  expect(await list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
   expect(await windowOverflow(page)).toBe(0);
 });
 
@@ -403,7 +404,7 @@ test("The sidebar's bottom bar holds the profile, the bell and Trash, which show
   // Collapsed, the three stack in the same order and keep their names.
   await collapse.click();
   await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
-  await expect(profile).toHaveAccessibleName("Guest Settings and theme");
+  await expect(profile).toHaveAccessibleName(`${name} Settings and theme`);
   const stacked = await Promise.all([profile, bell, trash].map(async (item) => (await item.boundingBox())!));
   expect(stacked[0].y + stacked[0].height).toBeLessThanOrEqual(stacked[1].y);
   expect(stacked[1].y + stacked[1].height).toBeLessThanOrEqual(stacked[2].y);
@@ -443,4 +444,78 @@ test("On a phone the bar is at the bottom of the menu, and the menu button shows
   await page.getByRole("menuitem", { name: /Ana mentioned you in Launch/ }).click();
   await expect(sheet).toBeHidden();
   await expect(page.getByRole("button", { name: "Open navigation", exact: true })).toBeVisible();
+});
+
+/** The middle of a box, for comparing where two controls sit. */
+function middle(box: { x: number; y: number; width: number; height: number }) {
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+test("The AI's sparkle sits beside New task, never scrolls away, and opens the AI page (#308)", async ({ page, isMobile }) => {
+  test.skip(isMobile, "The sidebar is a menu sheet on phones; the next test covers it.");
+  // Short enough that the sidebar's list scrolls.
+  await page.setViewportSize({ width: 1280, height: 520 });
+  // An account: a guest's ✦ opens the sign-up pop-up instead (#458; guest-mode.spec.ts).
+  await signUpAndLogIn(page, "Sparkle");
+
+  const sidebar = page.getByRole("navigation", { name: "Workspace" });
+  const ai = sidebar.getByRole("link", { name: "AI", exact: true });
+  const newTask = sidebar.getByRole("button", { name: "New task", exact: true });
+  const aiBox = (await ai.boundingBox())!;
+  const newTaskBox = (await newTask.boundingBox())!;
+  // S3: on New task's row, right after it.
+  expect(Math.abs(middle(aiBox).y - middle(newTaskBox).y)).toBeLessThan(2);
+  expect(aiBox.x).toBeGreaterThan(newTaskBox.x + newTaskBox.width);
+  await expect(ai).toHaveAttribute("href", "/ai");
+  await expect(ai.locator("svg path")).toHaveCount(2);
+
+  // The list under it scrolls; the top with the sparkle stays where it is.
+  const roadmap = sidebar.getByRole("link", { name: "Roadmap" });
+  await roadmap.scrollIntoViewIfNeeded();
+  await expect(roadmap).toBeInViewport();
+  const scrolled = await sidebar.locator("div.overflow-y-auto").evaluate((element) => element.scrollTop);
+  expect(scrolled).toBeGreaterThan(0);
+  expect((await ai.boundingBox())!.y).toBe(aiBox.y);
+  await expect(ai).toBeInViewport();
+
+  // Only the AI has sparkles: the Planner has a compass.
+  await expect(sidebar.getByRole("link", { name: "Planner" }).locator("svg.lucide-compass")).toHaveCount(1);
+
+  await ai.hover();
+  await expect(page.locator("[data-tooltip]")).toHaveText("Ask AI Multi Ctrl J");
+  await ai.click();
+  await expect(page).toHaveURL(/\/ai$/);
+  await expect(ai).toHaveAttribute("aria-current", "page");
+
+  // On the icon rail it goes under +. The sidebar narrows over 200 ms, and + and ✦ are both centred
+  // in it, so they're measured once it's the 56 px rail; mid-way, the column narrows between the two
+  // reads (#464).
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+  await expect.poll(async () => Math.round((await page.locator("#app-sidebar").boundingBox())!.width)).toBe(56);
+  const plus = (await newTask.boundingBox())!;
+  const railAi = (await ai.boundingBox())!;
+  expect(Math.abs(middle(railAi).x - middle(plus).x)).toBeLessThan(2);
+  expect(railAi.y).toBeGreaterThan(plus.y + plus.height);
+  await expect(ai).toHaveAttribute("aria-current", "page");
+});
+
+test("On a phone the sparkle is pinned beside New task at the top of the menu (#308)", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "Phones only.");
+  await signUpAndLogIn(page, "Sparkle");
+  await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Navigation" });
+  const ai = sheet.getByRole("link", { name: "AI", exact: true });
+  const newTask = sheet.getByRole("button", { name: "New task", exact: true });
+  await expect(ai).toBeVisible();
+  const aiBox = (await ai.boundingBox())!;
+  expect(Math.abs(middle(aiBox).y - middle((await newTask.boundingBox())!).y)).toBeLessThan(2);
+
+  // Pinned: scrolling the menu's list leaves it where it was.
+  await sheet.getByRole("link", { name: "Roadmap" }).scrollIntoViewIfNeeded();
+  expect((await ai.boundingBox())!.y).toBe(aiBox.y);
+
+  await ai.click();
+  await expect(page).toHaveURL(/\/ai$/);
+  await expect(sheet).toBeHidden();
 });
