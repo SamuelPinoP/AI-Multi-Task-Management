@@ -94,6 +94,40 @@ export function GuestProfileCard({
   );
 }
 
+/**
+ * In the phone top bar (#461, design A): the avatar and the tasks left, beside the menu button, and
+ * the card opens below. When the page's name moves into the bar, the words fold into the avatar.
+ */
+export function GuestProfileChip({ folded, ...props }: Parameters<typeof GuestProfileCard>[0] & { folded: boolean }) {
+  const left = guestLeft(props.usage, "tasks");
+  return (
+    <Popover>
+      <PopoverTrigger
+        className={cn(
+          "flex h-10 min-w-0 shrink-0 items-center gap-2 rounded-[0.625rem] pl-1 text-left outline-none transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover",
+          folded ? "pr-1" : "pr-2.5",
+        )}
+      >
+        <GuestAvatar userId={props.userId} className="h-7 w-7 text-2xs" />
+        <span
+          className={cn(
+            "grid min-w-0 overflow-hidden transition-[max-width,opacity] duration-200 motion-reduce:transition-none",
+            folded ? "max-w-0 opacity-0" : "max-w-40 opacity-100",
+          )}
+        >
+          <span className="truncate text-[0.8125rem] font-semibold leading-4">Guest</span>
+          <span className={cn("truncate text-[0.71875rem] leading-4", left ? "text-muted" : "font-medium text-warning")}>
+            {left ? `${left} task${left === 1 ? "" : "s"} left` : "No tasks left"}
+          </span>
+        </span>
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={6} className="w-[18.75rem] border-0 bg-transparent shadow-none">
+        <GuestProfileCard {...props} className="shadow-raised" />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /** On the icon rail (#415) the guest profile is the avatar, and the card opens beside it. */
 export function GuestProfileRail(props: Parameters<typeof GuestProfileCard>[0]) {
   return (
