@@ -1,30 +1,21 @@
 "use client";
 
-import { ChartColumn, ChevronLeft, History, ListTodo, CalendarDays, Search, SquarePen, type LucideIcon } from "lucide-react";
+import { ChevronLeft, History, Search, SquarePen } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useAiChat } from "@/components/ai/ai-chat-provider";
 import { AiComposer } from "@/components/ai/ai-composer";
 import { AiNotice } from "@/components/ai/ai-notice";
 import { AiSpark } from "@/components/ai/ai-spark";
+import { AI_SUGGESTIONS } from "@/components/ai/ai-suggestions";
 import { AiThread } from "@/components/ai/ai-thread";
 import { MobileMenuButton } from "@/components/mobile-menu";
 import { uiPrimaryButtonClass } from "@/components/ui";
 import { ResizeHandle } from "@/components/ui/resize-handle";
-import type { AgentStatus } from "@/lib/ai/chat";
-import { allowanceText } from "@/lib/ai/chat-client";
+import { allowanceLine } from "@/lib/ai/chat-client";
 import { cn } from "@/lib/cn";
 import { AI_CHAT_LIST_LIMITS, AI_CHAT_LIST_WIDTH_COOKIE, savePanelWidthCookie, type PanelSize } from "@/lib/panel-resize";
+import { isAskAiShortcut } from "@/lib/shortcuts";
 import { openGuestSignup } from "@/lib/workspace-events";
-
-/**
- * Questions to start from. The round-3 canvas also shows a task and an event; those come back
- * once the assistant can draft them (#310). Until then it only looks things up.
- */
-const SUGGESTIONS: Array<{ text: string; icon: LucideIcon }> = [
-  { text: "What's overdue?", icon: ListTodo },
-  { text: "What analytics can you give?", icon: ChartColumn },
-  { text: "What's on my calendar this week?", icon: CalendarDays },
-];
 
 /**
  * The AI page for a guest (#458): what the assistant answers, and the sign-up pop-up, which opens on
@@ -50,7 +41,7 @@ function GuestAiPage() {
         <p className="text-[1.625rem] font-semibold leading-tight tracking-[-0.02em]">Ask AI Multi about your work</p>
         <p className="max-w-[28rem] text-sm text-muted">It answers from your tasks, calendar and projects. It needs a free account.</p>
         <ul className="grid w-full max-w-[32.5rem] gap-1.5">
-          {SUGGESTIONS.map(({ text, icon: Icon }) => (
+          {AI_SUGGESTIONS.map(({ text, icon: Icon }) => (
             <li key={text}>
               <button
                 type="button"
@@ -69,13 +60,6 @@ function GuestAiPage() {
       </div>
     </div>
   );
-}
-
-/** "38 of 40 left today", or nothing when the planner answers whatever the allowance (no model here). */
-function allowanceLine(status: AgentStatus | null) {
-  if (!status) return null;
-  if (status.mode === "planner" && (status.reason === "region" || status.reason === "disabled")) return null;
-  return allowanceText(status.allowance);
 }
 
 const iconButtonClass =
@@ -102,6 +86,17 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
   useEffect(() => {
     loadStatus();
   }, [loadStatus]);
+
+  // Ctrl J (Cmd J), which opens the AI bar's chat on other pages, puts the cursor in this page's box.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isAskAiShortcut(event) || document.querySelector('[role="dialog"][aria-modal="true"], [role="alertdialog"]')) return;
+      event.preventDefault();
+      composer.current?.focus();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   // New words keep the conversation scrolled to its end, unless the reader has scrolled up.
   const turns = current?.turns;
@@ -164,8 +159,9 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
           />
         </label>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-1">
+          {/* grid-cols-1: an auto column would grow to the longest title and push it past the list. */}
           {matches.length ? (
-            <ul className="grid gap-px">
+            <ul className="grid grid-cols-1 gap-px">
               {matches.map((item) => (
                 <li key={item.id}>
                   <button
@@ -229,7 +225,7 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
                 What do you want to get done<span className="max-lg:hidden">, {firstName}</span>?
               </p>
               <ul className="grid w-full max-w-[32.5rem] gap-1.5">
-                {SUGGESTIONS.map(({ text, icon: Icon }) => (
+                {AI_SUGGESTIONS.map(({ text, icon: Icon }) => (
                   <li key={text}>
                     <button
                       type="button"

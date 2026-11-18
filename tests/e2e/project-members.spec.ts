@@ -106,6 +106,9 @@ test("the owner dismisses an admin, and removing someone asks first", async () =
   const confirm = page.getByRole("dialog", { name: `Remove ${names.editor}?` });
   await expect(confirm).toBeVisible();
   await confirm.getByRole("button", { name: "Remove" }).click();
+  // Wait for the server's answer before reloading (#466): the toast, since the
+  // check after it passes at once while the dialog hides the list.
+  await expect(page.getByText(`was removed from ${projectName}`)).toBeVisible();
   await expect(row(page, names.editor)).toHaveCount(0);
   await page.reload();
   await expect(members(page).getByRole("listitem")).toHaveCount(2);

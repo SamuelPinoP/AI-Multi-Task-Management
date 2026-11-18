@@ -666,6 +666,34 @@ html[data-panel-resizing] * {
   user-select: none !important;
 }
 
+/* The same while the AI chat's top edge or a top corner is dragged (components/ai/ai-dock.tsx, #308). */
+html[data-chat-resizing],
+html[data-chat-resizing] * {
+  user-select: none !important;
+}
+
+html[data-chat-resizing="top"],
+html[data-chat-resizing="top"] * {
+  cursor: ns-resize !important;
+}
+
+html[data-chat-resizing="top-left"],
+html[data-chat-resizing="top-left"] * {
+  cursor: nwse-resize !important;
+}
+
+html[data-chat-resizing="top-right"],
+html[data-chat-resizing="top-right"] * {
+  cursor: nesw-resize !important;
+}
+
+/* While the AI bar is at the bottom of the page (#308), toasts appear above it rather than over it.
+   Sonner sets these offsets inline, hence !important. */
+html[data-ai-bar] [data-sonner-toaster] {
+  --offset-bottom: 6.5rem !important;
+  --mobile-offset-bottom: 9.25rem !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 1ms !important;

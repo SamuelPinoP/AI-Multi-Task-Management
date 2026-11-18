@@ -27,6 +27,12 @@ export default defineConfig({
   // One worker: a cold dev server compiling routes for two workers at once
   // aborts navigations, and the suite is small.
   workers: 1,
+  // On CI a failed test runs once more, so one slow moment on the runner
+  // doesn't block a merge. A test that passes only on its retry still counts
+  // as flaky: the GitHub reporter marks it with an error annotation and the
+  // run summary counts it, so it gets fixed rather than hidden (#466).
+  // Locally, a failure fails at once.
+  retries: isCI ? 1 : 0,
   expect: { timeout: 10_000 },
   reporter: isCI
     ? [["list"], ["github"], ["html", { open: "never" }]]
@@ -93,7 +99,7 @@ export default defineConfig({
       // The browser flows again on a phone-sized screen.
       name: "mobile",
       use: { ...devices["Pixel 7"] },
-      testMatch: /(workspace|app-shell|accent-color|home|tasks|quick-add|projects|notes|events|calendar|accessibility|project-insights|subtasks|goals|linked-notes|project-templates|project-github|tree|chat-composer|chat-search|phone-fields|text-size|labels|bulk-edit|tasks-by-project|task-comments|direct-messages|project-members|add-people|phone-titles|usage|users|feedback|ai-page|guest-mode)\.spec\.ts/,
+      testMatch: /(workspace|app-shell|accent-color|home|tasks|quick-add|projects|notes|events|calendar|accessibility|project-insights|subtasks|goals|linked-notes|project-templates|project-github|tree|chat-composer|chat-search|phone-fields|text-size|labels|bulk-edit|tasks-by-project|task-comments|direct-messages|project-members|add-people|phone-titles|usage|users|feedback|ai-page|ai-bar|guest-mode)\.spec\.ts/,
     },
   ],
 });

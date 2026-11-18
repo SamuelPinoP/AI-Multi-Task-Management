@@ -4,6 +4,7 @@ import {
   CalendarDays,
   ChevronRight,
   CircleUserRound,
+  Compass,
   Download,
   FolderKanban,
   Gauge,
@@ -20,7 +21,6 @@ import {
   PanelLeftOpen,
   Plus,
   Settings,
-  Sparkles,
   SquareCheckBig,
   SquareKanban,
   Sun,
@@ -33,6 +33,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AccentMenuItems } from "@/components/accent-menu";
+import { AiDock } from "@/components/ai/ai-dock";
+import { AiSpark } from "@/components/ai/ai-spark";
 import { LogoMark } from "@/components/brand/logo-mark";
 import { CommandPalette } from "@/components/command-palette";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -63,7 +65,7 @@ import { isFullHeightPage, isNavItemActive, pageTitleFor, type NavMatch } from "
 import { authPageHref, confirmEmailHref } from "@/lib/auth-links";
 import { cn } from "@/lib/cn";
 import { getSafeRedirectPath } from "@/lib/safe-redirect";
-import { isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
+import { isAskAiShortcut, isTypingTarget, resolveShortcut } from "@/lib/shortcuts";
 import { calendarNavItem } from "@/lib/calendar-view";
 import { formatUnreadCount } from "@/lib/chats";
 import { savePanelCookies, shownWidth, SIDEBAR_LIMITS, type PanelSize } from "@/lib/panel-resize";
@@ -354,6 +356,42 @@ function SidebarProject({
   );
 }
 
+/**
+ * The way to the AI page (#308, design S3): a square ✦ beside New task, or under + on the rail.
+ * It's named "AI" for screen readers and shows as selected on the AI page.
+ */
+function AiTile({ active, guest, onNavigate, className }: { active: boolean; guest: boolean; onNavigate?: () => void; className?: string }) {
+  return (
+    <Tooltip
+      content={
+        <>
+          Ask AI Multi <TooltipKey>Ctrl J</TooltipKey>
+        </>
+      }
+    >
+      <Link
+        href="/ai"
+        onClick={(event) => {
+          // Guests get the sign-up pop-up in place (#458): the AI needs an account.
+          if (guest) {
+            event.preventDefault();
+            openGuestSignup("ai");
+          } else onNavigate?.();
+        }}
+        aria-label="AI"
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "grid shrink-0 place-items-center rounded-lg border border-accent/20 bg-accent-soft transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_10%,var(--accent-soft))]",
+          active && "border-accent bg-[color-mix(in_srgb,var(--accent)_10%,var(--accent-soft))] shadow-[inset_0_0_0_1px_var(--accent)]",
+          className,
+        )}
+      >
+        <AiSpark />
+      </Link>
+    </Tooltip>
+  );
+}
+
 /** Trash while it holds something (#404, design 2C). The command palette reaches it either way. */
 function TrashButton({ count, active, onNavigate }: { count: number; active: boolean; onNavigate?: () => void }) {
   const items = `${count} item${count === 1 ? "" : "s"}`;
@@ -427,11 +465,13 @@ function Sidebar({
     { href: "/board", label: "Boards", icon: SquareKanban, match: ["/tasks/board", "/tree"] },
   ];
   const toolItems: NavItem[] = [
-    { href: "/planner", label: "Planner", icon: Sparkles },
+    // A compass, so only the AI has sparkles (#308).
+    { href: "/planner", label: "Planner", icon: Compass },
     { href: "/goals", label: "Goals", icon: Target },
     { href: "/roadmap", label: "Roadmap", icon: MapIcon },
   ];
   const linkProps = { pathname, collapsed, onNavigate };
+  const aiActive = pathname === "/ai";
   const trash = nav.trashItems ? <TrashButton count={nav.trashItems} active={pathname === "/trash"} onNavigate={onNavigate} /> : null;
   const guestProfile =
     user.isGuest && nav.guest
@@ -447,132 +487,145 @@ function Sidebar({
 
   return (
     <div className="flex h-full flex-col">
-      {/* relative keeps the collapsed sidebar's hidden labels inside this scroller, as on main. The rail
-          centres everything on one axis and hides its scrollbar, which would push the icons off centre. */}
-      <nav
-        aria-label="Workspace"
-        className={cn(
-          "relative flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden py-3",
-          collapsed ? "items-center px-0 [scrollbar-width:none]" : "px-2.5 [scrollbar-width:thin]",
-        )}
-      >
-        {collapsed ? (
-          <>
-            {/* The rail (#415, design 1A): a smaller logo turns into the expand button on hover or focus, as in ChatGPT and Claude. */}
-            <Tooltip content="Expand sidebar">
-              <button
-                type="button"
-                onClick={onToggleCollapsed}
-                aria-label="Expand sidebar"
-                className="group/logo mb-2 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"
-              >
-                <LogoMark className="col-start-1 row-start-1 h-7 w-7 transition-opacity duration-150 group-hover/logo:opacity-0 group-focus-visible/logo:opacity-0" />
-                <PanelLeftOpen
-                  aria-hidden="true"
-                  className="col-start-1 row-start-1 h-4 w-4 opacity-0 transition-opacity duration-150 group-hover/logo:opacity-100 group-focus-visible/logo:opacity-100"
-                />
-              </button>
-            </Tooltip>
-            <span className="sr-only">AI Multi</span>
-          </>
-        ) : (
-          <div className="flex items-center gap-2.5 px-1.5 pb-3">
-            <LogoMark className="h-8 w-8 shrink-0" />
-            <p className="min-w-0 flex-1 truncate text-sm font-semibold">AI Multi</p>
-            {/* Collapse sits by the logo; the bottom bar belongs to the account (#404, design 1B). */}
-            {onToggleCollapsed ? (
-              <Tooltip content="Collapse sidebar">
+      <nav aria-label="Workspace" className="flex min-h-0 flex-1 flex-col">
+        {/* The top stays put (#308, design S3): the logo, New task and the AI's ✦ are always in view,
+            however long the list below grows. relative keeps the rail's hidden "AI Multi" inside it. */}
+        <div className={cn("relative flex shrink-0 flex-col gap-0.5 pt-3", collapsed ? "items-center px-0" : "px-2.5")}>
+          {collapsed ? (
+            <>
+              {/* The rail (#415, design 1A): a smaller logo turns into the expand button on hover or focus, as in ChatGPT and Claude. */}
+              <Tooltip content="Expand sidebar">
                 <button
                   type="button"
                   onClick={onToggleCollapsed}
-                  aria-label="Collapse sidebar"
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink"
+                  aria-label="Expand sidebar"
+                  className="group/logo mb-2 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"
                 >
-                  <PanelLeftClose aria-hidden="true" className="h-4 w-4" />
+                  <LogoMark className="col-start-1 row-start-1 h-7 w-7 transition-opacity duration-150 group-hover/logo:opacity-0 group-focus-visible/logo:opacity-0" />
+                  <PanelLeftOpen
+                    aria-hidden="true"
+                    className="col-start-1 row-start-1 h-4 w-4 opacity-0 transition-opacity duration-150 group-hover/logo:opacity-100 group-focus-visible/logo:opacity-100"
+                  />
                 </button>
               </Tooltip>
-            ) : null}
-          </div>
-        )}
+              <span className="sr-only">AI Multi</span>
+            </>
+          ) : (
+            <div className="flex items-center gap-2.5 px-1.5 pb-3">
+              <LogoMark className="h-8 w-8 shrink-0" />
+              <p className="min-w-0 flex-1 truncate text-sm font-semibold">AI Multi</p>
+              {/* Collapse sits by the logo; the bottom bar belongs to the account (#404, design 1B). */}
+              {onToggleCollapsed ? (
+                <Tooltip content="Collapse sidebar">
+                  <button
+                    type="button"
+                    onClick={onToggleCollapsed}
+                    aria-label="Collapse sidebar"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink"
+                  >
+                    <PanelLeftClose aria-hidden="true" className="h-4 w-4" />
+                  </button>
+                </Tooltip>
+              ) : null}
+            </div>
+          )}
 
-        {collapsed ? (
-          // A square that matches the logo's; the tooltip names it and its key.
-          <Tooltip
-            content={
-              <>
-                New task <TooltipKey>N</TooltipKey>
-              </>
-            }
-          >
-            <button
-              type="button"
-              onClick={onNewTask}
-              aria-label="New task"
-              aria-keyshortcuts="N"
-              className="mb-2.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-accent-ink transition-colors hover:bg-accent-hover"
-            >
-              <Plus aria-hidden="true" className="h-4 w-4" />
+          {collapsed ? (
+            <>
+              {/* A square that matches the logo's; the tooltip names it and its key. */}
+              <Tooltip
+                content={
+                  <>
+                    New task <TooltipKey>N</TooltipKey>
+                  </>
+                }
+              >
+                <button
+                  type="button"
+                  onClick={onNewTask}
+                  aria-label="New task"
+                  aria-keyshortcuts="N"
+                  className="mb-2 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-accent-ink transition-colors hover:bg-accent-hover"
+                >
+                  <Plus aria-hidden="true" className="h-4 w-4" />
+                </button>
+              </Tooltip>
+              {/* On the rail the ✦ goes under + (#308). */}
+              <AiTile active={aiActive} guest={user.isGuest} onNavigate={onNavigate} className="mb-2.5 h-8 w-8" />
+            </>
+          ) : (
+            <div className="mb-2 flex gap-1.5">
+              <button
+                type="button"
+                onClick={onNewTask}
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-lg bg-accent px-2.5 py-2 text-sm font-semibold text-accent-ink transition-colors hover:bg-accent-hover"
+              >
+                <Plus aria-hidden="true" className="h-4 w-4 shrink-0" />
+                <span className="truncate">New task</span>
+                <kbd aria-hidden="true" className="ml-auto rounded border border-current px-1 font-mono text-2xs opacity-75">N</kbd>
+              </button>
+              {/* S3 (#308): a square ✦ beside New task, wider on phones where it's tapped. */}
+              <AiTile active={aiActive} guest={user.isGuest} onNavigate={onNavigate} className="w-[2.375rem] self-stretch max-lg:w-[3.125rem]" />
+            </div>
+          )}
+        </div>
+
+        {/* relative keeps the collapsed sidebar's hidden labels inside this scroller, as on main. The rail
+            centres everything on one axis and hides its scrollbar, which would push the icons off centre. */}
+        <div
+          className={cn(
+            "relative flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden pb-3",
+            collapsed ? "items-center px-0 [scrollbar-width:none]" : "px-2.5 [scrollbar-width:thin]",
+          )}
+        >
+          {mainItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
+
+          <GroupLabel collapsed={collapsed}>Work</GroupLabel>
+          {workItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
+
+          <GroupLabel collapsed={collapsed}>
+            <Link href="/projects" onClick={onNavigate} className="hover:text-ink">Projects</Link>
+            <button type="button" onClick={onNewProject} className="rounded p-0.5 hover:bg-surface-hover hover:text-ink" title="Create a project">
+              <Plus aria-hidden="true" className="h-3.5 w-3.5" />
+              <span className="sr-only">Create a project</span>
             </button>
-          </Tooltip>
-        ) : (
-          <button
-            type="button"
-            onClick={onNewTask}
-            className="mb-2 flex items-center gap-2 rounded-lg bg-accent px-2.5 py-2 text-sm font-semibold text-accent-ink transition-colors hover:bg-accent-hover"
-          >
-            <Plus aria-hidden="true" className="h-4 w-4" />
-            New task
-            <kbd aria-hidden="true" className="ml-auto rounded border border-current px-1 font-mono text-2xs opacity-75">N</kbd>
-          </button>
-        )}
+          </GroupLabel>
+          {collapsed ? (
+            <SidebarLink item={{ href: "/projects", label: "Projects", icon: FolderKanban }} {...linkProps} />
+          ) : nav.projects.length ? (
+            <>
+              {nav.projects.map((project) => {
+                const href = `/projects/${project.id}`;
+                const active = pathname === href || pathname.startsWith(`${href}/`);
+                // Until the user opens or closes it, a project is open while one of its pages is showing.
+                const open = projectsOpen[project.id] ?? active;
+                return (
+                  <SidebarProject
+                    key={project.id}
+                    project={project}
+                    pathname={pathname}
+                    open={open}
+                    chatUnread={project.unreadChat}
+                    onToggle={() => onToggleProject(project.id, !open)}
+                    onNavigate={onNavigate}
+                  />
+                );
+              })}
+              {nav.activeProjectCount > nav.projects.length ? (
+                <Link href="/projects" onClick={onNavigate} className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted hover:bg-surface-hover hover:text-ink">
+                  All {nav.activeProjectCount} projects
+                </Link>
+              ) : null}
+            </>
+          ) : (
+            <button type="button" onClick={onNewProject} className="rounded-lg px-2.5 py-1.5 text-left text-xs text-muted hover:bg-surface-hover hover:text-ink">
+              No projects yet. Create one
+            </button>
+          )}
 
-        {mainItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
-
-        <GroupLabel collapsed={collapsed}>Work</GroupLabel>
-        {workItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
-
-        <GroupLabel collapsed={collapsed}>
-          <Link href="/projects" onClick={onNavigate} className="hover:text-ink">Projects</Link>
-          <button type="button" onClick={onNewProject} className="rounded p-0.5 hover:bg-surface-hover hover:text-ink" title="Create a project">
-            <Plus aria-hidden="true" className="h-3.5 w-3.5" />
-            <span className="sr-only">Create a project</span>
-          </button>
-        </GroupLabel>
-        {collapsed ? (
-          <SidebarLink item={{ href: "/projects", label: "Projects", icon: FolderKanban }} {...linkProps} />
-        ) : nav.projects.length ? (
-          <>
-            {nav.projects.map((project) => {
-              const href = `/projects/${project.id}`;
-              const active = pathname === href || pathname.startsWith(`${href}/`);
-              // Until the user opens or closes it, a project is open while one of its pages is showing.
-              const open = projectsOpen[project.id] ?? active;
-              return (
-                <SidebarProject
-                  key={project.id}
-                  project={project}
-                  pathname={pathname}
-                  open={open}
-                  chatUnread={project.unreadChat}
-                  onToggle={() => onToggleProject(project.id, !open)}
-                  onNavigate={onNavigate}
-                />
-              );
-            })}
-            {nav.activeProjectCount > nav.projects.length ? (
-              <Link href="/projects" onClick={onNavigate} className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted hover:bg-surface-hover hover:text-ink">
-                All {nav.activeProjectCount} projects
-              </Link>
-            ) : null}
-          </>
-        ) : (
-          <button type="button" onClick={onNewProject} className="rounded-lg px-2.5 py-1.5 text-left text-xs text-muted hover:bg-surface-hover hover:text-ink">
-            No projects yet. Create one
-          </button>
-        )}
-
-        <GroupLabel collapsed={collapsed}>Tools</GroupLabel>
-        {toolItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
+          <GroupLabel collapsed={collapsed}>Tools</GroupLabel>
+          {toolItems.map((item) => <SidebarLink key={item.href} item={item} {...linkProps} />)}
+        </div>
       </nav>
 
       {guestProfile ? (
@@ -936,6 +989,9 @@ export function AppShell({
   const isPublicPage = publicPaths.has(pathname) || isLoggedOutLanding;
   const showWorkspaceShell = Boolean(currentUser && initialNav && !isPublicPage);
   const fullHeight = isFullHeightPage(pathname);
+  // The AI bar (#308): on every page but the AI page, which has its own message box. The chats have
+  // theirs too, so there it waits as the ✦ button. Guests can't use the assistant.
+  const aiDock = !currentUser || currentUser.isGuest || pathname === "/ai" ? null : fullHeight ? "button" : "bar";
 
   const [nav, setNav] = useState(initialNav);
   const [sidebar, setSidebar] = useState<PanelSize>({ width: initialSidebarWidth, collapsed: initialSidebarCollapsed });
@@ -1035,6 +1091,12 @@ export function AppShell({
         setSearchOpen((open) => !open);
         return;
       }
+      // Ctrl J asks the AI (#308); a guest gets the sign-up pop-up instead (#458), outside other dialogs.
+      if (guestUsage && isAskAiShortcut(event) && !document.querySelector('[role="dialog"][aria-modal="true"], [role="alertdialog"]')) {
+        event.preventDefault();
+        openGuestSignup("ai");
+        return;
+      }
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
       if (isTypingTarget(event.target)) return;
       // Leave keys alone while a dialog, sheet or menu is open.
@@ -1064,7 +1126,7 @@ export function AppShell({
       window.clearTimeout(goTimer);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [guestFull, router, showWorkspaceShell]);
+  }, [guestFull, guestUsage, router, showWorkspaceShell]);
 
   // Dragging the edge (#415) updates the width as it goes and saves it when let go; the server reads
   // the cookies, so the next page load starts at the same width.
@@ -1202,15 +1264,21 @@ export function AppShell({
       {/* Pages reach the phone menu through this, for a menu button in a header of their own (#420).
           On phones the bell is inside the menu (#404), so the button shows a dot for anything new. */}
       <MobileMenuContext.Provider value={mobileMenu}>
-        <div className="flex min-w-0 flex-1 flex-col">
+        {/* relative: the AI bar floats at the bottom of this column, centred over the page (#308). */}
+        <div className="relative flex min-w-0 flex-1 flex-col">
           {/* The chats fill the screen with a header that never scrolls away, so it's their only bar (#420). */}
           {fullHeight ? null : <TopBar nav={nav} pathname={pathname} appAdmin={currentUser.isAppAdmin} />}
           <OfflineBanner />
           {/* relative: hidden (sr-only) text is absolutely positioned, and it scrolls only inside a positioned
-              scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar. */}
-          <main id="main-content" className={cn("relative min-h-0 flex-1 overflow-y-auto", !fullHeight && "pb-24 lg:pb-0")}>
+              scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar.
+              Pages end above the AI bar, and on phones above the bar and the tabs. */}
+          <main
+            id="main-content"
+            className={cn("relative min-h-0 flex-1 overflow-y-auto", !fullHeight && (aiDock === "bar" ? "pb-36 lg:pb-24" : "pb-24 lg:pb-0"))}
+          >
             {children}
           </main>
+          {aiDock ? <AiDock variant={aiDock} /> : null}
           <MobileTabs pathname={pathname} onNewTask={openNewTask} inFlow={fullHeight} />
         </div>
       </MobileMenuContext.Provider>
