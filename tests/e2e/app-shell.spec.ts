@@ -483,9 +483,12 @@ test("The AI's sparkle sits beside New task, never scrolls away, and opens the A
   await expect(page).toHaveURL(/\/ai$/);
   await expect(ai).toHaveAttribute("aria-current", "page");
 
-  // On the icon rail it goes under +.
+  // On the icon rail it goes under +. The sidebar narrows over 200 ms, and + and ✦ are both centred
+  // in it, so they're measured once it's the 56 px rail; mid-way, the column narrows between the two
+  // reads (#464).
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+  await expect.poll(async () => Math.round((await page.locator("#app-sidebar").boundingBox())!.width)).toBe(56);
   const plus = (await newTask.boundingBox())!;
   const railAi = (await ai.boundingBox())!;
   expect(Math.abs(middle(railAi).x - middle(plus).x)).toBeLessThan(2);
