@@ -1,5 +1,5 @@
 import { after, NextResponse, type NextRequest } from "next/server";
-import { createSessionRecord, getSafeRedirectPath, getSessionCookieOptions, getSessionUser, SESSION_COOKIE_NAME } from "@/lib/auth";
+import { createSessionRecord, getSafeRedirectPath, getSessionCookieOptions, getSessionUser, SESSION_COOKIE_NAME, signedInBeforeCookie } from "@/lib/auth";
 import { authPageHref } from "@/lib/auth-links";
 import {
   accountForGoogleIdentity,
@@ -59,5 +59,6 @@ export async function GET(request: NextRequest) {
   }
   const response = finish(next);
   response.cookies.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions(cookieExpiresAt));
+  response.cookies.set(...signedInBeforeCookie());
   return response;
 }

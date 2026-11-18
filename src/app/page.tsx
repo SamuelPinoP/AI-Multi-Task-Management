@@ -9,9 +9,10 @@ import { NowAndNext } from "@/components/home/now-and-next";
 import { QuickAdd, QuickAddFocusButton } from "@/components/home/quick-add";
 import { TeamChatList } from "@/components/home/team-chat";
 import { WeekBars } from "@/components/home/week-bars";
-import { LandingPage } from "@/components/landing-page";
+import { cookies } from "next/headers";
+import { GuestStart } from "@/components/guest/guest-start";
 import { uiButtonClass } from "@/components/ui";
-import { getSessionUser, isGuestLoginEnabled, isPublicSignupEnabled, mustConfirmEmail } from "@/lib/auth";
+import { getSessionUser, isGuestLoginEnabled, mustConfirmEmail, SIGNED_IN_BEFORE_COOKIE } from "@/lib/auth";
 import { confirmEmailHref } from "@/lib/auth-links";
 import { getChatSummaries } from "@/lib/chats-data";
 import { cn } from "@/lib/cn";
@@ -156,7 +157,11 @@ export default async function HomePage() {
   // Signed up, but the email isn't confirmed yet (#350): back to "Check your email".
   if (user && mustConfirmEmail(user)) redirect(confirmEmailHref());
   if (!user) {
-    return <LandingPage signupEnabled={isPublicSignupEnabled()} guestLoginEnabled={isGuestLoginEnabled()} />;
+    // Visitors land in the app (#460): a new one gets a guest workspace with sample content, started
+    // from the browser; one that has signed in here before goes to log in.
+    const signedInBefore = (await cookies()).has(SIGNED_IN_BEFORE_COOKIE);
+    if (signedInBefore || !isGuestLoginEnabled()) redirect("/login");
+    return <GuestStart />;
   }
 
   // The user's wall clock, so "today" follows their time zone, not the server's (#125).

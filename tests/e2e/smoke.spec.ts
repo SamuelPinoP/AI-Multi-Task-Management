@@ -3,10 +3,18 @@ import { expect, test } from "@playwright/test";
 // @smoke tests also run against Vercel previews, which share the production
 // database. Keep them read-only: no sign-ups, no sign-ins, no writes.
 
-test("landing page loads", { tag: "@smoke" }, async ({ page }) => {
-  const response = await page.goto("/");
-  expect(response?.status()).toBe(200);
-  await expect(page.getByRole("link", { name: /log in/i }).first()).toBeVisible();
+// With scripts on, "/" starts a guest workspace (#460), a write; with them off it only shows the start page.
+test.describe("the start page", () => {
+  test.use({ javaScriptEnabled: false });
+
+  test("the start page loads", { tag: "@smoke" }, async ({ page }) => {
+    const response = await page.goto("/");
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1, name: "AI Multi" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Log in" })).toBeVisible();
+    // Google's sign-in review looks for the Privacy Policy on the home page (#358).
+    await expect(page.getByRole("link", { name: "Privacy Policy" })).toBeVisible();
+  });
 });
 
 test("login page loads", { tag: "@smoke" }, async ({ page }) => {

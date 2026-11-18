@@ -4,6 +4,7 @@ import {
   getSafeRedirectPath,
   getSessionCookieOptions,
   mustConfirmEmail,
+  signedInBeforeCookie,
   SESSION_COOKIE_NAME,
   verifyPassword,
 } from "@/lib/auth";
@@ -89,6 +90,7 @@ export async function POST(request: Request) {
     getSessionCookieOptions(cookieExpiresAt),
   );
   response.cookies.set(LOGIN_IDENTIFIER_COOKIE, "", { path: "/login", maxAge: 0 });
+  response.cookies.set(...signedInBeforeCookie());
 
   return response;
 }

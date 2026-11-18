@@ -58,6 +58,8 @@ async function seedWorkspace(page: Page) {
 
 test("public pages have no WCAG A/AA violations", async ({ page, browser }) => {
   const found: string[] = [];
+  // "/" starts a guest workspace (#460); held back here, its start page stays put for the scan.
+  await page.route("**/api/auth/guest/start", (route) => route.fulfill({ status: 403, json: { error: "automated" } }));
   for (const path of ["/", "/login", "/login?error=invalid", "/signup", "/forgot-password", "/verify-email", "/verify-email?status=invalid", "/privacy", "/terms"]) {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
