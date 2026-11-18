@@ -34,6 +34,9 @@ model User {
   /// When the user agreed to the AI assistant's data notice (#307, #308); null until they do. Nothing is sent to
   /// an AI provider for them before that, or once AI_NOTICE_UPDATED moves past it (src/lib/ai/notice.ts).
   aiNoticeAcceptedAt           DateTime?
+  /// How the AI bar shows on the person's pages (#308): at the bottom, minimized to a button, or hidden (then
+  /// it waits on the AI page). Null until they choose, which shows the bar. Saved per account, not per device.
+  aiDock                       AiDockState?
   sessions                     Session[]
   signInEvents                 SignInEvent[]
   oauthAccounts                OAuthAccount[]
@@ -98,6 +101,16 @@ model AgentRun {
 
 /// How an AI assistant message ended (src/lib/ai/chat.ts). Every outcome but ANSWERED, STEP_LIMIT,
 /// INVALID_ARGUMENTS, CANCELLED and FAILED was answered by the rule-based planner instead.
+/// Where the AI bar is (#308): see User.aiDock.
+enum AiDockState {
+  /// At the bottom of every page.
+  OPEN
+  /// A ✦ button at the bottom right.
+  MINIMIZED
+  /// Off the pages; the AI page offers to show it again.
+  HIDDEN
+}
+
 enum AgentRunOutcome {
   /// The model answered.
   ANSWERED
