@@ -79,6 +79,8 @@ function titlesIn(content: Record<string, unknown>) {
 /**
  * The e2e tests' model. Rules, on the person's latest message:
  * - "[429]" or "[503]" in it: fails like a rate limit or an outage;
+ * - "[history]" in it: answers with the messages it was sent before this one, so the tests can see
+ *   which earlier turns the server gave the model (#452);
  * - a tool's name in it (optionally followed by JSON arguments): calls that tool;
  * - otherwise: answers "You asked: …".
  * After tool results, it answers with the titles they list (and any percent done), or the tool's error.
@@ -110,6 +112,14 @@ export function createFakeProvider(): Provider {
       const content = last?.role === "user" ? last.content : "";
       if (content.includes("[429]")) throw new ProviderError("rate_limited", "The fake provider's rate limit", 429);
       if (content.includes("[503]")) throw new ProviderError("unavailable", "The fake provider is down", 503);
+
+      if (content.includes("[history]")) {
+        const earlier = request.messages.slice(0, -1).map((message) => (message.role === "tool" ? "tool: …" : `${message.role}: ${message.content}`));
+        const text = `Earlier messages: ${earlier.length ? earlier.join(" | ") : "none"}`;
+        yield { type: "text", text };
+        yield finish(text);
+        return;
+      }
 
       const tool = request.tools.find((candidate) => new RegExp(`\\b${candidate.name}\\b`).test(content));
       if (tool) {

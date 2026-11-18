@@ -1,13 +1,15 @@
 // The AI chat in the browser (#308): reads the answer's stream of JSON lines
 // (`ChatEvent`, from POST /api/agent/chat), folds each event into the answer
-// the chat shows, builds the next request from the conversation, and splits an
-// answer's text into paragraphs and lists. Plain functions, without React or
-// server code, so they're unit tested on their own; the chat's state lives in
-// src/components/ai/ai-chat-provider.tsx.
+// the chat shows (the server folds them the same way to store the answer,
+// #452), turns a stored chat back into a conversation, groups the chats by day,
+// and splits an answer's text into paragraphs and lists. Plain functions,
+// without React or server code, so they're unit tested on their own; the chat's
+// state lives in src/components/ai/ai-chat-provider.tsx.
 import type { Allowance } from "@/lib/ai/allowance";
 import type { AgentStatus, ChatEvent } from "@/lib/ai/chat";
-import { MAX_MESSAGE_CHARS, MAX_MESSAGES } from "@/lib/ai/chat-limits";
+import type { StoredMessage } from "@/lib/ai/chat-history-core";
 import type { Source } from "@/lib/ai/tools/define";
+import { dayKeyInZone } from "@/lib/user-time";
 
 /** One answer as the chat shows it, filled in as its events arrive. */
 export type ChatAnswer = {
@@ -135,23 +137,68 @@ export function createEventReader() {
   };
 }
 
-export type RequestMessage = { role: "user" | "assistant"; content: string };
+/**
+ * Shown with a stored answer the planner gave (#452). The reason it gave at the time (a cap that
+ * has since reset, an outage) would be out of date, so the note only says who answered.
+ */
+export const PLANNER_NOTE = "Your planner answered this one instead of the AI.";
 
 /**
- * The messages for a new question: the conversation so far, then the question. Only finished
- * answers count, so a failed one leaves its question out and the roles keep alternating. Each
- * message is cut to what the endpoint accepts, and only as many whole exchanges are sent as one
- * request may carry (the model sees just the latest few anyway, MODEL_HISTORY).
+ * A stored chat as the conversation shows it: each question with the answer stored after it. The
+ * server stores both together, so a question without an answer only comes from damaged data, and is
+ * left out.
  */
-export function requestMessages(turns: ChatTurn[], question: string): RequestMessage[] {
-  const exchanges = turns
-    .filter((turn) => turn.answer.done && !turn.answer.error && turn.answer.text.trim())
-    .map((turn): RequestMessage[] => [
-      { role: "user", content: turn.question.trim().slice(0, MAX_MESSAGE_CHARS) },
-      { role: "assistant", content: turn.answer.text.trim().slice(0, MAX_MESSAGE_CHARS) },
-    ]);
-  const room = Math.floor((MAX_MESSAGES - 1) / 2);
-  return [...exchanges.slice(-room).flat(), { role: "user", content: question.trim().slice(0, MAX_MESSAGE_CHARS) }];
+export function turnsFromMessages(messages: StoredMessage[]): ChatTurn[] {
+  const turns: ChatTurn[] = [];
+  let asked: StoredMessage | null = null;
+  for (const message of messages) {
+    if (message.role === "USER") {
+      asked = message;
+      continue;
+    }
+    if (!asked) continue;
+    turns.push({
+      id: asked.id,
+      question: asked.content,
+      answer: {
+        steps: [],
+        sources: message.sources,
+        text: message.content,
+        notice: message.role === "PLANNER" ? PLANNER_NOTE : null,
+        error: null,
+        done: true,
+      },
+    });
+    asked = null;
+  }
+  return turns;
+}
+
+export type ChatGroupLabel = "Today" | "Yesterday" | "Previous 7 days" | "Previous 30 days" | "Older";
+
+const GROUP_ORDER: ChatGroupLabel[] = ["Today", "Yesterday", "Previous 7 days", "Previous 30 days", "Older"];
+
+function daysBetween(fromKey: string, toKey: string) {
+  return Math.round((Date.parse(`${toKey}T00:00:00Z`) - Date.parse(`${fromKey}T00:00:00Z`)) / 86_400_000);
+}
+
+/**
+ * The chats by day of their latest message in the person's time zone, as the round-2 canvas shows
+ * them: Today, Yesterday, Previous 7 days, Previous 30 days, then Older. Empty groups are left out;
+ * each keeps the chats' order.
+ */
+export function chatGroups<Chat extends { updatedAt: string }>(chats: Chat[], timeZone: string | null, now = new Date()) {
+  const today = dayKeyInZone(timeZone, now);
+  const groups = new Map<ChatGroupLabel, Chat[]>();
+  for (const chat of chats) {
+    const days = daysBetween(dayKeyInZone(timeZone, new Date(chat.updatedAt)), today);
+    const label: ChatGroupLabel = days <= 0 ? "Today" : days === 1 ? "Yesterday" : days <= 7 ? "Previous 7 days" : days <= 30 ? "Previous 30 days" : "Older";
+    groups.set(label, [...(groups.get(label) ?? []), chat]);
+  }
+  return GROUP_ORDER.flatMap((label) => {
+    const items = groups.get(label);
+    return items ? [{ label, chats: items }] : [];
+  });
 }
 
 /** A chat's name in the list: its first question, cut at a word to about `max` characters. */

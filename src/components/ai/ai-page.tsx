@@ -1,13 +1,14 @@
 "use client";
 
-import { ChevronDown, ChevronLeft, EyeOff, History, Maximize2, Minimize2, Search, SquarePen, Undo2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, Ellipsis, EyeOff, History, Maximize2, Minimize2, Pencil, Search, SquarePen, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { AiChatList, KEPT_CHATS_TEXT } from "@/components/ai/ai-chat-list";
 import { useAiChat, useAiDock } from "@/components/ai/ai-chat-provider";
 import { AiComposer } from "@/components/ai/ai-composer";
 import { AiNotice } from "@/components/ai/ai-notice";
 import { AiSpark } from "@/components/ai/ai-spark";
 import { AI_SUGGESTIONS } from "@/components/ai/ai-suggestions";
-import { AiThread } from "@/components/ai/ai-thread";
+import { AiThread, AiThreadLoading } from "@/components/ai/ai-thread";
 import { MobileMenuButton } from "@/components/mobile-menu";
 import { uiPrimaryButtonClass } from "@/components/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -136,15 +137,48 @@ function AiBarMenu({ compact = false }: { compact?: boolean }) {
 }
 
 /**
- * The AI page (#308, the classic layout picked on the round-3 canvas): this tab's chats on the
- * left, in a list whose edge resizes from 220 to 360 px like the sidebar's, and the conversation
- * in a 760 px column with one message box. Phones show the conversation, and the list full screen
- * from the clock button. The chat itself lives above the page (AiChatProvider in the root layout),
- * so a conversation stays while people look at the items it links to.
+ * A stored chat's ⋯ menu (#452; the round-2 canvas): Rename and Delete chat. Only for chats the
+ * server has, and not while an answer is arriving.
+ */
+function ChatOptions() {
+  const { current, busy, renameChat, deleteChat } = useAiChat();
+  if (!current?.serverId) return null;
+  const id = current.id;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label="Chat options"
+        title="Chat options"
+        disabled={busy}
+        className={cn(iconButtonClass, "outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 data-[state=open]:bg-surface-hover")}
+      >
+        <Ellipsis aria-hidden="true" className="h-4.5 w-4.5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48">
+        <DropdownMenuItem onSelect={() => renameChat(id)}>
+          <Pencil />
+          Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => deleteChat(id)} className="text-danger [&_svg]:text-danger">
+          <Trash2 />
+          Delete chat
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * The AI page (#308, the classic layout picked on the round-3 canvas): the person's chats on the
+ * left (their last 20, stored on the server, #452), in a list whose edge resizes from 220 to 360 px
+ * like the sidebar's, and the conversation in a 760 px column with one message box. Phones show the
+ * conversation, and the list full screen from the clock button. The chat itself lives above the
+ * page (AiChatProvider in the root layout), so a conversation stays while people look at the items
+ * it links to.
  */
 export function AiPage({ firstName, initialListWidth }: { firstName: string; initialListWidth: number }) {
   const chat = useAiChat();
-  const { enabled, chats, current, status, busy, notice, announcement, loadStatus } = chat;
+  const { enabled, chats, current, status, busy, opening, notice, announcement, listState, loadStatus, loadChats } = chat;
   const [list, setList] = useState<PanelSize>({ width: initialListWidth, collapsed: false });
   const [showList, setShowList] = useState(false);
   const [query, setQuery] = useState("");
@@ -155,7 +189,8 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
 
   useEffect(() => {
     loadStatus();
-  }, [loadStatus]);
+    loadChats();
+  }, [loadStatus, loadChats]);
 
   // Ctrl J (Cmd J), which opens the AI bar's chat on other pages, puts the cursor in this page's box.
   useEffect(() => {
@@ -178,6 +213,7 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
   const matches = query.trim() ? chats.filter((item) => item.title.toLowerCase().includes(query.trim().toLowerCase())) : chats;
   const allowance = allowanceLine(status);
   const title = current?.title ?? "New chat";
+  const hasStoredChats = chats.some((item) => item.serverId);
 
   function startNewChat() {
     chat.newChat();
@@ -229,34 +265,28 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
           />
         </label>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-1">
-          {/* grid-cols-1: an auto column would grow to the longest title and push it past the list. */}
-          {matches.length ? (
-            <ul className="grid grid-cols-1 gap-px">
-              {matches.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      chat.openChat(item.id);
-                      setShowList(false);
-                      atEnd.current = true;
-                    }}
-                    aria-current={item.id === current?.id ? "true" : undefined}
-                    className={cn(
-                      "flex h-[2.125rem] w-full items-center rounded-lg px-2 text-left text-[0.84375rem] text-ink transition-colors hover:bg-surface-hover max-lg:h-11 max-lg:text-[0.9375rem]",
-                      item.id === current?.id && "bg-surface font-semibold shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
-                    )}
-                  >
-                    <span className="truncate">{item.title}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="px-2 py-3 text-xs text-muted">{chats.length ? "No chats match." : "Your chats will show here."}</p>
-          )}
-          {/* Until chat history is stored (#452), a chat lasts as long as the tab. */}
-          <p className="px-2 pb-1 pt-3 text-xs text-muted">Chats stay here until you reload or close this tab.</p>
+          <AiChatList
+            chats={matches}
+            emptyText={chats.length ? "No chats match." : undefined}
+            onOpen={(id) => {
+              chat.openChat(id);
+              setShowList(false);
+              atEnd.current = true;
+            }}
+          />
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-2 pb-1 pt-3">
+            <p className="text-xs text-muted">{KEPT_CHATS_TEXT}</p>
+            {hasStoredChats && listState === "ready" ? (
+              <button
+                type="button"
+                onClick={chat.deleteAllChats}
+                disabled={busy}
+                className="rounded-md text-xs font-semibold text-danger underline-offset-2 hover:underline disabled:opacity-50 max-lg:min-h-11"
+              >
+                Delete all chats
+              </button>
+            ) : null}
+          </div>
         </div>
         <ResizeHandle label="Resize your chats" controls="ai-chats" size={list} limits={AI_CHAT_LIST_LIMITS} onResize={resizeList} className="hidden lg:block" />
       </section>
@@ -265,10 +295,12 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
         <div className="flex h-14 shrink-0 items-center gap-0.5 border-b border-line pl-1.5 pr-1 sm:gap-2 lg:pl-5 lg:pr-3">
           {/* Phones and tablets have no bar above this page; its menu button sits here (#420). */}
           <MobileMenuButton className="mr-1 max-lg:h-11 max-lg:w-11 lg:hidden" />
-          <p className="min-w-0 flex-1 truncate text-[0.9375rem] font-semibold">
+          <p className="min-w-0 truncate text-[0.9375rem] font-semibold">
             <span className="lg:hidden">{current ? title : "AI"}</span>
             <span className="max-lg:hidden">{title}</span>
           </p>
+          <ChatOptions />
+          <span aria-hidden="true" className="flex-1" />
           {allowance ? <span className="whitespace-nowrap text-xs text-muted max-lg:hidden">{allowance}</span> : null}
           <span className="max-lg:hidden">
             <AiBarMenu />
@@ -292,8 +324,10 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
           }}
           className="flex min-h-0 flex-1 flex-col overflow-y-auto"
         >
-          {current?.turns.length ? (
-            <AiThread chat={current} busy={busy} onRetry={chat.retry} className="mx-auto w-full max-w-[47.5rem] px-4 pb-2 pt-6 sm:px-6" />
+          {opening ? (
+            <AiThreadLoading />
+          ) : current?.turns?.length ? (
+            <AiThread turns={current.turns} busy={busy} onRetry={chat.retry} className="mx-auto w-full max-w-[47.5rem] px-4 pb-2 pt-6 sm:px-6" />
           ) : notice.open ? null : (
             <div className="m-auto flex w-full flex-col items-center gap-4 px-4 py-6 text-center sm:px-6">
               <AiSpark className="h-10 w-10" />
@@ -320,7 +354,7 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
               </ul>
             </div>
           )}
-          {notice.open ? <AiNotice className={cn("mx-auto w-[calc(100%-2rem)] max-w-[44.5rem] sm:w-[calc(100%-3rem)]", current?.turns.length ? "mb-3" : "my-auto")} /> : null}
+          {notice.open ? <AiNotice className={cn("mx-auto w-[calc(100%-2rem)] max-w-[44.5rem] sm:w-[calc(100%-3rem)]", current?.turns?.length ? "mb-3" : "my-auto")} /> : null}
         </div>
 
         <div className="mx-auto w-full max-w-[49rem] shrink-0 px-3 pt-1">

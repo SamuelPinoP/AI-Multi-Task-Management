@@ -67,6 +67,7 @@ model User {
   taskComments                 TaskComment[]
   taskEvents                   TaskEvent[]
   agentRuns                    AgentRun[]
+  agentChats                   AgentChat[]
 }
 
 /// One message to the AI assistant (#307): who asked, what answered and how it went. It feeds the daily caps
@@ -99,8 +100,54 @@ model AgentRun {
   @@index([createdAt])
 }
 
-/// How an AI assistant message ended (src/lib/ai/chat.ts). Every outcome but ANSWERED, STEP_LIMIT,
-/// INVALID_ARGUMENTS, CANCELLED and FAILED was answered by the rule-based planner instead.
+/// A conversation with the AI assistant (#452), stored so the person can come back to it and so the server, not the
+/// browser, decides which earlier messages the model sees. Each person keeps MAX_CHATS (src/lib/ai/chat-limits.ts):
+/// saving another deletes the one whose latest message is oldest. The daily cleanup deletes chats nobody opened for
+/// AGENT_CHAT_DAYS (src/lib/daily-cleanup.ts). Only exchanges whose answer arrived in full are stored.
+model AgentChat {
+  id        String             @id @default(cuid())
+  userId    String
+  /// The first question, shortened (chatTitle in src/lib/ai/chat-client.ts), until the person renames it.
+  title     String
+  createdAt DateTime           @default(now())
+  /// When its latest message was stored: the list shows the newest first. Set by the code, not @updatedAt, so
+  /// renaming or opening a chat doesn't move it up the list.
+  updatedAt DateTime           @default(now())
+  /// When the person last opened it or wrote in it. The daily cleanup counts its 90 days from here.
+  openedAt  DateTime           @default(now())
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AgentChatMessage[]
+
+  @@index([userId, updatedAt])
+  @@index([openedAt])
+}
+
+/// One message of an AI assistant chat (#452): a question, or the answer the person saw, with the links it showed.
+model AgentChatMessage {
+  id        String        @id @default(cuid())
+  chatId    String
+  role      AgentChatRole
+  content   String
+  /// The items the answer linked to (`Source[]` in src/lib/ai/tools/define.ts): kind, id, title and link. [] for questions.
+  sources   Json          @default("[]")
+  createdAt DateTime      @default(now())
+
+  chat AgentChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
+}
+
+/// Who wrote a stored AI chat message (#452).
+enum AgentChatRole {
+  /// The person's question.
+  USER
+  /// A model's answer.
+  ASSISTANT
+  /// The rule-based planner's answer, given when no model could answer (a cap, an outage, the person's country).
+  PLANNER
+}
+
 /// Where the AI bar is (#308): see User.aiDock.
 enum AiDockState {
   /// At the bottom of every page.
@@ -111,6 +158,8 @@ enum AiDockState {
   HIDDEN
 }
 
+/// How an AI assistant message ended (src/lib/ai/chat.ts). Every outcome but ANSWERED, STEP_LIMIT,
+/// INVALID_ARGUMENTS, CANCELLED and FAILED was answered by the rule-based planner instead.
 enum AgentRunOutcome {
   /// The model answered.
   ANSWERED

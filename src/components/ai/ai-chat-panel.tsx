@@ -1,15 +1,16 @@
 "use client";
 
-import { ChevronDown, ChevronLeft, Ellipsis, History, SquareArrowOutUpRight, SquarePen } from "lucide-react";
+import { ChevronDown, ChevronLeft, Ellipsis, History, Pencil, SquareArrowOutUpRight, SquarePen, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
+import { AiChatList, KEPT_CHATS_TEXT } from "@/components/ai/ai-chat-list";
 import { useAiChat } from "@/components/ai/ai-chat-provider";
 import { AI_PLACEHOLDER, AiComposer } from "@/components/ai/ai-composer";
 import { AiNotice } from "@/components/ai/ai-notice";
 import { AiSpark } from "@/components/ai/ai-spark";
 import { AI_SUGGESTIONS } from "@/components/ai/ai-suggestions";
-import { AiThread } from "@/components/ai/ai-thread";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AiThread, AiThreadLoading } from "@/components/ai/ai-thread";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { allowanceLine } from "@/lib/ai/chat-client";
 import { cn } from "@/lib/cn";
 
@@ -28,9 +29,10 @@ function IconButton({ label, onClick, children, className }: { label: string; on
 }
 
 /**
- * The inside of the AI bar's open chat (#308, round 3): a header with the chats of this tab, New
- * chat, a ⋯ menu and Collapse; the conversation, or a new chat's questions to start from; and the
- * message box. The computer's floating chat and the phone's full-screen sheet both use it.
+ * The inside of the AI bar's open chat (#308, round 3): a header with the person's chats (#452),
+ * New chat, a ⋯ menu (which also renames and deletes a stored chat) and Collapse; the
+ * conversation, or a new chat's questions to start from; and the message box. The computer's
+ * floating chat and the phone's full-screen sheet both use it.
  */
 export function AiChatPanel({
   onCollapse,
@@ -49,12 +51,17 @@ export function AiChatPanel({
   announce?: boolean;
 }) {
   const chat = useAiChat();
-  const { chats, current, busy, notice, status, announcement } = chat;
+  const { chats, current, busy, opening, notice, status, announcement, loadChats } = chat;
   const [view, setView] = useState<"chat" | "history">("chat");
   const body = useRef<HTMLDivElement>(null);
   // Whether the reader is at the end of the conversation, so new words keep it in view.
   const atEnd = useRef(true);
   const allowance = allowanceLine(status);
+
+  // The stored chats are read when the chat first opens, so its history is there at once.
+  useEffect(() => {
+    loadChats();
+  }, [loadChats]);
 
   const turns = current?.turns;
   useEffect(() => {
@@ -96,6 +103,20 @@ export function AiChatPanel({
                   </Link>
                 </DropdownMenuItem>
                 {menuItems}
+                {/* A stored chat's own actions (#452), not while an answer is arriving. */}
+                {current?.serverId && !busy ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => chat.renameChat(current.id)}>
+                      <Pencil />
+                      Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => chat.deleteChat(current.id)} className="text-danger [&_svg]:text-danger">
+                      <Trash2 />
+                      Delete chat
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
             <IconButton label="Collapse" onClick={onCollapse}>
@@ -117,33 +138,15 @@ export function AiChatPanel({
 
       {view === "history" ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-          {/* grid-cols-1: an auto column would grow to the longest title and push it past the chat. */}
-          {chats.length ? (
-            <ul aria-label="Chats" className="grid grid-cols-1 gap-px">
-              {chats.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      chat.openChat(item.id);
-                      setView("chat");
-                      atEnd.current = true;
-                    }}
-                    aria-current={item.id === current?.id ? "true" : undefined}
-                    className={cn(
-                      "flex h-[2.125rem] w-full items-center rounded-lg px-2 text-left text-[0.84375rem] text-ink transition-colors hover:bg-surface-hover max-lg:h-11 max-lg:text-[0.9375rem]",
-                      item.id === current?.id && "bg-surface font-semibold shadow-[0_0_0_1px_var(--line)] hover:bg-surface",
-                    )}
-                  >
-                    <span className="truncate">{item.title}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="px-2 py-3 text-xs text-muted">Your chats will show here.</p>
-          )}
-          <p className="px-2 pb-1 pt-3 text-xs text-muted">Chats stay here until you reload or close this tab.</p>
+          <AiChatList
+            chats={chats}
+            onOpen={(id) => {
+              chat.openChat(id);
+              setView("chat");
+              atEnd.current = true;
+            }}
+          />
+          <p className="px-2 pb-1 pt-3 text-xs text-muted">{KEPT_CHATS_TEXT} Delete any from its ⋯ menu.</p>
         </div>
       ) : (
         <>
@@ -155,8 +158,10 @@ export function AiChatPanel({
             }}
             className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-4 pt-2 max-sm:px-4"
           >
-            {current?.turns.length ? (
-              <AiThread chat={current} busy={busy} onRetry={chat.retry} onNavigate={onNavigate} />
+            {opening ? (
+              <AiThreadLoading />
+            ) : current?.turns?.length ? (
+              <AiThread turns={current.turns} busy={busy} onRetry={chat.retry} onNavigate={onNavigate} />
             ) : notice.open ? null : (
               <div className="m-auto flex w-full flex-col items-center gap-3 py-4 text-center">
                 <AiSpark className="h-10 w-10" />
@@ -181,7 +186,7 @@ export function AiChatPanel({
                 </ul>
               </div>
             )}
-            {notice.open ? <AiNotice className={cn(current?.turns.length ? "mt-4" : "my-auto")} /> : null}
+            {notice.open ? <AiNotice className={cn(current?.turns?.length ? "mt-4" : "my-auto")} /> : null}
           </div>
           <div className="shrink-0 px-3">
             <AiComposer ref={composerRef} />

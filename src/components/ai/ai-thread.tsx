@@ -3,7 +3,6 @@
 import { CalendarDays, FolderKanban, Info, NotebookPen, RotateCcw, SquareCheckBig, Target, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useMemo } from "react";
-import type { AiChat } from "@/components/ai/ai-chat-provider";
 import { uiButtonClass } from "@/components/ui";
 import { answerBlocks, finishedStep, type ChatTurn, type TextRun } from "@/lib/ai/chat-client";
 import type { Source } from "@/lib/ai/tools/define";
@@ -143,13 +142,13 @@ function Answer({ turn, canRetry, onRetry, onNavigate }: { turn: ChatTurn; canRe
  * bar's chat. Only the last answer offers "Try again" when it failed.
  */
 export function AiThread({
-  chat,
+  turns,
   busy,
   onRetry,
   onNavigate,
   className,
 }: {
-  chat: AiChat;
+  turns: ChatTurn[];
   busy: boolean;
   onRetry: (turnId: string) => void;
   /** Following one of the answer's links (the AI bar's chat closes on phones). */
@@ -158,15 +157,25 @@ export function AiThread({
 }) {
   return (
     <div className={cn("flex flex-col gap-5", className)}>
-      {chat.turns.map((turn, index) => (
+      {turns.map((turn, index) => (
         <Fragment key={turn.id}>
           <p className="max-w-[80%] self-end whitespace-pre-wrap break-words rounded-[1.125rem] bg-sunken px-3.5 py-2 text-sm leading-relaxed text-ink">
             <span className="sr-only">You: </span>
             {turn.question}
           </p>
-          <Answer turn={turn} canRetry={!busy && index === chat.turns.length - 1} onRetry={onRetry} onNavigate={onNavigate} />
+          <Answer turn={turn} canRetry={!busy && index === turns.length - 1} onRetry={onRetry} onNavigate={onNavigate} />
         </Fragment>
       ))}
     </div>
+  );
+}
+
+/** While a chat from the list loads its messages (#452). */
+export function AiThreadLoading({ className }: { className?: string }) {
+  return (
+    <p role="status" className={cn("m-auto flex items-center gap-1.5 py-6 text-xs text-muted", className)}>
+      <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent motion-reduce:animate-none" />
+      Loading the chat…
+    </p>
   );
 }

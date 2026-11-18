@@ -131,10 +131,11 @@ test.describe("on a computer", () => {
     await expect(chat(page)).toHaveCount(0);
     await expect(bar(page).getByRole("textbox", { name: "Ask AI Multi" })).toBeFocused();
 
-    // The chat's history lists this tab's chats.
+    // The chat's history lists the person's chats by day (#452).
     await page.keyboard.press("Control+j");
     await chat(page).getByRole("button", { name: "Chat history" }).click();
-    const listed = chat(page).getByRole("list", { name: "Chats" }).getByRole("button", { name: "Hello there" });
+    await expect(chat(page).getByText("Your last 20 chats are kept. Delete any from its ⋯ menu.")).toBeVisible();
+    const listed = chat(page).getByRole("list", { name: "Today" }).getByRole("button", { name: "Hello there" });
     await expect(listed).toHaveAttribute("aria-current", "true");
     // Its long title ends in an ellipsis inside the chat, never past its edge.
     await expect(listed).toHaveText("Hello there, is anything due this week for…");
@@ -147,6 +148,38 @@ test.describe("on a computer", () => {
     await page.locator("body").click({ position: { x: 5, y: 5 } });
     await page.keyboard.press("?");
     await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" }).getByText("Ask AI Multi")).toBeVisible();
+  });
+
+  test("the chat's ⋯ menu renames and deletes a stored chat, and its history opens chats from before a reload (#452)", async ({ page }) => {
+    await signUpAndLogIn(page, "E2E AI bar history");
+    await agree(page);
+    await page.goto("/tasks");
+    await bar(page).getByRole("textbox", { name: "Ask AI Multi" }).fill("Draft the launch email");
+    await bar(page).getByRole("textbox", { name: "Ask AI Multi" }).press("Enter");
+    await expect(chat(page).getByText("You asked: Draft the launch email")).toBeVisible();
+
+    await chat(page).getByRole("button", { name: "More" }).click();
+    await page.getByRole("menuitem", { name: "Rename" }).click();
+    const rename = page.getByRole("dialog", { name: "Rename chat" });
+    await rename.getByRole("textbox", { name: "Chat name" }).fill("Launch email");
+    await rename.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("Chat renamed")).toBeVisible();
+    await expect(chat(page).getByText("Launch email", { exact: true })).toBeVisible();
+
+    // After a reload the chat is in the history, and opens with its conversation.
+    await page.reload();
+    await openWithShortcut(page);
+    await chat(page).getByRole("button", { name: "Chat history" }).click();
+    await chat(page).getByRole("list", { name: "Today" }).getByRole("button", { name: "Launch email" }).click();
+    await expect(chat(page).getByText("You asked: Draft the launch email")).toBeVisible();
+
+    await chat(page).getByRole("button", { name: "More" }).click();
+    await page.getByRole("menuitem", { name: "Delete chat" }).click();
+    await page.getByRole("dialog", { name: "Delete this chat?" }).getByRole("button", { name: "Delete chat" }).click();
+    await expect(page.getByText("Chat deleted")).toBeVisible();
+    await expect(chat(page).getByRole("button", { name: "What's overdue?" })).toBeVisible();
+    await chat(page).getByRole("button", { name: "Chat history" }).click();
+    await expect(chat(page).getByText("Your chats will show here.")).toBeVisible();
   });
 
   test("the open chat is 760 × 560, resizes from its top edge and corners, and keeps its size", async ({ page }) => {
@@ -241,6 +274,13 @@ test.describe("on a phone", () => {
     await expect(sheet).toBeHidden();
     await opener.click();
     await expect(sheet.getByText("You asked: What analytics can you give?", { exact: true })).toBeVisible();
+
+    // A stored chat is deleted from the full-screen chat's ⋯ menu too, its confirmation over the sheet (#452).
+    await sheet.getByRole("button", { name: "More" }).click();
+    await page.getByRole("menuitem", { name: "Delete chat" }).click();
+    await page.getByRole("dialog", { name: "Delete this chat?" }).getByRole("button", { name: "Delete chat" }).click();
+    await expect(page.getByText("Chat deleted")).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "What's overdue?" })).toBeVisible();
   });
 
   test("on the chats the ✦ button sits above their message box and opens the chat", async ({ page }) => {

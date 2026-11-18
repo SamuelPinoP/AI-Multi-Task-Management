@@ -134,6 +134,20 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
       [id("old-agent-run"), id("recent-agent-run"), id("member")],
     );
 
+    // AI chats (#452) nobody opened for 90 days go with their messages; one opened 89 days ago stays,
+    // however old its messages are.
+    for (const [name, openedDaysAgo] of [["old-agent-chat", 91], ["recent-agent-chat", 89]] as const) {
+      await sql(
+        `INSERT INTO "AgentChat" (id, "userId", title, "createdAt", "updatedAt", "openedAt")
+         VALUES ($1, $2, 'Plan', ${UTC_NOW} - interval '120 days', ${UTC_NOW} - interval '120 days', ${UTC_NOW} - make_interval(days => $3))`,
+        [id(name), id("member"), openedDaysAgo],
+      );
+      await sql(
+        `INSERT INTO "AgentChatMessage" (id, "chatId", role, content, "createdAt") VALUES ($1, $2, 'USER', 'Plan my week', ${UTC_NOW} - interval '120 days')`,
+        [id(`${name}-message`), id(name)],
+      );
+    }
+
     const response = await request.get("/api/cron/cleanup");
     expect(response.ok(), await response.text()).toBe(true);
     const result = (await response.json()) as Record<string, number>;
@@ -148,6 +162,11 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
     expect(result.agentRuns).toBeGreaterThanOrEqual(1);
     expect(await exists("AgentRun", "id", id("old-agent-run"))).toBe(false);
     expect(await exists("AgentRun", "id", id("recent-agent-run"))).toBe(true);
+    expect(result.agentChats).toBeGreaterThanOrEqual(1);
+    expect(await exists("AgentChat", "id", id("old-agent-chat"))).toBe(false);
+    expect(await exists("AgentChatMessage", "id", id("old-agent-chat-message"))).toBe(false);
+    expect(await exists("AgentChat", "id", id("recent-agent-chat"))).toBe(true);
+    expect(await exists("AgentChatMessage", "id", id("recent-agent-chat-message"))).toBe(true);
 
     // Deleted, with what cascades from them.
     expect(await exists("User", "id", id("old-guest"))).toBe(false);

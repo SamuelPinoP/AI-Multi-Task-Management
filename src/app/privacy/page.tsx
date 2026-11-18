@@ -37,7 +37,7 @@ export default function PrivacyPage() {
           <li>With Sign in with Google, it receives only your Google account&apos;s ID, name and email address.</li>
           <li>
             If you ask the AI assistant something, your question and what it looks up to answer go to Google&apos;s Gemini
-            API, only after you agree to that.
+            API, only after you agree to that. AI Multi keeps your last 20 chats with it until you delete them.
           </li>
           <li>You can ask to see, export or delete your data at any time.</li>
           <li>AI Multi is for people {MINIMUM_AGE} and older.</li>
@@ -92,10 +92,11 @@ export default function PrivacyPage() {
           after 24 hours, and AI Multi sees only totals, never who visited.
         </p>
         <p>
-          <strong>The AI assistant.</strong> When you agree to its notice, AI Multi records when. For each message you send
-          it, AI Multi keeps a usage record: when, which model answered, how it went, how many requests and tokens it
-          took, and the names of the lookups it made (such as &quot;open tasks&quot;), never what you asked or what it
-          answered. See{" "}
+          <strong>The AI assistant.</strong> When you agree to its notice, AI Multi records when. It keeps your chats with
+          the assistant, so you can come back to them: your questions, its answers and the links they showed to your
+          items. For each message you send it, AI Multi also keeps a usage record: when, which model answered, how it
+          went, how many requests and tokens it took, and the names of the lookups it made (such as &quot;open
+          tasks&quot;), never what you asked or what it answered. See{" "}
           <a href="#ai" className={legalLinkClass}>
             The AI assistant
           </a>{" "}
@@ -204,9 +205,10 @@ export default function PrivacyPage() {
           <li>Email confirmation links: 24 hours. Password reset links: 1 hour.</li>
           <li>Notifications in the app: 90 days.</li>
           <li>
-            AI assistant usage records: 90 days. Conversations with the assistant aren&apos;t stored: a chat
-            stays in your browser tab until you reload or close it.
+            Chats with the AI assistant: your last 20, until you delete them. Starting a 21st deletes the oldest, and a chat
+            you haven&apos;t opened for 90 days is deleted.
           </li>
+          <li>AI assistant usage records: 90 days.</li>
           <li>Database backups: the 30 most recent daily backups, so deleted data leaves the backups within 30 days.</li>
         </ul>
       </LegalSection>
@@ -266,9 +268,13 @@ export default function PrivacyPage() {
             not be used, so nothing is sent to Google: your planner answers instead.
           </li>
           <li>
-            <strong>What AI Multi keeps:</strong> when you agreed to the notice, and a usage record of each message for 90
-            days, without its content. Your conversations aren&apos;t stored: a chat stays in your browser tab until you
-            reload or close it.
+            <strong>What AI Multi keeps:</strong> when you agreed to the notice; your last 20 chats, each with your
+            questions, the answers and the links they showed; and a usage record of each message for 90 days, without its
+            content. Starting a 21st chat deletes the oldest, and a chat you haven&apos;t opened for 90 days is deleted.
+          </li>
+          <li>
+            <strong>Deleting your chats:</strong> delete a chat from its ⋯ menu, or every chat with Delete all chats under
+            the list on the AI page. They&apos;re deleted for good, and leave the backups within 30 days.
           </li>
           <li>
             <strong>Limits:</strong> each account may send a set number of requests a day; after that, your planner answers
