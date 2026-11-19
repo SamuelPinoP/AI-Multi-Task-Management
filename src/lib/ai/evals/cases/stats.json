@@ -1,0 +1,44 @@
+[
+  {
+    "id": "stats-overall",
+    "ability": "stats",
+    "summary": "Repeats task_stats' counts instead of counting by hand: 4 of the 16 tasks the person can see are done.",
+    "request": "How many of my tasks are done?",
+    "expect": {
+      "tools": [{ "name": "task_stats" }],
+      "facts": ["4", "16"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "task_stats", "args": {} }] },
+      { "text": "You've finished 4 of your 16 tasks (25%). 12 are still to do, and 2 of those are overdue." }
+    ]
+  },
+  {
+    "id": "stats-project",
+    "ability": "stats",
+    "summary": "Gives one project's percent done from task_stats, filtered by the project's name.",
+    "request": "What percent of the Mobile app launch is done?",
+    "expect": {
+      "tools": [{ "name": "task_stats", "args": { "project": "mobile" } }],
+      "facts": [["50", "half"]]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "task_stats", "args": { "project": "Mobile app launch" } }] },
+      { "text": "The Mobile app launch is 50% done: 2 of its 4 tasks are finished." }
+    ]
+  },
+  {
+    "id": "stats-done-this-week",
+    "ability": "stats",
+    "summary": "Counts the tasks finished in the last seven days from task_stats.",
+    "request": "How many tasks did I finish this week?",
+    "expect": {
+      "tools": [{ "name": "task_stats" }],
+      "facts": [["3", "three"]]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "task_stats", "args": {} }] },
+      { "text": "You finished 3 tasks in the last 7 days." }
+    ]
+  }
+]

@@ -16,6 +16,122 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 - An installable app (phones and desktops) that keeps the pages you've opened readable offline
 - Project templates (Capstone, Sprint, Job search)
 - A linked GitHub repository per project, showing its open pull requests and issues
+- An AI assistant that answers questions about your own tasks, calendar, projects, notes and goals, scored by evaluation cases before any model or prompt change ships
+
+## AI agent
+
+The AI assistant answers questions about the signed-in person's own work, such
+as "What's overdue?", "What's on my calendar tomorrow?" or "Which projects are
+at risk?". It lives in the AI bar at the bottom of every page and on the AI page
+(`/ai`), streams its answers, and keeps each person's latest 20 chats.
+
+It only reads. Six tools look things up for it, each limited to what the person
+can see: `list_open_tasks`, `list_events`, `list_projects`, `search_notes`,
+`list_goals` and `task_stats`. Asked to change something, it says it can't yet.
+When no model can answer, because a daily cap is used up, the provider fails or
+the person is somewhere Gemini's free tier may not serve, the rule-based planner
+answers instead and says why.
+
+```mermaid
+flowchart LR
+  person([Person]) -->|question| route["POST /api/agent/chat"]
+  route --> gate{"Under the daily caps?<br/>Region allowed? Key set?"}
+  gate -- no --> planner["Rule-based planner"]
+  gate -- yes --> loop["Agent loop<br/>at most 4 model requests and 30 s"]
+  loop <-->|"conversation and tool definitions"| provider["Provider<br/>Gemini; Claude and Groq locally"]
+  loop <-->|"checked arguments; results marked as data"| tools["Read-only tools<br/>scoped to the person"]
+  tools <--> db[(Postgres)]
+  loop -- "provider failed" --> planner
+  loop -->|streamed answer| person
+  planner -->|"answer and the reason"| person
+```
+
+### Decisions and trade-offs
+
+- **One provider interface, plain `fetch`.** Every model sits behind `Provider`
+  in `src/lib/ai/types.ts`. Gemini, Claude (the Messages API) and Groq (OpenAI's
+  Chat Completions format) each take one file of plain `fetch` in
+  `src/lib/ai/providers/`, so switching models is a configuration change
+  (`AI_PROVIDER`, `AI_MODEL`) and every byte sent is in view. The cost is
+  parsing each provider's stream here instead of in an SDK; unit tests pin
+  each format down.
+- **Read-only first.** Changes will come with one confirmation (#310). Until
+  then, an assistant that can only read can't damage anything while its quality
+  is measured.
+- **Workspace content is data.** Tool results wrap what people stored in
+  `{"note", "data"}`, and the system prompt says data is never instructions.
+  Titles and notes in shared projects are written by other people, so an
+  "ignore your instructions" inside one must stay text. The evaluations plant
+  such text in a task title, a note and an event title.
+- **Bounded and capped.** A message gets at most 4 model requests, 30 seconds
+  and 1,024 output tokens. Daily caps per person (40) and for the whole app
+  (400) keep it inside Gemini's free tier of about 500 requests a day.
+- **Free-tier terms.** Gemini's free tier may not serve people in the EEA,
+  Switzerland or the UK, so they get the planner, and nothing of theirs goes to
+  Google.
+- **Measured, not guessed.** Changes to the model, prompt or tools are scored
+  by the evaluations below before they ship, and the launch model is chosen by
+  score per dollar (#502).
+- **Claude hasn't run live.** Its provider follows Anthropic's API reference
+  and is unit tested, but Claude's API needs paid credits and this project
+  spends nothing. Claude and Groq run locally and in evaluations only: the
+  privacy notice names Gemini, so Vercel's build refuses the other two.
+
+### Evaluations
+
+`src/lib/ai/evals/` scores the agent on 42 cases (#311). Each case is data: a
+sample workspace, a fixed clock and time zone, the question, and what a good
+answer does, meaning the tools it calls and with which arguments, the facts it
+states, what it must not call or say, and whether it asks a question back.
+Every answer is also held to rules that apply to all cases: nothing the person
+can't see, no ids, no quoted instructions, no claim of a change, and within the
+30-second deadline. A case passes when every check passes.
+
+The sample workspace belongs to Alex, in Los Angeles, on Thursday, November 19,
+2026 at 9:20 AM. It has shared and private projects, other people's tasks,
+deleted items, and instructions hidden in a task title, a note and an event
+title. The cases cover every tool, permissions, the caps and the planner
+fallback, clarifying questions, requests to change things, prompt injection,
+off-topic requests, follow-ups and time zones.
+
+```powershell
+npm run agent:eval -- --provider reference
+```
+
+This replays each case's reference answer through the real agent loop, tools
+and scorer, with no model, key or network. CI runs the same replay with the
+unit tests, so a change that breaks a case fails the build. A live run asks a
+real model, with a key set in the terminal for that run only:
+
+```powershell
+$env:AGENT_EVAL_API_KEY = "<the key>"
+```
+
+```powershell
+npm run agent:eval -- --provider groq
+```
+
+It prints each case's result, the score in total and by ability, the tokens,
+model requests per message, the cost at list prices, the model's time per
+message (median, 95th percentile and slowest) and how many messages a day the
+free plan allows. Then it saves everything to
+`src/lib/ai/evals/results/<date>-<model>.json`, adding `-2`, `-3` for later
+runs that day, so no run overwrites another. `--case`, `--ability`,
+`--model`, `--dry-run` and `--list` narrow a run down; `--help` explains them.
+A run paces itself under the model's free-plan limits and waits out a rate
+limit. A case whose provider fails for its own reasons, such as a quota or an
+outage, is reported as not scored rather than failed. Use a key from a project
+of its own, so a run never uses the app's daily allowance.
+
+#### Latest scores
+
+| Run | Cases passed | Notes |
+| --- | --- | --- |
+| Reference answers, no model | 42 of 42 | Every push, in CI. Checks the cases and the scorer, not a model. |
+| Gemini 3.1 Flash-Lite | Not run yet | The live comparison is #502. |
+| gpt-oss-120b on Groq | Not run yet | The live comparison is #502. |
+| Claude Haiku 5.5 | Not run | Its API needs paid credits. |
+| Gemini 3.5 Flash-Lite | Not run | No free tier. |
 
 ## Project chat attachment storage
 

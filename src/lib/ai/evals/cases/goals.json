@@ -1,0 +1,31 @@
+[
+  {
+    "id": "goals-this-week",
+    "ability": "goals",
+    "summary": "Reads this week's goals with their linked tasks' progress, leaving out an archived goal.",
+    "request": "How are my goals going this week?",
+    "expect": {
+      "tools": [{ "name": "list_goals" }],
+      "facts": ["Ship the mobile app", "Exercise three times"],
+      "notFacts": ["Learn to juggle"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_goals", "args": {} }] },
+      { "text": "This week you have two goals: Ship the mobile app (1 of its 3 linked tasks done) and Exercise three times (its 1 linked task is done)." }
+    ]
+  },
+  {
+    "id": "goals-last-week",
+    "ability": "goals",
+    "summary": "Works out last week's ISO week and reads its goals.",
+    "request": "What were my goals last week?",
+    "expect": {
+      "tools": [{ "name": "list_goals", "args": { "week": "2026-W46" } }],
+      "facts": ["Finish reading Deep Work"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_goals", "args": { "week": "2026-W46" } }] },
+      { "text": "Last week your goal was Finish reading Deep Work, and it's completed." }
+    ]
+  }
+]

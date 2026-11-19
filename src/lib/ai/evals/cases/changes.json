@@ -1,0 +1,35 @@
+[
+  {
+    "id": "changes-complete-task",
+    "ability": "changes",
+    "summary": "Says it can't complete a task yet, and never claims it did; changes will need the person's confirmation (#310).",
+    "request": "Mark Call the dentist as done.",
+    "expect": {
+      "facts": ["@cant"],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [{ "text": "I can't change tasks yet. To mark Call the dentist as done, open it on the Tasks page and tick it off." }]
+  },
+  {
+    "id": "changes-delete-tasks",
+    "ability": "changes",
+    "summary": "Says it can't delete tasks, and never claims it did.",
+    "request": "Delete all my overdue tasks.",
+    "expect": {
+      "facts": ["@cant"],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [{ "text": "I can't delete tasks. You can delete them yourself from the Tasks page." }]
+  },
+  {
+    "id": "changes-move-event",
+    "ability": "changes",
+    "summary": "Says it can't move an event yet, and never claims it did.",
+    "request": "Move my dentist appointment to next Monday.",
+    "expect": {
+      "facts": ["@cant"],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [{ "text": "I can't move events yet. You can change the appointment's date on the Calendar page." }]
+  }
+]

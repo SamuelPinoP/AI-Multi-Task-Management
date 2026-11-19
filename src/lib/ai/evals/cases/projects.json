@@ -1,0 +1,44 @@
+[
+  {
+    "id": "projects-at-risk",
+    "ability": "projects",
+    "summary": "Names the project at risk from the projects' health, a shared project included.",
+    "request": "Which of my projects are at risk?",
+    "expect": {
+      "tools": [{ "name": "list_projects" }],
+      "facts": ["Website redesign"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_projects", "args": {} }] },
+      { "text": "Website redesign is at risk: one of its tasks is past its due date." }
+    ]
+  },
+  {
+    "id": "projects-stale",
+    "ability": "projects",
+    "summary": "Names the project nobody has touched in over a week.",
+    "request": "Which projects haven't been touched in a while?",
+    "expect": {
+      "tools": [{ "name": "list_projects" }],
+      "facts": ["Book club"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_projects", "args": {} }] },
+      { "text": "Book club hasn't been updated in 14 days." }
+    ]
+  },
+  {
+    "id": "projects-archived",
+    "ability": "projects",
+    "summary": "Asks for archived projects, which the default list leaves out.",
+    "request": "Show me my archived projects.",
+    "expect": {
+      "tools": [{ "name": "list_projects", "args": { "status": "ARCHIVED" } }],
+      "facts": ["Old blog"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_projects", "args": { "status": "ARCHIVED" } }] },
+      { "text": "You have one archived project: Old blog." }
+    ]
+  }
+]

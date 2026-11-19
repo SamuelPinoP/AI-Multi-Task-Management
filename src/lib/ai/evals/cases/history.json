@@ -1,0 +1,19 @@
+[
+  {
+    "id": "history-follow-up",
+    "ability": "history",
+    "summary": "Understands \"those\" from the earlier messages of the chat, and checks the tasks' priorities.",
+    "history": [
+      { "role": "USER", "content": "What's due today?" },
+      { "role": "ASSISTANT", "content": "Two tasks are due today: Call the dentist and Write the release notes." }
+    ],
+    "request": "Which of those is more urgent?",
+    "expect": {
+      "facts": ["Write the release notes"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_open_tasks", "args": { "due": "today" } }] },
+      { "text": "Write the release notes is more urgent: it's high priority and already in progress, while Call the dentist is medium priority." }
+    ]
+  }
+]

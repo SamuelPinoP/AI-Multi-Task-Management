@@ -1,0 +1,74 @@
+[
+  {
+    "id": "tasks-overdue",
+    "ability": "tasks",
+    "summary": "Lists overdue tasks with the overdue filter, a task assigned to the person in a shared project included, and no done task.",
+    "request": "What's overdue?",
+    "expect": {
+      "tools": [{ "name": "list_open_tasks", "args": { "due": "overdue" } }],
+      "facts": ["Send the invoice to Acme", "Fix the hero image on the home page"],
+      "notFacts": ["Draw the wireframes"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_open_tasks", "args": { "due": "overdue" } }] },
+      { "text": "Two tasks are overdue:\n- Send the invoice to Acme (high priority, 2 days late)\n- Fix the hero image on the home page (urgent, due yesterday, assigned to you)" }
+    ]
+  },
+  {
+    "id": "tasks-due-today",
+    "ability": "tasks",
+    "summary": "Lists what is due today, and nothing from the trash or from other people's private lists that is also due today.",
+    "request": "What's due today?",
+    "expect": {
+      "tools": [{ "name": "list_open_tasks", "args": { "due": "today" } }],
+      "facts": ["Call the dentist", "Write the release notes"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_open_tasks", "args": { "due": "today" } }] },
+      { "text": "Two tasks are due today: Call the dentist, and Write the release notes, which is in progress and high priority." }
+    ]
+  },
+  {
+    "id": "tasks-by-project",
+    "ability": "tasks",
+    "summary": "Filters open tasks by a project named in the question, leaving out the project's done tasks.",
+    "request": "What's left to do for the Mobile app launch?",
+    "expect": {
+      "tools": [{ "name": "list_open_tasks", "args": { "project": "mobile" } }],
+      "facts": ["Write the release notes", "Submit the app to the store"],
+      "notFacts": ["Run the beta test", "Set up the repository"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_open_tasks", "args": { "project": "Mobile app launch" } }] },
+      { "text": "Two tasks are left for the Mobile app launch: Write the release notes (in progress, due today) and Submit the app to the store (due Tuesday)." }
+    ]
+  },
+  {
+    "id": "tasks-in-progress",
+    "ability": "tasks",
+    "summary": "Filters open tasks by status when asked what is under way.",
+    "request": "What am I in the middle of right now?",
+    "expect": {
+      "tools": [{ "name": "list_open_tasks", "args": { "status": "IN_PROGRESS" } }],
+      "facts": ["Fix the hero image on the home page", "Write the release notes"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_open_tasks", "args": { "status": "IN_PROGRESS" } }] },
+      { "text": "You have two tasks in progress: Fix the hero image on the home page (urgent, due yesterday) and Write the release notes (due today)." }
+    ]
+  },
+  {
+    "id": "tasks-no-due-date",
+    "ability": "tasks",
+    "summary": "Finds the open tasks without a due date.",
+    "request": "Which of my tasks don't have a due date?",
+    "expect": {
+      "tools": [{ "name": "list_open_tasks", "args": { "due": "no_due_date" } }],
+      "facts": ["Read Deep Work", "Pick the next book"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_open_tasks", "args": { "due": "no_due_date" } }] },
+      { "text": "Two open tasks have no due date: Read Deep Work and Pick the next book." }
+    ]
+  }
+]
