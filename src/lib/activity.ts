@@ -1,3 +1,4 @@
+import type { Db } from "@/lib/db-client";
 import { prisma } from "@/lib/prisma";
 
 export type ActivityAction =
@@ -21,9 +22,14 @@ type CreateActivityInput = {
   projectId?: string | null;
 };
 
-export async function createActivity(input: CreateActivityInput) {
+/**
+ * Adds an entry to Activity. A failure is only logged, since the change itself went through. `db`
+ * is a transaction's client when the change is one of several (#310); there, Postgres ends the
+ * whole transaction after a failed statement, so nothing in it applies.
+ */
+export async function createActivity(input: CreateActivityInput, db: Db = prisma) {
   try {
-    await prisma.activity.create({
+    await db.activity.create({
       data: {
         action: input.action,
         message: input.message,

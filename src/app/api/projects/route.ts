@@ -2,15 +2,14 @@ import { ProjectStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
-import { createActivity } from "@/lib/activity";
 import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 import { parseEventTimes, parseRepeatUntil } from "@/lib/event-time";
-import { isPriority } from "@/lib/priority";
 import { projectAccessWhere, getProjectAccessForUser } from "@/lib/project-access";
 import { findProjectTemplate, planTemplate } from "@/lib/project-templates";
 import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
 import { getUserNow } from "@/lib/user-time-server";
 import { guestLimitResponse } from "@/lib/guest-limits";
+import { createProject, parseProjectCreateBody } from "@/lib/project-writes";
 
 // About 20 inserts for the largest template; Prisma's 5-second default is tight on a cold database.
 const TEMPLATE_TRANSACTION = { maxWait: 10_000, timeout: 20_000 };
@@ -68,16 +67,8 @@ export async function POST(req: Request) {
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
     const body = await req.json();
-    const name = typeof body.name === "string" ? body.name.trim() : "";
-    const descriptionInput = typeof body.description === "string" ? body.description.trim() : "";
-    const colorInput = typeof body.color === "string" ? body.color.trim() : "";
-
-    if (!name) {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
-    }
-    if (body.priority !== undefined && !isPriority(body.priority)) {
-      return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
-    }
+    const parsed = parseProjectCreateBody(body);
+    if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
     const guestLimit = await guestLimitResponse(user, "projects");
     if (guestLimit) return guestLimit;
 
@@ -88,16 +79,15 @@ export async function POST(req: Request) {
     const plan = template && now ? planTemplate(template, { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() }) : null;
 
     const project = await prisma.$transaction(async (tx) => {
-      const created = await tx.project.create({
-        data: {
-          name,
-          description: descriptionInput || template?.description || null,
-          color: colorInput || template?.color || null,
-          priority: isPriority(body.priority) ? body.priority : "NONE",
-          userId: user.id,
-        },
-      });
-      if (!template || !plan) return created;
+      const { data } = parsed;
+      // The rules for the project itself are shared with the AI's changes (src/lib/project-writes.ts).
+      const created = await createProject(
+        user,
+        { ...data, description: data.description ?? template?.description ?? null, color: data.color ?? template?.color ?? null },
+        tx,
+      );
+      if (!created.ok) throw new Error(created.error);
+      if (!template || !plan) return created.value;
 
       for (const task of plan.tasks) {
         await tx.task.create({
@@ -109,10 +99,10 @@ export async function POST(req: Request) {
             dueDate: task.dueDate ? parseTaskDueDateForStorage(task.dueDate) : null,
             completedAt: task.status === "DONE" ? new Date() : null,
             userId: user.id,
-            projectId: created.id,
+            projectId: created.value.id,
             // The template's, not typed by the person, so a guest's limits leave them out (#458).
             isStarter: true,
-            subtasks: { create: task.subtasks.map((title) => ({ title, userId: user.id, projectId: created.id, isStarter: true })) },
+            subtasks: { create: task.subtasks.map((title) => ({ title, userId: user.id, projectId: created.value.id, isStarter: true })) },
           },
         });
       }
@@ -129,23 +119,14 @@ export async function POST(req: Request) {
             recurrence: event.recurrence,
             repeatUntil: repeatUntil.value ?? null,
             userId: user.id,
-            projectId: created.id,
+            projectId: created.value.id,
             isStarter: true,
           },
         });
       }
-      return created;
+      return created.value;
     }, TEMPLATE_TRANSACTION);
 
-    await createActivity({
-      userId: user.id,
-      action: "CREATED_PROJECT",
-      message: `Created project: “${project.name}”`,
-      entityType: "PROJECT",
-      entityId: project.id,
-      projectId: project.id,
-    });
-    // A template's tasks and check-ins have dates.
     if (template) refreshCalendarFeeds({ userIds: [user.id] });
 
     return NextResponse.json(project, { status: 201 });

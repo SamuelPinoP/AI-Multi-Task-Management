@@ -1,43 +1,14 @@
-import { Priority, Recurrence, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
-import { after, NextResponse } from "next/server";
-import { createActivity } from "@/lib/activity";
-import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
-import { dropLabelsOutsideScope, labelScopeFor, resolveTaskLabelIds, setTaskLabels } from "@/lib/labels-server";
-import { nextCompletedAt } from "@/lib/task-completion";
-import { TASK_TITLE_MAX } from "@/lib/task-history";
-import { loadHistoryStates, recordTaskChanges } from "@/lib/task-history-server";
-import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
+import { NextResponse } from "next/server";
+import { parseBody, taskUpdateSchema } from "@/lib/schemas/task";
 import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
-import { notifyTaskAssigned } from "@/lib/notifications";
-import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
-
+import { trashTask, updateTask } from "@/lib/task-writes";
+import { runFollowUps } from "@/lib/writes";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
-
-function isValidStatus(value: unknown): value is TaskStatus {
-  return typeof value === "string" && Object.values(TaskStatus).includes(value as TaskStatus);
-}
-
-function isValidPriority(value: unknown): value is Priority {
-  return typeof value === "string" && Object.values(Priority).includes(value as Priority);
-}
-
-function isValidRecurrence(value: unknown): value is Recurrence {
-  return typeof value === "string" && Object.values(Recurrence).includes(value as Recurrence);
-}
-
-function parseId(input: unknown): string | null {
-  if (typeof input !== "string") {
-    return null;
-  }
-
-  const trimmed = input.trim();
-  return trimmed || null;
-}
 
 /** One task, as the list returns it: for the task page to refresh (#352). */
 export async function GET(_req: Request, context: RouteContext) {
@@ -65,141 +36,15 @@ export async function PATCH(req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Task id is required" }, { status: 400 });
     }
 
-    const body = await req.json();
+    // Every field, checked as in src/lib/schemas/task.ts; the rules that need the database are in
+    // updateTask, which the AI's changes use too.
+    const parsed = parseBody(taskUpdateSchema, await req.json());
+    if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-    const title = typeof body.title === "string" ? body.title.trim() : "";
-    if (!title) {
-      return NextResponse.json({ error: "Title is required" }, { status: 400 });
-    }
-    if (title.length > TASK_TITLE_MAX) {
-      return NextResponse.json({ error: `Keep the title under ${TASK_TITLE_MAX} characters; put the rest in the description.` }, { status: 400 });
-    }
-
-    if (!isValidStatus(body.status)) {
-      return NextResponse.json({ error: "Invalid status" }, { status: 400 });
-    }
-
-    if (!isValidPriority(body.priority)) {
-      return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
-    }
-
-    if (!isValidRecurrence(body.recurrence)) {
-      return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
-    }
-
-    let dueDate: Date | null = null;
-    if (body.dueDate) {
-      const parsed = parseTaskDueDateForStorage(body.dueDate);
-      if (!parsed) {
-        return NextResponse.json({ error: "Invalid due date" }, { status: 400 });
-      }
-      dueDate = parsed;
-    }
-
-    const description = typeof body.description === "string" ? body.description.trim() : "";
-    let projectId = parseId(body.projectId);
-    let assigneeId = parseId(body.assigneeId);
-
-    // A subtask always stays in its parent's project (SMART-02).
-    const subtask = await prisma.task.findFirst({
-      where: { id, parentId: { not: null } },
-      select: { parent: { select: { projectId: true } } },
-    });
-    if (subtask?.parent) projectId = subtask.parent.projectId;
-
-    if (projectId) {
-      const access = await getProjectAccess(projectId, user.id);
-      if (!access) return NextResponse.json({ error: "Invalid project" }, { status: 400 });
-      if (!canEditProjectContent(access)) return NextResponse.json(unauthorizedProjectResponse("edit tasks"), { status: 403 });
-    }
-
-    if (assigneeId && !projectId) {
-      return NextResponse.json({ error: "Assignee requires a project" }, { status: 400 });
-    }
-
-    if (assigneeId) {
-      const member = await prisma.projectMember.findFirst({ where: { id: assigneeId, projectId: projectId as string } });
-      if (!member) {
-        return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
-      }
-    }
-
-    if (!projectId) {
-      assigneeId = null;
-    }
-
-    const existingTask = await prisma.task.findFirst({
-      where: { id, deletedAt: null, OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }] },
-      select: { id: true, status: true, title: true, userId: true, projectId: true, assigneeId: true },
-    });
-
-    if (!existingTask) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
-    }
-
-    if (existingTask.projectId) {
-      const existingAccess = await getProjectAccess(existingTask.projectId, user.id);
-      if (!canEditProjectContent(existingAccess)) return NextResponse.json(unauthorizedProjectResponse("edit tasks"), { status: 403 });
-    }
-
-    // Labels (#276): `labelIds` replaces the set; leaving it out keeps the labels that still fit.
-    const labelScope = labelScopeFor({ projectId, userId: existingTask.userId });
-    const labels = await resolveTaskLabelIds(body.labelIds, labelScope);
-    if (labels.error) return NextResponse.json({ error: labels.error }, { status: 400 });
-
-    // The history (#279) compares the task before and after this change.
-    const before = await loadHistoryStates([id]);
-
-    const updated = await prisma.task.updateMany({
-      where: { id, deletedAt: null },
-      data: {
-        title,
-        description: description || null,
-        status: body.status,
-        priority: body.priority,
-        dueDate,
-        completedAt: nextCompletedAt(existingTask.status, body.status),
-        recurrence: body.recurrence,
-        projectId,
-        assigneeId,
-      },
-    });
-
-    if (updated.count === 0) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
-    }
-
-    // Moving a task to another project moves its subtasks too; their assignees belonged to the old one.
-    if (existingTask.projectId !== projectId) {
-      await prisma.task.updateMany({ where: { parentId: id }, data: { projectId, assigneeId: null } });
-      // So did the old project's labels.
-      const subtasks = await prisma.task.findMany({ where: { parentId: id }, select: { id: true } });
-      await dropLabelsOutsideScope([id, ...subtasks.map((subtask) => subtask.id)], labelScope);
-    }
-    if (labels.ids) await setTaskLabels(id, labels.ids);
-    await recordTaskChanges(before, user.id);
-
-    const task = await prisma.task.findUnique({
-      where: { id },
-      include: taskInclude(user.id),
-    });
-    if (task && existingTask.status !== TaskStatus.DONE && task.status === TaskStatus.DONE) {
-      await createActivity({
-        userId: existingTask.userId,
-        action: "COMPLETED_TASK",
-        message: `Completed task: “${task.title}”`,
-        entityType: "TASK",
-        entityId: task.id,
-        projectId: task.projectId,
-      });
-    }
-
-    // A new assignee hears about it in their inbox (SMART-08).
-    if (task?.assigneeId && task.assigneeId !== existingTask.assigneeId) after(() => notifyTaskAssigned({ task, actor: user }));
-    // Subtasks moved with it, so both projects' people may see a change.
-    refreshCalendarFeeds({ userIds: [existingTask.userId], projectIds: [existingTask.projectId, projectId] });
-
-    return NextResponse.json(task, { status: 200 });
+    const result = await updateTask(user, id, parsed.data);
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    runFollowUps(user, [result.followUp]);
+    return NextResponse.json(result.value, { status: 200 });
   } catch (error) {
     console.error("PATCH /api/tasks/[id] error:", error);
     return NextResponse.json({ error: "Failed to update task" }, { status: 500 });
@@ -217,42 +62,9 @@ export async function DELETE(_req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Task id is required" }, { status: 400 });
     }
 
-    const existingTask = await prisma.task.findFirst({
-      where: { id, deletedAt: null, OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }] },
-      select: { id: true, title: true, userId: true, projectId: true },
-    });
-
-    if (!existingTask) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
-    }
-
-    if (existingTask.projectId) {
-      const existingAccess = await getProjectAccess(existingTask.projectId, user.id);
-      if (!canEditProjectContent(existingAccess)) return NextResponse.json(unauthorizedProjectResponse("delete tasks"), { status: 403 });
-    }
-
-    const deleted = await prisma.task.updateMany({
-      where: { id, deletedAt: null },
-      data: {
-        deletedAt: new Date(),
-        deletedById: user.id,
-      },
-    });
-
-    if (deleted.count === 0) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
-    }
-
-    await createActivity({
-      userId: existingTask.userId,
-      action: "DELETED_ITEM",
-      message: `Deleted task: “${existingTask.title}”`,
-      entityType: "TASK",
-      entityId: existingTask.id,
-      projectId: existingTask.projectId,
-    });
-    refreshCalendarFeeds({ userIds: [existingTask.userId], projectIds: [existingTask.projectId] });
-
+    const result = await trashTask(user, id);
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    runFollowUps(user, [result.followUp]);
     return NextResponse.json({ message: "Task moved to trash" }, { status: 200 });
   } catch (error) {
     console.error("DELETE /api/tasks/[id] error:", error);

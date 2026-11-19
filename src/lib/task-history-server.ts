@@ -1,5 +1,6 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
+import type { Db } from "@/lib/db-client";
 import { prisma } from "@/lib/prisma";
 import { getProjectAccess } from "@/lib/project-access";
 import { formatTaskDueDateInput } from "@/lib/task-date-buckets";
@@ -33,24 +34,24 @@ function stateOf(task: HistoryRow): TaskHistoryState {
   };
 }
 
-/** The tasks' current state, to compare after a change. */
-export async function loadHistoryStates(ids: string[]) {
-  const rows = await prisma.task.findMany({ where: { id: { in: ids } }, select: HISTORY_SELECT });
+/** The tasks' current state, to compare after a change. `db` is a transaction's client inside one (#310). */
+export async function loadHistoryStates(ids: string[], db: Db = prisma) {
+  const rows = await db.task.findMany({ where: { id: { in: ids } }, select: HISTORY_SELECT });
   return new Map(rows.map((row) => [row.id, stateOf(row)]));
 }
 
 /** Records what changed on each task between `before` and now. */
-export async function recordTaskChanges(before: Map<string, TaskHistoryState>, actorId: string) {
-  const after = await loadHistoryStates([...before.keys()]);
+export async function recordTaskChanges(before: Map<string, TaskHistoryState>, actorId: string, db: Db = prisma) {
+  const after = await loadHistoryStates([...before.keys()], db);
   const data = [...before].flatMap(([taskId, old]) => {
     const now = after.get(taskId);
     return now ? diffTaskHistory(old, now).map((event) => ({ ...event, taskId, actorId })) : [];
   });
-  if (data.length) await prisma.taskEvent.createMany({ data });
+  if (data.length) await db.taskEvent.createMany({ data });
 }
 
-export async function recordTaskCreated(taskId: string, actorId: string) {
-  await prisma.taskEvent.create({ data: { taskId, actorId, kind: "CREATED" } });
+export async function recordTaskCreated(taskId: string, actorId: string, db: Db = prisma) {
+  await db.taskEvent.create({ data: { taskId, actorId, kind: "CREATED" } });
 }
 
 /**

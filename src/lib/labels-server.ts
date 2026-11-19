@@ -1,5 +1,6 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
+import type { Db } from "@/lib/db-client";
 import { prisma } from "@/lib/prisma";
 import { canEditProjectContent, getProjectAccess, projectAccessWhere } from "@/lib/project-access";
 import { LABELS_PER_TASK_MAX } from "@/lib/labels";
@@ -31,28 +32,35 @@ export const LABEL_SELECT = { id: true, name: true, color: true, projectId: true
  * the task's scope. Returns the ids, `undefined` when the request left labels
  * out (keep them as they are), or an error for a 400.
  */
-export async function resolveTaskLabelIds(input: unknown, scope: LabelScope): Promise<{ ids?: string[]; error?: string }> {
+export async function resolveTaskLabelIds(input: unknown, scope: LabelScope, db: Db = prisma): Promise<{ ids?: string[]; error?: string }> {
   if (input === undefined) return {};
   if (!Array.isArray(input) || input.some((id) => typeof id !== "string" || !id)) return { error: "Invalid labels" };
   const ids = [...new Set(input as string[])];
   if (ids.length > LABELS_PER_TASK_MAX) return { error: `A task can have at most ${LABELS_PER_TASK_MAX} labels` };
   if (!ids.length) return { ids };
-  const found = await prisma.label.count({ where: { id: { in: ids }, ...labelScopeWhere(scope) } });
+  const found = await db.label.count({ where: { id: { in: ids }, ...labelScopeWhere(scope) } });
   return found === ids.length ? { ids } : { error: "Invalid label" };
 }
 
-/** Sets a task's labels to exactly `ids`. */
-export async function setTaskLabels(taskId: string, ids: string[]) {
-  await prisma.$transaction([
-    prisma.taskLabel.deleteMany({ where: { taskId, labelId: { notIn: ids } } }),
-    prisma.taskLabel.createMany({ data: ids.map((labelId) => ({ taskId, labelId })), skipDuplicates: true }),
-  ]);
+/**
+ * Sets a task's labels to exactly `ids`, both steps together: in their own transaction, or in the
+ * one `db` belongs to when it's a transaction's client (#310).
+ */
+export async function setTaskLabels(taskId: string, ids: string[], db?: Db) {
+  const remove = { where: { taskId, labelId: { notIn: ids } } };
+  const add = { data: ids.map((labelId) => ({ taskId, labelId })), skipDuplicates: true };
+  if (!db) {
+    await prisma.$transaction([prisma.taskLabel.deleteMany(remove), prisma.taskLabel.createMany(add)]);
+    return;
+  }
+  await db.taskLabel.deleteMany(remove);
+  await db.taskLabel.createMany(add);
 }
 
 /** After a task moves to another project (or out of one), drops the labels that belonged to the old scope. */
-export async function dropLabelsOutsideScope(taskIds: string[], scope: LabelScope) {
+export async function dropLabelsOutsideScope(taskIds: string[], scope: LabelScope, db: Db = prisma) {
   if (!taskIds.length) return;
-  await prisma.taskLabel.deleteMany({ where: { taskId: { in: taskIds }, NOT: { label: labelScopeWhere(scope) } } });
+  await db.taskLabel.deleteMany({ where: { taskId: { in: taskIds }, NOT: { label: labelScopeWhere(scope) } } });
 }
 
 /** Whether the user may rename, recolor or delete a label: their own personal one, or one in a project they can edit. */

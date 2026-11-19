@@ -1,4 +1,5 @@
 import type { Project, ProjectMemberRole } from "@prisma/client";
+import type { Db } from "@/lib/db-client";
 import { prisma } from "@/lib/prisma";
 import { projectAccessWhereForProject } from "@/lib/project-access-core";
 import { canManageMembers, memberRole, type ProjectRole } from "@/lib/project-roles";
@@ -23,8 +24,9 @@ export function getProjectAccessForUser(project: Pick<Project, "id" | "userId"> 
   return { projectId: project.id, userId, accessLevel: memberRole(membership.role), memberRole: membership.role };
 }
 
-export async function getProjectAccess(projectId: string, userId: string): Promise<ProjectAccess | null> {
-  const project = await prisma.project.findFirst({
+/** `db` is a transaction's client when the check is one step of several changes (#310). */
+export async function getProjectAccess(projectId: string, userId: string, db: Db = prisma): Promise<ProjectAccess | null> {
+  const project = await db.project.findFirst({
     where: projectAccessWhereForProject(projectId, userId),
     select: { id: true, userId: true, members: { where: { userId }, select: { userId: true, role: true } } },
   });
