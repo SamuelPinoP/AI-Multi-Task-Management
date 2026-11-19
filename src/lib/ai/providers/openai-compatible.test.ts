@@ -200,6 +200,12 @@ test("failures midway end the request with the right kind", async () => {
   assert.ok(midway instanceof ProviderError);
   assert.equal(midway.kind, "unavailable");
   assert.match(midway.message, /server_error: Service overloaded/);
+  // Groq refuses a tool call that doesn't match its schema in the stream: the model's mistake, not an outage (#502).
+  const badCall = await failure(
+    sseResponse([{ error: { message: "Tool call validation failed: parameters for tool task_stats did not match schema", type: "invalid_request_error", code: "tool_use_failed" } }]),
+  );
+  assert.equal((badCall as ProviderError).kind, "rejected");
+  assert.match((badCall as ProviderError).message, /^groq stream error invalid_request_error: Tool call validation failed/);
   const groqError = await failure(sseResponse([text("Half"), { choices: [], x_groq: { error: "over capacity" } }]));
   assert.equal((groqError as ProviderError).kind, "unavailable");
 

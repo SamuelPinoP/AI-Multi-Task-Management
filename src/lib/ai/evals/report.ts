@@ -122,7 +122,7 @@ export function formatSummary(summary: RunSummary, { provider, model, info }: { 
   if (summary.skipped.length) lines.push(`  Not scored (the provider failed): ${summary.skipped.join(", ")}`);
   if (summary.errors.length) lines.push(`  Errors in AI Multi: ${summary.errors.join(", ")}`);
   lines.push(
-    `  Tokens: ${summary.inputTokens.toLocaleString("en-US")} in, ${summary.outputTokens.toLocaleString("en-US")} out, over ${summary.modelRequests} model requests${summary.retries ? ` (${summary.retries} retried after a rate limit)` : ""}`,
+    `  Tokens: ${summary.inputTokens.toLocaleString("en-US")} in, ${summary.outputTokens.toLocaleString("en-US")} out, over ${summary.modelRequests} model requests${summary.retries ? ` (${summary.retries} retried after a rate limit or an outage)` : ""}`,
     `  Per message (${summary.messages} asked a model): ${summary.requestsPerMessage.toFixed(2)} requests, ${Math.round(summary.tokensPerMessage).toLocaleString("en-US")} tokens`,
   );
   if (summary.costUsd !== null && summary.costPerMessageUsd !== null) {

@@ -24,8 +24,8 @@ function caseNamed(id: string) {
   return found;
 }
 
-test("the suite has at least 20 cases, covering every tool and ability (#311)", () => {
-  assert.ok(cases.length >= 20, `only ${cases.length} cases`);
+test("the suite has at least 50 cases, covering every tool and ability (#311, #502)", () => {
+  assert.ok(cases.length >= 50, `only ${cases.length} cases`);
   const expected = new Set(cases.flatMap((found) => found.expect.tools.flatMap((tool) => ("anyOf" in tool ? tool.anyOf : [tool]).map((call) => call.name))));
   for (const tool of AGENT_TOOLS) assert.ok(expected.has(tool.name), `no case expects ${tool.name}`);
   for (const ability of ABILITIES) assert.ok(cases.some((found) => found.ability === ability), `no ${ability} case`);
@@ -289,6 +289,21 @@ test("a run stops when the provider refuses it before answering anything: a wron
     [
       ["tasks-overdue", true, null],
       ["tasks-due-today", false, "Gemini answered 400 INVALID_ARGUMENT: API key not valid."],
+    ],
+  );
+});
+
+test("a refusal midway through the stream fails its case and the run goes on: it's about one answer, not the key (#502)", async () => {
+  const twoCases = [caseNamed("tasks-overdue"), caseNamed("tasks-due-today")];
+  // Groq refuses a tool call that doesn't match its schema in the stream, after a 200: no status.
+  const message = "groq stream error invalid_request_error: Tool call validation failed";
+  const badCall = () => createScriptedProvider([{ error: new ProviderError("rejected", message) }]);
+  const results = await runCases(twoCases, { model: "m", providerFor: badCall });
+  assert.deepEqual(
+    results.map((found) => [found.id, found.passed, found.skipped, found.refused]),
+    [
+      ["tasks-overdue", false, null, message],
+      ["tasks-due-today", false, null, message],
     ],
   );
 });

@@ -15,5 +15,41 @@
       { "toolCalls": [{ "name": "list_open_tasks", "args": { "due": "today" } }] },
       { "text": "Write the release notes is more urgent: it's high priority and already in progress, while Call the dentist is medium priority." }
     ]
+  },
+  {
+    "id": "history-which-project",
+    "ability": "history",
+    "summary": "Understands \"the second one\" from the earlier messages and looks up that task's project.",
+    "history": [
+      { "role": "USER", "content": "What's due today?" },
+      { "role": "ASSISTANT", "content": "Two tasks are due today: Call the dentist and Write the release notes." }
+    ],
+    "request": "Which project is the second one in?",
+    "expect": {
+      "tools": [{ "name": "list_open_tasks" }],
+      "facts": ["Mobile app launch"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_open_tasks", "args": { "due": "today" } }] },
+      { "text": "Write the release notes is in the Mobile app launch project." }
+    ]
+  },
+  {
+    "id": "history-and-tomorrow",
+    "ability": "history",
+    "summary": "Reads \"And tomorrow?\" as the earlier calendar question, asked for the next day.",
+    "history": [
+      { "role": "USER", "content": "What's on my calendar today?" },
+      { "role": "ASSISTANT", "content": "Today you have Lunch with Jordan from 12:30 to 13:30, then the Design review with Kim from 14:00 to 15:00." }
+    ],
+    "request": "And tomorrow?",
+    "expect": {
+      "tools": [{ "name": "list_events", "args": { "from": "2026-11-20", "to": "2026-11-20" } }],
+      "facts": ["Dentist appointment"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_events", "args": { "from": "2026-11-20", "to": "2026-11-20" } }] },
+      { "text": "Tomorrow, Friday, you have your Dentist appointment from 15:00 to 16:00." }
+    ]
   }
 ]

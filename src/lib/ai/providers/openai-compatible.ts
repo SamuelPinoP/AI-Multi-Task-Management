@@ -128,7 +128,12 @@ export function createOpenAiCompatibleProvider({
           } catch {
             throw new ProviderError("unavailable", `${name} sent a malformed stream`);
           }
-          if (chunk.error) throw new ProviderError("unavailable", `${name} stream error ${describe(chunk.error)}`);
+          if (chunk.error) {
+            // Groq checks the model's tool calls against their schema and ends the stream when one
+            // doesn't match: the model's mistake, like Gemini's MALFORMED_FUNCTION_CALL, not an outage.
+            const refused = chunk.error.type === "invalid_request_error" || chunk.error.code === "tool_use_failed";
+            throw new ProviderError(refused ? "rejected" : "unavailable", `${name} stream error ${describe(chunk.error)}`);
+          }
           if (chunk.x_groq?.error) throw new ProviderError("unavailable", `${name} stream error: ${chunk.x_groq.error}`.slice(0, 300));
           const reported = chunk.usage ?? chunk.x_groq?.usage;
           if (reported) {

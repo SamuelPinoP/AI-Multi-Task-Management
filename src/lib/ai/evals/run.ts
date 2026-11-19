@@ -49,6 +49,8 @@ export type RequestRecord = {
   outputTokens: number;
   error?: string;
   errorKind?: ProviderErrorKind;
+  /** The provider's HTTP status when it answered with an error; none for an error midway through its stream. */
+  status?: number;
   /** Refused for a rate limit or an outage, and sent again after a wait. */
   retried?: boolean;
 };
@@ -143,7 +145,10 @@ export function instrumentProvider(
           record.latencyMs = clock.now() - started;
           settle?.(record.inputTokens + record.outputTokens);
           record.error = error instanceof Error ? error.message : String(error);
-          if (error instanceof ProviderError) record.errorKind = error.kind;
+          if (error instanceof ProviderError) {
+            record.errorKind = error.kind;
+            record.status = error.status;
+          }
           // Only a live run retries, and only before anything reached the agent.
           const retry =
             pacer !== undefined &&
@@ -255,7 +260,10 @@ export type CaseResult = {
   modelTimeMs: number;
   /** Something in AI Multi failed: a bug to fix, not a score. */
   error: string | null;
-  /** The provider refused a request outright (a bad key, model or request), in its words. The case is still scored. */
+  /**
+   * The provider refused a request (a bad key, model or request) or the model's answer (a tool call
+   * that failed its schema check), in its words. The case is still scored.
+   */
   refused: string | null;
 };
 
@@ -271,6 +279,10 @@ function workspaceFor(name: string) {
 }
 
 export async function runCase(evalCase: EvalCase, options: RunOptions): Promise<CaseResult> {
+  return (await runCaseAndRecords(evalCase, options)).result;
+}
+
+async function runCaseAndRecords(evalCase: EvalCase, options: RunOptions): Promise<{ result: CaseResult; records: RequestRecord[] }> {
   const workspace = workspaceFor(evalCase.workspace);
   const clock = evalCase.clock ?? workspace.clock;
   const realNow = new Date(clock.now);
@@ -339,7 +351,7 @@ export async function runCase(evalCase: EvalCase, options: RunOptions): Promise<
     modelTimeMs: records.filter((record) => !record.injected).reduce((sum, record) => sum + record.latencyMs, 0),
   };
   const checks = scoreCase(evalCase, observed, workspace);
-  return {
+  const caseResult: CaseResult = {
     id: evalCase.id,
     ability: evalCase.ability,
     summary: evalCase.summary,
@@ -358,23 +370,29 @@ export async function runCase(evalCase: EvalCase, options: RunOptions): Promise<
     error: result.failure ? (result.failure instanceof Error ? `${result.failure.name}: ${result.failure.message}` : String(result.failure)) : null,
     refused: refused ? (refused.error ?? "refused") : null,
   };
+  return { result: caseResult, records };
 }
 
 /**
  * Runs cases one after another (a free plan's limits allow little else), reporting each as it ends.
- * Stops when the provider refuses a request before it has answered any: a wrong key or model name
- * would fail every case alike, and that's no score.
+ * Stops when the provider refuses a request with an error status before it has answered any: a
+ * wrong key or model name would fail every case alike, and that's no score. A refusal midway
+ * through a stream, such as Groq refusing a tool call that doesn't match its schema, is about one
+ * answer, so the run goes on.
  */
 export async function runCases(cases: EvalCase[], options: RunOptions, onResult?: (result: CaseResult, index: number) => void) {
   const results: CaseResult[] = [];
   let answeredOnce = false;
   for (const [index, evalCase] of cases.entries()) {
-    const result = await runCase(evalCase, options);
+    const { result, records } = await runCaseAndRecords(evalCase, options);
     results.push(result);
     onResult?.(result, index);
     if (result.inputTokens > 0) answeredOnce = true;
-    if (result.refused && !answeredOnce) {
-      throw new Error(`The provider refused a request before answering any, so the run stopped. Check the key and the model's name. It said: ${result.refused}`);
+    const refusedRequest = records.find((record) => !record.injected && record.errorKind === "rejected" && record.status !== undefined);
+    if (refusedRequest && !answeredOnce) {
+      throw new Error(
+        `The provider refused a request before answering any, so the run stopped. Check the key and the model's name. It said: ${refusedRequest.error ?? "refused"}`,
+      );
     }
   }
   return results;

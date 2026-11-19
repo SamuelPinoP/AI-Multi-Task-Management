@@ -79,7 +79,7 @@ flowchart LR
 
 ### Evaluations
 
-`src/lib/ai/evals/` scores the agent on 42 cases (#311). Each case is data: a
+`src/lib/ai/evals/` scores the agent on 53 cases (#311, #502). Each case is data: a
 sample workspace, a fixed clock and time zone, the question, and what a good
 answer does, meaning the tools it calls and with which arguments, the facts it
 states, what it must not call or say, and whether it asks a question back.
@@ -101,10 +101,11 @@ npm run agent:eval -- --provider reference
 This replays each case's reference answer through the real agent loop, tools
 and scorer, with no model, key or network. CI runs the same replay with the
 unit tests, so a change that breaks a case fails the build. A live run asks a
-real model, with a key set in the terminal for that run only:
+real model, with a key set in the terminal for that run only. The masked prompt
+keeps the key off the screen and out of PowerShell's history file:
 
 ```powershell
-$env:AGENT_EVAL_API_KEY = "<the key>"
+$env:AGENT_EVAL_API_KEY = [System.Net.NetworkCredential]::new("", (Read-Host "Paste the key" -AsSecureString)).Password
 ```
 
 ```powershell
@@ -120,18 +121,33 @@ runs that day, so no run overwrites another. `--case`, `--ability`,
 `--model`, `--dry-run` and `--list` narrow a run down; `--help` explains them.
 A run paces itself under the model's free-plan limits and waits out a rate
 limit. A case whose provider fails for its own reasons, such as a quota or an
-outage, is reported as not scored rather than failed. Use a key from a project
-of its own, so a run never uses the app's daily allowance.
+outage, is reported as not scored rather than failed; a tool call the provider
+refuses is the model's mistake, so it fails. Use a key from a project of its
+own, so a run never uses the app's daily allowance, and clear it with
+`Remove-Item Env:AGENT_EVAL_API_KEY` once the run is saved.
 
 #### Latest scores
 
-| Run | Cases passed | Notes |
-| --- | --- | --- |
-| Reference answers, no model | 42 of 42 | Every push, in CI. Checks the cases and the scorer, not a model. |
-| Gemini 3.1 Flash-Lite | Not run yet | The live comparison is #502. |
-| gpt-oss-120b on Groq | Not run yet | The live comparison is #502. |
-| Claude Haiku 5.5 | Not run | Its API needs paid credits. |
-| Gemini 3.5 Flash-Lite | Not run | No free tier. |
+| Run | Cases passed | Cost per 1,000 messages | Model time per message, median / 95th percentile | Messages a day on the free plan |
+| --- | --- | --- | --- | --- |
+| Reference answers, no model | 53 of 53 | – | – | – |
+| Gemini 3.1 Flash-Lite | 38 of 42 (90%) | $0.80 | 6.8 s / 59.6 s | About 240 |
+| gpt-oss-120b on Groq | 37 of 42 (88%) | $0.41 | 2.4 s / 14.9 s | About 88 |
+| Claude Haiku 5.5 | Not run: its API needs paid credits | | | |
+| Gemini 3.5 Flash-Lite | Not run: no free tier | | | |
+
+The reference replay runs on every push, in CI, and checks the cases and the
+scorer rather than a model. The live runs are from November 19, 2026, on the 42
+cases there were then; their results are in `src/lib/ai/evals/results/`, and
+costs are at list prices. Gemini took 285 seconds on one answer, past the
+30-second deadline, answered a vague request instead of asking what was meant,
+and twice kept searching until the step limit instead of saying it found
+nothing. Groq read "next week" as the wrong week, took 37 seconds on one answer,
+searched notes for a task, and twice sent `task_stats` an empty or null
+project, which Groq refused. Groq's results file shows those two as not scored,
+because the runner took the refusal for an outage; it now counts them as
+failed, as this table does. The comparison and the recommended model are on
+#256.
 
 ## Project chat attachment storage
 

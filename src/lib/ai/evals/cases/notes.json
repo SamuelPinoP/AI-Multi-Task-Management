@@ -26,5 +26,33 @@
       { "toolCalls": [{ "name": "search_notes", "args": { "query": "launch checklist" } }] },
       { "text": "Your Launch checklist says to update the store screenshots, finish the release notes, check the privacy labels and book the venue for the launch party." }
     ]
+  },
+  {
+    "id": "notes-recipe",
+    "ability": "notes",
+    "summary": "Finds a recipe by a word in a note's text, not its title, and answers from the excerpt.",
+    "request": "How do I make the lentil soup?",
+    "expect": {
+      "tools": [{ "name": "search_notes" }],
+      "facts": ["cumin"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "search_notes", "args": { "query": "lentil" } }] },
+      { "text": "Your Soup recipes note only says to add cumin to the lentil soup at the end." }
+    ]
+  },
+  {
+    "id": "notes-not-found",
+    "ability": "notes",
+    "summary": "Says it found nothing when a search comes back empty, instead of searching until the step limit as Gemini's first live run did twice.",
+    "request": "What did I write down about the Paris trip?",
+    "expect": {
+      "tools": [{ "name": "search_notes" }],
+      "facts": ["@notFound"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "search_notes", "args": { "query": "Paris" } }] },
+      { "text": "I couldn't find any notes about a Paris trip." }
+    ]
   }
 ]
