@@ -12,6 +12,7 @@ import { TASK_TITLE_MAX } from "@/lib/task-history";
 import { recordTaskCreated } from "@/lib/task-history-server";
 import { notifyTaskAssigned } from "@/lib/notifications";
 import { guestLimitResponse } from "@/lib/guest-limits";
+import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 
 
 function isValidStatus(value: unknown): value is TaskStatus {
@@ -139,6 +140,7 @@ export async function POST(req: Request) {
     await createActivity({ userId: user.id, action: status === TaskStatus.DONE ? "COMPLETED_TASK" : "CREATED_TASK", message: `${status === TaskStatus.DONE ? "Completed task" : "Created task"}: “${task.title}”`, entityType: "TASK", entityId: task.id, projectId: task.projectId });
     // The assignee hears about it in their inbox (SMART-08).
     if (task.assigneeId) after(() => notifyTaskAssigned({ task, actor: user }));
+    refreshCalendarFeeds({ userIds: [user.id], projectIds: [task.projectId] });
     return NextResponse.json(task, { status: 201 });
   } catch (error) {
     console.error("POST /api/tasks error:", error);

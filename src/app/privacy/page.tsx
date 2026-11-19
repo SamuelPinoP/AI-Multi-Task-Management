@@ -172,7 +172,8 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Your calendar link.</strong> If you make a calendar subscription link, anyone with that link can see your
-            events until you replace it.
+            events and due tasks until you replace it or turn it off. A copy of that calendar is kept in storage for calendar
+            apps to fetch, and is deleted when you replace the link or turn it off.
           </li>
           <li>
             <strong>Samuel, who runs AI Multi.</strong> He gets an email with your name, username and email address when you
@@ -182,7 +183,7 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Service providers</strong> that process data for AI Multi, under their own privacy terms: Vercel hosts
-            the app and counts visits (Web Analytics); Neon holds the database; Cloudflare R2 stores uploaded files and database backups; Google sends email
+            the app and counts visits (Web Analytics); Neon holds the database; Cloudflare R2 stores uploaded files, the calendar copies behind calendar links, and database backups; Google sends email
             (Gmail), runs Sign in with Google, and answers the AI assistant&apos;s questions (the Gemini API); GitHub supplies public repository details when a project links a
             repository (AI Multi sends it only the repository&apos;s name); and your browser&apos;s push service delivers
             the notifications you turned on.

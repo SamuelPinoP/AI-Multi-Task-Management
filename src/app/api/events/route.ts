@@ -4,6 +4,7 @@ import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
 import { parseEventTimes, parseRepeatUntil } from "@/lib/event-time";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
+import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import { visibleNoteWhere } from "@/lib/note-access";
 import { guestLimitResponse } from "@/lib/guest-limits";
@@ -76,6 +77,7 @@ export async function POST(req: Request) {
       entityId: event.id,
       projectId: event.projectId,
     });
+    refreshCalendarFeeds({ userIds: [user.id], projectIds: [event.projectId] });
 
     return NextResponse.json(event, { status: 201 });
   } catch (error) {

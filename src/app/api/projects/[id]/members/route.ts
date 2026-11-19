@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeAuthEmail, requireApiUser } from "@/lib/auth";
+import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 import { accountRequiredResponse } from "@/lib/guest-limits";
 import { canManageProjectMembers, getProjectAccess } from "@/lib/project-access";
 import { displayName } from "@/lib/direct-chats-core";
@@ -41,6 +42,8 @@ async function addTeammate(projectId: string, actorId: string, personId: string,
     });
     return created;
   });
+  // The project's dated items join their calendar feed.
+  refreshCalendarFeeds({ userIds: [person.id] });
   return NextResponse.json({ member }, { status: 201 });
 }
 

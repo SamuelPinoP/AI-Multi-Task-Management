@@ -2,7 +2,8 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, request as playwrightRequest, test } from "@playwright/test";
 import { signUpAndLogIn, uniqueName } from "./helpers";
 
-// SMART-09: a private link calendar apps subscribe to, showing events and due tasks.
+// SMART-09: a private link calendar apps subscribe to, showing events and due
+// tasks. CU-01 (#497): the feed is stored and rebuilt when its data changes.
 
 /** `YYYY-MM-DD`, `days` from today in the browser's (and the server's, in CI: UTC) time zone. */
 function dateInputValue(days: number) {
@@ -18,8 +19,12 @@ test("the calendar link serves events and due tasks until it's replaced or turne
   const holiday = uniqueName("Team day off");
   const dueTask = uniqueName("Send the report");
   const doneTask = uniqueName("Already done");
-  const post = async (url: string, data: Record<string, unknown>) => expect((await page.request.post(url, { data })).ok()).toBe(true);
-  await post("/api/events", {
+  const post = async (url: string, data: Record<string, unknown>) => {
+    const response = await page.request.post(url, { data });
+    expect(response.ok()).toBe(true);
+    return ((await response.json()) as { id: string }).id;
+  };
+  const meetingFields = {
     title: meeting,
     startDate: dateInputValue(1),
     startTime: "09:00",
@@ -28,9 +33,10 @@ test("the calendar link serves events and due tasks until it's replaced or turne
     recurrence: "WEEKLY",
     repeatUntil: dateInputValue(29),
     location: "Room 4, 2nd floor",
-  });
+  };
+  const meetingId = await post("/api/events", meetingFields);
   await post("/api/events", { title: holiday, startDate: dateInputValue(3), startTime: "", endDate: "", endTime: "" });
-  await post("/api/tasks", { title: dueTask, dueDate: dateInputValue(2) });
+  const dueTaskId = await post("/api/tasks", { title: dueTask, dueDate: dateInputValue(2) });
   await post("/api/tasks", { title: doneTask, dueDate: dateInputValue(2), status: "DONE" });
 
   await page.goto("/events/calendar");
@@ -59,6 +65,19 @@ test("the calendar link serves events and due tasks until it's replaced or turne
   expect(body).toContain(`DTSTART;VALUE=DATE:${dateInputValue(3).replace(/-/g, "")}`);
   expect(body).toContain(`SUMMARY:Due: ${dueTask}`);
   expect(body).not.toContain(doneTask);
+
+  // The feed is stored and served without the database; changes rebuild it
+  // within seconds, so the calendar app's next fetch sees them (#497).
+  const feedText = async (link: string) => (await (await calendarApp.get(link)).text()).replace(/\r\n /g, "");
+  const moved = uniqueName("Weekly sync moved");
+  expect((await page.request.patch(`/api/events/${meetingId}`, { data: { ...meetingFields, title: moved, startTime: "10:00", endTime: "10:30" } })).ok()).toBe(true);
+  expect((await page.request.patch("/api/tasks/bulk", { data: { ids: [dueTaskId], change: { status: "DONE" } } })).ok()).toBe(true);
+  await expect.poll(() => feedText(firstLink), { timeout: 20_000 }).toContain(`SUMMARY:${moved}`);
+  await expect.poll(() => feedText(firstLink), { timeout: 20_000 }).not.toContain(dueTask);
+  const changed = await feedText(firstLink);
+  expect(changed).toContain(`DTSTART:${dateInputValue(1).replace(/-/g, "")}T100000`);
+  expect(changed).not.toContain(meeting);
+  expect(changed).toContain(`SUMMARY:${holiday}`);
 
   // A new link replaces the old one.
   await dialog.getByRole("button", { name: "New link" }).click();

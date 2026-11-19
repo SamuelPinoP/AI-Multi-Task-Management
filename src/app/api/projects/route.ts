@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
+import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 import { parseEventTimes, parseRepeatUntil } from "@/lib/event-time";
 import { isPriority } from "@/lib/priority";
 import { projectAccessWhere, getProjectAccessForUser } from "@/lib/project-access";
@@ -144,6 +145,8 @@ export async function POST(req: Request) {
       entityId: project.id,
       projectId: project.id,
     });
+    // A template's tasks and check-ins have dates.
+    if (template) refreshCalendarFeeds({ userIds: [user.id] });
 
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
