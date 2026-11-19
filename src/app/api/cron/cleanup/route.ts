@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cleanUpCalendarFeeds } from "@/lib/calendar-feed-store";
 import { runDailyCleanup } from "@/lib/daily-cleanup";
 import { prisma } from "@/lib/prisma";
 import { deleteProjectChatAttachments } from "@/lib/project-chat-storage";
@@ -19,8 +20,13 @@ export async function GET(request: Request) {
 
   try {
     const result = await runDailyCleanup({ db: prisma, deleteStoredObjects: deleteProjectChatAttachments });
-    console.log("daily_cleanup_done", result);
-    return NextResponse.json(result);
+    // Stored calendar feeds whose link is gone, in case deleting one at the time failed (#497).
+    const calendarFeeds = await cleanUpCalendarFeeds().catch((error: unknown) => {
+      console.error("calendar_feed_cleanup_failed", { error: error instanceof Error ? error.name : "UnknownError" });
+      return null;
+    });
+    console.log("daily_cleanup_done", { ...result, calendarFeeds });
+    return NextResponse.json({ ...result, calendarFeeds });
   } catch (error) {
     console.error("daily_cleanup_failed", { error: error instanceof Error ? error.message : "Unknown error" });
     return NextResponse.json({ error: "The daily cleanup failed." }, { status: 500 });

@@ -11,6 +11,7 @@ import { loadHistoryStates, recordTaskChanges } from "@/lib/task-history-server"
 import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
 import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
 import { notifyTaskAssigned } from "@/lib/notifications";
+import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 
 
 type RouteContext = {
@@ -195,6 +196,8 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     // A new assignee hears about it in their inbox (SMART-08).
     if (task?.assigneeId && task.assigneeId !== existingTask.assigneeId) after(() => notifyTaskAssigned({ task, actor: user }));
+    // Subtasks moved with it, so both projects' people may see a change.
+    refreshCalendarFeeds({ userIds: [existingTask.userId], projectIds: [existingTask.projectId, projectId] });
 
     return NextResponse.json(task, { status: 200 });
   } catch (error) {
@@ -248,6 +251,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
       entityId: existingTask.id,
       projectId: existingTask.projectId,
     });
+    refreshCalendarFeeds({ userIds: [existingTask.userId], projectIds: [existingTask.projectId] });
 
     return NextResponse.json({ message: "Task moved to trash" }, { status: 200 });
   } catch (error) {

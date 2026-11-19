@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
+import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 import { canManageProjectMembers, getProjectAccess, unauthorizedProjectResponse } from "@/lib/project-access";
 import { canChangeRole, canRemoveMember, parseAssignableRole } from "@/lib/project-roles";
 
@@ -50,6 +51,8 @@ export async function DELETE(_req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Only the project owner can remove an admin." }, { status: 403 });
     }
     await prisma.projectMember.delete({ where: { id: member.id } });
+    // The project's items leave their calendar feed, except the ones they created.
+    refreshCalendarFeeds({ userIds: [member.userId] });
     return NextResponse.json({ message: "Member removed" });
   } catch (error) {
     console.error("DELETE /api/projects/[id]/members/[memberId] error:", error);

@@ -293,10 +293,40 @@ Every day at about 09:00 UTC, after the backup, Vercel Cron calls
   in a real user's project, or whose project has a real member, is left alone;
 - chat uploads that expired without being attached, with their stored files;
 - hourly email counts older than 35 days (see "Free-tier usage" below);
-- sign-ins older than a year (see "Users" below).
+- sign-ins older than a year (see "Users" below);
+- stored calendar feeds that no link points to any more (see "Calendar feeds"
+  below; replacing or turning off a link normally deletes its feed at once).
 
 It answers with the counts. A repeat call finds nothing new, so the route is
 safe to leave public; with `CRON_SECRET` set it is required, as for backups.
+
+## Calendar feeds
+
+A calendar subscription link (`/api/calendar/<token>.ics`, SMART-09) serves a
+stored copy of the person's feed, so calendar apps, which fetch on their own
+schedule day and night, don't wake the database (#497). The copies live in the
+private R2 bucket under `calendar-feeds/`, named by a SHA-256 hash of the
+token, so the bucket never holds a working link
+(`src/lib/calendar-feed-store-core.ts`).
+
+- Changes to events, dated tasks, project names and project members rebuild
+  the feeds of the people with a link who see them, after the response and
+  while the database is awake anyway. Changes for one person within about 2
+  seconds share one rebuild. A route that writes events, tasks, projects or
+  members must call `refreshCalendarFeeds`; a unit test checks every API route.
+- A link with no stored copy yet is built on its first fetch, then stored.
+- Replacing or turning off a link deletes its copy at once and leaves an empty
+  marker, so a calendar app still subscribed to the old link gets a 404 without
+  a database lookup.
+- When what a feed contains or how it is written changes, bump
+  `CALENDAR_FEED_VERSION` (a unit test pins it to the output): every stored
+  copy is then rebuilt on its next fetch, and the daily cleanup deletes the old
+  ones.
+
+A Vercel preview with its own database (`PREVIEW_DATABASE_URL`) and
+`next dev` build the feed on every fetch, as before, so a preview never
+writes into production's bucket. `next start` without R2, as in the e2e
+tests, stores the copies in the system's temporary folder.
 
 ## Free-tier usage
 

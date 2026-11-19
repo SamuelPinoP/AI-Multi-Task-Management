@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
+import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 import { parseRepeatUntil } from "@/lib/event-time";
 import { prisma } from "@/lib/prisma";
 import { canEditProjectContent, getProjectAccess, projectAccessWhere, unauthorizedProjectResponse } from "@/lib/project-access";
@@ -87,6 +88,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       data,
       include: { project: { select: { id: true, name: true, color: true } } },
     });
+    refreshCalendarFeeds({ userIds: [event.userId], projectIds: [event.projectId] });
     return NextResponse.json({ ...event, recurrence: normalizeRecurrence(event.recurrence) });
   } catch (error) {
     console.error("PATCH /api/events/[id]/repeats error:", error);

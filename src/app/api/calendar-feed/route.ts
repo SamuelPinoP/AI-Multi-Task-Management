@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
 import { accountRequiredResponse } from "@/lib/guest-limits";
 import { calendarFeedPath, newCalendarFeedToken } from "@/lib/calendar-feed";
+import { saveCalendarFeedToken } from "@/lib/calendar-feed-store";
 import { prisma } from "@/lib/prisma";
 
-// The signed-in user's calendar subscription link (SMART-09).
+// The signed-in user's calendar subscription link (SMART-09). Replacing or
+// turning off the link deletes the old link's stored feed at once (#497).
 
 /** The current link, or null when it's off. */
 export async function GET() {
@@ -23,7 +25,7 @@ export async function POST() {
     const accountOnly = accountRequiredResponse(user, "calendar-feed");
     if (accountOnly) return accountOnly;
     const token = newCalendarFeedToken();
-    await prisma.user.update({ where: { id: user.id }, data: { calendarFeedToken: token } });
+    await saveCalendarFeedToken(user.id, token);
     return NextResponse.json({ path: calendarFeedPath(token) }, { status: 201 });
   } catch (error) {
     console.error("POST /api/calendar-feed error:", error);
@@ -36,7 +38,7 @@ export async function DELETE() {
   try {
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-    await prisma.user.update({ where: { id: user.id }, data: { calendarFeedToken: null } });
+    await saveCalendarFeedToken(user.id, null);
     return NextResponse.json({ path: null });
   } catch (error) {
     console.error("DELETE /api/calendar-feed error:", error);

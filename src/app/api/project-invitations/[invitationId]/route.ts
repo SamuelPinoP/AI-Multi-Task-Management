@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeAuthEmail, requireApiUser } from "@/lib/auth";
+import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 import { EMAIL_NOT_CONFIRMED_ERROR } from "@/lib/email-verification";
 
 type RouteContext = { params: Promise<{ invitationId: string }> };
@@ -85,6 +86,8 @@ export async function PATCH(req: Request, context: RouteContext) {
 
       return updatedInvitation;
     });
+    // The project's dated items join their calendar feed.
+    refreshCalendarFeeds({ userIds: [user.id] });
 
     return NextResponse.json(accepted);
   } catch (error) {

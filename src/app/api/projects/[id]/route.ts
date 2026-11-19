@@ -13,6 +13,7 @@ import {
 } from "@/lib/project-access";
 import { OWNER_INVITATION_SELECT, ownerInvitationJson } from "@/lib/project-invitations";
 import { deleteProjectChatAttachments } from "@/lib/project-chat-storage";
+import { calendarFeedUserIds, refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 
 
 type RouteContext = {
@@ -136,6 +137,8 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     const updated = await prisma.project.updateMany({ where: { id, userId: user.id }, data });
     if (updated.count === 0) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    // Feeds name the project in each item's description.
+    refreshCalendarFeeds({ projectIds: [id] });
 
     const project = await prisma.project.findUnique({ where: { id } });
     return NextResponse.json(project);
@@ -166,8 +169,11 @@ export async function DELETE(_req: Request, context: RouteContext) {
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
     await deleteProjectChatAttachments(project.comments.flatMap((comment) => comment.attachments));
+    // Found before the project and its member list go: members lose its items, and the owner's lose its name.
+    const feedUserIds = await calendarFeedUserIds({ projectIds: [id] });
     const deleted = await prisma.project.deleteMany({ where: { id, userId: user.id } });
     if (deleted.count === 0) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    refreshCalendarFeeds({ userIds: feedUserIds });
 
     return NextResponse.json({ message: "Project deleted" });
   } catch (error) {

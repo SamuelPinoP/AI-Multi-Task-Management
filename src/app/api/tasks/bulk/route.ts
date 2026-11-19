@@ -1,6 +1,7 @@
 import { TaskStatus, type Prisma } from "@prisma/client";
 import { after, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
+import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 import { labelScopeFor, labelScopeWhere } from "@/lib/labels-server";
 import { notifyTasksAssigned } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -102,9 +103,18 @@ async function checkTargets(change: BulkTaskChange, tasks: LoadedTask[], userId:
   return null;
 }
 
-/** Runs after a change: activity for newly done tasks, and assignment notifications. */
-function afterChange(before: LoadedTask[], user: { id: string; name: string | null; email: string }) {
+/**
+ * Runs after a change: activity for newly done tasks, assignment
+ * notifications, and calendar feeds, including those of the projects the
+ * tasks moved to.
+ */
+function afterChange(
+  before: LoadedTask[],
+  user: { id: string; name: string | null; email: string },
+  movedTo: readonly (string | null | undefined)[] = [],
+) {
   const ids = before.map((task) => task.id);
+  refreshCalendarFeeds({ userIds: before.map((task) => task.userId), projectIds: [...before.map((task) => task.projectId), ...movedTo] });
   after(async () => {
     const tasks = await prisma.task.findMany({
       where: { id: { in: ids } },
@@ -208,7 +218,7 @@ export async function PATCH(req: Request) {
     const before = await loadHistoryStates(ids);
     await prisma.$transaction(writes);
     await recordTaskChanges(before, user.id);
-    afterChange(tasks, user);
+    afterChange(tasks, user, [change.projectId]);
 
     const updated = await prisma.task.findMany({ where: { id: { in: ids } }, include: taskInclude(user.id) });
     return NextResponse.json({ tasks: updated, previous: tasks.map(snapshotOf) });
@@ -268,7 +278,7 @@ async function restore(input: unknown, user: { id: string; name: string | null; 
   const before = await loadHistoryStates(snapshots.map((snapshot) => snapshot.id));
   await prisma.$transaction(writes);
   await recordTaskChanges(before, user.id);
-  afterChange(loaded.tasks, user);
+  afterChange(loaded.tasks, user, snapshots.map((snapshot) => snapshot.projectId));
 
   const updated = await prisma.task.findMany({ where: { id: { in: snapshots.map((snapshot) => snapshot.id) } }, include: taskInclude(user.id) });
   return NextResponse.json({ tasks: updated });
@@ -300,6 +310,7 @@ export async function DELETE(req: Request) {
         })),
       }),
     ]);
+    refreshCalendarFeeds({ userIds: tasks.map((task) => task.userId), projectIds: tasks.map((task) => task.projectId) });
     return NextResponse.json({ deleted: tasks.length });
   } catch (error) {
     console.error("DELETE /api/tasks/bulk error:", error);

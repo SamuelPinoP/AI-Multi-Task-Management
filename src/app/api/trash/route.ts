@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
+import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 import { parseBulkIds } from "@/lib/task-bulk";
 import { trashWhere } from "@/lib/trash";
 
@@ -61,7 +62,7 @@ export async function PATCH(req: Request) {
     const parsed = parseBulkIds(body.ids);
     if (!parsed.ids) return NextResponse.json({ error: parsed.error }, { status: 400 });
     const where = { id: { in: parsed.ids }, ...trashWhere(user.id) };
-    const tasks = await prisma.task.findMany({ where, select: { id: true, title: true, projectId: true } });
+    const tasks = await prisma.task.findMany({ where, select: { id: true, title: true, userId: true, projectId: true } });
     if (!tasks.length) return NextResponse.json({ error: "Items not found" }, { status: 404 });
     await prisma.$transaction([
       prisma.task.updateMany({ where, data: { deletedAt: null, deletedById: null } }),
@@ -76,6 +77,7 @@ export async function PATCH(req: Request) {
         })),
       }),
     ]);
+    refreshCalendarFeeds({ userIds: tasks.map((task) => task.userId), projectIds: tasks.map((task) => task.projectId) });
     return NextResponse.json({ restored: tasks.length }, { status: 200 });
   }
 
@@ -85,7 +87,7 @@ export async function PATCH(req: Request) {
 
   const where = { id, ...trashWhere(user.id) };
   const data = { deletedAt: null, deletedById: null };
-  const select = { id: true, title: true, projectId: true } as const;
+  const select = { id: true, title: true, userId: true, projectId: true } as const;
 
   const item =
     type === "note"
@@ -111,6 +113,7 @@ export async function PATCH(req: Request) {
     entityId: item.id,
     projectId: item.projectId,
   });
+  if (type !== "note") refreshCalendarFeeds({ userIds: [item.userId], projectIds: [item.projectId] });
 
   return NextResponse.json({ message: "Item restored" }, { status: 200 });
 }
@@ -121,11 +124,23 @@ export async function DELETE() {
   const user = await requireApiUser();
   if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
+  // Deleting a task deletes its subtasks, which calendar feeds show even while the task is in the Trash.
+  const parents = await prisma.task.findMany({
+    where: { userId: user.id, deletedAt: { not: null }, subtasks: { some: { deletedAt: null } } },
+    select: { projectId: true, subtasks: { where: { deletedAt: null }, select: { userId: true } } },
+  });
+
   const [notes, tasks, events] = await Promise.all([
     prisma.note.deleteMany({ where: { userId: user.id, deletedAt: { not: null } } }),
     prisma.task.deleteMany({ where: { userId: user.id, deletedAt: { not: null } } }),
     prisma.event.deleteMany({ where: { userId: user.id, deletedAt: { not: null } } }),
   ]);
+  if (parents.length) {
+    refreshCalendarFeeds({
+      userIds: parents.flatMap((parent) => parent.subtasks.map((subtask) => subtask.userId)),
+      projectIds: parents.map((parent) => parent.projectId),
+    });
+  }
 
   return NextResponse.json({
     message: "Trash emptied",

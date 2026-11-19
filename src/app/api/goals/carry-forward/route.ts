@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
+import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 import { editableTaskWhere, loadGoalsWeek } from "@/lib/goals";
 import { prisma } from "@/lib/prisma";
 import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
@@ -21,12 +22,17 @@ export async function POST(req: Request) {
     if (!weekStart(week)) return NextResponse.json({ error: "Invalid week" }, { status: 400 });
 
     const { review } = await loadGoalsWeek(user.id, week, await getUserTimeZone());
-    let tasks = 0;
+    const movedIds: string[] = [];
     for (const task of review.slipped) {
       const dueDate = task.dueDate ? parseTaskDueDateForStorage(nextWeekDayKey(task.dueDate)) : null;
       if (!dueDate) continue;
       const moved = await prisma.task.updateMany({ where: { id: task.id, ...editableTaskWhere(user.id) }, data: { dueDate } });
-      tasks += moved.count;
+      if (moved.count) movedIds.push(task.id);
+    }
+    const tasks = movedIds.length;
+    if (tasks) {
+      const moved = await prisma.task.findMany({ where: { id: { in: movedIds } }, select: { userId: true, projectId: true } });
+      refreshCalendarFeeds({ userIds: moved.map((task) => task.userId), projectIds: moved.map((task) => task.projectId) });
     }
     const goals = await prisma.weeklyGoal.updateMany({
       where: { id: { in: review.openGoals.map((goal) => goal.id) }, userId: user.id },

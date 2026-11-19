@@ -4,6 +4,7 @@ import { normalizeRecurrence, isValidRecurrence } from "@/lib/recurrence";
 import { parseEventTimes, parseRepeatUntil } from "@/lib/event-time";
 import { NextResponse } from "next/server";
 import { createActivity } from "@/lib/activity";
+import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 import { canEditProjectContent, getProjectAccess, projectAccessWhere, unauthorizedProjectResponse } from "@/lib/project-access";
 type RouteContext = { params: Promise<{ id: string }> };
 function parseProjectId(input: unknown): string | null {
@@ -65,6 +66,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       },
       include: { project: { select: { id: true, name: true, color: true } } },
     });
+    refreshCalendarFeeds({ userIds: [event.userId], projectIds: [existingEvent.projectId, event.projectId] });
     return NextResponse.json(event ? { ...event, recurrence: normalizeRecurrence(event.recurrence) } : null, { status: 200 });
   } catch (error) { console.error("PATCH /api/events/[id] error:", error); return NextResponse.json({ error: "Failed to update event" }, { status: 500 }); }
 }
@@ -102,6 +104,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
       entityId: existingEvent.id,
       projectId: existingEvent.projectId,
     });
+    refreshCalendarFeeds({ userIds: [existingEvent.userId], projectIds: [existingEvent.projectId] });
     return NextResponse.json({ message: "Event moved to trash" }, { status: 200 });
   } catch (error) {
     console.error("DELETE /api/events/[id] error:", error);
