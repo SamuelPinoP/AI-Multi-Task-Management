@@ -8,12 +8,12 @@
 // Gemini, from a separate Google project), so they never draw on the app's
 // free pool. See CONTRIBUTING.md, "Changing the AI assistant".
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { ABILITIES, loadCases, type EvalCase } from "@/lib/ai/evals/case";
 import { costUsd, modelInfo, UNKNOWN_PACE } from "@/lib/ai/evals/pricing";
-import { formatCaseResult, formatSummary, resultFileName, summarize } from "@/lib/ai/evals/report";
+import { formatCaseResult, formatSummary, resultFileName, summarize, unusedFileName } from "@/lib/ai/evals/report";
 import { createPacer, createReferenceProvider, runCases, type RunOptions } from "@/lib/ai/evals/run";
 import { PROVIDERS } from "@/lib/ai/providers";
 
@@ -119,7 +119,7 @@ async function main() {
   if (summary.errors.length) process.exitCode = 1;
   if (values["dry-run"]) return;
 
-  const file = path.join(RESULTS_DIR, resultFileName(ranAt, model));
+  const file = path.join(RESULTS_DIR, unusedFileName(resultFileName(ranAt, model), (name) => existsSync(path.join(RESULTS_DIR, name))));
   mkdirSync(RESULTS_DIR, { recursive: true });
   const saved = {
     version: 1,

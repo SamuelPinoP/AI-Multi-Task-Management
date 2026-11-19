@@ -115,7 +115,8 @@ It prints each case's result, the score in total and by ability, the tokens,
 model requests per message, the cost at list prices, the model's time per
 message (median, 95th percentile and slowest) and how many messages a day the
 free plan allows. Then it saves everything to
-`src/lib/ai/evals/results/<date>-<model>.json`. `--case`, `--ability`,
+`src/lib/ai/evals/results/<date>-<model>.json`, adding `-2`, `-3` for later
+runs that day, so no run overwrites another. `--case`, `--ability`,
 `--model`, `--dry-run` and `--list` narrow a run down; `--help` explains them.
 A run paces itself under the model's free-plan limits and waits out a rate
 limit. A case whose provider fails for its own reasons, such as a quota or an

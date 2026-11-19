@@ -10,7 +10,7 @@ import { AGENT_TOOLS } from "../tools";
 import { ProviderError, type ProviderEvent, type ProviderRequest } from "../types";
 import { ABILITIES, caseSchema, factAlternatives, loadCases, PHRASE_SETS, type EvalCase } from "./case";
 import { costUsd, modelInfo } from "./pricing";
-import { formatCaseResult, resultFileName, summarize } from "./report";
+import { formatCaseResult, resultFileName, summarize, unusedFileName } from "./report";
 import { createPacer, createReferenceProvider, instrumentProvider, RETRY_DELAYS_MS, runCase, runCases, type CaseResult, type RequestRecord, type RunClock } from "./run";
 import { CHANGE_CLAIM, INSTRUCTION_PHRASES, mentions, normalize, scoreCase, type Observed } from "./score";
 import { loadWorkspace } from "./workspace";
@@ -348,4 +348,10 @@ test("results are saved by date and model, with a model's slashes made safe", ()
   const ranAt = new Date("2026-11-19T20:00:00.000Z");
   assert.equal(resultFileName(ranAt, "openai/gpt-oss-120b"), "2026-11-19-openai-gpt-oss-120b.json");
   assert.equal(resultFileName(ranAt, "gemini-3.1-flash-lite"), "2026-11-19-gemini-3.1-flash-lite.json");
+
+  // A second run of the same model that day, such as a re-run of a few cases, never overwrites the first.
+  const taken = new Set(["2026-11-19-gemini-3.1-flash-lite.json", "2026-11-19-gemini-3.1-flash-lite-2.json"]);
+  const exists = (name: string) => taken.has(name);
+  assert.equal(unusedFileName("2026-11-19-gemini-3.1-flash-lite.json", exists), "2026-11-19-gemini-3.1-flash-lite-3.json");
+  assert.equal(unusedFileName("2026-11-20-gemini-3.1-flash-lite.json", exists), "2026-11-20-gemini-3.1-flash-lite.json");
 });

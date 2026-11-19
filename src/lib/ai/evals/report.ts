@@ -146,3 +146,13 @@ export function resultFileName(ranAt: Date, model: string) {
     .replace(/^-+|-+$/g, "");
   return `${ranAt.toISOString().slice(0, 10)}-${slug}.json`;
 }
+
+/** The name, or the first free one of name-2.json, name-3.json…: a run never overwrites an earlier one's results. */
+export function unusedFileName(fileName: string, exists: (name: string) => boolean) {
+  if (!exists(fileName)) return fileName;
+  const dot = fileName.lastIndexOf(".");
+  for (let copy = 2; ; copy += 1) {
+    const candidate = `${fileName.slice(0, dot)}-${copy}${fileName.slice(dot)}`;
+    if (!exists(candidate)) return candidate;
+  }
+}
