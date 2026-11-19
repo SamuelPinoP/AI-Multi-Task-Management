@@ -11,7 +11,7 @@ import { ProviderError, type ProviderEvent, type ProviderRequest } from "../type
 import { ABILITIES, caseSchema, factAlternatives, loadCases, PHRASE_SETS, type EvalCase } from "./case";
 import { costUsd, modelInfo } from "./pricing";
 import { formatCaseResult, resultFileName, summarize } from "./report";
-import { createPacer, createReferenceProvider, instrumentProvider, RETRY_DELAYS_MS, runCase, type CaseResult, type RequestRecord, type RunClock } from "./run";
+import { createPacer, createReferenceProvider, instrumentProvider, RETRY_DELAYS_MS, runCase, runCases, type CaseResult, type RequestRecord, type RunClock } from "./run";
 import { CHANGE_CLAIM, INSTRUCTION_PHRASES, mentions, normalize, scoreCase, type Observed } from "./score";
 import { loadWorkspace } from "./workspace";
 
@@ -268,7 +268,29 @@ test("a provider failure isn't scored as the model's; a refused request is", asy
   assert.equal(refused.outcome, "PROVIDER_ERROR");
   assert.equal(refused.skipped, null);
   assert.equal(refused.passed, false);
-  assert.match(formatCaseResult(refused), /^FAIL {2}tasks-overdue/);
+  assert.equal(refused.refused, "bad request");
+  assert.match(formatCaseResult(refused), /^FAIL {2}tasks-overdue[\s\S]*The provider refused a request: bad request/);
+});
+
+test("a run stops when the provider refuses it before answering anything: a wrong key or model fails every case alike", async () => {
+  const twoCases = [caseNamed("tasks-overdue"), caseNamed("tasks-due-today")];
+  const badKey = () => createScriptedProvider([{ error: new ProviderError("rejected", "Gemini answered 400 INVALID_ARGUMENT: API key not valid.", 400) }]);
+  const reported: string[] = [];
+  await assert.rejects(
+    runCases(twoCases, { model: "m", providerFor: badKey }, (found) => reported.push(found.id)),
+    /refused a request before answering any.*API key not valid/,
+  );
+  assert.deepEqual(reported, ["tasks-overdue"], "the first case is reported, and no more are sent");
+
+  // Once the provider has answered, a refused request is that case's own failure, and the run goes on.
+  const results = await runCases(twoCases, { model: "m", providerFor: (found) => (found.id === "tasks-overdue" ? createReferenceProvider(found) : badKey()) });
+  assert.deepEqual(
+    results.map((found) => [found.id, found.passed, found.refused]),
+    [
+      ["tasks-overdue", true, null],
+      ["tasks-due-today", false, "Gemini answered 400 INVALID_ARGUMENT: API key not valid."],
+    ],
+  );
 });
 
 function result(overrides: Partial<CaseResult>): CaseResult {
@@ -289,6 +311,7 @@ function result(overrides: Partial<CaseResult>): CaseResult {
     outputTokens: 0,
     modelTimeMs: 0,
     error: null,
+    refused: null,
     ...overrides,
   };
 }

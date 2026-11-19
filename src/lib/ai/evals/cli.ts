@@ -6,7 +6,7 @@
 // The key comes from AGENT_EVAL_API_KEY, set for one terminal session, and
 // never from the app's own variables: evaluation runs use their own key (for
 // Gemini, from a separate Google project), so they never draw on the app's
-// free pool. See CONTRIBUTING.md, "Evaluating the AI assistant".
+// free pool. See CONTRIBUTING.md, "Changing the AI assistant".
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";

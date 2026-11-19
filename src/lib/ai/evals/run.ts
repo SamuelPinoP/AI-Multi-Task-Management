@@ -255,6 +255,8 @@ export type CaseResult = {
   modelTimeMs: number;
   /** Something in AI Multi failed: a bug to fix, not a score. */
   error: string | null;
+  /** The provider refused a request outright (a bad key, model or request), in its words. The case is still scored. */
+  refused: string | null;
 };
 
 const workspaces = new Map<string, Workspace>();
@@ -324,6 +326,7 @@ export async function runCase(evalCase: EvalCase, options: RunOptions): Promise<
   );
 
   const answered = records.filter((record) => !record.injected && !record.error);
+  const refused = records.find((record) => !record.injected && record.errorKind === "rejected");
   const lastRecord = records.at(-1);
   const skipped =
     lastRecord && !lastRecord.injected && lastRecord.errorKind && lastRecord.errorKind !== "rejected" ? `The provider failed: ${lastRecord.error}` : null;
@@ -353,16 +356,26 @@ export async function runCase(evalCase: EvalCase, options: RunOptions): Promise<
     outputTokens: answered.reduce((sum, record) => sum + record.outputTokens, 0),
     modelTimeMs: observed.modelTimeMs,
     error: result.failure ? (result.failure instanceof Error ? `${result.failure.name}: ${result.failure.message}` : String(result.failure)) : null,
+    refused: refused ? (refused.error ?? "refused") : null,
   };
 }
 
-/** Runs cases one after another (a free plan's limits allow little else), reporting each as it ends. */
+/**
+ * Runs cases one after another (a free plan's limits allow little else), reporting each as it ends.
+ * Stops when the provider refuses a request before it has answered any: a wrong key or model name
+ * would fail every case alike, and that's no score.
+ */
 export async function runCases(cases: EvalCase[], options: RunOptions, onResult?: (result: CaseResult, index: number) => void) {
   const results: CaseResult[] = [];
+  let answeredOnce = false;
   for (const [index, evalCase] of cases.entries()) {
     const result = await runCase(evalCase, options);
     results.push(result);
     onResult?.(result, index);
+    if (result.inputTokens > 0) answeredOnce = true;
+    if (result.refused && !answeredOnce) {
+      throw new Error(`The provider refused a request before answering any, so the run stopped. Check the key and the model's name. It said: ${result.refused}`);
+    }
   }
   return results;
 }

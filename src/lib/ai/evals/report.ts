@@ -105,6 +105,7 @@ export function formatCaseResult(result: CaseResult) {
   ];
   if (result.skipped) lines.push(`      ${result.skipped}`);
   if (result.error) lines.push(`      Error in AI Multi: ${result.error}`);
+  if (result.refused) lines.push(`      The provider refused a request: ${result.refused}`);
   for (const check of result.checks.filter((found) => !found.passed)) lines.push(`      x ${check.name}${check.detail ? `: ${check.detail}` : ""}`);
   if (!result.passed && !result.skipped) lines.push(`      Answer: ${JSON.stringify(result.answer.slice(0, 400))}`);
   return lines.join("\n");
