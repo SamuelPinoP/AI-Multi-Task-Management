@@ -102,6 +102,7 @@ export const PHRASE_SETS: Record<string, string[]> = {
     "no task",
     "no note",
     "no event",
+    "no goal",
     "no match",
     "not find",
     "doesn't appear",
@@ -112,6 +113,11 @@ export const PHRASE_SETS: Record<string, string[]> = {
     "are no",
     "there's no",
     "there is no",
+    "none",
+    "don't have any",
+    "do not have any",
+    "haven't set",
+    "have not set",
   ],
 };
 

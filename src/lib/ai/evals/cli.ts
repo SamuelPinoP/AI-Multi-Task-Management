@@ -32,8 +32,10 @@ const USAGE = `Usage: npm run agent:eval -- --provider <name> [options]
   --dry-run           Print the results without saving them.
   --list              List the cases and stop.
 
-Live providers read their key from ${KEY_VARIABLE}, set for this terminal only. In PowerShell:
-  $env:${KEY_VARIABLE} = "<the key>"
+Live providers read their key from ${KEY_VARIABLE}, set for this terminal only. In PowerShell, a
+masked prompt keeps the key off the screen and out of the history file:
+  $env:${KEY_VARIABLE} = [System.Net.NetworkCredential]::new("", (Read-Host "Paste the key" -AsSecureString)).Password
+Clear it once the run is saved: Remove-Item Env:${KEY_VARIABLE}
 Use a key made for evaluations: for Gemini, one from a separate Google project.`;
 
 function fail(message: string): never {

@@ -18,5 +18,15 @@
       "asks": true
     },
     "reference": [{ "text": "What should I check on: a task, an event, a project or a note?" }]
+  },
+  {
+    "id": "clarify-is-it-done",
+    "ability": "clarify",
+    "summary": "Asks which item \"it\" is when nothing came before, instead of answering about today's tasks as Gemini's first live run did for a similar question.",
+    "request": "Is it done yet?",
+    "expect": {
+      "asks": true
+    },
+    "reference": [{ "text": "Which one do you mean? Tell me the task and I'll check whether it's done." }]
   }
 ]

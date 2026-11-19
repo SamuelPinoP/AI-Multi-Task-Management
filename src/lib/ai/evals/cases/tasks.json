@@ -70,5 +70,21 @@
       { "toolCalls": [{ "name": "list_open_tasks", "args": { "due": "no_due_date" } }] },
       { "text": "Two open tasks have no due date: Read Deep Work and Pick the next book." }
     ]
+  },
+  {
+    "id": "tasks-all-open",
+    "ability": "tasks",
+    "summary": "Lists every open task by leaving the filters out, not sending them empty: Groq's first live run sent task_stats an empty project, which Groq refused.",
+    "request": "What tasks do I still have open?",
+    "expect": {
+      "tools": [{ "name": "list_open_tasks" }],
+      "facts": ["File the quarterly taxes", "Read Deep Work"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_open_tasks", "args": {} }] },
+      {
+        "text": "You have 12 open tasks. The most pressing are Send the invoice to Acme and Fix the hero image on the home page, both overdue, then Call the dentist and Write the release notes, due today. Further out are File the quarterly taxes on December 15, and Read Deep Work and Pick the next book, which have no due date."
+      }
+    ]
   }
 ]

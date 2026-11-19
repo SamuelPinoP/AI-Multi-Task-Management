@@ -27,5 +27,33 @@
       { "toolCalls": [{ "name": "list_goals", "args": { "week": "2026-W46" } }] },
       { "text": "Last week your goal was Finish reading Deep Work, and it's completed." }
     ]
+  },
+  {
+    "id": "goals-next-week",
+    "ability": "goals",
+    "summary": "Works out next week's ISO week, 2026-W48, and says it has no goals yet.",
+    "request": "Have I set any goals for next week?",
+    "expect": {
+      "tools": [{ "name": "list_goals", "args": { "week": "2026-W48" } }],
+      "facts": ["@notFound"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_goals", "args": { "week": "2026-W48" } }] },
+      { "text": "You don't have any goals for next week yet." }
+    ]
+  },
+  {
+    "id": "goals-one-goal",
+    "ability": "goals",
+    "summary": "Answers about one goal, named in the question, with its linked tasks' progress: 1 of 3 done.",
+    "request": "How far along is my goal to ship the mobile app?",
+    "expect": {
+      "tools": [{ "name": "list_goals" }],
+      "facts": [["1", "one"], ["3", "three"]]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_goals", "args": {} }] },
+      { "text": "Ship the mobile app has 1 of its 3 linked tasks done." }
+    ]
   }
 ]

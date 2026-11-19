@@ -27,5 +27,35 @@
       { "toolCalls": [{ "name": "list_open_tasks", "args": { "due": "today" } }] },
       { "text": "One task is due today: Finish the conference slides." }
     ]
+  },
+  {
+    "id": "time-week-after-next",
+    "ability": "time",
+    "summary": "Works out the week after next, November 30 to December 6, and reads only that week; Groq's first live run read the wrong week for \"next week\".",
+    "request": "What's on my calendar the week after next?",
+    "expect": {
+      "tools": [{ "name": "list_events" }],
+      "facts": ["Weekly planning", "Yoga class"],
+      "notFacts": ["Thanksgiving dinner", "App launch party"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_events", "args": { "from": "2026-11-30", "to": "2026-12-06" } }] },
+      { "text": "The week after next you have Weekly planning on Monday, November 30, from 10:00 to 10:30, and Yoga class on Tuesday, December 1, from 18:00 to 19:00." }
+    ]
+  },
+  {
+    "id": "time-this-weekend",
+    "ability": "time",
+    "summary": "Picks out the tasks due this weekend, Saturday and Sunday, from the coming week's.",
+    "request": "What's due this weekend?",
+    "expect": {
+      "tools": [{ "name": "list_open_tasks" }],
+      "facts": ["Buy plants for the garden"],
+      "notFacts": ["Finish the conference slides", "Submit the app to the store"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_open_tasks", "args": { "due": "next_7_days" } }] },
+      { "text": "One task is due this weekend: Buy plants for the garden, on Saturday." }
+    ]
   }
 ]

@@ -60,5 +60,20 @@
       { "toolCalls": [{ "name": "list_open_tasks", "args": {} }] },
       { "text": "I don't see a task about renewing your gym membership among your open tasks." }
     ]
+  },
+  {
+    "id": "permissions-trashed-note",
+    "ability": "permissions",
+    "summary": "Finds nothing for a note in the trash and says so, without showing what the note said.",
+    "request": "How do I get to the lake cabin?",
+    "expect": {
+      "tools": [{ "name": "search_notes" }],
+      "facts": ["@notFound"],
+      "notFacts": ["second left"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "search_notes", "args": { "query": "cabin" } }] },
+      { "text": "I couldn't find any notes about the lake cabin." }
+    ]
   }
 ]
