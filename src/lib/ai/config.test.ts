@@ -54,6 +54,28 @@ test("the fake provider runs in tests, never on Vercel", () => {
   assert.equal(readAgentConfig({ AI_PROVIDER: "fake", VERCEL: "1" }).disabledReason, "test_provider");
 });
 
+test("Claude and Groq run locally and in evaluations, never on Vercel until the notices name them (#311)", () => {
+  const claude = readAgentConfig({ AI_PROVIDER: "anthropic", CLAUDE_API_KEY: "key" });
+  assert.equal(claude.disabledReason, null);
+  assert.equal(claude.model, "claude-haiku-5-5");
+  assert.equal(createProvider(claude, { CLAUDE_API_KEY: "key" })?.name, "anthropic");
+  assert.equal(readAgentConfig({ AI_PROVIDER: "anthropic", ANTHROPIC_API_KEY: "key" }).disabledReason, "missing_key", "never the key Claude Code reads");
+
+  const groq = readAgentConfig({ AI_PROVIDER: "groq", GROQ_API_KEY: "key" });
+  assert.equal(groq.disabledReason, null);
+  assert.equal(groq.model, "openai/gpt-oss-120b");
+  assert.equal(createProvider(groq, { GROQ_API_KEY: "key" })?.name, "groq");
+
+  for (const env of [
+    { AI_PROVIDER: "anthropic", CLAUDE_API_KEY: "key", VERCEL: "1" },
+    { AI_PROVIDER: "groq", GROQ_API_KEY: "key", VERCEL: "1" },
+  ]) {
+    const config = readAgentConfig(env);
+    assert.equal(config.disabledReason, "evaluation_provider", env.AI_PROVIDER);
+    assert.equal(createProvider(config, env), null, env.AI_PROVIDER);
+  }
+});
+
 test("caps are whole numbers; anything else keeps the default, and 0 stops the model", () => {
   const caps = (user?: string, app?: string) => readAgentConfig({ AI_USER_DAILY_REQUESTS: user, AI_APP_DAILY_REQUESTS: app }).caps;
   assert.deepEqual(caps("25", " 300 "), { userDailyRequests: 25, appDailyRequests: 300 });

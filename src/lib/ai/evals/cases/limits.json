@@ -1,0 +1,61 @@
+[
+  {
+    "id": "limits-user-cap",
+    "ability": "limits",
+    "summary": "With the person's daily allowance used up, the planner answers without asking a model.",
+    "setup": { "usedToday": { "user": 40, "app": 120 } },
+    "request": "What's overdue?",
+    "expect": {
+      "outcome": "USER_LIMIT",
+      "maxToolCalls": 0,
+      "facts": ["Send the invoice to Acme"]
+    }
+  },
+  {
+    "id": "limits-app-cap",
+    "ability": "limits",
+    "summary": "With the whole app's daily cap used up, the planner answers without asking a model.",
+    "setup": { "usedToday": { "user": 2, "app": 400 } },
+    "request": "What's overdue?",
+    "expect": {
+      "outcome": "APP_LIMIT",
+      "maxToolCalls": 0,
+      "facts": ["Send the invoice to Acme"]
+    }
+  },
+  {
+    "id": "limits-region",
+    "ability": "limits",
+    "summary": "On the free tier, a person in the EEA gets the planner, as Gemini's free terms require.",
+    "setup": { "country": "DE" },
+    "request": "What's overdue?",
+    "expect": {
+      "outcome": "REGION",
+      "maxToolCalls": 0,
+      "facts": ["Send the invoice to Acme"]
+    }
+  },
+  {
+    "id": "limits-rate-limited",
+    "ability": "limits",
+    "summary": "When the provider answers 429, the planner answers instead.",
+    "setup": { "failure": { "kind": "rate_limited", "onRequest": 1 } },
+    "request": "What's overdue?",
+    "expect": {
+      "outcome": "RATE_LIMITED",
+      "facts": ["Send the invoice to Acme"]
+    }
+  },
+  {
+    "id": "limits-outage-midway",
+    "ability": "limits",
+    "summary": "When the provider fails after a lookup, the planner's answer replaces the unfinished one.",
+    "setup": { "failure": { "kind": "unavailable", "onRequest": 2 } },
+    "request": "What's overdue?",
+    "expect": {
+      "outcome": "PROVIDER_ERROR",
+      "facts": ["Send the invoice to Acme"]
+    },
+    "reference": [{ "toolCalls": [{ "name": "list_open_tasks", "args": { "due": "overdue" } }] }]
+  }
+]

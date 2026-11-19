@@ -12,7 +12,8 @@ export const DEFAULT_PROVIDER = "gemini";
  * The free tier's pool is per Google Cloud project and shared by everyone: about 500 requests a day
  * on Gemini 3.1 Flash-Lite (#256). A message takes one request, plus one per round of tool calls.
  * - per person: about 20 questions a day;
- * - for the whole app: under the free tier, leaving room for evaluation runs (#311) on the same key.
+ * - for the whole app: under the free tier, with room to spare. Evaluation runs (#311) use a key
+ *   from another Google project, so they never draw on this pool.
  * Once AI Multi charges (#432), these become the plans' allowances.
  */
 export const DEFAULT_USER_DAILY_REQUESTS = 40;
@@ -27,7 +28,9 @@ export type DisabledReason =
   /** AI_PROVIDER names a provider this build doesn't have. */
   | "unknown_provider"
   /** The fake provider, for tests, on a Vercel deployment. */
-  | "test_provider";
+  | "test_provider"
+  /** A provider only evaluations and local runs may use (#311), on a Vercel deployment. */
+  | "evaluation_provider";
 
 export type AgentConfig = {
   provider: string;
@@ -61,6 +64,7 @@ export function readAgentConfig(env: Env): AgentConfig {
   let disabledReason: DisabledReason | null = null;
   if (!spec) disabledReason = "unknown_provider";
   else if (spec.testOnly && env.VERCEL === "1") disabledReason = "test_provider";
+  else if (spec.evaluationOnly && env.VERCEL === "1") disabledReason = "evaluation_provider";
   else if (spec.apiKeyEnv && !env[spec.apiKeyEnv]?.trim()) disabledReason = "missing_key";
 
   return { provider, model, caps, freeTier: env.AI_FREE_TIER?.trim().toLowerCase() !== "false", disabledReason };

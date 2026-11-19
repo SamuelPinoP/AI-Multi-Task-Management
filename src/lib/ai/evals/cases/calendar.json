@@ -1,0 +1,63 @@
+[
+  {
+    "id": "calendar-today",
+    "ability": "calendar",
+    "summary": "Reads today's events with a one-day range, an event in a shared project included, and no deleted or other people's events.",
+    "request": "What's on my calendar today?",
+    "expect": {
+      "tools": [{ "name": "list_events", "args": { "from": "2026-11-19", "to": "2026-11-19" } }],
+      "facts": ["Lunch with Jordan", "Design review with Kim"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_events", "args": { "from": "2026-11-19", "to": "2026-11-19" } }] },
+      { "text": "Today you have Lunch with Jordan from 12:30 to 13:30, then the Design review with Kim from 14:00 to 15:00." }
+    ]
+  },
+  {
+    "id": "calendar-find-event",
+    "ability": "calendar",
+    "summary": "Finds when an event is by reading a range of upcoming days, and gives its day and time.",
+    "request": "When is my dentist appointment?",
+    "expect": {
+      "tools": [{ "name": "list_events" }],
+      "facts": [
+        ["Friday", "November 20", "Nov 20", "Nov. 20", "20 November", "11/20", "2026-11-20", "tomorrow"],
+        ["3:00", "3 PM", "3pm", "3 p.m.", "15:00"]
+      ]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_events", "args": { "from": "2026-11-19", "to": "2026-12-19" } }] },
+      { "text": "Your dentist appointment is tomorrow, Friday, November 20, from 15:00 to 16:00." }
+    ]
+  },
+  {
+    "id": "calendar-repeating-event",
+    "ability": "calendar",
+    "summary": "Reads a weekly event's occurrences instead of assuming one: next Tuesday's class was skipped, so the next one is December 1.",
+    "request": "When is my next yoga class?",
+    "expect": {
+      "tools": [{ "name": "list_events" }],
+      "facts": [["December 1", "Dec 1", "Dec. 1", "1 December", "12/1", "2026-12-01"]],
+      "notFacts": ["November 24", "Nov 24", "Nov. 24", "24 November", "11/24", "2026-11-24"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_events", "args": { "from": "2026-11-19", "to": "2026-12-19" } }] },
+      { "text": "Your next yoga class is on Tuesday, December 1, from 18:00 to 19:00." }
+    ]
+  },
+  {
+    "id": "calendar-next-week",
+    "ability": "calendar",
+    "summary": "Reads next week's events, a weekly one and an all-day one included, without inventing the skipped yoga class.",
+    "request": "What's on my calendar next week?",
+    "expect": {
+      "tools": [{ "name": "list_events" }],
+      "facts": ["Weekly planning", "Thanksgiving dinner"],
+      "notFacts": ["Yoga class"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_events", "args": { "from": "2026-11-23", "to": "2026-11-29" } }] },
+      { "text": "Next week you have Weekly planning on Monday from 10:00 to 10:30, Thanksgiving dinner on Thursday (all day) and the App launch party on Friday from 19:00 to 22:00." }
+    ]
+  }
+]

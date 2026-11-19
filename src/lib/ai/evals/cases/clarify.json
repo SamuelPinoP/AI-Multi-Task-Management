@@ -1,0 +1,22 @@
+[
+  {
+    "id": "clarify-which-deadline",
+    "ability": "clarify",
+    "summary": "Asks which deadline is meant when the question points at one that was never named.",
+    "request": "Is that deadline still realistic?",
+    "expect": {
+      "asks": true
+    },
+    "reference": [{ "text": "Which deadline do you mean? Tell me the task or project and I'll check it." }]
+  },
+  {
+    "id": "clarify-check-on-it",
+    "ability": "clarify",
+    "summary": "Asks what to check when the request doesn't say.",
+    "request": "Can you check on it for me?",
+    "expect": {
+      "asks": true
+    },
+    "reference": [{ "text": "What should I check on: a task, an event, a project or a note?" }]
+  }
+]

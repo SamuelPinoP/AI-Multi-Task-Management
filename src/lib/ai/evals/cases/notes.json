@@ -1,0 +1,30 @@
+[
+  {
+    "id": "notes-search",
+    "ability": "notes",
+    "summary": "Searches notes for a decision, a note in a shared project included, and answers from the excerpt.",
+    "request": "Which font did we pick in the design review?",
+    "expect": {
+      "tools": [{ "name": "search_notes" }],
+      "facts": ["Inter"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "search_notes", "args": { "query": "font" } }] },
+      { "text": "You picked Inter for the body font, according to your Design review notes." }
+    ]
+  },
+  {
+    "id": "notes-checklist",
+    "ability": "notes",
+    "summary": "Finds a note by its title and sums up what it says.",
+    "request": "What's on my launch checklist?",
+    "expect": {
+      "tools": [{ "name": "search_notes" }],
+      "facts": ["screenshots", "privacy labels"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "search_notes", "args": { "query": "launch checklist" } }] },
+      { "text": "Your Launch checklist says to update the store screenshots, finish the release notes, check the privacy labels and book the venue for the launch party." }
+    ]
+  }
+]
