@@ -72,6 +72,9 @@
     "typescript": "^5"
   },
   "overrides": {
+    "@prisma/config": {
+      "effect": "3.22.5"
+    },
     "@prisma/studio-core": {
       "@radix-ui/react-toggle": "1.2.1"
     },
