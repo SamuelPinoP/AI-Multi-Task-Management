@@ -312,7 +312,10 @@ inside a dialog. The `overrides` entry in `package.json` keeps Prisma Studio on
 the app's Radix release; update it when Radix is updated. It also gives
 `typescript-eslint` minimatch 11, which fixes a denial-of-service advisory
 (GHSA-g3hv-75wg-m249) that has no 10.x fix; remove that entry once
-`typescript-eslint` depends on minimatch 11 itself.
+`typescript-eslint` depends on minimatch 11 itself. And it gives Prisma's
+config loader (`@prisma/config`) `effect` 3.22.5, which fixes a ReDoS advisory
+(GHSA-7589-6fvf-x4pw) in the 3.20.0 that Prisma 7.10.1 pins (#508); remove that
+entry once a Prisma release depends on a patched `effect`.
 
 On the 1st of each month, `.github/workflows/maintenance-report.yml` opens a
 "Monthly maintenance check" issue assigned to the repository owner, so GitHub
@@ -328,6 +331,20 @@ redirect, and the API). If it still fails after about two minutes of retries,
 it opens a "Production is down" issue assigned to the repository owner, and
 closes it with a note once the site answers again. The checks don't touch the
 database, so they don't use Neon's free compute hours.
+
+Every day, and after each merge that changes `package.json` or
+`package-lock.json`, `.github/workflows/security-audit.yml` runs `npm audit` on
+`main`'s production dependencies (`scripts/security-audit.mjs`, from the
+lockfile, so without `npm ci`). A high or critical advisory opens one "Security
+audit" issue, labelled `security-audit` and assigned to the repository owner,
+listing each advisory, the installed version, the dependency that brings it in
+and how to fix it. The workflow keeps the list current, comments when it
+changes, and closes the issue once `main` is clean. CI's `npm audit` step fails
+every pull request until then, even for an advisory against a package nobody
+touched (#508), so the issue usually exists before a pull request runs into it.
+Run it any time from the Actions tab, or locally with
+`node scripts/security-audit.mjs` (add `--issue --dry-run` to see what it would
+change on GitHub).
 
 ## Rate limits
 

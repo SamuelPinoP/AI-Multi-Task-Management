@@ -22,7 +22,7 @@ Every issue is a ticket someone else could pick up without asking questions. The
   - One or more `area:`.
   - Exactly one `priority:` (high, medium, low).
   - `status: needs info` while the issue waits on a decision or on the owner.
-  - The workflows rely on the names `maintenance` and `downtime`; never rename them.
+  - The workflows rely on the names `maintenance`, `downtime` and `security-audit`; never rename them.
 - **Size:** one issue should fit in one PR. Bigger work is an epic (`type: epic`) whose pieces are sub-issues. Split an issue that bundles unrelated problems, and link the pieces to each other.
 - **Owner:** every open issue has an assignee.
 - **Closing:**
