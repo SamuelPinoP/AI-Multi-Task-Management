@@ -94,6 +94,8 @@ test("the title says what's affected, in plain words", () => {
 test("the issue lists each advisory, says how to fix it and when it's done, and remembers which ones it listed", () => {
   const [effect] = advisoriesFrom(PRISMA_AUDIT, LOCKFILE);
   const body = issueBody([{ ...effect, title: "A | B" }], OPTIONS);
+  // A backslash is escaped too, so it can't undo the pipe's escape: "C:\" then "|" stays one cell.
+  assert.ok(issueBody([{ ...effect, title: "C:\\ | D" }], OPTIONS).includes("[C:\\\\ \\| D]("));
   for (const heading of ["### Summary", "### Advisories", "### How to fix", "### Acceptance criteria", "### Details"]) assert.ok(body.includes(heading), heading);
   assert.ok(
     body.includes(

@@ -65,8 +65,15 @@ export function advisoriesFrom(audit, lockfile = {}) {
 
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
 const listing = (names) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
-/** Keeps a value inside one Markdown table cell. */
-const cell = (text) => String(text).replace(/\s+/g, " ").replace(/\|/g, "\\|");
+/**
+ * Keeps a value inside one Markdown table cell. Backslashes are escaped first: otherwise a title
+ * ending in "\" would turn the escaped "\|" after it back into a column break.
+ */
+const cell = (text) =>
+  String(text)
+    .replace(/\s+/g, " ")
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|");
 const code = (text) => `\`${String(text).replace(/`/g, "'")}\``;
 
 export function auditTitle(advisories) {
