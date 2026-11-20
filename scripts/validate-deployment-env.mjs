@@ -3,7 +3,7 @@ import "dotenv/config";
 
 const ALLOWED_STORAGE_PROVIDERS = new Set(["local", "vercel-blob", "aws-s3"]);
 const ALLOWED_EMAIL_PROVIDERS = new Set(["disabled", "resend", "smtp", "brevo"]);
-const BOOLEAN_ENV_NAMES = ["SIGNUP_ENABLED", "GUEST_LOGIN_ENABLED", "PROJECT_CHAT_GUEST_UPLOADS_ENABLED", "AI_FREE_TIER"];
+const BOOLEAN_ENV_NAMES = ["SIGNUP_ENABLED", "GUEST_LOGIN_ENABLED", "PROJECT_CHAT_GUEST_UPLOADS_ENABLED", "AI_FREE_TIER", "ALWAYS_RUN_MIGRATIONS"];
 const BYTE_LIMIT_ENV_NAMES = ["PROJECT_CHAT_S3_QUOTA_BYTES", "PROJECT_CHAT_USER_QUOTA_BYTES"];
 // Cloudflare R2's free tier is 10 GB-month. Compare against decimal GB, the smaller reading.
 const R2_FREE_TIER_BYTES = 10 * 1000 ** 3;
@@ -44,6 +44,10 @@ if (!databaseUrl) {
 }
 if (process.env.VERCEL_ENV === "preview" && !cleanEnvValue("PREVIEW_DATABASE_URL")) {
   warnings.push("PREVIEW_DATABASE_URL is not set, so this preview uses the production database and skips migrations. Connect the preview Neon database to the Preview environment.");
+}
+// CU-04 (#510): meant for one deploy after rolling the database back in place, not to stay on.
+if (process.env.VERCEL === "1" && cleanEnvValue("ALWAYS_RUN_MIGRATIONS") === "true") {
+  warnings.push("ALWAYS_RUN_MIGRATIONS is true, so every deploy wakes the database to run prisma migrate deploy. Remove it once the database is back up to date.");
 }
 
 for (const [name, value] of [

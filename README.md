@@ -429,6 +429,15 @@ backup straight from R2. The script refuses targets that already have data
 and checks that the target has the backup's migrations. It restores in one
 transaction, so a failure leaves the target empty.
 
+Deploys skip `prisma migrate deploy` when they bring no new migration, so the
+build doesn't wake the database (#510): R2 remembers which migrations the last
+successful run applied to which database, by a fingerprint that never holds
+the URL. A restore into a new database migrates on its next deploy, because
+its fingerprint is new. After rolling a database back in place instead (a
+point-in-time restore in Neon's console), set `ALWAYS_RUN_MIGRATIONS=true` in
+Vercel for one deploy, then remove it. `DEPLOYMENT_CHECKLIST.md` ("Database and
+migrations") has the details.
+
 ## Daily cleanup
 
 Every day at about 09:00 UTC, after the backup, Vercel Cron calls
