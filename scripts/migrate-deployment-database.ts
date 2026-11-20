@@ -11,7 +11,7 @@ import { spawnSync } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { resolveDatabaseUrl } from "../src/lib/database-url";
+import { resolveDatabaseUrl, resolveMigrationDatabaseUrl } from "../src/lib/database-url";
 import { runDeployMigrations, type DeployRecordStore, type MigrationFile } from "../src/lib/deploy-migrations-core";
 import { projectChatS3Target } from "../src/lib/project-chat-storage";
 
@@ -56,6 +56,10 @@ function openStore(): DeployRecordStore | null {
 }
 
 async function migrate() {
+  // prisma.config.ts migrates over resolveMigrationDatabaseUrl(); say so when that isn't the app's pooled URL.
+  if (resolveMigrationDatabaseUrl() !== resolveDatabaseUrl()) {
+    console.log("prisma migrate deploy connects to Neon directly, not through the pooler, so its lock ends with this build (#515).");
+  }
   const result = spawnSync("npx", ["prisma", "migrate", "deploy"], {
     stdio: "inherit",
     shell: process.platform === "win32",
@@ -67,7 +71,7 @@ async function migrate() {
 async function main() {
   const result = await runDeployMigrations({
     env: process.env,
-    databaseUrl: resolveDatabaseUrl(),
+    databaseUrl: resolveMigrationDatabaseUrl(),
     readMigrations,
     openStore,
     migrate,

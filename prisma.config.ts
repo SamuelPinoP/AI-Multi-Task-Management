@@ -2,7 +2,7 @@
 // npm install --save-dev prisma dotenv
 import "dotenv/config";
 import { defineConfig, env } from "prisma/config";
-import { resolveDatabaseUrl } from "./src/lib/database-url";
+import { resolveMigrationDatabaseUrl } from "./src/lib/database-url";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -10,7 +10,9 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    // Previews use PREVIEW_DATABASE_URL; env() keeps Prisma's own error when nothing is set.
-    url: resolveDatabaseUrl() ?? env("DATABASE_URL"),
+    // Previews use PREVIEW_DATABASE_URL, and Neon's pooled hosts become direct ones, because
+    // `migrate deploy`'s lock outlives a pooled connection (#515). env() keeps Prisma's own
+    // error when nothing is set.
+    url: resolveMigrationDatabaseUrl() ?? env("DATABASE_URL"),
   },
 });

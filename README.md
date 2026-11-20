@@ -292,7 +292,8 @@ images for 14 days, linked from the run summary, but merging isn't blocked.
 `.github/workflows/preview-smoke.yml` runs the Playwright tests tagged
 `@smoke` (`tests/e2e/smoke.spec.ts`) against each Vercel preview once it is
 deployed. Previews use their own database (`PREVIEW_DATABASE_URL`, #166), and
-their builds apply pending migrations to it; every preview shares that one
+their builds apply pending migrations to it, over a direct connection rather
+than Neon's pooler (#515); every preview shares that one
 database, so smoke tests stay read-only: no sign-ups, sign-ins or writes.
 Preview URLs are behind Vercel Deployment Protection; the workflow sends the
 `VERCEL_AUTOMATION_BYPASS_SECRET` repository secret as the

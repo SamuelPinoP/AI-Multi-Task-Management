@@ -122,7 +122,7 @@ function errorName(error: unknown) {
 
 export type DeployMigrationsInput = {
   env: Record<string, string | undefined>;
-  /** The URL Prisma migrates (resolveDatabaseUrl in src/lib/database-url.ts). */
+  /** The URL Prisma migrates (resolveMigrationDatabaseUrl in src/lib/database-url.ts). */
   databaseUrl: string | undefined;
   readMigrations(): Promise<MigrationFile[]>;
   /** The record store, or null when R2 isn't configured. It may throw when R2's settings are invalid. */
