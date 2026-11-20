@@ -114,7 +114,7 @@ try {
   say(
     names.length === 0
       ? "`npm audit`: no known issues in production dependencies."
-      : `\`npm audit\` on production dependencies: ${counts.critical ?? 0} critical, ${counts.high ?? 0} high, ${counts.moderate ?? 0} moderate, ${counts.low ?? 0} low: ${names.join(", ")}. CI already blocks high and critical ones.`,
+      : `\`npm audit\` on production dependencies: ${counts.critical ?? 0} critical, ${counts.high ?? 0} high, ${counts.moderate ?? 0} moderate, ${counts.low ?? 0} low: ${names.join(", ")}. CI blocks high and critical ones, and the daily security audit opens an issue for them.`,
   );
 } catch (error) {
   say(`Couldn't run \`npm audit\`: ${error.message.split("\n")[0]}`);
