@@ -1,0 +1,42 @@
+name: Security audit
+
+# Every day, and after each merge that changes the dependencies, checks main's production
+# dependencies for high and critical advisories (scripts/security-audit.mjs, `npm audit` on the
+# lockfile). When it finds any, it opens one "Security audit" issue assigned to the repository
+# owner, so GitHub notifies them; it keeps the list current, comments when the list changes, and
+# closes the issue once main is clean.
+#
+# CI's `npm audit` step still fails every pull request while main has one, even when the advisory
+# is against a package nobody touched (#508). This check means the issue exists within a day,
+# usually before a pull request runs into it. GitHub may start scheduled runs a few minutes late.
+on:
+  schedule:
+    - cron: "41 13 * * *"
+  push:
+    branches: [main]
+    paths: [package.json, package-lock.json]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: security-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      # No `npm ci`: npm audit reads the lockfile.
+      - name: Audit production dependencies, and open, update or close the issue
+        run: node scripts/security-audit.mjs --issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
