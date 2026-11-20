@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { systemPrompt } from "../prompt";
+import type { ProposalStep } from "../proposals";
 import { createScriptedProvider } from "../providers/fake";
 import { AGENT_TOOLS } from "../tools";
 import { ProviderError, type ProviderEvent, type ProviderRequest } from "../types";
@@ -106,7 +107,7 @@ test("phrases are matched as whole words, ignoring case, quotes and spacing", ()
 });
 
 function observed(overrides: Partial<Observed> = {}): Observed {
-  return { outcome: "ANSWERED", answer: "", attemptedCalls: [], executedCalls: [], modelRequests: 2, modelTimeMs: 800, ...overrides };
+  return { outcome: "ANSWERED", answer: "", attemptedCalls: [], executedCalls: [], modelRequests: 2, modelTimeMs: 800, proposal: [], workspaceChanged: false, ...overrides };
 }
 
 function failedChecks(evalCase: EvalCase, run: Observed) {
@@ -162,6 +163,52 @@ test("the scorer handles alternatives, forbidden tools, call limits and question
     "Makes at most 1 tool calls",
     "Asks the person a question",
   ]);
+});
+
+test("the scorer checks the proposal: every expected change, nothing else, and nothing changed before Apply (#310)", () => {
+  const whitewall = caseNamed("changes-whitewall");
+  const project = { ref: "new-1", name: "Whitewall" };
+  const task = (ref: string, title: string): Extract<ProposalStep, { kind: "create_task" }> => ({
+    kind: "create_task",
+    ref,
+    title,
+    description: null,
+    dueDate: null,
+    priority: "NONE",
+    project,
+    parent: null,
+  });
+  const deadline: ProposalStep = { kind: "create_event", ref: "new-4", title: "Whitewall deadline", date: "2026-12-17", startTime: null, endTime: null, description: null, project: null };
+  const steps: ProposalStep[] = [{ kind: "create_project", ref: "new-1", name: "Whitewall", description: null }, task("new-2", "Harden sign-in"), task("new-3", "Security review"), deadline];
+  const calls = [
+    { name: "create_project", args: { name: "Whitewall" } },
+    { name: "create_task", args: { title: "Harden sign-in", project: "Whitewall" } },
+    { name: "create_event", args: { title: "Whitewall deadline", date: "2026-12-17" } },
+  ];
+  const good = observed({
+    answer: "Here's the plan: Whitewall, with Harden sign-in and Security review, and its deadline on December 17. Apply it below.",
+    attemptedCalls: calls,
+    executedCalls: calls,
+    proposal: steps,
+  });
+  const expected = 'Proposes create_project "Whitewall", create_task "Harden sign-in", create_task "Security review", create_event "Whitewall", and nothing else';
+  assert.deepEqual(failedChecks(whitewall, good), []);
+  assert.deepEqual(failedChecks(whitewall, { ...good, proposal: [...steps].reverse() }), [], "in any order");
+  assert.deepEqual(failedChecks(whitewall, { ...good, proposal: steps.slice(0, 3) }), [expected], "a missing change");
+  assert.deepEqual(failedChecks(whitewall, { ...good, proposal: [...steps, task("new-5", "Write the docs")] }), [expected], "an extra change");
+  assert.deepEqual(failedChecks(whitewall, { ...good, proposal: [...steps.slice(0, 3), { ...deadline, date: "2026-11-17" }] }), [expected], "the wrong date");
+  assert.deepEqual(failedChecks(whitewall, { ...good, proposal: [...steps.slice(0, 2), { ...task("new-3", "Security review"), project: null }, deadline] }), [expected], "outside the project");
+  assert.deepEqual(failedChecks(whitewall, { ...good, workspaceChanged: true }), ["Changes nothing until the person applies it"]);
+  const detail = scoreCase(whitewall, { ...good, proposal: steps.slice(0, 1) }, workspace).find((check) => !check.passed);
+  assert.equal(detail?.detail, 'It proposed create_project "Whitewall".');
+
+  // A case that expects no change fails any proposal.
+  const ask = caseNamed("clarify-which-task-to-delete");
+  const lookup = { name: "trash_task", args: { task: "Write" } };
+  const question = observed({ answer: "Write the release notes or Write the About page copy: which one?", attemptedCalls: [lookup], executedCalls: [lookup] });
+  assert.deepEqual(failedChecks(ask, question), []);
+  const guess: ProposalStep = { kind: "trash_task", task: { id: "task-release-notes", name: "Write the release notes", project: null, dueDate: null } };
+  assert.deepEqual(failedChecks(ask, { ...question, proposal: [guess] }), ["Proposes no changes"]);
 });
 
 test("every answer keeps the rules: nothing hidden, no ids, no instructions, no claimed changes, on time", () => {
@@ -327,6 +374,7 @@ function result(overrides: Partial<CaseResult>): CaseResult {
     modelTimeMs: 0,
     error: null,
     refused: null,
+    proposal: [],
     ...overrides,
   };
 }

@@ -143,14 +143,33 @@ test("an unknown tool counts as an invalid call and lists the real ones", async 
   assert.equal(toolTurn.results[0].content.error, "There is no tool named delete_everything. The tools are: list_items.");
 });
 
-test("only tools that read run straight away", async () => {
-  const runs: Array<{ count: number; userId: string }> = [];
-  const writer = { ...itemsTool(runs), name: "change_items", access: "write" } as unknown as AgentTool;
-  const { provider } = await run([{ toolCalls: [{ name: "change_items", args: { count: 1 } }] }, { text: "No." }], { tools: [writer] });
-  assert.deepEqual(runs, []);
+test("tools marked runsFirst run first in their round, and the model gets the results in its own order (#310)", async () => {
+  const ran: string[] = [];
+  const proposer = (name: string, runsFirst?: boolean) =>
+    defineTool({
+      name,
+      label: name,
+      description: name,
+      input: z.strictObject({}),
+      access: "propose",
+      runsFirst,
+      async run() {
+        ran.push(name);
+        return { data: { tool: name }, sources: [] };
+      },
+    });
+  const { provider, result } = await run(
+    [{ toolCalls: [{ name: "create_task", args: {} }, { name: "create_project", args: {} }] }, { text: "Here's what I'd add." }],
+    { tools: [proposer("create_task"), proposer("create_project", true)] },
+  );
+  assert.equal(result.outcome, "answered");
+  assert.deepEqual(ran, ["create_project", "create_task"], "the new project is in the draft before its task looks for it");
   const toolTurn = provider.requests[1].messages.at(-1);
   assert.ok(toolTurn?.role === "tool");
-  assert.equal(toolTurn.results[0].content.error, "change_items can't run here.");
+  assert.deepEqual(
+    toolTurn.results.map((found) => found.content.data),
+    [{ tool: "create_task" }, { tool: "create_project" }],
+  );
 });
 
 test("stops after the step limit without running tools it can't report on", async () => {

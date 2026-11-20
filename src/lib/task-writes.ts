@@ -16,7 +16,7 @@ import type { TaskCreateData, TaskUpdateData } from "@/lib/schemas/task";
 import { nextCompletedAt } from "@/lib/task-completion";
 import { loadHistoryStates, recordTaskChanges, recordTaskCreated } from "@/lib/task-history-server";
 import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
-import { refuse, type WriteActor, type WriteResult } from "@/lib/writes";
+import { activityText, refuse, type WriteActor, type WriteResult } from "@/lib/writes";
 
 /** A task as the task routes return it. */
 export type TaskWithDetails = Prisma.TaskGetPayload<{ include: ReturnType<typeof taskInclude> }>;
@@ -95,7 +95,7 @@ export async function createTask(actor: WriteActor, input: TaskCreateData, db: D
     {
       userId: actor.id,
       action: done ? "COMPLETED_TASK" : "CREATED_TASK",
-      message: `${done ? "Completed task" : "Created task"}: “${task.title}”`,
+      message: activityText(`${done ? "Completed task" : "Created task"}: “${task.title}”`, actor),
       entityType: "TASK",
       entityId: task.id,
       projectId: task.projectId,
@@ -182,12 +182,14 @@ export async function updateTask(actor: WriteActor, id: string, input: TaskUpdat
 
   const task = await db.task.findUnique({ where: { id }, include: taskInclude(actor.id) });
   if (!task) return refuse(404, "Task not found");
-  if (existingTask.status !== "DONE" && task.status === "DONE") {
+  const completed = existingTask.status !== "DONE" && task.status === "DONE";
+  // Edits in the app show in the task's history only; the AI assistant's show in Activity too (#310).
+  if (completed || actor.via) {
     await createActivity(
       {
         userId: existingTask.userId,
-        action: "COMPLETED_TASK",
-        message: `Completed task: “${task.title}”`,
+        action: completed ? "COMPLETED_TASK" : "UPDATED_TASK",
+        message: activityText(`${completed ? "Completed task" : "Updated task"}: “${task.title}”`, actor),
         entityType: "TASK",
         entityId: task.id,
         projectId: task.projectId,
@@ -231,7 +233,7 @@ export async function trashTask(actor: WriteActor, id: string, db: Db = prisma):
     {
       userId: existingTask.userId,
       action: "DELETED_ITEM",
-      message: `Deleted task: “${existingTask.title}”`,
+      message: activityText(`Deleted task: “${existingTask.title}”`, actor),
       entityType: "TASK",
       entityId: existingTask.id,
       projectId: existingTask.projectId,

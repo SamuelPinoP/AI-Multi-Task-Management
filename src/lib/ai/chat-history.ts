@@ -10,6 +10,7 @@ import type { StoredAnswer } from "@/lib/ai/chat";
 import { chatTitle } from "@/lib/ai/chat-client";
 import { chatsPastLimit, storedSources, type ChatRole, type ChatSummary, type StoredChat } from "@/lib/ai/chat-history-core";
 import { MAX_CHATS, MODEL_HISTORY } from "@/lib/ai/chat-limits";
+import { PROPOSAL_SELECT, proposalView } from "@/lib/ai/proposals-core";
 import { requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -45,7 +46,13 @@ export async function listChats(userId: string): Promise<ChatSummary[]> {
 export async function openChat(userId: string, chatId: string, now = new Date()): Promise<StoredChat | null> {
   const chat = await prisma.agentChat.findFirst({
     where: { id: chatId, userId },
-    select: { ...SUMMARY_SELECT, messages: { orderBy: MESSAGE_ORDER, select: { id: true, role: true, content: true, sources: true, createdAt: true } } },
+    select: {
+      ...SUMMARY_SELECT,
+      messages: {
+        orderBy: MESSAGE_ORDER,
+        select: { id: true, role: true, content: true, sources: true, createdAt: true, proposal: { select: PROPOSAL_SELECT } },
+      },
+    },
   });
   if (!chat) return null;
   await prisma.agentChat.updateMany({ where: { id: chat.id, userId }, data: { openedAt: now } });
@@ -56,6 +63,8 @@ export async function openChat(userId: string, chatId: string, now = new Date())
       role: message.role,
       content: message.content,
       sources: storedSources(message.sources),
+      // As it stands now: applied, cancelled or expired since (#310).
+      proposal: message.proposal ? proposalView(message.proposal, now) : null,
       createdAt: message.createdAt.toISOString(),
     })),
   };
@@ -116,7 +125,14 @@ export async function saveExchange({
   const answeredAt = new Date(Math.max(Date.now(), askedAt.getTime() + 1));
   const messages = [
     { role: "USER" as const, content: question, createdAt: askedAt },
-    { role: answer.role, content: answer.content, sources: answer.sources, createdAt: answeredAt },
+    {
+      role: answer.role,
+      content: answer.content,
+      sources: answer.sources,
+      createdAt: answeredAt,
+      // The changes it proposed (#310), stored with the answer so the chat shows them when reopened.
+      ...(answer.proposalId ? { proposal: { connect: { id: answer.proposalId } } } : {}),
+    },
   ];
 
   if (chatId) {

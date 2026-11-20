@@ -3,6 +3,7 @@
 import { CalendarDays, FolderKanban, Info, NotebookPen, RotateCcw, SquareCheckBig, Target, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useMemo } from "react";
+import { AiProposalCard } from "@/components/ai/ai-proposal-card";
 import { uiButtonClass } from "@/components/ui";
 import { answerBlocks, finishedStep, type ChatTurn, type TextRun } from "@/lib/ai/chat-client";
 import type { Source } from "@/lib/ai/tools/define";
@@ -111,6 +112,8 @@ function Answer({ turn, canRetry, onRetry, onNavigate }: { turn: ChatTurn; canRe
 
       {answer.text ? <AnswerText text={answer.text} /> : null}
 
+      {answer.proposal ? <AiProposalCard proposal={answer.proposal} onNavigate={onNavigate} /> : null}
+
       {answer.sources.length ? (
         <ul aria-label="Used to answer" className="flex flex-wrap gap-1.5">
           {answer.sources.map((source) => (
@@ -138,7 +141,8 @@ function Answer({ turn, canRetry, onRetry, onNavigate }: { turn: ChatTurn; canRe
 
 /**
  * A conversation with the assistant (#308): each question on the right, and under it what the
- * assistant looked at, its answer, and links to the items it used. Shared by the AI page and the AI
+ * assistant looked at, its answer, the changes it proposes to apply or cancel (#310), and links to
+ * the items it used. Shared by the AI page and the AI
  * bar's chat. Only the last answer offers "Try again" when it failed.
  */
 export function AiThread({

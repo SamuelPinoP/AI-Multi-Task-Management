@@ -93,8 +93,8 @@ export default function PrivacyPage() {
         </p>
         <p>
           <strong>The AI assistant.</strong> When you agree to its notice, AI Multi records when. It keeps your chats with
-          the assistant, so you can come back to them: your questions, its answers and the links they showed to your
-          items. For each message you send it, AI Multi also keeps a usage record: when, which model answered, how it
+          the assistant, so you can come back to them: your questions, its answers, the links they showed to your items,
+          and the changes it proposed, with which ones you applied. For each message you send it, AI Multi also keeps a usage record: when, which model answered, how it
           went, how many requests and tokens it took, and the names of the lookups it made (such as &quot;open
           tasks&quot;), never what you asked or what it answered. See{" "}
           <a href="#ai" className={legalLinkClass}>
@@ -270,7 +270,8 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>What AI Multi keeps:</strong> when you agreed to the notice; your last 20 chats, each with your
-            questions, the answers and the links they showed; and a usage record of each message for 90 days, without its
+            questions, the answers, the links they showed, and the changes the assistant proposed, with which ones you
+            applied; and a usage record of each message for 90 days, without its
             content. Starting a 21st chat deletes the oldest, and a chat you haven&apos;t opened for 90 days is deleted.
           </li>
           <li>
@@ -283,8 +284,10 @@ export default function PrivacyPage() {
           </li>
         </ul>
         <p>
-          Answers can be wrong; check them before you rely on them. For now, the assistant can&apos;t change anything in
-          your workspace.
+          Answers can be wrong; check them before you rely on them. The assistant can propose changes to your tasks,
+          projects and calendar, such as a new task, a new date, or moving a task to the Trash, but it can&apos;t make them.
+          Nothing changes until you tick the ones you want and apply them yourself, as you; you can cancel instead, and
+          what you leave expires after an hour. Changes you apply show in Activity as made via AI Multi.
         </p>
       </LegalSection>
 

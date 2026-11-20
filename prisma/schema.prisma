@@ -68,6 +68,7 @@ model User {
   taskEvents                   TaskEvent[]
   agentRuns                    AgentRun[]
   agentChats                   AgentChat[]
+  agentProposals               AgentProposal[]
 }
 
 /// One message to the AI assistant (#307): who asked, what answered and how it went. It feeds the daily caps
@@ -133,7 +134,9 @@ model AgentChatMessage {
   sources   Json          @default("[]")
   createdAt DateTime      @default(now())
 
-  chat AgentChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chat     AgentChat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  /// The changes this answer proposed (#310), if any.
+  proposal AgentProposal?
 
   @@index([chatId, createdAt])
 }
@@ -146,6 +149,48 @@ enum AgentChatRole {
   ASSISTANT
   /// The rule-based planner's answer, given when no model could answer (a cap, an outage, the person's country).
   PLANNER
+}
+
+/// Changes the AI assistant proposed in one answer (#310), which only the person can apply, all together in one
+/// transaction, from the chat (src/lib/ai/proposals-server.ts). The model can't apply them. A pending proposal
+/// can't be applied after `expiresAt`, an hour on. It goes with its chat; one whose answer wasn't stored goes in
+/// the daily cleanup (src/lib/daily-cleanup.ts).
+model AgentProposal {
+  id        String              @id @default(cuid())
+  userId    String
+  /// The stored answer it belongs to; null until the answer is stored, or when it wasn't (the person left).
+  messageId String?             @unique
+  /// The changes, in order (`ProposalStep[]` in src/lib/ai/proposals.ts), with the titles the person saw.
+  steps     Json
+  status    AgentProposalStatus @default(PENDING)
+  /// The steps applied, by index into `steps`; the person left out the rest. Empty until applied.
+  applied   Int[]               @default([])
+  /// Links to what applying changed, one per applied step (`ProposalLink[]`), for the stored chat.
+  links     Json?
+  createdAt DateTime            @default(now())
+  expiresAt DateTime
+  /// When it was applied, cancelled or refused.
+  decidedAt DateTime?
+  /// Why applying it was refused, as the person was told. Nothing changed.
+  error     String?
+
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message AgentChatMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+/// Where an AI assistant proposal stands (#310). One past its `expiresAt` while still PENDING has expired.
+enum AgentProposalStatus {
+  /// Waiting for the person to apply or cancel it.
+  PENDING
+  /// Applied: every change was made, in one transaction.
+  APPLIED
+  /// Cancelled by the person: nothing changed.
+  CANCELLED
+  /// Applying it was refused (an item was gone, or access was lost), so nothing changed. `error` says why.
+  FAILED
 }
 
 /// Where the AI bar is (#308): see User.aiDock.
@@ -830,6 +875,8 @@ enum ActivityAction {
   COMMENTED
   DELETED_ITEM
   RESTORED_ITEM
+  /// A task's fields changed through the AI assistant (#310). Edits in the app itself go to the task's history only.
+  UPDATED_TASK
 }
 
 enum ActivityEntityType {

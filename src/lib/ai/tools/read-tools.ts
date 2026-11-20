@@ -40,9 +40,9 @@ function isDayKey(value: string) {
 
 /**
  * A date written YYYY-MM-DD. Checked in code rather than with a JSON Schema pattern, which not
- * every provider accepts.
+ * every provider accepts. The write tools (./write-tools.ts) take dates the same way.
  */
-function dayKey(description: string) {
+export function dayKey(description: string) {
   return z.string().refine(isDayKey, "Use a real date written YYYY-MM-DD.").describe(description);
 }
 
