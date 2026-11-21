@@ -1,7 +1,7 @@
 "use client";
 
 import { Moon, Sun } from "lucide-react";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { ACCENTS, DEFAULT_ACCENT, isAccent, type Accent } from "@/lib/accent";
 import { DEFAULT_TEXT_SIZE, isTextSize, TEXT_SIZES, type TextSize } from "@/lib/text-size";
 
@@ -63,38 +63,54 @@ function applyTextSize(textSize: TextSize) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => getPreferredTheme());
-  const [accent, setAccent] = useState<Accent>(() => getPreferredAccent());
-  const [textSize, setTextSize] = useState<TextSize>(() => getPreferredTextSize());
+  const [theme, setThemeState] = useState<Theme>(() => getPreferredTheme());
+  const [accent, setAccentState] = useState<Accent>(() => getPreferredAccent());
+  const [textSize, setTextSizeState] = useState<TextSize>(() => getPreferredTextSize());
 
   useEffect(() => {
     applyTheme(theme);
-    localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
   useEffect(() => {
     applyAccent(accent);
-    localStorage.setItem(ACCENT_STORAGE_KEY, accent);
   }, [accent]);
 
   useEffect(() => {
     applyTextSize(textSize);
-    localStorage.setItem(TEXT_SIZE_STORAGE_KEY, textSize);
   }, [textSize]);
+
+  // A choice is saved when someone makes it, never when the app starts (#526). A save on start
+  // wrote back the value the first render read, over anything stored in between, such as a
+  // test's setItem right after a page shows. Until someone picks a theme, each load follows
+  // the device's light or dark setting.
+  const setTheme = useCallback((next: Theme) => {
+    setThemeState(next);
+    localStorage.setItem(STORAGE_KEY, next);
+  }, []);
+
+  const setAccent = useCallback((next: Accent) => {
+    setAccentState(next);
+    localStorage.setItem(ACCENT_STORAGE_KEY, next);
+  }, []);
+
+  const setTextSize = useCallback((next: TextSize) => {
+    setTextSizeState(next);
+    localStorage.setItem(TEXT_SIZE_STORAGE_KEY, next);
+  }, []);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
       theme,
       setTheme,
       toggleTheme: () => {
-        setTheme((current) => (current === "dark" ? "light" : "dark"));
+        setTheme(theme === "dark" ? "light" : "dark");
       },
       accent,
       setAccent,
       textSize,
       setTextSize,
     }),
-    [theme, accent, textSize],
+    [theme, accent, textSize, setTheme, setAccent, setTextSize],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
