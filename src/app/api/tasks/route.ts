@@ -1,34 +1,12 @@
-import { Priority, Recurrence, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
-import { after, NextResponse } from "next/server";
-import { createActivity } from "@/lib/activity";
-import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
-import { projectAccessWhere, getProjectAccess, canEditProjectContent, unauthorizedProjectResponse } from "@/lib/project-access";
-import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
-import { visibleNoteWhere } from "@/lib/note-access";
-import { resolveTaskLabelIds } from "@/lib/labels-server";
-import { TASK_TITLE_MAX } from "@/lib/task-history";
-import { recordTaskCreated } from "@/lib/task-history-server";
-import { notifyTaskAssigned } from "@/lib/notifications";
+import { NextResponse } from "next/server";
+import { projectAccessWhere } from "@/lib/project-access";
+import { taskInclude } from "@/lib/task-include";
 import { guestLimitResponse } from "@/lib/guest-limits";
-import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
-
-
-function isValidStatus(value: unknown): value is TaskStatus {
-  return typeof value === "string" && Object.values(TaskStatus).includes(value as TaskStatus);
-}
-function isValidPriority(value: unknown): value is Priority {
-  return typeof value === "string" && Object.values(Priority).includes(value as Priority);
-}
-function isValidRecurrence(value: unknown): value is Recurrence {
-  return typeof value === "string" && Object.values(Recurrence).includes(value as Recurrence);
-}
-function parseId(input: unknown): string | null {
-  if (typeof input !== "string") return null;
-  const trimmed = input.trim();
-  return trimmed || null;
-}
+import { parseBody, taskCreateSchema } from "@/lib/schemas/task";
+import { createTask } from "@/lib/task-writes";
+import { runFollowUps } from "@/lib/writes";
 
 export async function GET() {
   try {
@@ -52,96 +30,20 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const title = typeof body.title === "string" ? body.title.trim() : "";
-    const descriptionInput = typeof body.description === "string" ? body.description.trim() : "";
-    let projectId = parseId(body.projectId);
-    const assigneeId = parseId(body.assigneeId);
-    const parentId = parseId(body.parentId);
-    const noteId = parseId(body.noteId);
-
-    if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
-    if (title.length > TASK_TITLE_MAX) {
-      return NextResponse.json({ error: `Keep the title under ${TASK_TITLE_MAX} characters; put the rest in the description.` }, { status: 400 });
-    }
-    if (body.status && !isValidStatus(body.status)) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
-    if (body.priority && !isValidPriority(body.priority)) return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
-    if (body.recurrence && !isValidRecurrence(body.recurrence)) return NextResponse.json({ error: "Invalid recurrence" }, { status: 400 });
-
-    let dueDate: Date | null = null;
-    if (body.dueDate) {
-      const parsed = parseTaskDueDateForStorage(body.dueDate);
-      if (!parsed) return NextResponse.json({ error: "Invalid due date" }, { status: 400 });
-      dueDate = parsed;
-    }
+    // The body is checked first (src/lib/schemas/task.ts), then the account; the rules that need the
+    // database (parent, note, project, assignee, labels) are in createTask, which the AI's changes use too.
+    const parsed = parseBody(taskCreateSchema, await req.json());
+    if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
     const user = await requireApiUser();
     if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     const guestLimit = await guestLimitResponse(user, "tasks");
     if (guestLimit) return guestLimit;
 
-    // A subtask (SMART-02) goes in its parent's project, one level deep.
-    if (parentId) {
-      const parent = await prisma.task.findFirst({
-        where: { id: parentId, ...visibleTaskWhere(user.id) },
-        select: { projectId: true, parentId: true },
-      });
-      if (!parent) return NextResponse.json({ error: "Invalid parent task" }, { status: 400 });
-      if (parent.parentId) return NextResponse.json({ error: "Subtasks can't have their own subtasks" }, { status: 400 });
-      projectId = parent.projectId;
-    }
-
-    // A task made from a note (SMART-05) goes in the note's project.
-    if (noteId) {
-      const note = await prisma.note.findFirst({ where: { id: noteId, ...visibleNoteWhere(user.id) }, select: { projectId: true } });
-      if (!note) return NextResponse.json({ error: "Invalid note" }, { status: 400 });
-      // A subtask keeps its parent's project.
-      if (!parentId) projectId = note.projectId;
-    }
-
-    if (projectId) {
-      const access = await getProjectAccess(projectId, user.id);
-      if (!access) return NextResponse.json({ error: "Invalid project" }, { status: 400 });
-      if (!canEditProjectContent(access)) return NextResponse.json(unauthorizedProjectResponse("create tasks"), { status: 403 });
-    }
-
-    if (assigneeId) {
-      if (!projectId) return NextResponse.json({ error: "Assignee requires a project" }, { status: 400 });
-      const member = await prisma.projectMember.findFirst({ where: { id: assigneeId, projectId } });
-      if (!member) return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
-    }
-
-    // Labels (#276) come from the task's project, or from the creator's personal labels.
-    const labels = await resolveTaskLabelIds(body.labelIds, projectId ? { projectId } : { userId: user.id });
-    if (labels.error) return NextResponse.json({ error: labels.error }, { status: 400 });
-
-    const status = isValidStatus(body.status) ? body.status : TaskStatus.TODO;
-    const task = await prisma.task.create({
-      data: {
-        title,
-        description: descriptionInput || null,
-        status,
-        // No priority unless one is picked (#361).
-        priority: isValidPriority(body.priority) ? body.priority : Priority.NONE,
-        dueDate,
-        completedAt: status === TaskStatus.DONE ? new Date() : null,
-        recurrence: isValidRecurrence(body.recurrence) ? body.recurrence : Recurrence.NONE,
-        userId: user.id,
-        projectId,
-        assigneeId,
-        parentId,
-        noteId,
-        labels: labels.ids?.length ? { create: labels.ids.map((labelId) => ({ labelId })) } : undefined,
-      },
-      include: taskInclude(user.id),
-    });
-
-    await recordTaskCreated(task.id, user.id);
-    await createActivity({ userId: user.id, action: status === TaskStatus.DONE ? "COMPLETED_TASK" : "CREATED_TASK", message: `${status === TaskStatus.DONE ? "Completed task" : "Created task"}: “${task.title}”`, entityType: "TASK", entityId: task.id, projectId: task.projectId });
-    // The assignee hears about it in their inbox (SMART-08).
-    if (task.assigneeId) after(() => notifyTaskAssigned({ task, actor: user }));
-    refreshCalendarFeeds({ userIds: [user.id], projectIds: [task.projectId] });
-    return NextResponse.json(task, { status: 201 });
+    const result = await createTask(user, parsed.data);
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    runFollowUps(user, [result.followUp]);
+    return NextResponse.json(result.value, { status: 201 });
   } catch (error) {
     console.error("POST /api/tasks error:", error);
     return NextResponse.json({ error: "Failed to create task" }, { status: 500 });
