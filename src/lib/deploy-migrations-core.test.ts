@@ -354,3 +354,17 @@ test("an unreadable database URL migrates and lets Prisma report it", async () =
   assert.equal(migrateCalls, 1);
   assert.deepEqual(calls, []);
 });
+
+test("the build log names the connection Prisma uses when it runs (#517)", async () => {
+  const { logs } = await run({ connection: "DATABASE_URL_UNPOOLED, the direct connection" });
+  assert.deepEqual(logs.slice(0, 2), [
+    "Running prisma migrate deploy against the production database: there's no record of an earlier deploy to this database.",
+    "Prisma connects with DATABASE_URL_UNPOOLED, the direct connection.",
+  ]);
+
+  // A skipped build doesn't connect, so it doesn't name a connection.
+  const { store } = memoryStore({ [productionKey]: JSON.stringify(recordFor(MIGRATIONS)) });
+  const skipped = await run({ store, connection: "DATABASE_URL_UNPOOLED, the direct connection" });
+  assert.equal(skipped.logs.length, 1);
+  assert.match(skipped.logs[0], /^Skipping prisma migrate deploy/);
+});
