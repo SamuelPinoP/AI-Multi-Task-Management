@@ -43,7 +43,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { GuestProfileCard, GuestProfileChip, GuestProfileRail } from "@/components/guest/guest-profile";
 import { GuestSignupDialog } from "@/components/guest/guest-signup-dialog";
 import { MobileMenuButton, MobileMenuContext, type MobileMenu } from "@/components/mobile-menu";
-import { NewTaskDialog, type NewTaskDraft } from "@/components/new-task-dialog";
+import { NewTaskDialog } from "@/components/new-task-dialog";
 import { NotificationsMenu } from "@/components/notifications-menu";
 import { ProjectSheet, type ProjectInput } from "@/components/projects/project-sheet";
 import { clearOfflineData, OfflineBanner, promptInstall, useInstallPrompt } from "@/components/pwa";
@@ -91,7 +91,9 @@ import {
   OPEN_SEARCH_EVENT,
   openGuestSignup,
   openSearch,
+  quickAddInProject,
   WORKSPACE_CHANGED_EVENT,
+  type NewTaskDraft,
 } from "@/lib/workspace-events";
 import type { WorkspaceNav, WorkspaceNavProject } from "@/lib/workspace-nav";
 
@@ -997,7 +999,18 @@ function TopBar({
   );
 }
 
-function MobileTabs({ pathname, onNewTask, inFlow }: { pathname: string; onNewTask: () => void; inFlow: boolean }) {
+function MobileTabs({
+  pathname,
+  onNewTask,
+  onQuickAdd,
+  inFlow,
+}: {
+  pathname: string;
+  onNewTask: () => void;
+  /** The + on the Tasks page, which opens the page's add box as a sheet (#521, design 2A). */
+  onQuickAdd: () => void;
+  inFlow: boolean;
+}) {
   const tabs: NavItem[] = [
     { href: "/", label: "Home", icon: House },
     { href: "/tasks", label: "Tasks", icon: SquareCheckBig, exact: true },
@@ -1033,7 +1046,7 @@ function MobileTabs({ pathname, onNewTask, inFlow }: { pathname: string; onNewTa
       {tabs.slice(0, 2).map(tab)}
       <button
         type="button"
-        onClick={onNewTask}
+        onClick={pathname === "/tasks" ? onQuickAdd : onNewTask}
         aria-label="New task"
         className="grid h-11 w-11 place-items-center justify-self-center rounded-xl bg-accent text-accent-ink shadow-sm transition-colors hover:bg-accent-hover"
       >
@@ -1262,6 +1275,13 @@ export function AppShell({
     setNewTaskOpen(true);
   };
 
+  // On the Tasks page the phone's + opens the page's own add box, as a sheet (#521); a guest with no room left signs up first.
+  const openQuickAdd = () => {
+    setMenuOpen(false);
+    if (guestFull("tasks")) return openGuestSignup("tasks");
+    quickAddInProject();
+  };
+
   const openNewProject = () => {
     setMenuOpen(false);
     if (guestFull("projects")) return openGuestSignup("projects");
@@ -1385,7 +1405,7 @@ export function AppShell({
             {children}
           </main>
           {aiDock ? <AiDock variant={aiDock} /> : null}
-          <MobileTabs pathname={pathname} onNewTask={openNewTask} inFlow={fullHeight} />
+          <MobileTabs pathname={pathname} onNewTask={openNewTask} onQuickAdd={openQuickAdd} inFlow={fullHeight} />
         </div>
       </MobileMenuContext.Provider>
 

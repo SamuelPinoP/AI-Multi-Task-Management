@@ -1,14 +1,16 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
+import { continueAsGuest, longPress, signUpAndLogIn, uniqueName } from "./helpers";
 
-// Changing several tasks at once (#281): select with the row checkboxes, then use the bar.
+// Changing several tasks at once (#281): select with the row checkboxes, then use the bar. Phones select by holding a
+// task, then tapping more (#521); tasks-phone.spec.ts covers that flow.
 
 function row(page: Page, title: string) {
   return page.getByRole("listitem").filter({ has: page.getByRole("button", { name: title, exact: true }) });
 }
 
-test("bulk: select a range, set the priority, undo, then delete and undo", async ({ page }) => {
+test("bulk: select a range, set the priority, undo, then delete and undo", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Shift+click is for computers; phones select by holding a task.");
   const [a, b, c, d] = ["A", "B", "C", "D"].map((letter) => uniqueName(`Bulk ${letter}`));
   await continueAsGuest(page);
   // Created in order, so the list shows them newest first: D, C, B, A.
@@ -45,7 +47,8 @@ test("bulk: select a range, set the priority, undo, then delete and undo", async
   for (const title of [a, b, c]) await expect(row(page, title)).toBeVisible();
 });
 
-test("bulk: Ctrl+A selects every task shown, Escape clears, and Mark done completes them", async ({ page }) => {
+test("bulk: Ctrl+A selects every task shown, Escape clears, and Mark done completes them", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Keyboard shortcuts are for computers; phones select by holding a task.");
   const first = uniqueName("Bulk first");
   const second = uniqueName("Bulk second");
   await continueAsGuest(page);
@@ -93,7 +96,7 @@ test("the row's Mark done button completes one task into Done, and Undo brings i
 });
 
 test("the bulk bar floats above the AI bar, and the last task scrolls clear of it (#520)", async ({ page, isMobile }) => {
-  test.skip(isMobile, "Phones keep today's layout until #521.");
+  test.skip(isMobile, "On phones the bar sits above the AI button and the tabs; tasks-phone.spec.ts checks it.");
   // An account: guests don't get the AI bar (#458).
   await signUpAndLogIn(page, "Bulk float");
   await page.setViewportSize({ width: 1280, height: 600 });
@@ -119,12 +122,18 @@ test("the bulk bar floats above the AI bar, and the last task scrolls clear of i
   expect(lastBox.y + lastBox.height).toBeLessThanOrEqual((await bar.boundingBox())!.y);
 });
 
-test("the bulk bar passes axe in both themes and fits a phone screen", async ({ page }) => {
+test("the bulk bar passes axe in both themes and fits a phone screen", async ({ page, isMobile }) => {
   const titles = [uniqueName("Axe one"), uniqueName("Axe two")];
   await continueAsGuest(page);
   for (const title of titles) expect((await page.request.post("/api/tasks", { data: { title, priority: "HIGH" } })).ok()).toBe(true);
   await page.goto("/tasks");
-  for (const title of titles) await page.getByRole("checkbox", { name: `Select ${title}` }).click();
+  // Each row's box on a computer; a phone holds the first task, and then a tap selects the next (#521).
+  if (isMobile) {
+    await longPress(page.getByRole("button", { name: titles[0], exact: true }));
+    await page.getByRole("checkbox", { name: `Select ${titles[1]}` }).click();
+  } else {
+    for (const title of titles) await page.getByRole("checkbox", { name: `Select ${title}` }).click();
+  }
   const bar = page.getByRole("toolbar", { name: "Selected tasks" });
   await expect(bar).toContainText("2 selected");
 

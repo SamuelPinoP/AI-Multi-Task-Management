@@ -86,7 +86,10 @@ test("Small shrinks the text but keeps the smallest text at 11px, and phone fiel
 
   // iOS Safari zooms into fields under 16px (#337), so on phones they stay 16px at Small too.
   await page.goto("/tasks");
+  // A phone's search opens from its button (#521).
+  if (isMobile) await page.getByRole("button", { name: "Search tasks" }).click();
   const search = page.getByPlaceholder("Search tasks");
+  await expect(search).toBeVisible();
   expect(await search.evaluate((field) => parseFloat(getComputedStyle(field).fontSize))).toBe(isMobile ? 16 : 13.125);
 });
 

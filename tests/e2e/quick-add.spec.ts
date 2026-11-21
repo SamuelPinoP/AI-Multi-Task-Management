@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { signUpAndLogIn, uniqueName } from "./helpers";
+import { plusTab, signUpAndLogIn, uniqueName } from "./helpers";
 
-test("quick add reads dates, #project, !priority and @person before saving", async ({ page }) => {
+test("quick add reads dates, #project, !priority and @person before saving", async ({ page, isMobile }) => {
   // An account: it adds a member, which guests can't (#458).
   await signUpAndLogIn(page, "Quick add");
   const projectName = uniqueName("Capstone");
@@ -12,10 +12,20 @@ test("quick add reads dates, #project, !priority and @person before saving", asy
   const projectToken = `#${projectName.replace(/\s+/g, "-")}`;
 
   await page.goto("/tasks");
-  const input = page.getByLabel("Add a task");
+  // The add box sits under the header on a computer. On a phone it's a sheet from the + tab, which closes once it
+  // adds the task (#521).
+  const input = page.getByRole("textbox", { name: "Add a task", exact: true });
   const details = page.getByRole("list", { name: "Details from your text" });
+  const openBox = async () => {
+    if (isMobile) await plusTab(page).click();
+  };
+  const expectSaved = async () => {
+    if (isMobile) await expect(page.getByRole("dialog", { name: "Add a task" })).toBeHidden();
+    else await expect(input).toHaveValue("");
+  };
 
   // Hints explain tokens that can't be used yet.
+  await openBox();
   await input.fill("Call @Dana");
   await expect(page.getByText("Add a #project to assign @Dana")).toBeVisible();
 
@@ -33,15 +43,16 @@ test("quick add reads dates, #project, !priority and @person before saving", asy
   await page.getByRole("button", { name: "Keep “sat” as text" }).click();
   await expect(details.getByRole("listitem")).toHaveCount(1);
   await input.press("Enter");
-  await expect(input).toHaveValue("");
+  await expectSaved();
   const kept = page.getByRole("region", { name: /^No due date/ });
   await expect(kept.getByRole("button", { name: `${title} sat`, exact: true })).toBeVisible();
 
   // Save the full example and check every field in the edit sheet.
+  await openBox();
   await input.fill(`${title} tomorrow ${projectToken} !high @Dana`);
   await expect(details.getByRole("listitem")).toHaveCount(4);
   await input.press("Enter");
-  await expect(input).toHaveValue("");
+  await expectSaved();
   await page.getByRole("region", { name: /^Upcoming/ }).getByRole("button", { name: title, exact: true }).click();
   await expect(page.getByLabel("Title")).toHaveValue(title);
   // "tomorrow" in the browser's calendar, which may differ from the test runner's.
