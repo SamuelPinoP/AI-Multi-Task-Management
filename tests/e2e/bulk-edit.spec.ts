@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { continueAsGuest, uniqueName } from "./helpers";
+import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
 
 // Changing several tasks at once (#281): select with the row checkboxes, then use the bar.
 
@@ -64,19 +64,59 @@ test("bulk: Ctrl+A selects every task shown, Escape clears, and Mark done comple
   await page.getByRole("checkbox", { name: `Select ${second}` }).click();
   await bar.getByRole("button", { name: "Mark done" }).click();
   await expect(page.getByText("2 tasks marked done")).toBeVisible();
+  // They fold away into Done (#520), and the bar goes with them; the Done tab shows them.
+  await expect(bar).toHaveCount(0);
+  await page.getByRole("radio", { name: "Done" }).click();
   for (const title of [first, second]) {
     await expect(page.getByRole("button", { name: `Done: ${title}` })).toHaveAttribute("aria-pressed", "true");
   }
 });
 
-test("the row's Mark done button completes one task and turns green", async ({ page }) => {
+test("the row's Mark done button completes one task into Done, and Undo brings it back (#520)", async ({ page }) => {
   const title = uniqueName("Row done");
   await continueAsGuest(page);
   expect((await page.request.post("/api/tasks", { data: { title } })).ok()).toBe(true);
   await page.goto("/tasks");
   await page.getByRole("button", { name: `Mark done: ${title}` }).click();
+  await expect(page.getByText("Task completed")).toBeVisible();
+
+  // Done starts folded; unfolded, the task's button is green.
+  const fold = page.getByRole("region", { name: /^Done/ }).getByRole("button", { name: /^Done \d+$/ });
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await fold.click();
   await expect(page.getByRole("button", { name: `Done: ${title}` })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("region", { name: /^Done/ }).getByRole("button", { name: title, exact: true })).toBeVisible();
+
+  // Undo in the message puts it back as it was.
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByRole("button", { name: `Mark done: ${title}` })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("region", { name: /^Done/ })).toHaveCount(0);
+});
+
+test("the bulk bar floats above the AI bar, and the last task scrolls clear of it (#520)", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Phones keep today's layout until #521.");
+  // An account: guests don't get the AI bar (#458).
+  await signUpAndLogIn(page, "Bulk float");
+  await page.setViewportSize({ width: 1280, height: 600 });
+  const titles = Array.from({ length: 12 }, (_, index) => uniqueName(`Float ${String(index + 1).padStart(2, "0")}`));
+  for (const title of titles) expect((await page.request.post("/api/tasks", { data: { title } })).ok()).toBe(true);
+  await page.goto("/tasks");
+  await page.getByRole("checkbox", { name: `Select ${titles[0]}` }).click();
+
+  const bar = page.getByRole("toolbar", { name: "Selected tasks" });
+  const ai = page.getByRole("form", { name: "Ask AI Multi" });
+  await expect(bar).toBeVisible();
+  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined))));
+  const barBox = (await bar.boundingBox())!;
+  const aiBox = (await ai.boundingBox())!;
+  // Centred over the list like the AI bar, and above it with a gap.
+  expect(Math.abs(barBox.x + barBox.width / 2 - (aiBox.x + aiBox.width / 2))).toBeLessThan(2);
+  expect(aiBox.y - (barBox.y + barBox.height)).toBeGreaterThanOrEqual(8);
+
+  // Scrolled to the end, every task can sit above the bar.
+  await page.locator("#main-content").evaluate((main) => main.scrollTo(0, main.scrollHeight));
+  const rows = page.getByRole("listitem").filter({ has: page.getByRole("checkbox", { name: /^Select Float/ }) });
+  const lastBox = (await rows.last().boundingBox())!;
+  expect(lastBox.y + lastBox.height).toBeLessThanOrEqual((await bar.boundingBox())!.y);
 });
 
 test("the bulk bar passes axe in both themes and fits a phone screen", async ({ page }) => {

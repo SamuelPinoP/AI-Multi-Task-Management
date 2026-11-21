@@ -56,9 +56,10 @@ function dueName(key: string) {
 }
 
 /**
- * The bar that replaces the filters while tasks are selected (#281, design
- * 1B): mark them done, set their priority, labels, project, due date or
- * assignee, or move them to the Trash. Every change is one request.
+ * The bar that shows while tasks are selected (#281, design 1B): mark them
+ * done, set their priority, labels, project, due date or assignee, or move
+ * them to the Trash. Every change is one request. On the Tasks page it floats
+ * at the bottom of the list (#520, design 1D).
  */
 export function BulkBar({
   tasks,
@@ -68,6 +69,7 @@ export function BulkBar({
   onClear,
   onChange,
   onDelete,
+  className,
 }: {
   /** The selected tasks. */
   tasks: Task[];
@@ -79,6 +81,7 @@ export function BulkBar({
   onClear: () => void;
   onChange: (change: BulkTaskChange, names?: BulkNames) => void;
   onDelete: () => void;
+  className?: string;
 }) {
   const [members, setMembers] = useState<{ projectId: string; list: Member[] } | null>(null);
   const [dateInput, setDateInput] = useState("");
@@ -115,7 +118,10 @@ export function BulkBar({
     <div
       role="toolbar"
       aria-label="Selected tasks"
-      className="flex min-h-11 w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-accent/60 bg-accent-soft px-1.5 py-1"
+      className={cn(
+        "flex min-h-11 w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-accent/60 bg-accent-soft px-1.5 py-1",
+        className,
+      )}
     >
       <button
         type="button"

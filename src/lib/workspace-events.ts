@@ -16,6 +16,16 @@ export function openNewTask(draft: { projectId?: string } = {}) {
   window.dispatchEvent(new CustomEvent(OPEN_NEW_TASK_EVENT, { detail: draft }));
 }
 
+/**
+ * Puts the cursor in the page's quick add with a project already picked (#520): a project's + on
+ * the Tasks page. `detail: { projectId }`, where "" means no project.
+ */
+export const QUICK_ADD_IN_PROJECT_EVENT = "workspace:quick-add-in-project";
+
+export function quickAddInProject(projectId: string) {
+  window.dispatchEvent(new CustomEvent<{ projectId: string }>(QUICK_ADD_IN_PROJECT_EVENT, { detail: { projectId } }));
+}
+
 /** Asks the shell to open search, the Ctrl+K pop-up (#410): Home's search button does. */
 export const OPEN_SEARCH_EVENT = "workspace:open-search";
 

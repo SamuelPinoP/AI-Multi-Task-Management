@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
 
-// The Tasks page groups tasks by project (#348, design 1B).
-test("tasks: one card per project, no project first, then by priority", async ({ page }) => {
+// The Tasks page groups tasks by project (#348): one full-width band each since #520 (design 1D).
+test("tasks: one band per project, no project first, then by priority", async ({ page }) => {
   // An account: it makes more projects than a guest workspace holds (#458).
   await signUpAndLogIn(page, "Tasks by project");
   const post = async <T>(url: string, data: Record<string, unknown>) => (await (await page.request.post(url, { data })).json()) as T;
@@ -22,14 +22,24 @@ test("tasks: one card per project, no project first, then by priority", async ({
   await expect(cards.nth(1)).toContainText("Urgent");
   await expect(cards.nth(1)).toContainText("1 active");
 
-  // Each project links to its Calendar and Notes, already filtered.
-  await expect(cards.nth(1).getByRole("link", { name: `Calendar for ${urgent.name}` })).toHaveAttribute("href", `/events/calendar?project=${urgent.id}`);
-  await expect(cards.nth(1).getByRole("link", { name: `Notes for ${urgent.name}` })).toHaveAttribute("href", `/notes?project=${urgent.id}`);
-  await cards.nth(1).getByRole("link", { name: `Calendar for ${urgent.name}` }).click();
+  // Each band's ⋯ opens its project's Calendar and Notes, already filtered, and its page (#520).
+  await cards.nth(1).getByRole("button", { name: `More for ${urgent.name}` }).click();
+  const menu = page.getByRole("menu");
+  await expect(menu.getByRole("menuitem", { name: "Open in Calendar" })).toHaveAttribute("href", `/events/calendar?project=${urgent.id}`);
+  await expect(menu.getByRole("menuitem", { name: "Project notes" })).toHaveAttribute("href", `/notes?project=${urgent.id}`);
+  await expect(menu.getByRole("menuitem", { name: "Open project" })).toHaveAttribute("href", `/projects/${urgent.id}`);
+  await menu.getByRole("menuitem", { name: "Open in Calendar" }).click();
   await expect(page.getByRole("combobox", { name: "Project" })).toHaveValue(urgent.id);
 
-  // "No project" itself files its tasks into a project, with Undo.
+  // No project's ⋯ has its Calendar and Notes too.
   await page.goto("/tasks");
+  await cards.nth(0).getByRole("button", { name: "More for No project" }).click();
+  await expect(menu.getByRole("menuitem", { name: "Open in Calendar" })).toHaveAttribute("href", "/events/calendar?project=none");
+  await expect(menu.getByRole("menuitem", { name: "Notes with no project" })).toHaveAttribute("href", "/notes?project=none");
+  await expect(menu.getByRole("menuitem", { name: "Open project" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  // "No project" itself files its tasks into a project, with Undo.
   await page.getByRole("button", { name: "No project", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: low.name }).click();
   await expect(page.getByText(`1 task moved to ${low.name}`)).toBeVisible();
@@ -41,6 +51,33 @@ test("tasks: one card per project, no project first, then by priority", async ({
   await expect(cards.nth(0).getByRole("button", { name: loose, exact: true })).toBeVisible();
 });
 
+test("a band's + starts a task in its project from the add box, and a band folds (#520)", async ({ page }) => {
+  await continueAsGuest(page);
+  const post = async <T>(url: string, data: Record<string, unknown>) => (await (await page.request.post(url, { data })).json()) as T;
+  const project = await post<{ id: string; name: string }>("/api/projects", { name: uniqueName("Band project") });
+  const first = uniqueName("First in band");
+  await post("/api/tasks", { title: first, projectId: project.id });
+  await page.goto("/tasks");
+
+  // + puts the cursor in the add box with the project picked; Enter adds the task to the band.
+  const band = page.getByRole("region", { name: project.name });
+  await band.getByRole("button", { name: `New task in ${project.name}` }).click();
+  const input = page.getByLabel("Add a task", { exact: true });
+  await expect(input).toBeFocused();
+  await expect(page.getByRole("list", { name: "Details you picked" })).toContainText(project.name);
+  const second = uniqueName("Added from the band");
+  await input.fill(second);
+  await input.press("Enter");
+  await expect(band.getByRole("button", { name: second, exact: true })).toBeVisible();
+
+  // Folding a band hides its tasks, not the band.
+  await band.getByRole("button", { name: `Fold ${project.name}` }).click();
+  await expect(band.getByRole("button", { name: first, exact: true })).toHaveCount(0);
+  await expect(band.getByRole("heading", { level: 2 })).toHaveText(project.name);
+  await band.getByRole("button", { name: `Unfold ${project.name}` }).click();
+  await expect(band.getByRole("button", { name: first, exact: true })).toBeVisible();
+});
+
 test("notes: a project link opens the Notes page filtered to it", async ({ page }) => {
   await continueAsGuest(page);
   const project = (await (await page.request.post("/api/projects", { data: { name: uniqueName("Notes project") } })).json()) as { id: string };
@@ -50,18 +87,18 @@ test("notes: a project link opens the Notes page filtered to it", async ({ page 
   await expect(page.getByRole("combobox", { name: "Project" })).toHaveValue("none");
 });
 
-test("a long project name truncates in its card's header, and the quick add's text keeps its width on phones", async ({ page, isMobile }) => {
+test("a long project name truncates in its band, and the quick add's text keeps its width on phones", async ({ page, isMobile }) => {
   await continueAsGuest(page);
   const post = async <T>(url: string, data: Record<string, unknown>) => (await (await page.request.post(url, { data })).json()) as T;
   const project = await post<{ id: string; name: string }>("/api/projects", { name: uniqueName("A project with a rather long name for a phone screen"), priority: "HIGH" });
   await post("/api/tasks", { title: uniqueName("Long name task"), projectId: project.id });
   await page.goto("/tasks");
 
-  // The name gives way; Calendar, Notes and + stay on the name's line.
-  const card = page.getByRole("region", { name: project.name });
+  // The name gives way; + and ⋯ stay on the name's line.
+  const band = page.getByRole("region", { name: project.name });
   const middle = async (box: { y: number; height: number } | null) => (box ? box.y + box.height / 2 : Number.NaN);
-  const name = await middle(await card.getByRole("heading", { level: 2 }).boundingBox());
-  for (const control of [card.getByRole("link", { name: `Calendar for ${project.name}` }), card.getByRole("button", { name: `New task in ${project.name}` })]) {
+  const name = await middle(await band.getByRole("heading", { level: 2 }).boundingBox());
+  for (const control of [band.getByRole("button", { name: `New task in ${project.name}` }), band.getByRole("button", { name: `More for ${project.name}` })]) {
     expect(Math.abs((await middle(await control.boundingBox())) - name)).toBeLessThan(6);
   }
 

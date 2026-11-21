@@ -2,7 +2,7 @@
 
 import { CalendarDays, Flag, FolderInput, Info, Plus, Tag, UserRound, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { DueDatePicker } from "@/components/tasks/due-date-picker";
 import { LabelPicker } from "@/components/tasks/label-picker";
 import { loadLabels, scopeKeyFor, useLabels } from "@/components/tasks/label-store";
@@ -16,7 +16,7 @@ import { isPressingPriority, PRIORITY_MENU_ORDER, priorityLabels, type Priority 
 import { projectColor } from "@/lib/project-color";
 import { parseQuickAdd, type QuickAddKind, type QuickAddResult } from "@/lib/quick-add-parse";
 import { TASK_TITLE_MAX } from "@/lib/task-history";
-import { notifyWorkspaceChanged, openGuestSignupFor } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, openGuestSignupFor, QUICK_ADD_IN_PROJECT_EVENT } from "@/lib/workspace-events";
 
 export const QUICK_ADD_INPUT_ID = "quick-add-input";
 
@@ -34,6 +34,11 @@ type QuickAddProps = {
   successMessage?: string;
   /** Where the toast's Edit action goes for the new item. */
   editHref?: (id: string) => string;
+  /**
+   * "box" (default) is a rounded box with icon buttons. "row" is the Tasks page's full-width row
+   * (#520), whose buttons say what they are from 640px, so "Due date" isn't mistaken for a calendar.
+   */
+  variant?: "box" | "row";
 };
 
 type ProjectOption = { id: string; name: string; color: string | null };
@@ -46,6 +51,10 @@ type Picked = { dueDate?: string; projectId?: string; priority?: Priority; assig
 
 const pickerClass =
   "grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40 [&_svg]:h-4 [&_svg]:w-4";
+
+/** The row's buttons: an icon on phones, the icon and its name from 640px. */
+const namedPickerClass =
+  "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[0.8125rem] font-medium text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent max-sm:w-8 max-sm:px-0 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0";
 
 /** A button that puts the cursor in the page's quick add, for empty states that say "Add a task". */
 export function QuickAddFocusButton({ className, children }: { className?: string; children: ReactNode }) {
@@ -90,9 +99,11 @@ export function QuickAdd({
   successMessage = "Task added",
   editHref = (id) => `/tasks/${id}`,
   quiet = false,
+  variant = "box",
 }: QuickAddProps = {}) {
   const router = useRouter();
   const smart = endpoint === TASKS_ENDPOINT && field === "title";
+  const named = variant === "row";
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const [ignore, setIgnore] = useState<ReadonlySet<QuickAddKind>>(new Set());
@@ -196,6 +207,27 @@ export function QuickAdd({
     }
   }
 
+  // A project's + on the Tasks page picks that project here and puts the cursor in the box (#520).
+  const startInProject = useEffectEvent((projectId: string) => {
+    void loadProjects();
+    setPicked((current) => ({ ...current, projectId, assigneeId: undefined, labelIds: undefined }));
+    document.getElementById(QUICK_ADD_INPUT_ID)?.focus();
+  });
+  useEffect(() => {
+    if (!smart) return;
+    const listener = (event: Event) => startInProject((event as CustomEvent<{ projectId?: string }>).detail?.projectId ?? "");
+    window.addEventListener(QUICK_ADD_IN_PROJECT_EVENT, listener);
+    return () => window.removeEventListener(QUICK_ADD_IN_PROJECT_EVENT, listener);
+  }, [smart]);
+
+  /** A picker button: an icon with a tooltip in the box, the icon and its name in the row. */
+  function pickerButton(name: string, active: unknown) {
+    return named
+      ? { className: cn(namedPickerClass, Boolean(active) && "text-accent") }
+      : { "aria-label": name, title: name, className: cn(pickerClass, Boolean(active) && "text-accent") };
+  }
+  const pickerName = (name: string) => (named ? <span className="max-sm:sr-only">{name}</span> : null);
+
   function keepAsText(kind: QuickAddKind) {
     setIgnore((current) => new Set(current).add(kind));
   }
@@ -283,7 +315,12 @@ export function QuickAdd({
     <form
       onSubmit={handleSubmit}
       // One minmax(0, 1fr) column: an auto column would grow to the row's one-line width and widen the page on phones (#288).
-      className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-xl border border-line bg-surface px-3 py-2 transition-colors focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft"
+      className={cn(
+        "grid grid-cols-[minmax(0,1fr)] bg-surface transition-colors",
+        named
+          ? "gap-1.5 border-b border-line px-4 py-2 focus-within:border-b-accent/60 sm:px-6"
+          : "gap-2 rounded-xl border border-line px-3 py-2 focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft",
+      )}
     >
       {/* On phones the buttons take a row of their own, so the text keeps the full width. */}
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
@@ -307,10 +344,11 @@ export function QuickAdd({
         />
         {smart ? (
           // Buttons that open the same pickers as the task page (#362, design 1B); typed codes keep working.
-          <div role="group" aria-label="Task details" className="flex shrink-0 items-center max-sm:w-full max-sm:pl-4.5" onFocus={() => void loadProjects()}>
+          <div role="group" aria-label="Task details" className={cn("flex shrink-0 items-center max-sm:w-full max-sm:pl-4.5", named && "gap-0.5")} onFocus={() => void loadProjects()}>
             <DueDatePicker value={picked.dueDate ?? parsed?.dueDate ?? ""} onChange={(key) => pick({ dueDate: key ?? "" })}>
-              <button type="button" aria-label="Due date" title="Due date" className={cn(pickerClass, picked.dueDate && "text-accent")}>
+              <button type="button" {...pickerButton("Due date", picked.dueDate)}>
                 <CalendarDays aria-hidden="true" />
+                {pickerName("Due date")}
               </button>
             </DueDatePicker>
             <PropertyPicker
@@ -328,8 +366,9 @@ export function QuickAdd({
               emptyText={projects ? "No project matches." : "Loading projects…"}
               onSelect={(id) => pick({ projectId: id, assigneeId: undefined, labelIds: undefined })}
             >
-              <button type="button" aria-label="Project" title="Project" onClick={() => void loadProjects()} className={cn(pickerClass, picked.projectId && "text-accent")}>
+              <button type="button" onClick={() => void loadProjects()} {...pickerButton("Project", picked.projectId)}>
                 <FolderInput aria-hidden="true" />
+                {pickerName("Project")}
               </button>
             </PropertyPicker>
             <PropertyPicker
@@ -339,8 +378,9 @@ export function QuickAdd({
               options={PRIORITY_MENU_ORDER.map((priority) => ({ value: priority, label: priorityLabels[priority] }))}
               onSelect={(priority) => pick({ priority })}
             >
-              <button type="button" aria-label="Priority" title="Priority" className={cn(pickerClass, picked.priority && "text-accent")}>
+              <button type="button" {...pickerButton("Priority", picked.priority)}>
                 <Flag aria-hidden="true" />
+                {pickerName("Priority")}
               </button>
             </PropertyPicker>
             <PropertyPicker
@@ -358,8 +398,9 @@ export function QuickAdd({
               emptyText={projectId ? "No member matches." : "Add a project first: people are assigned within a project."}
               onSelect={(id) => pick({ assigneeId: id || undefined })}
             >
-              <button type="button" aria-label="Assignee" title="Assignee" className={cn(pickerClass, picked.assigneeId && "text-accent")}>
+              <button type="button" {...pickerButton("Assignee", picked.assigneeId)}>
                 <UserRound aria-hidden="true" />
+                {pickerName("Assignee")}
               </button>
             </PropertyPicker>
             <LabelPicker
@@ -368,8 +409,9 @@ export function QuickAdd({
               selectedIds={picked.labelIds ?? []}
               onChange={(ids) => pick({ labelIds: ids })}
             >
-              <button type="button" aria-label="Labels" title="Labels" onClick={() => void loadLabels()} className={cn(pickerClass, picked.labelIds?.length && "text-accent")}>
+              <button type="button" onClick={() => void loadLabels()} {...pickerButton("Labels", picked.labelIds?.length)}>
                 <Tag aria-hidden="true" />
+                {pickerName("Labels")}
               </button>
             </LabelPicker>
           </div>

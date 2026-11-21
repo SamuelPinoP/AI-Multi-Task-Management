@@ -1,55 +1,56 @@
 "use client";
 
 /**
- * Tasks: the list first, the form second (DES-02).
+ * Tasks (#520, design 1D): the list fills the width, from the sidebar to the scrollbar, like Linear.
  *
- * - A one-line quick add and a "New task" sheet for full details.
- * - All, Active and Done beside the title; search, priority, labels, project
- *   and sort in one row, which turns into the bulk bar while tasks are selected.
- * - One card per project (design 1B, #348): tasks with no project first, then
- *   projects by priority, ties in the sidebar's order. Inside a card, tasks
- *   are grouped into Overdue, Today, Upcoming, No due date and Done.
- * - Each card links to its project's Calendar and Notes; "No project" moves
- *   its tasks into a project.
- * - Mark done completes a task in place; open it to edit in a side sheet.
- * - `?task=<id>` opens that task (links from search, Home and the Planner).
- * - Subtasks live inside their parent's sheet; the row shows a progress ring,
- *   and "Blocked" while the task waits on open tasks (SMART-02).
+ * - One header row: the title, All / Active / Done, search, Filter (priorities, projects, labels)
+ *   and Display (sort, descriptions).
+ * - The quick add is a full-width row under it, and the only way to add on this page; the sidebar's
+ *   New task and the N key stay. While tasks are selected, the bulk bar floats at the bottom.
+ * - One band per project (#348): tasks with no project first, then projects by priority, ties in the
+ *   sidebar's order. A band folds, adds a task in its project (+), and opens the project's Calendar,
+ *   notes and page (⋯); "No project" moves its tasks into a project.
+ * - Inside a band, tasks are grouped into Overdue, Today, Upcoming, No due date and Done; Done
+ *   starts folded, except on the Done tab.
+ * - Each task is one line (`TaskRow`); Mark done completes it in place, with Undo in its message.
+ * - `?task=<id>` opens that task's page (links from search, Home and the Planner).
+ * - Subtasks live inside their parent; the row shows a progress ring, and "Blocked" while the task
+ *   waits on open tasks (SMART-02).
  */
 
-import { CalendarDays, ChevronDown, NotebookText, Plus, Search } from "lucide-react";
+import { CalendarDays, ChevronDown, FolderOpen, MoreHorizontal, NotebookText, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { QuickAdd } from "@/components/home/quick-add";
 import { BulkBar, type BulkNames } from "@/components/tasks/bulk-bar";
-import { PriorityBadge } from "@/components/tasks/priority-badge";
-import { LabelFilter } from "@/components/tasks/label-filter";
 import { loadLabels, useLabels } from "@/components/tasks/label-store";
-import { TaskRow } from "@/components/tasks/task-row";
+import { PriorityBadge } from "@/components/tasks/priority-badge";
+import { NO_PROJECT, noTaskFilters, TaskDisplayMenu, TaskFilterMenu, type TaskFilters, type TaskSort } from "@/components/tasks/task-list-menus";
 import { TASK_ORDER_KEY } from "@/components/tasks/task-page-view";
+import { TaskRow } from "@/components/tasks/task-row";
 import { taskRequestBody } from "@/components/tasks/task-sheet";
-import type { Priority, Project, Task, TaskInput, TaskStatus } from "@/components/tasks/types";
-import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import type { Project, Task, TaskInput, TaskStatus } from "@/components/tasks/types";
+import { uiButtonClass } from "@/components/ui";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import { daysFrom } from "@/lib/home-summary";
 import { labelsOfTask, matchesLabelFilter } from "@/lib/labels";
-import { comparePriority, PRIORITIES, priorityLabels } from "@/lib/priority";
+import { comparePriority, priorityLabels } from "@/lib/priority";
 import { projectColor } from "@/lib/project-color";
 import { describeBulkChange, type BulkTaskChange, type TaskSnapshot } from "@/lib/task-bulk";
 import { compareTaskDueDates, formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { topLevelTasks } from "@/lib/task-relations";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
-import { notifyWorkspaceChanged, openNewTask, TASK_CREATED_EVENT } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, quickAddInProject, TASK_CREATED_EVENT } from "@/lib/workspace-events";
 
 /** A project from /api/projects, with the caller's access. */
 type ProjectItem = Project & { status?: string; updatedAt?: string };
 
 type StatusFilter = "ALL" | "OPEN" | "DONE";
-type SortOption = "DUE_DATE_ASC" | "DUE_DATE_DESC" | "NEWEST" | "OLDEST";
 type SectionKey = "OVERDUE" | "TODAY" | "UPCOMING" | "NO_DATE" | "DONE";
 
 const SECTION_ORDER: SectionKey[] = ["OVERDUE", "TODAY", "UPCOMING", "NO_DATE", "DONE"];
@@ -60,9 +61,6 @@ const statusTabs: [StatusFilter, string][] = [
   ["DONE", "Done"],
 ];
 
-const headerLinkClass =
-  "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[0.8125rem] font-medium text-muted outline-none transition-colors hover:bg-surface hover:text-accent focus-visible:ring-2 focus-visible:ring-accent";
-
 const sectionTitles: Record<SectionKey, string> = {
   OVERDUE: "Overdue",
   TODAY: "Today",
@@ -71,11 +69,9 @@ const sectionTitles: Record<SectionKey, string> = {
   DONE: "Done",
 };
 
-const controlClass =
-  "min-w-0 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/25";
-
-/** The priority, project and sort filters: at least 8.5rem each on phones, sized to their labels from 640px. */
-const filterClass = `${controlClass} flex-1 basis-34 sm:flex-none sm:basis-auto`;
+/** The band's small square buttons: + and ⋯. */
+const bandButtonClass =
+  "grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover data-[state=open]:text-ink";
 
 function sectionFor(task: Task, now: Date): SectionKey {
   if (task.status === "DONE") return "DONE";
@@ -83,7 +79,6 @@ function sectionFor(task: Task, now: Date): SectionKey {
   const diff = daysFrom(task.dueDate, now);
   return diff < 0 ? "OVERDUE" : diff === 0 ? "TODAY" : "UPCOMING";
 }
-
 
 function inputFromTask(task: Task, overrides: Partial<TaskInput> = {}): TaskInput {
   return {
@@ -104,6 +99,14 @@ async function errorMessage(response: Response, fallback: string) {
   return body?.error ?? fallback;
 }
 
+/** A set with `key` added, or removed if it was there. */
+function toggled(set: ReadonlySet<string>, key: string) {
+  const next = new Set(set);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  return next;
+}
+
 export default function TasksPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -116,12 +119,14 @@ export default function TasksPage() {
   const [busyIds, setBusyIds] = useState<string[]>([]);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
-  const [priorityFilter, setPriorityFilter] = useState<"ALL" | Priority>("ALL");
-  const [projectFilter, setProjectFilter] = useState("");
-  const [labelFilter, setLabelFilter] = useState<Set<string>>(() => new Set());
+  const [filters, setFilters] = useState<TaskFilters>(noTaskFilters);
   const labels = useLabels();
-  const [sortBy, setSortBy] = useState<SortOption>("DUE_DATE_ASC");
+  const [sortBy, setSortBy] = useState<TaskSort>("DUE_DATE_ASC");
+  const [showDescriptions, setShowDescriptions] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  // Folded project bands, and the bands whose Done section is open.
+  const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
+  const [doneOpen, setDoneOpen] = useState<ReadonlySet<string>>(() => new Set());
 
   const [confirmDelete, setConfirmDelete] = useState<Task | null>(null);
   // Selection for bulk changes (#281): ids, plus the last clicked row for Shift+click ranges.
@@ -151,7 +156,7 @@ export default function TasksPage() {
       const response = await fetch("/api/projects");
       if (response.ok) setProjects((await response.json()) as ProjectItem[]);
     } catch {
-      // The project selects stay empty; tasks still load.
+      // The project filters stay empty; tasks still load.
     }
   }
 
@@ -169,8 +174,7 @@ export default function TasksPage() {
     return () => window.removeEventListener(TASK_CREATED_EVENT, refresh);
   }, []);
 
-  // Tasks assigned or changed on another device show up on coming back. An open
-  // task keeps its edits: the sheet only resets its form for a different task.
+  // Tasks assigned or changed on another device show up on coming back.
   useRefreshOnReturn(() => {
     void Promise.all([fetchTasks(false), fetchProjects(), loadLabels(true)]);
   });
@@ -187,9 +191,9 @@ export default function TasksPage() {
       (task) =>
         (!query || task.title.toLowerCase().includes(query) || (task.description ?? "").toLowerCase().includes(query)) &&
         (statusFilter === "ALL" || (statusFilter === "DONE") === (task.status === "DONE")) &&
-        (priorityFilter === "ALL" || task.priority === priorityFilter) &&
-        (!projectFilter || task.projectId === projectFilter) &&
-        matchesLabelFilter(labelsOfTask(task).map((label) => label.id), labelFilter),
+        (!filters.priorities.size || filters.priorities.has(task.priority)) &&
+        (!filters.projects.size || filters.projects.has(task.projectId ?? NO_PROJECT)) &&
+        matchesLabelFilter(labelsOfTask(task).map((label) => label.id), filters.labels),
     );
     return filtered.sort((a, b) => {
       if (sortBy === "NEWEST") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -197,10 +201,10 @@ export default function TasksPage() {
       const comparison = compareTaskDueDates(a.dueDate, b.dueDate);
       return sortBy === "DUE_DATE_ASC" ? comparison : -comparison;
     });
-  }, [tasks, searchQuery, statusFilter, priorityFilter, projectFilter, labelFilter, sortBy]);
+  }, [tasks, searchQuery, statusFilter, filters, sortBy]);
 
   const now = new Date();
-  // One card per project (#348): no project first, then by priority, ties in the sidebar's order.
+  // One band per project (#348): no project first, then by priority, ties in the sidebar's order.
   const projectOrder = new Map(
     [...projects]
       .sort((a, b) => comparePriority(a.priority ?? "NONE", b.priority ?? "NONE") || (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
@@ -211,16 +215,21 @@ export default function TasksPage() {
   const projectGroups = [...byProject]
     .map(([projectId, groupTasks]) => {
       const project = projects.find((item) => item.id === projectId) ?? null;
+      const key = projectId || NO_PROJECT;
       return {
-        key: projectId || "none",
+        key,
         projectId: projectId || null,
         project,
         name: projectId ? (project?.name ?? groupTasks[0]?.project?.name ?? "Project") : "No project",
         color: projectId ? projectColor(project ?? groupTasks[0]?.project ?? { id: projectId, color: null }) : null,
         active: groupTasks.filter((task) => task.status !== "DONE").length,
-        sections: SECTION_ORDER.map((key) => ({ key, tasks: groupTasks.filter((task) => sectionFor(task, now) === key) })).filter(
-          (section) => section.tasks.length,
-        ),
+        open: !folded.has(key),
+        sections: SECTION_ORDER.map((sectionKey) => ({
+          key: sectionKey,
+          tasks: groupTasks.filter((task) => sectionFor(task, now) === sectionKey),
+          // Done starts folded, so finished work doesn't push the open tasks down; the Done tab shows it all.
+          shut: sectionKey === "DONE" && statusFilter !== "DONE" && !doneOpen.has(key),
+        })).filter((section) => section.tasks.length),
       };
     })
     .sort((a, b) => {
@@ -228,7 +237,10 @@ export default function TasksPage() {
       const order = (projectOrder.get(a.projectId) ?? Infinity) - (projectOrder.get(b.projectId) ?? Infinity);
       return order || a.name.localeCompare(b.name);
     });
-  const shownTasks = projectGroups.flatMap((group) => group.sections.flatMap((section) => section.tasks));
+  // The tasks on screen, in order: folded bands and a folded Done hide theirs.
+  const shownTasks = projectGroups.flatMap((group) =>
+    group.open ? group.sections.flatMap((section) => (section.shut ? [] : section.tasks)) : [],
+  );
 
   // Bulk changes apply to the selected tasks still on screen, in the order shown.
   const shownIds = shownTasks.map((task) => task.id);
@@ -236,7 +248,7 @@ export default function TasksPage() {
   const bulkProjects = projects.filter((project) => project.status !== "ARCHIVED");
 
   const filtersActive =
-    Boolean(searchQuery.trim()) || statusFilter !== "ALL" || priorityFilter !== "ALL" || Boolean(projectFilter) || labelFilter.size > 0;
+    Boolean(searchQuery.trim()) || statusFilter !== "ALL" || filters.priorities.size > 0 || filters.projects.size > 0 || filters.labels.size > 0;
 
   function selectTask(task: Task, range: boolean) {
     setSelected((current) => {
@@ -255,6 +267,12 @@ export default function TasksPage() {
   function clearSelection() {
     setSelected(new Set());
     setAnchorId(null);
+  }
+
+  function clearFilters() {
+    setSearchQuery("");
+    setStatusFilter("ALL");
+    setFilters(noTaskFilters);
   }
 
   // Ctrl+A (Cmd+A on a Mac) selects every task shown; Escape clears the selection.
@@ -354,8 +372,8 @@ export default function TasksPage() {
     router.push(`/tasks/${task.id}`);
   }
 
-  async function toggleTask(task: Task) {
-    const status: TaskStatus = task.status === "DONE" ? "TODO" : "DONE";
+  /** Saves a new status; false if it failed, which the message explains. */
+  async function setTaskStatus(task: Task, status: TaskStatus) {
     setBusyIds((ids) => [...ids, task.id]);
     try {
       const response = await fetch(`/api/tasks/${task.id}`, {
@@ -368,12 +386,23 @@ export default function TasksPage() {
       // Refetch: the parent's progress ring and other tasks' "Blocked" badges may change too.
       await fetchTasks(false);
       notifyWorkspaceChanged();
-      if (status === "DONE") toast.success("Task completed", { description: task.title });
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not update the task.");
+      return false;
     } finally {
       setBusyIds((ids) => ids.filter((id) => id !== task.id));
     }
+  }
+
+  async function toggleTask(task: Task) {
+    const status: TaskStatus = task.status === "DONE" ? "TODO" : "DONE";
+    if (!(await setTaskStatus(task, status)) || status !== "DONE") return;
+    // A done task moves into the folded Done section, so its message can bring it back.
+    toast.success("Task completed", {
+      description: task.title,
+      action: { label: "Undo", onClick: () => void setTaskStatus({ ...task, status }, task.status) },
+    });
   }
 
   async function deleteTask(task: Task) {
@@ -395,7 +424,7 @@ export default function TasksPage() {
     }
   }
 
-  /** "No project" moves its tasks into a project: the selected ones in the card, or all of them. */
+  /** "No project" moves its tasks into a project: the selected ones in the band, or all of them. */
   function moveUnfiled(groupTasks: Task[], project: ProjectItem) {
     const chosen = groupTasks.filter((task) => selected.has(task.id));
     const ids = (chosen.length ? chosen : groupTasks).filter((task) => !task.parentId).map((task) => task.id);
@@ -407,135 +436,102 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
-      {/* The status tabs sit by the title, a step smaller than it (design 1B with 1C's header). */}
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <h1 className="text-title">Tasks</h1>
-          <div role="radiogroup" aria-label="Status" className="flex rounded-xl bg-sunken p-1">
-            {statusTabs.map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={statusFilter === value}
-                onClick={() => setStatusFilter(value)}
-                className={cn(
-                  "rounded-lg px-3.5 py-1.5 text-[0.9375rem] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent",
-                  statusFilter === value ? "bg-surface text-ink shadow-card" : "text-muted hover:text-ink",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+    // No side margins (#520): the bands and rows run from the sidebar to the scrollbar, on the surface color down to
+    // the bottom of the page (data-page-surface, read by the app shell's main).
+    <div data-page-surface className="flex min-h-full flex-col bg-surface">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-canvas px-4 py-3 sm:pl-6 sm:pr-4">
+        <h1 className="text-title">Tasks</h1>
+        <div role="radiogroup" aria-label="Status" className="flex shrink-0 rounded-[0.625rem] bg-sunken p-[0.1875rem]">
+          {statusTabs.map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={statusFilter === value}
+              onClick={() => setStatusFilter(value)}
+              className={cn(
+                "rounded-[0.4375rem] px-3 py-1 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent",
+                statusFilter === value ? "bg-surface text-ink shadow-card" : "text-muted hover:text-ink",
+              )}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-        <button type="button" onClick={() => openNewTask()} className={cn(uiPrimaryButtonClass, "px-3 py-1.5")}>
-          <Plus aria-hidden="true" className="h-4 w-4" />
-          New task
-        </button>
+        <div role="search" aria-label="Filter tasks" className="flex min-w-0 flex-1 items-center justify-end gap-2 max-sm:basis-full sm:gap-3">
+          <label className="relative flex min-w-30 basis-60 items-center max-sm:flex-1">
+            <span className="sr-only">Search tasks</span>
+            <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 h-4 w-4 text-muted" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search tasks"
+              className="h-8.5 w-full min-w-0 rounded-lg border border-line bg-surface pl-8 pr-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
+            />
+          </label>
+          <TaskFilterMenu filters={filters} projects={projects} labels={labels ?? []} onChange={setFilters} />
+          <TaskDisplayMenu sort={sortBy} showDescriptions={showDescriptions} onSortChange={setSortBy} onShowDescriptionsChange={setShowDescriptions} />
+        </div>
       </header>
 
-      <QuickAdd onAdded={() => void fetchTasks(false)} />
-
-      {selectedTasks.length ? (
-        <BulkBar
-          tasks={selectedTasks}
-          projects={bulkProjects}
-          labels={labels ?? []}
-          busy={bulkBusy}
-          onClear={clearSelection}
-          onChange={(change, names) => void applyBulk(change, names)}
-          onDelete={() => setConfirmBulkDelete(true)}
-        />
-      ) : (
-      <div className="flex flex-wrap items-center gap-2" role="search" aria-label="Filter tasks">
-        <label className="relative flex min-w-48 flex-1 items-center">
-          <span className="sr-only">Search tasks</span>
-          <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 h-4 w-4 text-muted" />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search tasks"
-            className={cn(controlClass, "w-full pl-8")}
-          />
-        </label>
-        {/* On phones the filters share rows two by two, so their 16px labels (#337) aren't cut off. */}
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap">
-          <select aria-label="Priority" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as "ALL" | Priority)} className={filterClass}>
-            <option value="ALL">Any priority</option>
-            {PRIORITIES.map((value) => (
-              <option key={value} value={value}>{priorityLabels[value]}</option>
-            ))}
-          </select>
-          <LabelFilter labels={labels ?? []} projects={projects} selected={labelFilter} onChange={setLabelFilter} className="flex-1 basis-34 sm:flex-none sm:basis-auto" />
-          <select aria-label="Project" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} className={filterClass}>
-            <option value="">All projects</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>{project.name}</option>
-            ))}
-          </select>
-          <select aria-label="Sort" value={sortBy} onChange={(event) => setSortBy(event.target.value as SortOption)} className={filterClass}>
-            <option value="DUE_DATE_ASC">Due soonest</option>
-            <option value="DUE_DATE_DESC">Due latest</option>
-            <option value="NEWEST">Newest</option>
-            <option value="OLDEST">Oldest</option>
-          </select>
-        </div>
-      </div>
-      )}
+      <QuickAdd variant="row" onAdded={() => void fetchTasks(false)} />
 
       {loadError ? (
-        <p role="alert" className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
+        <p role="alert" className="border-b border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger sm:px-6">
           {loadError}{" "}
           <button type="button" onClick={() => void fetchTasks()} className="font-semibold underline">Try again</button>
         </p>
       ) : null}
 
       {fetching ? (
-        <div className="grid gap-2" aria-busy="true" aria-label="Loading tasks">
-          {Array.from({ length: 4 }, (_, index) => (
-            <div key={index} className="h-11 animate-pulse rounded-xl border border-line bg-surface" />
+        <div aria-busy="true" aria-label="Loading tasks">
+          {Array.from({ length: 6 }, (_, index) => (
+            <div key={index} className="flex h-10 items-center border-b border-line/60 px-4 sm:px-6">
+              <span className="h-3 animate-pulse rounded bg-sunken" style={{ width: `${[42, 30, 55, 36, 48, 26][index]}%` }} />
+            </div>
           ))}
         </div>
       ) : projectGroups.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-line bg-surface px-6 py-10 text-center">
+        <div className="px-6 py-14 text-center">
           <h2 className="text-base font-semibold">{tasks.length === 0 ? "No tasks yet." : "No tasks match these filters."}</h2>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted">
             {tasks.length === 0
-              ? "Type one in the box above and press Enter, or use New task for the details."
+              ? "Type one in the box above and press Enter, or press N for the full form."
               : "Clear the search or switch back to all tasks."}
           </p>
           {tasks.length !== 0 && filtersActive ? (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery("");
-                setStatusFilter("ALL");
-                setPriorityFilter("ALL");
-                setProjectFilter("");
-                setLabelFilter(new Set());
-              }}
-              className={cn(uiButtonClass, "mt-4 px-3 py-1.5")}
-            >
+            <button type="button" onClick={clearFilters} className={cn(uiButtonClass, "mt-4 px-3 py-1.5")}>
               Clear filters
             </button>
           ) : null}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5">
-          {projectGroups.map((group) => {
+        // While tasks are selected, room to scroll the last ones above the floating bulk bar.
+        <div className={selectedTasks.length ? "pb-20" : "pb-6"}>
+          {projectGroups.map((group, index) => {
             const groupTasks = group.sections.flatMap((section) => section.tasks);
-            const scope = group.projectId ?? "none";
+            const scope = group.projectId ?? NO_PROJECT;
+            const tasksId = `group-${group.key}-tasks`;
             return (
-              <section key={group.key} aria-labelledby={`group-${group.key}`} className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+              <section key={group.key} aria-labelledby={`group-${group.key}`}>
                 {/* One line at any width: a long project name truncates rather than pushing the buttons onto a second row. */}
-                <div className="flex min-h-12 items-center gap-2 border-b border-line bg-sunken py-1.5 pl-3.5 pr-2 sm:gap-2.5 sm:pl-4">
+                <div className={cn("flex h-10 items-center gap-2 border-b border-line bg-sunken pl-2.5 pr-2 sm:pr-3", index > 0 && "border-t")}>
+                  <button
+                    type="button"
+                    aria-expanded={group.open}
+                    aria-controls={group.open ? tasksId : undefined}
+                    aria-label={`${group.open ? "Fold" : "Unfold"} ${group.name}`}
+                    title={group.open ? "Fold" : "Unfold"}
+                    onClick={() => setFolded((current) => toggled(current, group.key))}
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <ChevronDown aria-hidden="true" className={cn("h-3.5 w-3.5 transition-transform", !group.open && "-rotate-90")} />
+                  </button>
                   {group.projectId ? (
                     <>
                       <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: group.color ?? undefined }} />
-                      <h2 id={`group-${group.key}`} className="min-w-0 truncate text-[0.9375rem] font-semibold">
+                      <h2 id={`group-${group.key}`} className="min-w-0 truncate text-[0.90625rem] font-semibold">
                         <Link href={`/projects/${group.projectId}`} title={group.name} className="rounded outline-none hover:text-accent focus-visible:ring-2 focus-visible:ring-accent">
                           {group.name}
                         </Link>
@@ -550,14 +546,14 @@ export default function TasksPage() {
                           <button
                             type="button"
                             title="Move these tasks to a project"
-                            className="-ml-1.5 inline-flex h-8 items-center gap-2 rounded-lg px-1.5 text-[0.9375rem] font-semibold outline-none transition-colors hover:bg-surface hover:text-accent focus-visible:ring-2 focus-visible:ring-accent"
+                            className="-ml-1 inline-flex h-7 items-center gap-2 rounded-md px-1.5 text-[0.90625rem] font-semibold outline-none transition-colors hover:bg-surface-hover hover:text-accent focus-visible:ring-2 focus-visible:ring-accent"
                           >
                             <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full border-[1.5px] border-dashed border-muted" />
                             No project
-                            <ChevronDown aria-hidden="true" className="h-4 w-4 text-muted" />
+                            <ChevronDown aria-hidden="true" className="h-3.5 w-3.5 text-muted" />
                           </button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-64 p-1">
+                        <PopoverContent align="start" className="w-64 p-1">
                           <p className="px-2.5 pb-1.5 pt-2 text-xs text-muted">
                             {(() => {
                               const chosen = groupTasks.filter((task) => selected.has(task.id)).length;
@@ -585,68 +581,138 @@ export default function TasksPage() {
                       </Popover>
                     </h2>
                   )}
-                  <span className="shrink-0 text-xs text-muted">{group.active} active</span>
+                  <span className="shrink-0 text-[0.78125rem] tabular-nums text-muted">
+                    {group.active}
+                    <span className="sr-only"> active</span>
+                  </span>
                   <span aria-hidden="true" className="flex-1" />
-                  <Link
-                    href={`/events/calendar?project=${group.projectId ?? "none"}`}
-                    aria-label={`Calendar for ${group.projectId ? group.name : "tasks with no project"}`}
-                    title={`Calendar for ${group.projectId ? group.name : "tasks with no project"}`}
-                    className={headerLinkClass}
-                  >
-                    <CalendarDays aria-hidden="true" className="h-4 w-4" />
-                    <span className="hidden sm:inline">Calendar</span>
-                  </Link>
-                  <Link href={`/notes?project=${scope}`} aria-label={group.projectId ? `Notes for ${group.name}` : "Notes with no project"} title={group.projectId ? `Notes for ${group.name}` : "Notes with no project"} className={headerLinkClass}>
-                    <NotebookText aria-hidden="true" className="h-4 w-4" />
-                  </Link>
+                  {/* The add box above, with this band's project picked. */}
                   <button
                     type="button"
-                    onClick={() => openNewTask({ projectId: group.projectId ?? undefined })}
+                    onClick={() => quickAddInProject(group.projectId ?? "")}
                     aria-label={group.projectId ? `New task in ${group.name}` : "New task with no project"}
                     title={group.projectId ? `New task in ${group.name}` : "New task with no project"}
-                    className={headerLinkClass}
+                    className={bandButtonClass}
                   >
                     <Plus aria-hidden="true" className="h-4 w-4" />
                   </button>
+                  {/* The project's Calendar and notes moved in here (#520), so the band holds one calendar-free line. */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger aria-label={`More for ${group.name}`} title="More" className={bandButtonClass}>
+                      <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem asChild>
+                        <Link href={`/events/calendar?project=${scope}`}>
+                          <CalendarDays />
+                          Open in Calendar
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href={`/notes?project=${scope}`}>
+                          <NotebookText />
+                          {group.projectId ? "Project notes" : "Notes with no project"}
+                        </Link>
+                      </DropdownMenuItem>
+                      {group.projectId ? (
+                        <DropdownMenuItem asChild>
+                          <Link href={`/projects/${group.projectId}`}>
+                            <FolderOpen />
+                            Open project
+                          </Link>
+                        </DropdownMenuItem>
+                      ) : null}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                {group.sections.map((section) => (
-                  <section key={section.key} aria-labelledby={`section-${group.key}-${section.key}`}>
-                    <h3
-                      id={`section-${group.key}-${section.key}`}
-                      className={cn(
-                        "flex items-center gap-2 px-4 pb-1 pt-3 text-2xs font-semibold uppercase tracking-wider",
-                        section.key === "OVERDUE" ? "text-danger" : "text-muted",
-                      )}
-                    >
-                      {sectionTitles[section.key]}
-                      <span className="font-mono tabular-nums">{section.tasks.length}</span>
-                    </h3>
-                    <ul>
-                      {section.tasks.map((task) => (
-                        <TaskRow
-                          key={task.id}
-                          ref={task.id === linkedTaskId ? linkedRowRef : undefined}
-                          task={task}
-                          now={now}
-                          highlighted={task.id === linkedTaskId}
-                          busy={busyIds.includes(task.id)}
-                          showProject={false}
-                          onToggle={(item) => void toggleTask(item)}
-                          onOpen={openTask}
-                          onDelete={setConfirmDelete}
-                          selected={selected.has(task.id)}
-                          onSelect={selectTask}
-                        />
-                      ))}
-                    </ul>
-                  </section>
-                ))}
+
+                {group.open ? (
+                  <div id={tasksId}>
+                    {group.sections.map((section) => {
+                      const headingId = `section-${group.key}-${section.key}`;
+                      const sectionTasksId = `${headingId}-tasks`;
+                      return (
+                        <section key={section.key} aria-labelledby={headingId}>
+                          {/* Indented a little past the task titles; Done's fold arrow sits in front of its name. */}
+                          <h3
+                            id={headingId}
+                            className={cn(
+                              "flex h-8 items-end gap-2 pb-1 pl-11 pr-4 text-2xs font-semibold uppercase tracking-wider sm:pl-13",
+                              section.key === "OVERDUE" ? "text-danger" : "text-muted",
+                            )}
+                          >
+                            {/* Done folds, except on the Done tab, which shows it all. */}
+                            {section.key === "DONE" && statusFilter !== "DONE" ? (
+                              <button
+                                type="button"
+                                aria-expanded={!section.shut}
+                                aria-controls={section.shut ? undefined : sectionTasksId}
+                                onClick={() => setDoneOpen((current) => toggled(current, group.key))}
+                                className="-ml-5 inline-flex items-center gap-1.5 rounded uppercase tracking-wider outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+                              >
+                                <ChevronDown aria-hidden="true" className={cn("h-3.5 w-3.5 transition-transform", section.shut && "-rotate-90")} />
+                                {sectionTitles[section.key]}
+                                <span className="font-mono tabular-nums">{section.tasks.length}</span>
+                              </button>
+                            ) : (
+                              <>
+                                {sectionTitles[section.key]}
+                                <span className="font-mono tabular-nums">{section.tasks.length}</span>
+                              </>
+                            )}
+                          </h3>
+                          {section.shut ? null : (
+                            <ul id={sectionTasksId}>
+                              {section.tasks.map((task) => (
+                                <TaskRow
+                                  key={task.id}
+                                  ref={task.id === linkedTaskId ? linkedRowRef : undefined}
+                                  task={task}
+                                  now={now}
+                                  highlighted={task.id === linkedTaskId}
+                                  busy={busyIds.includes(task.id)}
+                                  showProject={false}
+                                  showDescription={showDescriptions}
+                                  onToggle={(item) => void toggleTask(item)}
+                                  onOpen={openTask}
+                                  onDelete={setConfirmDelete}
+                                  selected={selected.has(task.id)}
+                                  selecting={selectedTasks.length > 0}
+                                  onSelect={selectTask}
+                                />
+                              ))}
+                            </ul>
+                          )}
+                        </section>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </section>
             );
           })}
         </div>
       )}
 
+      {/* While tasks are selected, the bulk bar floats at the bottom of the list, as in Linear (design 1D). The empty
+          strip it hangs from sticks to the bottom as the list scrolls, and takes no room. Sticking keeps clear of
+          main's bottom padding, the space for the AI bar and the phone's tabs (--page-end); with none, 1.5rem. */}
+      {selectedTasks.length ? (
+        <div className="pointer-events-none sticky bottom-[max(0rem,calc(1.5rem-var(--page-end,0rem)))] z-20 mt-auto h-0">
+          <div className="pointer-events-auto absolute bottom-0 left-1/2 w-max max-w-[calc(100%-2rem)] -translate-x-1/2 animate-[ui-pop-in_120ms_ease-out]">
+            <BulkBar
+              tasks={selectedTasks}
+              projects={bulkProjects}
+              labels={labels ?? []}
+              busy={bulkBusy}
+              onClear={clearSelection}
+              onChange={(change, names) => void applyBulk(change, names)}
+              onDelete={() => setConfirmBulkDelete(true)}
+              className="shadow-raised"
+            />
+          </div>
+        </div>
+      ) : null}
 
       <ConfirmDialog
         open={confirmBulkDelete}

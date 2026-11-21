@@ -30,7 +30,8 @@ test("New task: every property from its buttons, then the task's page shows them
   const { project, label } = await setUp(page);
   const title = uniqueName("Popup task");
   await page.goto("/tasks");
-  await page.getByRole("main").getByRole("button", { name: "New task", exact: true }).click();
+  // The sidebar's New task on a computer, the + tab on a phone: the Tasks page has no button of its own (#520).
+  await page.getByRole("button", { name: "New task", exact: true }).filter({ visible: true }).click();
   const dialog = page.getByRole("dialog", { name: "New task" });
   await dialog.getByLabel("Title").fill(title);
   await dialog.getByLabel("Description").fill("Written in the pop-up.");
