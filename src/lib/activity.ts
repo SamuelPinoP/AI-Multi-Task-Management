@@ -9,7 +9,9 @@ export type ActivityAction =
   | "CREATED_PROJECT"
   | "COMMENTED"
   | "DELETED_ITEM"
-  | "RESTORED_ITEM";
+  | "RESTORED_ITEM"
+  /** A task changed through the AI assistant (#310). */
+  | "UPDATED_TASK";
 
 export type ActivityEntityType = "NOTE" | "TASK" | "EVENT" | "PROJECT";
 

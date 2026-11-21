@@ -102,13 +102,13 @@ test("an agreement must name the notice the person was shown", () => {
   }
 });
 
-async function fakeAnswer(messages: ProviderRequest["messages"]) {
+async function fakeAnswer(messages: ProviderRequest["messages"], tools = ["list_open_tasks"]) {
   const events: ProviderEvent[] = [];
   const request: ProviderRequest = {
     model: "fake",
     system: "System",
     messages,
-    tools: [{ name: "list_open_tasks", description: "", parameters: {} }],
+    tools: tools.map((name) => ({ name, description: "", parameters: {} })),
     maxOutputTokens: 100,
     signal: new AbortController().signal,
   };
@@ -140,4 +140,30 @@ test("the e2e fake calls the tool a message names, then lists what it found", as
   assert.deepEqual(stats[0], { type: "text", text: "task_stats found 2: AI Multi (33%); No project (0%)" }, "with each item's percent done");
   assert.deepEqual((await fakeAnswer([{ role: "user", content: "Hello" }]))[0], { type: "text", text: "You asked: Hello" });
   await assert.rejects(fakeAnswer([{ role: "user", content: "[429]" }]), { name: "ProviderError", kind: "rate_limited" });
+});
+
+test("the e2e fake calls every tool a message names, in order, and says what each one proposed (#310)", async () => {
+  const tools = ["create_project", "create_task", "create_event", "trash_task"];
+  // Braces and a tool's name inside the arguments belong to them.
+  const message = 'create_project {"name":"QA {Whitewall}"} then create_task {"title":"Say \\"create_event\\"","project":"QA {Whitewall}"} create_event';
+  const calls = (await fakeAnswer([{ role: "user", content: message }], tools)).flatMap((event) => (event.type === "tool_call" ? [event.call] : []));
+  assert.deepEqual(calls, [
+    { id: "local-0", name: "create_project", args: { name: "QA {Whitewall}" } },
+    { id: "local-1", name: "create_task", args: { title: 'Say "create_event"', project: "QA {Whitewall}" } },
+    { id: "local-2", name: "create_event", args: {} },
+  ]);
+  const answer = await fakeAnswer(
+    [
+      { role: "user", content: message },
+      {
+        role: "tool",
+        results: [
+          { callId: "local-0", name: "create_project", content: { note: "n", data: { proposed: 'New project "QA"', ref: "new-1", proposedSoFar: 1 } } },
+          { callId: "local-1", name: "trash_task", content: { note: "n", data: { proposed: null, reason: '2 tasks match "Write".', matches: [{ title: "Write A" }] } } },
+        ],
+      },
+    ],
+    tools,
+  );
+  assert.deepEqual(answer[0], { type: "text", text: 'Proposed: New project "QA"\ntrash_task proposed nothing: 2 tasks match "Write".' });
 });

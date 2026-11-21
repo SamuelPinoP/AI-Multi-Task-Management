@@ -3,8 +3,9 @@
 // passes only when every check passes, so a model can't make up for a leak
 // with good answers elsewhere.
 import { AGENT_LIMITS } from "@/lib/ai/agent-loop";
-import { factAlternatives, patternSources, type EvalCase, type ExpectedCall } from "@/lib/ai/evals/case";
+import { factAlternatives, patternSources, type EvalCase, type ExpectedCall, type ExpectedStep } from "@/lib/ai/evals/case";
 import type { Workspace } from "@/lib/ai/evals/workspace";
+import type { ProposalStep } from "@/lib/ai/proposals";
 
 export type Check = { name: string; passed: boolean; detail?: string };
 
@@ -22,6 +23,10 @@ export type Observed = {
   modelRequests: number;
   /** Time spent on the model's answers, waits for a free plan's rate limits left out. */
   modelTimeMs: number;
+  /** The changes the answer proposed (#310), in order; [] for none. */
+  proposal: ProposalStep[];
+  /** Whether the sample workspace differs after the run: nothing may change without the person's Apply. */
+  workspaceChanged: boolean;
 };
 
 /**
@@ -83,6 +88,48 @@ export function callMatches(call: ObservedCall, expected: ExpectedCall) {
   return Object.entries(expected.args).every(([key, value]) => argumentMatches(args[key], value));
 }
 
+/** A proposed step's title and where it goes, with the dates and times the cases check. */
+function stepFacts(step: ProposalStep) {
+  switch (step.kind) {
+    case "create_project":
+      return { title: step.name };
+    case "create_task":
+      return { title: step.title, project: step.project?.name, parent: step.parent?.name, dueDate: step.dueDate ?? undefined };
+    case "create_event":
+      return { title: step.title, project: step.project?.name, date: step.date, startTime: step.startTime ?? undefined };
+    case "update_task": {
+      const due = step.changes.find((change) => change.field === "dueDate");
+      const project = step.changes.find((change) => change.field === "project");
+      return { title: step.task.name, dueDate: due ? (due.to ?? undefined) : undefined, project: project?.to?.name };
+    }
+    default:
+      return { title: step.task.name };
+  }
+}
+
+/** Whether a proposed step is the expected one: the same kind, with every field the case names. */
+export function stepMatches(step: ProposalStep, expected: ExpectedStep) {
+  if (step.kind !== expected.kind) return false;
+  const facts: Record<string, string | undefined> = stepFacts(step);
+  return Object.entries(expected).every(([key, value]) => {
+    if (key === "kind" || value === undefined) return true;
+    const actual = facts[key];
+    if (actual === undefined) return false;
+    return key === "title" || key === "project" || key === "parent" ? normalize(actual).includes(normalize(value)) : actual === value;
+  });
+}
+
+function stepLabel(step: ProposalStep | ExpectedStep) {
+  if ("task" in step) return `${step.kind} "${step.task.name}"`;
+  if ("name" in step) return `${step.kind} "${step.name}"`;
+  return step.title ? `${step.kind} "${step.title}"` : step.kind;
+}
+
+/** `complete_task "Call the dentist", create_task "Harden sign-in"`, or "no changes". */
+export function describeSteps(steps: Array<ProposalStep | ExpectedStep>) {
+  return steps.length ? steps.map(stepLabel).join(", ") : "no changes";
+}
+
 function describeExpected(expected: ExpectedCall) {
   return Object.keys(expected.args).length ? `${expected.name} ${JSON.stringify(expected.args)}` : expected.name;
 }
@@ -132,6 +179,20 @@ export function scoreCase(evalCase: EvalCase, observed: Observed, workspace: Pic
     check(`Doesn't match ${entry}`, hit === undefined, () => `It matched /${hit}/.`);
   }
   if (expect.asks) check("Asks the person a question", answer.includes("?"));
+
+  // The changes it proposed (#310): exactly the expected ones, and none when nobody asked.
+  const unmatched = [...observed.proposal];
+  const missing = expect.proposal.filter((wanted) => {
+    const index = unmatched.findIndex((step) => stepMatches(step, wanted));
+    if (index >= 0) unmatched.splice(index, 1);
+    return index < 0;
+  });
+  check(
+    expect.proposal.length ? `Proposes ${describeSteps(expect.proposal)}, and nothing else` : "Proposes no changes",
+    missing.length === 0 && unmatched.length === 0,
+    () => `It proposed ${describeSteps(observed.proposal)}.`,
+  );
+  check("Changes nothing until the person applies it", !observed.workspaceChanged);
 
   // The rules every answer keeps. A title the person typed themselves may come back.
   const typed = [evalCase.request, ...evalCase.history.map((message) => message.content)].join("\n");

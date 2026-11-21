@@ -187,6 +187,9 @@ function toTables(file: WorkspaceFile): Tables {
   const taskRows: Row[] = file.tasks.map((task) => ({
     id: task.id,
     title: task.title,
+    // The write tools (#310) read these to describe a change; the sample tasks have neither.
+    description: null,
+    parentId: null,
     status: task.status,
     priority: task.priority,
     dueDate: task.due ? dayDate(task.due) : null,

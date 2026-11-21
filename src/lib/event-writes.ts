@@ -9,7 +9,7 @@ import { parseEventTimes, parseRepeatUntil, type ParsedEventTimes } from "@/lib/
 import { prisma } from "@/lib/prisma";
 import { canEditProjectContent, getProjectAccess, unauthorizedProjectResponse } from "@/lib/project-access";
 import { isValidRecurrence, normalizeRecurrence, type RecurrenceValue } from "@/lib/recurrence";
-import { refuse, type WriteActor, type WriteResult } from "@/lib/writes";
+import { activityText, refuse, type WriteActor, type WriteResult } from "@/lib/writes";
 
 export type EventCreateData = {
   title: string;
@@ -82,7 +82,7 @@ export async function createEvent(actor: WriteActor, input: EventCreateData, db:
     {
       userId: actor.id,
       action: "CREATED_EVENT",
-      message: `Created event: “${event.title}”`,
+      message: activityText(`Created event: “${event.title}”`, actor),
       entityType: "EVENT",
       entityId: event.id,
       projectId: event.projectId,

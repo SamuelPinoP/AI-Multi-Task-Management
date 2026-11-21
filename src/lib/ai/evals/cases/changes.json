@@ -2,34 +2,127 @@
   {
     "id": "changes-complete-task",
     "ability": "changes",
-    "summary": "Says it can't complete a task yet, and never claims it did; changes will need the person's confirmation (#310).",
+    "summary": "Proposes marking the task done and says the person applies it; nothing changes before that, and it never claims it did (#310).",
     "request": "Mark Call the dentist as done.",
     "expect": {
-      "facts": ["@cant"],
+      "tools": [{ "name": "complete_task", "args": { "task": "dentist" } }],
+      "proposal": [{ "kind": "complete_task", "title": "Call the dentist" }],
+      "facts": ["Call the dentist", "@awaitsApply"],
       "notPatterns": ["@doneClaims"]
     },
-    "reference": [{ "text": "I can't change tasks yet. To mark Call the dentist as done, open it on the Tasks page and tick it off." }]
+    "reference": [
+      { "toolCalls": [{ "name": "complete_task", "args": { "task": "Call the dentist" } }] },
+      { "text": "Here's the change: mark Call the dentist as done. Review it below and apply it if it looks right." }
+    ]
   },
   {
     "id": "changes-delete-tasks",
     "ability": "changes",
-    "summary": "Says it can't delete tasks, and never claims it did.",
+    "summary": "Looks up the overdue tasks and proposes moving each one to the Trash, naming every one, instead of deleting anything (#310).",
     "request": "Delete all my overdue tasks.",
     "expect": {
-      "facts": ["@cant"],
+      "tools": [{ "name": "list_open_tasks", "args": { "due": "overdue" } }, { "name": "trash_task" }],
+      "proposal": [
+        { "kind": "trash_task", "title": "Send the invoice to Acme" },
+        { "kind": "trash_task", "title": "Fix the hero image on the home page" }
+      ],
+      "facts": ["Send the invoice to Acme", "Fix the hero image on the home page", "@awaitsApply"],
       "notPatterns": ["@doneClaims"]
     },
-    "reference": [{ "text": "I can't delete tasks. You can delete them yourself from the Tasks page." }]
+    "reference": [
+      { "toolCalls": [{ "name": "list_open_tasks", "args": { "due": "overdue" } }] },
+      {
+        "toolCalls": [
+          { "name": "trash_task", "args": { "task": "Send the invoice to Acme" } },
+          { "name": "trash_task", "args": { "task": "Fix the hero image on the home page" } }
+        ]
+      },
+      {
+        "text": "Two tasks are overdue: Send the invoice to Acme and Fix the hero image on the home page. Review moving both to the Trash below and apply it if that's right; you can restore them from the Trash later."
+      }
+    ]
   },
   {
     "id": "changes-move-event",
     "ability": "changes",
-    "summary": "Says it can't move an event yet, and never claims it did.",
+    "summary": "Says it can't move an event, which none of its tools can change, and proposes nothing.",
     "request": "Move my dentist appointment to next Monday.",
     "expect": {
       "facts": ["@cant"],
       "notPatterns": ["@doneClaims"]
     },
     "reference": [{ "text": "I can't move events yet. You can change the appointment's date on the Calendar page." }]
+  },
+  {
+    "id": "changes-whitewall",
+    "ability": "changes",
+    "summary": "Turns one request into one proposal: the Whitewall project, its two security tasks and its deadline on the calendar, Thursday, December 17 (#310).",
+    "request": "Create a project called Whitewall with two security tasks, Harden sign-in and Security review. The deadline is next month on the 17th, so put it on my calendar.",
+    "expect": {
+      "tools": [
+        { "name": "create_project", "args": { "name": "Whitewall" } },
+        { "name": "create_task", "args": { "project": "Whitewall" } },
+        { "name": "create_event", "args": { "date": "2026-12-17" } }
+      ],
+      "proposal": [
+        { "kind": "create_project", "title": "Whitewall" },
+        { "kind": "create_task", "title": "Harden sign-in", "project": "Whitewall" },
+        { "kind": "create_task", "title": "Security review", "project": "Whitewall" },
+        { "kind": "create_event", "title": "Whitewall", "date": "2026-12-17" }
+      ],
+      "facts": ["Whitewall", "Harden sign-in", "Security review", "@awaitsApply"],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [
+      {
+        "toolCalls": [
+          { "name": "create_project", "args": { "name": "Whitewall", "description": "Security work for the app." } },
+          {
+            "name": "create_task",
+            "args": { "title": "Harden sign-in", "project": "Whitewall", "description": "Limit repeated sign-in attempts and require strong passwords." }
+          },
+          {
+            "name": "create_task",
+            "args": { "title": "Security review", "project": "Whitewall", "description": "Review access rules, secrets and dependencies before the deadline." }
+          },
+          { "name": "create_event", "args": { "title": "Whitewall deadline", "date": "2026-12-17", "project": "Whitewall" } }
+        ]
+      },
+      {
+        "text": "Here's the plan: a new project, Whitewall, with two tasks, Harden sign-in and Security review, and an all-day event, Whitewall deadline, on Thursday, December 17. Review it below and apply it when it looks right."
+      }
+    ]
+  },
+  {
+    "id": "changes-update-due-date",
+    "ability": "changes",
+    "summary": "Proposes moving a task's due date to next Monday, November 23 (#310).",
+    "request": "Push the release notes to Monday.",
+    "expect": {
+      "tools": [{ "name": "update_task", "args": { "task": "release notes", "dueDate": "2026-11-23" } }],
+      "proposal": [{ "kind": "update_task", "title": "Write the release notes", "dueDate": "2026-11-23" }],
+      "facts": ["Write the release notes", "@awaitsApply"],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "update_task", "args": { "task": "release notes", "dueDate": "2026-11-23" } }] },
+      { "text": "Here's the change: Write the release notes moves from today to Monday, November 23. Apply it below if that's right." }
+    ]
+  },
+  {
+    "id": "changes-subtask",
+    "ability": "changes",
+    "summary": "Proposes a subtask under an existing task, in its parent's project, Garden makeover (#310).",
+    "request": "Add a subtask to Buy plants for the garden: compare prices at the nursery.",
+    "expect": {
+      "tools": [{ "name": "create_task", "args": { "parent": "Buy plants" } }],
+      "proposal": [{ "kind": "create_task", "title": "prices", "parent": "Buy plants for the garden", "project": "Garden makeover" }],
+      "facts": ["Buy plants for the garden", "@awaitsApply"],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "create_task", "args": { "title": "Compare prices at the nursery", "parent": "Buy plants for the garden" } }] },
+      { "text": "Here's the new subtask: Compare prices at the nursery, under Buy plants for the garden in Garden makeover. Apply it below to add it." }
+    ]
   }
 ]

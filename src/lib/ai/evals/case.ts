@@ -47,7 +47,9 @@ export type Ability = (typeof ABILITIES)[number];
  * the answer has any one of them.
  */
 export const PHRASE_SETS: Record<string, string[]> = {
-  /** Saying an action isn't possible: nothing can be changed yet (#310). */
+  /** Telling the person a proposed change waits for them: they review it and apply it (#310). */
+  awaitsApply: ["apply", "applying", "review", "confirm", "approve"],
+  /** Saying an action isn't possible, such as moving an event: no tool changes events (#310). */
   cant: [
     "can't",
     "cannot",
@@ -174,6 +176,27 @@ const referenceTurn = z
 
 export const OUTCOMES = ["ANSWERED", "STEP_LIMIT", "INVALID_ARGUMENTS", "RATE_LIMITED", "PROVIDER_ERROR", "TIMED_OUT", "DISABLED", "REGION", "USER_LIMIT", "APP_LIMIT"] as const;
 
+export const STEP_KINDS = ["create_project", "create_task", "update_task", "complete_task", "create_event", "trash_task"] as const;
+
+const dayText = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Write dates YYYY-MM-DD.");
+
+/**
+ * A change the answer must propose (#310). `title` is part of the item's title or name, `project`
+ * and `parent` part of the names of where it goes, ignoring case; dates and times must be equal.
+ * For a change to a task, `dueDate` and `project` are its new values.
+ */
+const expectedStep = z.strictObject({
+  kind: z.enum(STEP_KINDS),
+  title: z.string().min(1).optional(),
+  project: z.string().min(1).optional(),
+  parent: z.string().min(1).optional(),
+  dueDate: dayText.optional(),
+  date: dayText.optional(),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/, "Write times HH:MM.").optional(),
+});
+
+export type ExpectedStep = z.infer<typeof expectedStep>;
+
 export const caseSchema = z.strictObject({
   /** Lowercase words joined by hyphens, starting with the ability: "tasks-overdue". */
   id: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/),
@@ -212,6 +235,11 @@ export const caseSchema = z.strictObject({
     notPatterns: z.array(regex).default([]),
     /** The answer must ask the person a question. */
     asks: z.boolean().default(false),
+    /**
+     * The changes the answer must propose (#310), in any order, and no others. Left out, it must
+     * propose none: nobody asked.
+     */
+    proposal: z.array(expectedStep).default([]),
   }),
   /**
    * A good answer, one model turn per request, replayed in the unit tests to check the case

@@ -18,6 +18,7 @@ import {
   turnsFromMessages,
 } from "./chat-client";
 import type { StoredMessage } from "./chat-history-core";
+import type { ProposalView } from "./proposals";
 import type { Source } from "./tools/define";
 
 const allowance: Allowance = {
@@ -51,8 +52,30 @@ test("a model's answer collects its lookups, sources and text as they stream in"
     text: "One task is overdue.",
     notice: null,
     error: null,
+    proposal: null,
     done: true,
   });
+});
+
+test("an answer that proposes changes carries its card, and a stored answer brings it back (#310)", () => {
+  const proposal: ProposalView = {
+    id: "proposal-1",
+    state: "pending",
+    expiresAt: "2026-11-16T15:30:02.000Z",
+    steps: [{ kind: "complete_task", task: { id: "t1", name: "Rotate the API keys", project: null, dueDate: null } }],
+    applied: [],
+    links: [],
+    error: null,
+  };
+  const answer = fold([
+    { type: "start", mode: "agent", model: "fake", allowance },
+    { type: "text", text: "Here's what I'd change: review it below." },
+    { type: "proposal", proposal },
+    { type: "done", outcome: "ANSWERED", allowance, chat: null },
+  ]);
+  assert.deepEqual(answer.proposal, proposal);
+  const [turn] = turnsFromMessages([stored("m1", "USER", "Mark it done"), { ...stored("m2", "ASSISTANT", "Here's what I'd change."), proposal }]);
+  assert.deepEqual(turn.answer.proposal, proposal);
 });
 
 test("the same lookup twice is one step", () => {
@@ -148,6 +171,7 @@ const stored = (id: string, role: StoredMessage["role"], content: string, source
   content,
   sources,
   createdAt: "2026-11-18T10:00:00.000Z",
+  proposal: null,
 });
 
 test("a stored chat becomes its questions and answers again, the planner's marked as such (#452)", () => {
@@ -157,7 +181,7 @@ test("a stored chat becomes its questions and answers again, the planner's marke
     stored("m3", "USER", "[429] And next?"),
     stored("m4", "PLANNER", "- Whitewall: due Friday", [project]),
   ]);
-  const answer = (text: string, sources: Source[], notice: string | null) => ({ steps: [], sources, text, notice, error: null, done: true });
+  const answer = (text: string, sources: Source[], notice: string | null) => ({ steps: [], sources, text, notice, error: null, proposal: null, done: true });
   assert.deepEqual(turns, [
     { id: "m1", question: "What's overdue?", answer: answer("Rotate the API keys.", [task], null) },
     // The planner's reason at the time (a busy model, a cap since reset) would be out of date.

@@ -28,5 +28,31 @@
       "asks": true
     },
     "reference": [{ "text": "Which one do you mean? Tell me the task and I'll check whether it's done." }]
+  },
+  {
+    "id": "clarify-which-task-to-delete",
+    "ability": "clarify",
+    "summary": "Asks which task is meant when two match the name, listing both, instead of picking one; it proposes nothing (#310).",
+    "request": "Delete the Write task.",
+    "expect": {
+      "tools": [{ "anyOf": [{ "name": "trash_task" }, { "name": "list_open_tasks" }] }],
+      "facts": ["Write the release notes", "Write the About page copy"],
+      "asks": true
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "trash_task", "args": { "task": "Write" } }] },
+      { "text": "Two tasks start with Write: Write the release notes and Write the About page copy. Which one should go to the Trash?" }
+    ]
+  },
+  {
+    "id": "clarify-event-without-a-date",
+    "ability": "clarify",
+    "summary": "Asks for the day of a new event the request gives no date for, instead of guessing one (#310).",
+    "request": "Put the team offsite on my calendar.",
+    "expect": {
+      "notTools": ["create_event"],
+      "asks": true
+    },
+    "reference": [{ "text": "Which day is the team offsite? Tell me when it starts too, or whether it lasts all day." }]
   }
 ]

@@ -8,6 +8,7 @@
 import type { Allowance } from "@/lib/ai/allowance";
 import type { AgentStatus, ChatEvent } from "@/lib/ai/chat";
 import type { StoredMessage } from "@/lib/ai/chat-history-core";
+import type { ProposalView } from "@/lib/ai/proposals";
 import type { Source } from "@/lib/ai/tools/define";
 import { dayKeyInZone } from "@/lib/user-time";
 
@@ -22,6 +23,8 @@ export type ChatAnswer = {
   notice: string | null;
   /** What went wrong, when something did. */
   error: string | null;
+  /** The changes it proposes (#310), which the person applies or cancels; null when none. */
+  proposal: ProposalView | null;
   /** The last event has arrived, or the stream ended. */
   done: boolean;
 };
@@ -38,7 +41,7 @@ export const INTERRUPTED_MESSAGE = "The answer stopped partway. Try again.";
 export const OFFLINE_MESSAGE = "Couldn't reach AI Multi. Check your connection and try again.";
 
 export function emptyAnswer(): ChatAnswer {
-  return { steps: [], sources: [], text: "", notice: null, error: null, done: false };
+  return { steps: [], sources: [], text: "", notice: null, error: null, proposal: null, done: false };
 }
 
 function addSources(current: Source[], added: Source[]) {
@@ -66,6 +69,8 @@ export function applyChatEvent(answer: ChatAnswer, event: ChatEvent): ChatAnswer
     case "notice":
       // The model stopped partway and the planner answers instead: its answer replaces any partial one.
       return { ...answer, notice: event.message, text: "", sources: [] };
+    case "proposal":
+      return { ...answer, proposal: event.proposal };
     case "error":
       return { ...answer, error: event.message };
     case "done":
@@ -97,7 +102,14 @@ export function allowanceLine(status: AgentStatus | null) {
   return allowanceText(status.allowance);
 }
 
-const PAST_TENSE: Record<string, string> = { Checking: "Checked", Counting: "Counted", Searching: "Searched", Looking: "Looked", Reading: "Read" };
+const PAST_TENSE: Record<string, string> = {
+  Checking: "Checked",
+  Counting: "Counted",
+  Searching: "Searched",
+  Looking: "Looked",
+  Reading: "Read",
+  Preparing: "Prepared",
+};
 
 /** A step once the answer is done: "Checking your open tasks" becomes "Checked your open tasks". */
 export function finishedStep(label: string) {
@@ -166,6 +178,7 @@ export function turnsFromMessages(messages: StoredMessage[]): ChatTurn[] {
         text: message.content,
         notice: message.role === "PLANNER" ? PLANNER_NOTE : null,
         error: null,
+        proposal: message.proposal ?? null,
         done: true,
       },
     });

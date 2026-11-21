@@ -57,5 +57,50 @@
       { "toolCalls": [{ "name": "list_open_tasks", "args": { "due": "next_7_days" } }] },
       { "text": "One task is due this weekend: Buy plants for the garden, on Saturday." }
     ]
+  },
+  {
+    "id": "time-event-tomorrow-at-3",
+    "ability": "time",
+    "summary": "Turns \"tomorrow at 3\" into Friday, November 20 at 15:00 for a new event (#310).",
+    "request": "Add a call with the designer tomorrow at 3.",
+    "expect": {
+      "tools": [{ "name": "create_event", "args": { "date": "2026-11-20", "startTime": "15:00" } }],
+      "proposal": [{ "kind": "create_event", "title": "designer", "date": "2026-11-20", "startTime": "15:00" }],
+      "facts": ["@awaitsApply"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "create_event", "args": { "title": "Call with the designer", "date": "2026-11-20", "startTime": "15:00" } }] },
+      { "text": "Here's the event: Call with the designer, tomorrow, Friday, November 20, at 3:00 PM. Apply it below to put it on your calendar." }
+    ]
+  },
+  {
+    "id": "time-due-next-month",
+    "ability": "time",
+    "summary": "Turns \"next month on the 17th\" into December 17 for a new task's due date (#310).",
+    "request": "Add a task to renew my passport, due next month on the 17th.",
+    "expect": {
+      "tools": [{ "name": "create_task", "args": { "dueDate": "2026-12-17" } }],
+      "proposal": [{ "kind": "create_task", "title": "passport", "dueDate": "2026-12-17" }],
+      "facts": ["@awaitsApply"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "create_task", "args": { "title": "Renew my passport", "dueDate": "2026-12-17" } }] },
+      { "text": "Here's the new task: Renew my passport, due Thursday, December 17. Apply it below to add it." }
+    ]
+  },
+  {
+    "id": "time-new-task-tomorrow-in-tokyo",
+    "ability": "time",
+    "summary": "Dates a new task by the person's own time zone: just after midnight in Tokyo it's already Friday, so tomorrow is Saturday, November 21 (#310).",
+    "clock": { "now": "2026-11-19T15:30:00.000Z", "timeZone": "Asia/Tokyo" },
+    "request": "Add a task to back up my laptop, due tomorrow.",
+    "expect": {
+      "tools": [{ "name": "create_task", "args": { "dueDate": "2026-11-21" } }],
+      "proposal": [{ "kind": "create_task", "title": "laptop", "dueDate": "2026-11-21" }]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "create_task", "args": { "title": "Back up my laptop", "dueDate": "2026-11-21" } }] },
+      { "text": "Here's the new task: Back up my laptop, due tomorrow, Saturday, November 21. Apply it below to add it." }
+    ]
   }
 ]

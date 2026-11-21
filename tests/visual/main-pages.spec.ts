@@ -157,6 +157,31 @@ test("AI page", async ({ page }) => {
   await expect(page).toHaveScreenshot("ai.png", { mask: changing(page) });
 });
 
+// #310: the changes an answer proposes, each with a checkbox, before the person applies them. The
+// e2e server's fake model calls the tools the message names. A fixed clock keeps "Due today" and
+// this year's dates as they are.
+test("AI changes to apply", async ({ page }) => {
+  await signUp(page);
+  await page.clock.setFixedTime(new Date("2026-11-19T17:20:00Z"));
+  await post(page, "/api/tasks", { title: "Call the dentist", dueDate: "2026-11-19", priority: "MEDIUM" });
+  expect((await page.request.post("/api/agent/notice", { data: { version: AI_NOTICE_VERSION } })).ok()).toBe(true);
+
+  const security = "Check sign-in, sessions, permissions and dependencies against the OWASP Top 10.";
+  const calls: Array<[string, Record<string, unknown>]> = [
+    ["create_project", { name: "Whitewall", description: "Security work so Multi is safe to launch." }],
+    ["create_task", { title: "Harden sign-in", project: "Whitewall", dueDate: "2026-12-17", priority: "HIGH", description: "Limit sign-in attempts." }],
+    ["create_task", { title: "Security review before launch", project: "Whitewall", dueDate: "2026-12-17", priority: "HIGH", description: security }],
+    ["create_event", { title: "Whitewall deadline", date: "2026-12-17", project: "Whitewall" }],
+    ["complete_task", { task: "Call the dentist" }],
+  ];
+  await page.goto("/ai");
+  await page.getByRole("textbox", { name: "Message the AI" }).fill(calls.map(([name, args]) => `${name} ${JSON.stringify(args)}`).join(" "));
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Changes to apply" })).toContainText("5 of 5 selected");
+  await page.waitForLoadState("networkidle");
+  await expect(page).toHaveScreenshot("ai-changes.png", { mask: changing(page) });
+});
+
 test("Calendar", async ({ page }) => {
   await signUp(page);
   // The month grid is drawn in the browser, so a fixed clock fixes the month.

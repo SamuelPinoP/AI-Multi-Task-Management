@@ -4,9 +4,10 @@
 // database. The person's id comes from their session, through `ToolContext`.
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
+import type { ProposalDraft } from "@/lib/ai/proposals";
 import type { ToolDefinition } from "@/lib/ai/types";
 
-/** The database the tools read: only the models they need, so tests can pass a stand-in. */
+/** The database the tools read: only the models they need, so tests can pass a stand-in. They never write. */
 export type ToolDb = Pick<PrismaClient, "task" | "event" | "project" | "note" | "weeklyGoal">;
 
 export type ToolContext = {
@@ -18,6 +19,11 @@ export type ToolContext = {
   realNow: Date;
   timeZone: string | null;
   db: ToolDb;
+  /**
+   * The changes this answer proposes so far (#310), which "propose" tools add to. The chat starts
+   * a new one for each message; without one, those tools refuse.
+   */
+  draft?: ProposalDraft;
 };
 
 /** An item a tool looked up, as a link the chat panel can show (#308). Never sent to the model. */
@@ -42,10 +48,13 @@ export type AgentTool<Input extends z.ZodType = z.ZodType> = {
   description: string;
   input: Input;
   /**
-   * "read" tools run as soon as the model calls them. Tools that change data (#310) will only
-   * propose changes for the person to confirm in the app, and the loop runs nothing else.
+   * "read" tools look things up. "propose" tools (#310) look up what a change needs and add it to
+   * the answer's proposal (`ToolContext.draft`), which only the person can apply, in the app. No
+   * tool changes anything.
    */
-  access: "read";
+  access: "read" | "propose";
+  /** Runs before the other calls the model makes at the same time, which may need what it adds. */
+  runsFirst?: boolean;
   run(args: z.output<Input>, context: ToolContext): Promise<ToolOutput>;
 };
 

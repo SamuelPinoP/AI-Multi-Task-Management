@@ -8,8 +8,16 @@ import { refreshCalendarFeeds } from "@/lib/calendar-feed-store";
 import type { FeedScope } from "@/lib/calendar-feed-store-core";
 import { notifyTaskAssigned } from "@/lib/notifications";
 
-/** Who makes a change: the signed-in person, from their session. */
-export type WriteActor = { id: string; name: string | null; email: string };
+/**
+ * Who makes a change: the signed-in person, from their session. `via` is set when they made it
+ * through the AI assistant, by applying its proposal (#310), and Activity says so.
+ */
+export type WriteActor = { id: string; name: string | null; email: string; via?: "AI Multi" };
+
+/** An Activity message as the actor made it: "Created task: “X” via AI Multi" for the AI's changes. */
+export function activityText(message: string, actor: WriteActor) {
+  return actor.via ? `${message} via ${actor.via}` : message;
+}
 
 /** Work for after a change is committed. */
 export type FollowUp = {

@@ -5,6 +5,7 @@ import { projectAccessWhere } from "../../project-access-core";
 import { visibleTaskWhere } from "../../task-include";
 import { toolDefinition, type ToolContext, type ToolDb } from "./define";
 import { AGENT_TOOLS } from "./index";
+import { WRITE_TOOLS } from "./write-tools";
 import { excerpt, listEvents, listGoals, listOpenTasks, listProjects, MAX_PROJECTS, MAX_TASKS, percentOf, searchNotes, taskStats } from "./read-tools";
 
 type Model = "task" | "event" | "project" | "note" | "weeklyGoal";
@@ -274,11 +275,24 @@ test("goals: this week's by default, the person's own only", async () => {
   for (const week of ["2026-W60", "next week", "2026-47"]) assert.equal(listGoals.input.safeParse({ week }).success, false, week);
 });
 
-test("every tool reads only, has a provider-safe name, and a schema without patterns", () => {
+test("every tool has a provider-safe name and a schema without patterns; only the change tools propose (#310)", () => {
   const names = AGENT_TOOLS.map((tool) => tool.name);
-  assert.deepEqual(names, ["list_open_tasks", "list_events", "list_projects", "task_stats", "search_notes", "list_goals"]);
+  assert.deepEqual(names, [
+    "list_open_tasks",
+    "list_events",
+    "list_projects",
+    "task_stats",
+    "search_notes",
+    "list_goals",
+    "create_project",
+    "create_task",
+    "update_task",
+    "complete_task",
+    "create_event",
+    "trash_task",
+  ]);
   for (const tool of AGENT_TOOLS) {
-    assert.equal(tool.access, "read");
+    assert.equal(tool.access, WRITE_TOOLS.some((write) => write.name === tool.name) ? "propose" : "read", tool.name);
     assert.match(tool.name, /^[a-z][a-z_]{2,40}$/);
     const schema = JSON.stringify(toolDefinition(tool).parameters);
     assert.doesNotMatch(schema, /"\$schema"|"pattern"/, tool.name);

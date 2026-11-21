@@ -17,6 +17,7 @@ export type ActivityActionName =
   | "CREATED_NOTE"
   | "CREATED_TASK"
   | "COMPLETED_TASK"
+  | "UPDATED_TASK"
   | "CREATED_EVENT"
   | "CREATED_PROJECT"
   | "COMMENTED"
@@ -78,6 +79,7 @@ export function signInLabel(method: SignInMethodName, newAccount: boolean) {
 const ACTIVITY_LABELS: Record<ActivityActionName, { one: string; count: (n: number) => string }> = {
   CREATED_TASK: { one: "Created a task", count: (n) => `Created ${plural(n, "task")}` },
   COMPLETED_TASK: { one: "Completed a task", count: (n) => `Completed ${plural(n, "task")}` },
+  UPDATED_TASK: { one: "Changed a task", count: (n) => `Changed ${plural(n, "task")}` },
   CREATED_NOTE: { one: "Created a note", count: (n) => `Created ${plural(n, "note")}` },
   CREATED_EVENT: { one: "Created an event", count: (n) => `Created ${plural(n, "event")}` },
   CREATED_PROJECT: { one: "Created a project", count: (n) => `Created ${plural(n, "project")}` },
