@@ -19,12 +19,9 @@ import { cn } from "@/lib/cn";
 import { PRIORITY_MENU_ORDER, priorityLabels, type Priority } from "@/lib/priority";
 import { projectColor } from "@/lib/project-color";
 import { TASK_TITLE_MAX } from "@/lib/task-history";
-import { notifyWorkspaceChanged, openGuestSignupFor, TASK_CREATED_EVENT } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, openGuestSignupFor, TASK_CREATED_EVENT, type NewTaskDraft } from "@/lib/workspace-events";
 
 type ProjectOption = { id: string; name: string; color: string | null; status?: string };
-
-/** What a New task can start with, such as the project it's added from. */
-export type NewTaskDraft = { projectId?: string };
 
 const chipClass =
   "inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[0.8125rem] text-ink outline-none transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-line [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0";
@@ -85,19 +82,19 @@ export function NewTaskDialog({
   const [openedWith, setOpenedWith] = useState<string | null>(null);
   const allLabels = useLabels();
 
-  // Each time it opens, it starts empty, in the project it was opened from.
-  const openKey = open ? (draft?.projectId ?? "") : null;
+  // Each time it opens, it starts from its draft: empty, or in the project it was opened from.
+  const openKey = open ? JSON.stringify(draft ?? {}) : null;
   if (openKey !== openedWith) {
     setOpenedWith(openKey);
     if (openKey !== null) {
-      setTitle("");
+      setTitle(draft?.title ?? "");
       setDescription("");
       setStatus("TODO");
-      setPriority("NONE");
-      setProjectId(openKey);
-      setAssigneeId("");
-      setLabelIds([]);
-      setDueDate("");
+      setPriority(draft?.priority ?? "NONE");
+      setProjectId(draft?.projectId ?? "");
+      setAssigneeId(draft?.projectId ? (draft.assigneeId ?? "") : "");
+      setLabelIds(draft?.labelIds ?? []);
+      setDueDate(draft?.dueDate ?? "");
       setRecurrence("NONE");
       setError(null);
     }

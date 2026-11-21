@@ -26,8 +26,9 @@ type ProjectOption = { id: string; name: string; color: string | null };
 /** Names for the toast, such as the project or person picked. */
 export type BulkNames = { project?: string; assignee?: string; label?: string; due?: string };
 
+// Under 640px the buttons are 28px wide (#521), so every action fits a 360px phone.
 const buttonClass =
-  "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[0.8125rem] font-medium text-ink outline-none transition-colors hover:bg-surface focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50 sm:px-2.5 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0";
+  "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-1.5 text-[0.8125rem] font-medium text-ink outline-none transition-colors hover:bg-surface focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50 sm:px-2.5 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0";
 
 function BarButton({ icon, children, className, ...props }: { icon: ReactNode; children: ReactNode } & React.ComponentProps<"button">) {
   return (
@@ -59,7 +60,8 @@ function dueName(key: string) {
  * The bar that shows while tasks are selected (#281, design 1B): mark them
  * done, set their priority, labels, project, due date or assignee, or move
  * them to the Trash. Every change is one request. On the Tasks page it floats
- * at the bottom of the list (#520, design 1D).
+ * at the bottom of the list (#520, design 1D). On phones it drops the divider
+ * and the gaps, so all of it fits a 360px screen without scrolling (#521).
  */
 export function BulkBar({
   tasks,
@@ -119,7 +121,7 @@ export function BulkBar({
       role="toolbar"
       aria-label="Selected tasks"
       className={cn(
-        "flex min-h-11 w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-accent/60 bg-accent-soft px-1.5 py-1",
+        "flex min-h-11 w-full items-center gap-0 overflow-x-auto rounded-xl border border-accent/60 bg-accent-soft px-1 py-1 sm:gap-0.5 sm:px-1.5",
         className,
       )}
     >
@@ -127,14 +129,14 @@ export function BulkBar({
         type="button"
         onClick={onClear}
         aria-label="Clear the selection"
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-accent outline-none hover:bg-surface focus-visible:ring-2 focus-visible:ring-accent"
+        className="grid h-8 w-7 shrink-0 place-items-center rounded-lg text-accent outline-none hover:bg-surface focus-visible:ring-2 focus-visible:ring-accent sm:w-8"
       >
         <X aria-hidden="true" className="h-4 w-4" />
       </button>
-      <span aria-live="polite" className="shrink-0 whitespace-nowrap pl-0.5 pr-2 text-sm font-semibold text-accent">
+      <span aria-live="polite" className="shrink-0 whitespace-nowrap pl-0.5 pr-1.5 text-sm font-semibold text-accent sm:pr-2">
         {count} selected
       </span>
-      <span aria-hidden="true" className="mx-1 h-5 w-px shrink-0 bg-accent/30" />
+      <span aria-hidden="true" className="mx-1 h-5 w-px shrink-0 bg-accent/30 max-sm:hidden" />
 
       <BarButton
         icon={<CircleCheck />}

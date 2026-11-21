@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 
@@ -48,6 +48,22 @@ export async function openAccountMenu(page: Page) {
   const button = accountMenuButton(page);
   if (!(await button.isVisible())) await page.getByRole("button", { name: /^Open navigation/ }).click();
   await button.click();
+}
+
+/**
+ * The + in a phone's bottom tabs. It opens the New task pop-up, except on the Tasks page, where it
+ * opens the add box as a sheet (#521).
+ */
+export function plusTab(page: Page) {
+  return page.getByRole("navigation", { name: "Primary" }).getByRole("button", { name: "New task", exact: true });
+}
+
+/**
+ * Press and hold, as a finger does on a phone: on the Tasks page it selects a task (#521). The
+ * mouse stays down well past the page's 450 ms.
+ */
+export async function longPress(target: Locator) {
+  await target.click({ delay: 700 });
 }
 
 /** Runs one query against the test database (the server's DATABASE_URL). */

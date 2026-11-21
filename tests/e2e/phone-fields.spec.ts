@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { continueAsGuest } from "./helpers";
+import { continueAsGuest, plusTab } from "./helpers";
 
 /*
  * Form fields on phones (#337). iOS Safari zooms the page in when a field's
@@ -56,6 +56,12 @@ test("every visible field on the main pages uses at least 16px text on phones", 
   for (const path of ["/tasks", "/notes", "/projects", "/goals"]) {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
+    // On phones the Tasks page's search and add box open from buttons (#521).
+    if (path === "/tasks") {
+      await page.getByRole("button", { name: "Search tasks" }).click();
+      await plusTab(page).click();
+      await expect(page.getByRole("dialog", { name: "Add a task" })).toBeVisible();
+    }
     const fields = await visibleFieldSizes(page);
     checked += fields.length;
     tooSmall.push(...fields.filter((field) => field.size < 16).map((field) => `${path}: ${field.name} (${field.size}px)`));
@@ -63,24 +69,4 @@ test("every visible field on the main pages uses at least 16px text on phones", 
   expect(tooSmall).toEqual([]);
   // Guards against a page change that leaves nothing to check.
   expect(checked).toBeGreaterThan(5);
-});
-
-test("the Tasks search, Filter and Display share a row on phones, with room for their words", async ({ page, isMobile }) => {
-  test.skip(!isMobile, "Computers have the room.");
-  await continueAsGuest(page);
-  await page.goto("/tasks");
-
-  // Filter and Display replaced the four selects (#520); their words show whole, inside the screen.
-  const filters = page.getByRole("search", { name: "Filter tasks" });
-  const search = filters.getByRole("searchbox", { name: "Search tasks" });
-  const buttons = [filters.getByRole("button", { name: "Filter", exact: true }), filters.getByRole("button", { name: "Display" })];
-  const width = page.viewportSize()!.width;
-  const searchBox = (await search.boundingBox())!;
-  expect(searchBox.width).toBeGreaterThanOrEqual(120);
-  for (const button of buttons) {
-    expect(await button.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-    const box = (await button.boundingBox())!;
-    expect(box.x + box.width).toBeLessThanOrEqual(width);
-    expect(Math.abs(box.y + box.height / 2 - (searchBox.y + searchBox.height / 2))).toBeLessThan(2);
-  }
 });

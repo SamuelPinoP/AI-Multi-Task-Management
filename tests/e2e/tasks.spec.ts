@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { continueAsGuest, uniqueName } from "./helpers";
+import { continueAsGuest, longPress, plusTab, uniqueName } from "./helpers";
 
 function dateInputValue(daysFromToday: number) {
   const date = new Date();
@@ -7,10 +7,17 @@ function dateInputValue(daysFromToday: number) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-/** The New task pop-up: the Tasks page has no button of its own since #520, so the sidebar's, or the + tab on a phone. */
+/**
+ * The New task pop-up. The Tasks page has no button of its own since #520, so the sidebar's on a computer. On a phone
+ * the + tab opens the add box as a sheet there (#521), and the sheet's More details opens the pop-up.
+ */
 async function openNewTask(page: Page, isMobile: boolean) {
-  const nav = page.getByRole("navigation", { name: isMobile ? "Primary" : "Workspace" });
-  await nav.getByRole("button", { name: "New task", exact: true }).click();
+  if (isMobile) {
+    await plusTab(page).click();
+    await page.getByRole("dialog", { name: "Add a task" }).getByRole("button", { name: "More details" }).click();
+  } else {
+    await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "New task", exact: true }).click();
+  }
 }
 
 test("tasks: create in the pop-up, edit, complete into Done, filter and delete", async ({ page, isMobile }) => {
@@ -63,12 +70,30 @@ test("tasks: create in the pop-up, edit, complete into Done, filter and delete",
   await expect(page.getByRole("heading", { name: "No tasks match these filters." })).toBeVisible();
   await page.getByRole("button", { name: "Clear filters" }).click();
 
-  // Delete from the row menu.
-  await page.getByRole("button", { name: `More actions for ${title}` }).click();
-  await page.getByRole("menuitem", { name: "Delete" }).click();
-  await page.getByRole("dialog", { name: "Delete this task?" }).getByRole("button", { name: "Delete" }).click();
+  // Delete from the row's menu; phone rows have none, so a phone holds the task to select it and uses the bar (#521).
+  if (isMobile) {
+    await longPress(page.getByRole("button", { name: title, exact: true }));
+    await page.getByRole("toolbar", { name: "Selected tasks" }).getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("dialog", { name: "Delete 1 task?" }).getByRole("button", { name: "Delete" }).click();
+  } else {
+    await page.getByRole("button", { name: `More actions for ${title}` }).click();
+    await page.getByRole("menuitem", { name: "Delete" }).click();
+    await page.getByRole("dialog", { name: "Delete this task?" }).getByRole("button", { name: "Delete" }).click();
+  }
   await expect(page.getByRole("button", { name: title, exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "No tasks yet." })).toBeVisible();
+});
+
+test("tasks: on a tablet the bottom bar's + puts the cursor in the add box on the page (#521)", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Phones open the add box as a sheet; tasks-phone.spec.ts covers it.");
+  await continueAsGuest(page);
+  // Wide enough for the computer's layout, narrow enough for the bottom bar.
+  await page.setViewportSize({ width: 800, height: 1000 });
+  await page.goto("/tasks");
+  await expect(page.getByRole("heading", { name: "No tasks yet." })).toBeVisible();
+  await plusTab(page).click();
+  await expect(page.getByRole("textbox", { name: "Add a task", exact: true })).toBeFocused();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
 test("tasks: the Done tab shows finished tasks unfolded (#520)", async ({ page }) => {
@@ -107,7 +132,9 @@ test("tasks: five priorities, No priority by default, and a filter for each (#36
   await page.keyboard.press("Escape");
   await create.getByRole("button", { name: "Cancel" }).click();
 
-  // Filter (#520): tick a priority; the menu stays open for the next one.
+  // Filter (#520): tick a priority; the menu stays open for the next one. Phones filter from a sheet instead, which
+  // tasks-phone.spec.ts covers.
+  if (isMobile) return;
   const filters = page.getByRole("search", { name: "Filter tasks" });
   await filters.getByRole("button", { name: "Filter", exact: true }).click();
   await page.getByRole("menuitemcheckbox", { name: "Urgent" }).click();
@@ -121,7 +148,8 @@ test("tasks: five priorities, No priority by default, and a filter for each (#36
   await expect(filters.getByRole("button", { name: "Filter, 1 on" })).toBeVisible();
 });
 
-test("tasks: Filter picks projects and No project, and Display sorts and hides descriptions (#520)", async ({ page }) => {
+test("tasks: Filter picks projects and No project, and Display sorts and hides descriptions (#520)", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Phones filter and sort from a sheet; tasks-phone.spec.ts covers it.");
   await continueAsGuest(page);
   const project = (await (await page.request.post("/api/projects", { data: { name: uniqueName("Filter project") } })).json()) as {
     id: string;
