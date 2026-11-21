@@ -20,6 +20,7 @@ import { toast } from "@/components/ui/toaster";
 import { MAX_MESSAGE_CHARS } from "@/lib/ai/chat-limits";
 import type { AiDock } from "@/lib/ai/dock";
 import { AI_NOTICE_VERSION } from "@/lib/ai/notice";
+import type { ProposalView } from "@/lib/ai/proposals";
 
 /**
  * A conversation with the assistant. Each person's latest chats are stored on the server (#452);
@@ -88,6 +89,11 @@ type AiChatContextValue = {
   dismissNotice: () => void;
   /** Reads the status once; the chat calls it when it shows. */
   loadStatus: () => void;
+  /**
+   * Shows where a proposal stands now in the answer that made it, after the person applied or
+   * cancelled it (#310), and tells screen readers what happened.
+   */
+  replaceProposal: (proposal: ProposalView, announcement: string) => void;
 };
 
 /**
@@ -549,6 +555,16 @@ export function AiChatProvider({ enabled, initialDock, children }: { enabled: bo
     })();
   }, [enabled]);
 
+  const replaceProposal = useCallback((proposal: ProposalView, said: string) => {
+    const holds = (turn: ChatTurn) => turn.answer.proposal?.id === proposal.id;
+    setChats((list) =>
+      list.map((chat) =>
+        chat.turns?.some(holds) ? { ...chat, turns: chat.turns.map((turn) => (holds(turn) ? { ...turn, answer: { ...turn.answer, proposal } } : turn)) } : chat,
+      ),
+    );
+    setAnnouncement(said);
+  }, []);
+
   const setDock = useCallback((next: AiDock) => {
     if (next === dockRef.current) return;
     dockRef.current = next;
@@ -598,8 +614,32 @@ export function AiChatProvider({ enabled, initialDock, children }: { enabled: bo
       agree: () => void agree(),
       dismissNotice: putBack,
       loadStatus,
+      replaceProposal,
     }),
-    [enabled, chats, current, status, busy, openingCurrent, announcement, draft, ask, retry, newChat, openChat, listState, loadChats, renameChat, deleteChat, deleteAllChats, notice, agree, putBack, loadStatus],
+    [
+      enabled,
+      chats,
+      current,
+      status,
+      busy,
+      openingCurrent,
+      announcement,
+      draft,
+      ask,
+      retry,
+      newChat,
+      openChat,
+      listState,
+      loadChats,
+      renameChat,
+      deleteChat,
+      deleteAllChats,
+      notice,
+      agree,
+      putBack,
+      loadStatus,
+      replaceProposal,
+    ],
   );
   const dockValue = useMemo<AiDockContextValue>(() => ({ dock, setDock }), [dock, setDock]);
 

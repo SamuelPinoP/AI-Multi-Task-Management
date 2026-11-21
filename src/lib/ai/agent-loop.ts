@@ -92,8 +92,7 @@ export async function runAgentLoop({
       result.validationFailures += 1;
       return reply({ error: `There is no tool named ${call.name}. The tools are: ${[...byName.keys()].join(", ")}.` });
     }
-    // Only tools that read run straight away; changes will go through the person's confirmation (#310).
-    if (tool.access !== "read") return reply({ error: `${call.name} can't run here.` });
+    // Every tool only reads: "propose" tools add to the answer's proposal, which the person applies in the app (#310).
     const parsed = tool.input.safeParse(call.args);
     if (!parsed.success) {
       result.validationFailures += 1;
@@ -162,8 +161,12 @@ export async function runAgentLoop({
         break;
       }
 
-      const results: ToolResult[] = [];
-      for (const call of calls) results.push(await runTool(call));
+      // Tools marked `runsFirst` go first (a new project, before the tasks that go in it); the
+      // results keep the order of the calls.
+      const order = calls.map((call, index) => ({ call, index }));
+      order.sort((a, b) => Number(!byName.get(a.call.name)?.runsFirst) - Number(!byName.get(b.call.name)?.runsFirst));
+      const results: ToolResult[] = new Array(calls.length);
+      for (const { call, index } of order) results[index] = await runTool(call);
       if (result.validationFailures > limits.maxValidationFailures) {
         result.outcome = "invalid_arguments";
         emit({ type: "text", text: INVALID_ARGUMENTS_MESSAGE });

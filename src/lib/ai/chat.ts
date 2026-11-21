@@ -14,6 +14,7 @@ import { MAX_MESSAGE_CHARS, MAX_MESSAGES, MODEL_HISTORY } from "@/lib/ai/chat-li
 import type { AgentConfig } from "@/lib/ai/config";
 import { fallbackMessage, type FallbackReason } from "@/lib/ai/fallback";
 import { systemPrompt } from "@/lib/ai/prompt";
+import { newDraft, type ProposalStep, type ProposalView } from "@/lib/ai/proposals";
 import { regionAllowed } from "@/lib/ai/region";
 import type { AgentTool, Source, ToolContext } from "@/lib/ai/tools/define";
 import type { AgentMessage, Provider, ProviderError } from "@/lib/ai/types";
@@ -50,6 +51,7 @@ export function parseChatRequest(body: unknown): { request: ChatRequest } | { er
  * - `tool` and `sources` while the model looks things up (the panel links the sources, #308);
  * - `text` pieces of the answer;
  * - `notice` when the model fails midway and the planner takes over;
+ * - `proposal` when the answer proposes changes (#310): the card the person applies or cancels;
  * - `error` when something in AI Multi failed;
  * - `done` last, with the outcome, the allowance after this message, and the stored chat the
  *   question and its answer are now in (#452), or null when they weren't stored.
@@ -59,6 +61,7 @@ export type ChatEvent =
   | { type: "start"; mode: "planner"; reason: FallbackReason; message: string; allowance: Allowance }
   | LoopEvent
   | { type: "notice"; reason: FallbackReason; message: string }
+  | { type: "proposal"; proposal: ProposalView }
   | { type: "error"; message: string }
   | { type: "done"; outcome: AgentRunOutcome; allowance: Allowance | null; chat: ChatSummary | null };
 
@@ -126,10 +129,15 @@ export type ChatDependencies = {
    * chat they're now in: a new one, or the one they continue. Null when that chat is gone.
    */
   save(answer: StoredAnswer): Promise<ChatSummary | null>;
+  /** Stores the changes an answer proposed (#310), pending until the person applies or cancels them. */
+  propose(steps: ProposalStep[]): Promise<{ id: string; expiresAt: Date }>;
 };
 
-/** An answer as the chat history keeps it: what the person saw, and who wrote it. */
-export type StoredAnswer = { role: Exclude<ChatRole, "USER">; content: string; sources: Source[] };
+/**
+ * An answer as the chat history keeps it: what the person saw, who wrote it, and the changes it
+ * proposed (#310), if any.
+ */
+export type StoredAnswer = { role: Exclude<ChatRole, "USER">; content: string; sources: Source[]; proposalId?: string };
 
 /** A message to answer: the question, and the stored chat's latest messages, oldest first ([] for a new chat). */
 export type ChatInput = { question: string; history: Array<{ role: ChatRole; content: string }> };
@@ -216,11 +224,12 @@ export async function runAgentChat(
   };
 
   let saveFailure: unknown;
+  let proposalId: string | undefined;
   /** Stores a complete answer, never a partial one or one the person left before it finished. */
   const save = async (outcome: AgentRunOutcome): Promise<ChatSummary | null> => {
     if (outcome === "CANCELLED" || deps.signal.aborted || shown.error || !shown.text.trim()) return null;
     try {
-      return await deps.save({ role: byPlanner ? "PLANNER" : "ASSISTANT", content: shown.text, sources: shown.sources });
+      return await deps.save({ role: byPlanner ? "PLANNER" : "ASSISTANT", content: shown.text, sources: shown.sources, ...(proposalId ? { proposalId } : {}) });
     } catch (error) {
       saveFailure = error;
       return null;
@@ -243,13 +252,15 @@ export async function runAgentChat(
     record.provider = provider.name;
     record.model = config.model;
     send({ type: "start", mode: "agent", model: config.model, allowance });
+    // The changes this message proposes (#310); the write tools add to it, and change nothing.
+    const draft = newDraft();
     const loop = await runAgentLoop({
       provider,
       model: config.model,
       system: systemPrompt({ realNow: now, timeZone: context.timeZone }),
       messages: modelMessages(input.history, input.question),
       tools: deps.tools,
-      context,
+      context: { ...context, draft },
       signal: deps.signal,
       limits: deps.limits,
       emit: send,
@@ -268,6 +279,12 @@ export async function runAgentChat(
       config.caps,
       now,
     );
+    // Only a finished answer proposes: one cut short (a limit, an outage) may be missing changes.
+    if (loop.outcome === "answered" && draft.steps.length) {
+      const stored = await deps.propose(draft.steps);
+      proposalId = stored.id;
+      send({ type: "proposal", proposal: { id: stored.id, state: "pending", expiresAt: stored.expiresAt.toISOString(), steps: draft.steps, applied: [], links: [], error: null } });
+    }
     const fallback = fallbackFor(loop);
     if (fallback) {
       send({ type: "notice", reason: fallback, message: fallbackMessage(fallback, allowance, now) });

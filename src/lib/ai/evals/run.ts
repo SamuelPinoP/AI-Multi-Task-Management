@@ -18,6 +18,7 @@ import { createMemoryDb } from "@/lib/ai/evals/memory-db";
 import { scoreCase, type Check, type ObservedCall } from "@/lib/ai/evals/score";
 import { loadWorkspace, type Workspace } from "@/lib/ai/evals/workspace";
 import { plannerAnswer } from "@/lib/ai/fallback";
+import { PROPOSAL_TTL_MS, type ProposalStep } from "@/lib/ai/proposals";
 import { createScriptedProvider } from "@/lib/ai/providers/fake";
 import { AGENT_TOOLS } from "@/lib/ai/tools";
 import type { AgentTool, ToolContext } from "@/lib/ai/tools/define";
@@ -258,6 +259,8 @@ export type CaseResult = {
   inputTokens: number;
   outputTokens: number;
   modelTimeMs: number;
+  /** The changes the answer proposed (#310); never applied in a run. */
+  proposal: ProposalStep[];
   /** Something in AI Multi failed: a bug to fix, not a score. */
   error: string | null;
   /**
@@ -317,6 +320,8 @@ async function runCaseAndRecords(evalCase: EvalCase, options: RunOptions): Promi
     disabledReason: null,
   };
 
+  // The workspace as it was, to check that nothing changed: proposals are only stored, never applied (#310).
+  const before = JSON.stringify(workspace.tables);
   let answer: ChatAnswer = emptyAnswer();
   const result = await runAgentChat(
     { question: evalCase.request, history: evalCase.history },
@@ -331,6 +336,7 @@ async function runCaseAndRecords(evalCase: EvalCase, options: RunOptions): Promi
       signal: new AbortController().signal,
       limits: { ...AGENT_LIMITS, deadlineMs: RUN_DEADLINE_MS },
       save: async () => null,
+      propose: async () => ({ id: `proposal-${evalCase.id}`, expiresAt: new Date(realNow.getTime() + PROPOSAL_TTL_MS) }),
     },
     (event) => {
       answer = applyChatEvent(answer, event);
@@ -349,6 +355,8 @@ async function runCaseAndRecords(evalCase: EvalCase, options: RunOptions): Promi
     executedCalls,
     modelRequests: result.record.modelRequests,
     modelTimeMs: records.filter((record) => !record.injected).reduce((sum, record) => sum + record.latencyMs, 0),
+    proposal: answer.proposal?.steps ?? [],
+    workspaceChanged: JSON.stringify(workspace.tables) !== before,
   };
   const checks = scoreCase(evalCase, observed, workspace);
   const caseResult: CaseResult = {
@@ -367,6 +375,7 @@ async function runCaseAndRecords(evalCase: EvalCase, options: RunOptions): Promi
     inputTokens: answered.reduce((sum, record) => sum + record.inputTokens, 0),
     outputTokens: answered.reduce((sum, record) => sum + record.outputTokens, 0),
     modelTimeMs: observed.modelTimeMs,
+    proposal: observed.proposal,
     error: result.failure ? (result.failure instanceof Error ? `${result.failure.name}: ${result.failure.message}` : String(result.failure)) : null,
     refused: refused ? (refused.error ?? "refused") : null,
   };

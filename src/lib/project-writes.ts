@@ -8,7 +8,7 @@ import { createActivity } from "@/lib/activity";
 import type { Db } from "@/lib/db-client";
 import { isPriority, type Priority } from "@/lib/priority";
 import { prisma } from "@/lib/prisma";
-import { refuse, type WriteActor, type WriteResult } from "@/lib/writes";
+import { activityText, refuse, type WriteActor, type WriteResult } from "@/lib/writes";
 
 export type ProjectCreateData = {
   name: string;
@@ -40,7 +40,7 @@ export async function createProject(actor: WriteActor, input: ProjectCreateData,
     {
       userId: actor.id,
       action: "CREATED_PROJECT",
-      message: `Created project: “${project.name}”`,
+      message: activityText(`Created project: “${project.name}”`, actor),
       entityType: "PROJECT",
       entityId: project.id,
       projectId: project.id,

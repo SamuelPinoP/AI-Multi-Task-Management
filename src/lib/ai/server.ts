@@ -8,6 +8,7 @@ import { runAgentChat, type ChatEvent, type RunRecord } from "@/lib/ai/chat";
 import { saveExchange, type ContinuedChat } from "@/lib/ai/chat-history";
 import { readAgentConfig } from "@/lib/ai/config";
 import { plannerAnswer } from "@/lib/ai/fallback";
+import { storeProposal } from "@/lib/ai/proposals-server";
 import { createProvider } from "@/lib/ai/providers";
 import { AGENT_TOOLS } from "@/lib/ai/tools";
 import { prisma } from "@/lib/prisma";
@@ -95,6 +96,8 @@ export async function streamAgentChat({
           planner: async () => plannerAnswer(await generateSmartPlanner(userId, now, realNow)),
           signal: gone.signal,
           save: (answer) => saveExchange({ userId, chatId: chat?.id ?? null, question, askedAt: startedAt, answer }),
+          // Only stored: the person applies or cancels it from the chat (src/app/api/agent/proposals).
+          propose: (steps) => storeProposal(userId, steps),
         },
         emit,
       );

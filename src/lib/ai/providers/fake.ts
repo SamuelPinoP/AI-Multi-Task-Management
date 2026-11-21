@@ -76,14 +76,73 @@ function titlesIn(content: Record<string, unknown>) {
     .filter((title): title is string => title !== null);
 }
 
+/** The JSON object `text` starts with (after spaces), its braces balanced; "" when it starts with none. */
+function leadingObject(text: string) {
+  const start = text.search(/\S/);
+  if (start < 0 || text[start] !== "{") return "";
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+    } else if (char === '"') inString = true;
+    else if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, index + 1);
+    }
+  }
+  // Never closed: the tool gets it as unreadable arguments.
+  return text.slice(start);
+}
+
+/** Every tool `content` names, in order, each with the JSON arguments that follow its name. */
+function toolCallsIn(content: string, names: string[]) {
+  if (!names.length) return [];
+  const calls: Array<{ name: string; args: unknown }> = [];
+  let readUpTo = 0;
+  for (const match of content.matchAll(new RegExp(`\\b(${names.join("|")})\\b`, "g"))) {
+    // A tool's name inside an earlier call's arguments, such as a title, isn't a call.
+    if (match.index < readUpTo) continue;
+    const end = match.index + match[0].length;
+    const json = leadingObject(content.slice(end));
+    readUpTo = end + (json ? content.slice(end).indexOf(json) + json.length : 0);
+    let args: unknown = {};
+    try {
+      if (json) args = JSON.parse(json);
+    } catch {
+      args = { unreadable: json };
+    }
+    calls.push({ name: match[1], args });
+  }
+  return calls;
+}
+
+/** What the model says about one tool result. */
+function resultLine(result: { name: string; content: Record<string, unknown> }) {
+  if (typeof result.content.error === "string") return `${result.name} failed: ${result.content.error}`;
+  // A change tool (#310): what it proposed, or why it proposed nothing.
+  const data = result.content.data as { proposed?: unknown; reason?: unknown } | undefined;
+  if (data && typeof data === "object" && "proposed" in data) {
+    return typeof data.proposed === "string" ? `Proposed: ${data.proposed}` : `${result.name} proposed nothing: ${String(data.reason)}`;
+  }
+  const titles = titlesIn(result.content);
+  return titles.length ? `${result.name} found ${titles.length}: ${titles.join("; ")}` : `${result.name} found nothing`;
+}
+
 /**
  * The e2e tests' model. Rules, on the person's latest message:
  * - "[429]" or "[503]" in it: fails like a rate limit or an outage;
  * - "[history]" in it: answers with the messages it was sent before this one, so the tests can see
  *   which earlier turns the server gave the model (#452);
- * - a tool's name in it (optionally followed by JSON arguments): calls that tool;
+ * - tools' names in it, each optionally followed by its JSON arguments: calls them all, in order;
  * - otherwise: answers "You asked: …".
- * After tool results, it answers with the titles they list (and any percent done), or the tool's error.
+ * After tool results, it answers with a line per result: the change proposed ("Proposed: …") or
+ * why none was, the titles it lists (and any percent done), or the tool's error.
  */
 export function createFakeProvider(): Provider {
   return {
@@ -98,12 +157,7 @@ export function createFakeProvider(): Provider {
       });
 
       if (last?.role === "tool") {
-        const lines = last.results.map((result) => {
-          if (typeof result.content.error === "string") return `${result.name} failed: ${result.content.error}`;
-          const titles = titlesIn(result.content);
-          return titles.length ? `${result.name} found ${titles.length}: ${titles.join("; ")}` : `${result.name} found nothing`;
-        });
-        const text = lines.join("\n");
+        const text = last.results.map(resultLine).join("\n");
         yield { type: "text", text };
         yield finish(text);
         return;
@@ -121,18 +175,13 @@ export function createFakeProvider(): Provider {
         return;
       }
 
-      const tool = request.tools.find((candidate) => new RegExp(`\\b${candidate.name}\\b`).test(content));
-      if (tool) {
-        const after = content.slice(content.indexOf(tool.name) + tool.name.length);
-        const json = after.slice(after.indexOf("{"), after.lastIndexOf("}") + 1);
-        let args: unknown = {};
-        try {
-          if (json) args = JSON.parse(json);
-        } catch {
-          args = { unreadable: json };
-        }
-        yield { type: "tool_call", call: { id: localCallId(0), name: tool.name, args } };
-        yield finish(tool.name);
+      const calls = toolCallsIn(
+        content,
+        request.tools.map((tool) => tool.name),
+      );
+      if (calls.length) {
+        for (const [index, call] of calls.entries()) yield { type: "tool_call", call: { id: localCallId(index), name: call.name, args: call.args } };
+        yield finish(calls.map((call) => call.name).join(" "));
         return;
       }
 

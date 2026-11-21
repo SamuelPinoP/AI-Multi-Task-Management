@@ -3,6 +3,7 @@
 // database side is in ./chat-history.ts; the chat in the browser turns these
 // into its conversation (./chat-client.ts).
 import { MAX_CHAT_TITLE_CHARS, MAX_CHATS, MAX_MESSAGES } from "@/lib/ai/chat-limits";
+import type { ProposalView } from "@/lib/ai/proposals";
 import type { Source } from "@/lib/ai/tools/define";
 import { getSafeRedirectPath } from "@/lib/safe-redirect";
 
@@ -24,6 +25,8 @@ export type StoredMessage = {
   content: string;
   /** What the answer linked to; [] for questions. */
   sources: Source[];
+  /** The changes the answer proposed (#310), as they stand now; null when none. */
+  proposal: ProposalView | null;
   createdAt: string;
 };
 

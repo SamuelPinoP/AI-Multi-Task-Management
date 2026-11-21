@@ -17,8 +17,9 @@ import {
 } from "./chat";
 import type { ChatSummary } from "./chat-history-core";
 import type { AgentConfig } from "./config";
+import type { ProposalStep } from "./proposals";
 import { createScriptedProvider, type ScriptedTurn } from "./providers/fake";
-import { defineTool, type ToolContext, type ToolDb } from "./tools/define";
+import { defineTool, type AgentTool, type ToolContext, type ToolDb } from "./tools/define";
 import { ProviderError } from "./types";
 
 const context: ToolContext = {
@@ -43,6 +44,7 @@ const tool = defineTool({
 const PLANNER = { text: "- Pay rent: Overdue by 2 days.", sources: [{ kind: "task" as const, id: "t1", title: "Pay rent", href: "/tasks?task=t1" }] };
 const ask = (question = "What's due?"): ChatInput => ({ question, history: [] });
 const STORED: ChatSummary = { id: "chat-1", title: "What's due?", updatedAt: "2026-11-16T14:30:02.000Z" };
+const PROPOSAL_EXPIRES = new Date("2026-11-16T15:30:02.000Z");
 
 async function chat({
   turns = [],
@@ -55,6 +57,7 @@ async function chat({
   country = null,
   signal = new AbortController().signal,
   save,
+  tools = [tool],
 }: {
   turns?: ScriptedTurn[];
   used?: { user: number; app: number };
@@ -66,17 +69,19 @@ async function chat({
   country?: string | null;
   signal?: AbortSignal;
   save?: (answer: StoredAnswer) => Promise<ChatSummary | null>;
+  tools?: AgentTool[];
 }) {
   const provider = createScriptedProvider(turns);
   const events: ChatEvent[] = [];
   const saved: StoredAnswer[] = [];
+  const proposed: ProposalStep[][] = [];
   let plannerCalls = 0;
   const result = await runAgentChat(
     input,
     {
       config: { provider: "scripted", model: "test-model", caps: { userDailyRequests: 10, appDailyRequests: 100 }, freeTier: true, disabledReason: null, ...config },
       provider: noProvider ? null : provider,
-      tools: [tool],
+      tools,
       context,
       country,
       usedToday: usedToday ?? (async () => used),
@@ -90,10 +95,14 @@ async function chat({
         saved.push(answer);
         return save ? save(answer) : STORED;
       },
+      propose: async (steps) => {
+        proposed.push(steps);
+        return { id: "proposal-1", expiresAt: PROPOSAL_EXPIRES };
+      },
     },
     (event) => events.push(event),
   );
-  return { ...result, events, provider, plannerCalls, saved, types: events.map((event) => event.type) };
+  return { ...result, events, provider, plannerCalls, saved, proposed, types: events.map((event) => event.type) };
 }
 
 test("a model answers, using a tool, and the run is recorded", async () => {
@@ -355,4 +364,45 @@ test("before anything is sent, the chat can tell who will answer (#308)", () => 
   // The person's own cap is reported first, and the region before either.
   assert.deepEqual(mode({ allowance: allowanceFor({ user: 10, app: 100 }, config.caps, now) }), { mode: "planner", reason: "user_limit" });
   assert.deepEqual(mode({ country: "GB", allowance: allowanceFor({ user: 10, app: 100 }, config.caps, now) }), { mode: "planner", reason: "region" });
+});
+
+/** A change tool as the real ones work (#310): it adds a step to the answer's draft and changes nothing. */
+const completer = defineTool({
+  name: "complete_task",
+  label: "Preparing a change",
+  description: "Proposes marking a task done.",
+  input: z.strictObject({}),
+  access: "propose",
+  async run(_input, toolContext) {
+    toolContext.draft?.steps.push({ kind: "complete_task", task: { id: "t1", name: "Pay rent", project: null, dueDate: null } });
+    return { data: { proposed: 'Mark "Pay rent" as done' }, sources: [] };
+  },
+});
+
+test("an answer that proposes changes stores them, sends the card after the text, and links it to the answer (#310)", async () => {
+  const { events, proposed, saved, types } = await chat({
+    tools: [tool, completer],
+    turns: [{ toolCalls: [{ name: "complete_task", args: {} }] }, { text: "Here's what I'd change: review it below and apply it." }],
+  });
+  const steps = [{ kind: "complete_task", task: { id: "t1", name: "Pay rent", project: null, dueDate: null } }];
+  assert.deepEqual(proposed, [steps]);
+  assert.deepEqual(types.slice(-3), ["text", "proposal", "done"]);
+  assert.deepEqual(
+    events.find((event) => event.type === "proposal"),
+    { type: "proposal", proposal: { id: "proposal-1", state: "pending", expiresAt: PROPOSAL_EXPIRES.toISOString(), steps, applied: [], links: [], error: null } },
+  );
+  assert.equal(saved[0].proposalId, "proposal-1");
+});
+
+test("an answer cut short proposes nothing, and one without changes has no card (#310)", async () => {
+  const cut = await chat({ tools: [tool, completer], turns: [{ toolCalls: [{ name: "complete_task", args: {} }] }, { error: new ProviderError("unavailable", "down") }] });
+  assert.equal(cut.record.outcome, "PROVIDER_ERROR");
+  assert.deepEqual(cut.proposed, [], "the changes may be incomplete, so none is offered");
+  assert.equal(cut.types.includes("proposal"), false);
+  assert.equal(cut.saved[0].proposalId, undefined);
+
+  const plain = await chat({ turns: [{ text: "Nothing needs changing." }] });
+  assert.deepEqual(plain.proposed, []);
+  assert.equal(plain.types.includes("proposal"), false);
+  assert.equal(plain.saved[0].proposalId, undefined);
 });
