@@ -288,35 +288,59 @@ test("a chat is renamed and deleted from its ⋯ menu, and every chat with Delet
   await expect(chats.getByText("Your chats will show here.")).toBeVisible();
 });
 
-test("the chats list resizes from 220 to 360 px, like the sidebar, and keeps its width", async ({ page, isMobile }) => {
+test("the chats list resizes from 220 to 360 px and folds to a rail, like the sidebar, and keeps both", async ({ page, isMobile }) => {
   test.skip(isMobile, "Phones show the list full screen.");
   await signUpAndLogIn(page, "E2E AI resize");
   await page.goto("/ai");
   const edge = page.getByRole("separator", { name: "Resize your chats" });
   const list = page.locator("#ai-chats");
+  const width = async () => Math.round((await list.boundingBox())!.width);
+  const rail = page.getByRole("button", { name: "Show your chats" });
   await expect(edge).toHaveAttribute("aria-valuenow", "264");
-  expect(Math.round((await list.boundingBox())!.width)).toBe(264);
+  await expect.poll(width).toBe(264);
 
   await edge.focus();
   await page.keyboard.press("End");
   await expect(edge).toHaveAttribute("aria-valuenow", "360");
   await page.reload();
   await expect(edge).toHaveAttribute("aria-valuenow", "360");
-  expect(Math.round((await list.boundingBox())!.width)).toBe(360);
+  await expect.poll(width).toBe(360);
 
-  // It never collapses: Home and a drag far to the left stop at 220 px.
-  await edge.focus();
-  await page.keyboard.press("Home");
-  await expect(edge).toHaveAttribute("aria-valuenow", "220");
+  // A drag holds at 220 px, then past it snaps to a 56 px rail of icons.
   const box = (await edge.boundingBox())!;
-  await page.mouse.move(box.x + box.width / 2, box.y + 200);
+  const left = (await list.boundingBox())!.x;
+  const y = box.y + 200;
+  await page.mouse.move(box.x + box.width / 2, y);
   await page.mouse.down();
-  await page.mouse.move(box.x - 300, box.y + 200, { steps: 5 });
-  await page.mouse.up();
+  await page.mouse.move(left + 180, y, { steps: 5 });
   await expect(edge).toHaveAttribute("aria-valuenow", "220");
-  await expect(list).toBeVisible();
+  await page.mouse.move(left + 40, y, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(width).toBe(56);
+  await expect(edge).toHaveAttribute("aria-valuetext", "Icons only");
+  await expect(rail).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Chats", exact: true })).toBeHidden();
 
-  // Double-click brings back 264 px.
-  await edge.dblclick();
-  await expect(edge).toHaveAttribute("aria-valuenow", "264");
+  // The rail survives a reload, and a click on the edge opens the list at the width from before the drag.
+  await page.reload();
+  await expect(rail).toBeVisible();
+  await expect.poll(width).toBe(56);
+  await edge.click();
+  await expect.poll(width).toBe(360);
+  await expect(rail).toBeHidden();
+
+  // A click folds it again; the rail's magnifier opens the list with the cursor in its search.
+  await edge.click();
+  await expect.poll(width).toBe(56);
+  await page.getByRole("button", { name: "Search chats" }).click();
+  await expect.poll(width).toBe(360);
+  await expect(page.getByRole("searchbox", { name: "Search chats" })).toBeFocused();
+
+  // The list's own button folds it too, and the rail's first button opens it.
+  await page.getByRole("button", { name: "Collapse your chats" }).click();
+  await expect.poll(width).toBe(56);
+  await rail.click();
+  await expect.poll(width).toBe(360);
+  await page.reload();
+  await expect.poll(width).toBe(360);
 });

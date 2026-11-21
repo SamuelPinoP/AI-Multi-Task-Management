@@ -1,6 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AI_CHAT_LIST_LIMITS, CHAT_LIST_LIMITS, clampWidth, dragTo, keyTo, parseWidth, roundRem, shownWidth, SIDEBAR_LIMITS, snapPoint, type PanelLimits } from "./panel-resize";
+import {
+  AI_CHAT_LIST_LIMITS,
+  CHAT_LIST_LIMITS,
+  clampWidth,
+  clickTo,
+  dragTo,
+  keyTo,
+  parseWidth,
+  roundRem,
+  shownWidth,
+  SIDEBAR_LIMITS,
+  snapPoint,
+  type PanelLimits,
+} from "./panel-resize";
 
 const limits: PanelLimits = { min: 11, max: 22.5, initial: 14, collapsed: 3.5 };
 
@@ -68,19 +81,31 @@ test("a collapsed panel shows its collapsed width and keeps its open one", () =>
   assert.equal(shownWidth({ width: 16, collapsed: false }, limits), 16);
 });
 
-test("the AI page's chats open at 264 px and go from 220 to 360 px, never collapsing", () => {
+test("the AI page's chats open at 264 px and go from 220 to 360 px, or a 56 px rail like the sidebar's", () => {
   const { initial, min, max, collapsed } = AI_CHAT_LIST_LIMITS;
-  assert.deepEqual([initial, min, max].map((rem) => rem * 16), [264, 220, 360]);
-  assert.equal(collapsed, undefined);
-  assert.equal(snapPoint(AI_CHAT_LIST_LIMITS), null);
+  assert.deepEqual([initial, min, max, collapsed].map((rem) => rem * 16), [264, 220, 360, 56]);
+  // It snaps to the rail halfway between the rail and its narrowest width: 138 px.
+  assert.equal(snapPoint(AI_CHAT_LIST_LIMITS), 138 / 16);
+  assert.deepEqual(dragTo(2, AI_CHAT_LIST_LIMITS, 16.5), { width: 16.5, collapsed: true });
 });
 
-test("a panel that never collapses stops at its narrowest, whatever the pointer or keys do", () => {
-  const list = AI_CHAT_LIST_LIMITS;
+test("a click on the edge collapses an open panel and opens a collapsed one at the width it had", () => {
+  for (const panel of [SIDEBAR_LIMITS, CHAT_LIST_LIMITS, AI_CHAT_LIST_LIMITS]) {
+    assert.deepEqual(clickTo({ width: 18, collapsed: false }, panel), { width: 18, collapsed: true });
+    assert.deepEqual(clickTo({ width: 18, collapsed: true }, panel), { width: 18, collapsed: false });
+  }
+  // Enter on the edge does the same.
+  assert.deepEqual(keyTo("Enter", { width: 18, collapsed: false }, AI_CHAT_LIST_LIMITS), { width: 18, collapsed: true });
+});
+
+test("a panel that never collapses stops at its narrowest, whatever the pointer, keys or clicks do", () => {
+  const list: PanelLimits = { min: 13.75, max: 22.5, initial: 16.5 };
+  assert.equal(snapPoint(list), null);
   assert.deepEqual(dragTo(18, list, 16.5), { width: 18, collapsed: false });
   assert.deepEqual(dragTo(2, list, 16.5), { width: 13.75, collapsed: false });
   assert.deepEqual(dragTo(-40, list, 16.5), { width: 13.75, collapsed: false });
   assert.deepEqual(dragTo(40, list, 16.5), { width: 22.5, collapsed: false });
+  assert.equal(clickTo({ width: 16.5, collapsed: false }, list), null);
 
   const open = { width: 16.5, collapsed: false };
   assert.deepEqual(keyTo("ArrowLeft", open, list), { width: 15.5, collapsed: false });
@@ -88,7 +113,7 @@ test("a panel that never collapses stops at its narrowest, whatever the pointer 
   assert.deepEqual(keyTo("ArrowRight", open, list), { width: 17.5, collapsed: false });
   assert.deepEqual(keyTo("Home", open, list), { width: 13.75, collapsed: false });
   assert.deepEqual(keyTo("End", open, list), { width: 22.5, collapsed: false });
-  // Enter brings back the width it opens at, like a double-click on the edge.
+  // Enter brings back the width it opens at.
   assert.deepEqual(keyTo("Enter", { width: 20, collapsed: false }, list), { width: 16.5, collapsed: false });
   assert.equal(keyTo("a", open, list), null);
   // A stray "collapsed" (from an old cookie, say) never hides it.

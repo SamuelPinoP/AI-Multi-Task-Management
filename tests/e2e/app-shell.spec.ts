@@ -90,7 +90,7 @@ test("The sidebar lists Home, Chats and Tasks, then Work: Calendar, Notes, My da
   expect(await sidebarOrder(page)).toEqual(SIDEBAR_ORDER.filter((name) => name !== "Work"));
 });
 
-test("Dragging the sidebar's edge resizes it, snaps it to the icon rail and remembers the width", async ({ page, isMobile }) => {
+test("Dragging the sidebar's edge resizes it, snaps it to the icon rail and remembers the width; a click folds and opens it", async ({ page, isMobile }) => {
   test.skip(isMobile, "The sidebar is a menu sheet on phones.");
   await continueAsGuest(page);
 
@@ -136,9 +136,17 @@ test("Dragging the sidebar's edge resizes it, snaps it to the icon rail and reme
   await page.reload();
   await expect.poll(width).toBe(240);
 
-  // A double-click on the edge goes back to 224 px.
-  await edge.dblclick();
-  await expect.poll(width).toBe(224);
+  // A click on the edge, without dragging, folds it to the icon rail, and another opens it at the
+  // width it had (Samuel, November 21: "a simple click is enough").
+  await expect(edge).toHaveAttribute("title", "Drag to resize. Click to collapse.");
+  await edge.click();
+  await expect.poll(width).toBe(56);
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+  await expect(edge).toHaveAttribute("title", "Drag to resize. Click to expand.");
+  await edge.click();
+  await expect.poll(width).toBe(240);
+  await page.reload();
+  await expect.poll(width).toBe(240);
 });
 
 test("The browser tab and the sidebar show the AI Multi mark", async ({ page, isMobile }) => {
