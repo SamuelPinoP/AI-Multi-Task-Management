@@ -10,14 +10,15 @@ export type ShortcutAction =
   | { type: "go"; href: string };
 
 export const goTargets: Record<string, { href: string; label: string }> = {
+  // In the sidebar's order (#519), which the shortcuts help lists them in.
   h: { href: "/", label: "Home" },
-  d: { href: "/today", label: "My day" },
   m: { href: "/chats", label: "Chats" },
   t: { href: "/tasks", label: "Tasks" },
   // The Calendar's two tabs (DES-13) keep the keys of the old Events and Calendar items.
   e: { href: "/events", label: "Calendar: Agenda" },
   c: { href: "/events/calendar", label: "Calendar: Month" },
   n: { href: "/notes", label: "Notes" },
+  d: { href: "/today", label: "My day" },
   b: { href: "/board", label: "Boards" },
   p: { href: "/projects", label: "Projects" },
 };

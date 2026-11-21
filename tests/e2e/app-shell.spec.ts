@@ -62,6 +62,30 @@ test("Sidebar collapses and stays collapsed after a reload", async ({ page, isMo
   await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
 });
 
+const SIDEBAR_ORDER = ["Home", "Chats", "Tasks", "Work", "Calendar", "Notes", "My day", "Boards"];
+
+/** The sidebar's pages and group names, in the order they're drawn, by their first words ("Tasks, 3 open" is "Tasks"). */
+async function sidebarOrder(page: Page) {
+  const names = await page
+    .getByRole("navigation", { name: "Workspace" })
+    .locator("a, p")
+    .evaluateAll((elements) => elements.map((element) => (element.getAttribute("aria-label") ?? element.textContent ?? "").split(",")[0].trim()));
+  return names.filter((name) => SIDEBAR_ORDER.includes(name));
+}
+
+test("The sidebar lists Home, Chats and Tasks, then Work: Calendar, Notes, My day and Boards (#519)", async ({ page, isMobile }) => {
+  await continueAsGuest(page);
+  if (isMobile) await page.getByRole("button", { name: /^Open navigation/ }).click();
+  await expect(page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Boards", exact: true })).toBeVisible();
+  expect(await sidebarOrder(page)).toEqual(SIDEBAR_ORDER);
+  if (isMobile) return;
+
+  // The icon rail keeps the order, with a line where the Work group starts.
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+  expect(await sidebarOrder(page)).toEqual(SIDEBAR_ORDER.filter((name) => name !== "Work"));
+});
+
 test("Dragging the sidebar's edge resizes it, snaps it to the icon rail and remembers the width", async ({ page, isMobile }) => {
   test.skip(isMobile, "The sidebar is a menu sheet on phones.");
   await continueAsGuest(page);
