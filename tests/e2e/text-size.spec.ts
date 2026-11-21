@@ -74,6 +74,33 @@ test("a saved text size applies before the app's JavaScript runs, and an unknown
   expect(await rootFontSize(page)).toBe(16);
 });
 
+// The app saves a theme, accent or text size only when someone picks one (#526). It used to save on
+// start too, which could write "default" over a size the test above stored while Home was starting.
+test("starting the app saves no theme, accent or text size, and picking one saves just that", async ({ page }) => {
+  await page.addInitScript(() => {
+    const keys = ["ai-multi-theme", "ai-multi-accent", "ai-multi-text-size"];
+    const saves: string[] = [];
+    (window as unknown as { settingSaves: string[] }).settingSaves = saves;
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (keys.includes(key)) saves.push(`${key}=${value}`);
+      setItem.call(this, key, value);
+    };
+  });
+  const saves = () => page.evaluate(() => (window as unknown as { settingSaves: string[] }).settingSaves);
+
+  await continueAsGuest(page);
+  // The menu opens once the app has started, and React runs the start's effects before that.
+  await openAccountMenu(page);
+  const large = page.getByRole("menuitemradio", { name: "Large", exact: true });
+  await expect(large).toHaveAttribute("aria-checked", "false");
+  expect(await saves()).toEqual([]);
+
+  await large.click();
+  await expect(page.locator("html")).toHaveAttribute("data-text-size", "large");
+  expect(await saves()).toEqual(["ai-multi-text-size=large"]);
+});
+
 test("Small shrinks the text but keeps the smallest text at 11px, and phone fields at 16px", async ({ page, isMobile }) => {
   await continueAsGuest(page);
   await openAccountMenu(page);

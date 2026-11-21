@@ -35,11 +35,15 @@ test("New task adds a task, updates the sidebar and is found by search", async (
   await expect(page.getByRole("button", { name: "Priority: High" })).toBeVisible();
 });
 
-test("Account menu switches the theme and logs out", async ({ page }) => {
+test("Account menu switches the theme, a reload keeps it, and logs out", async ({ page }) => {
   await continueAsGuest(page);
 
   await openAccountMenu(page);
   await page.getByRole("menuitemradio", { name: /Dark/ }).click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  // Picking a theme saves it (#526), so the next load starts dark.
+  await page.keyboard.press("Escape");
+  await page.reload();
   await expect(page.locator("html")).toHaveClass(/dark/);
 
   // A guest workspace has no password, so leaving it asks first (#458).
