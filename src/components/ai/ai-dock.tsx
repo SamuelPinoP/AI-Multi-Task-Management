@@ -89,13 +89,17 @@ function MovedToast({ id, onUndo }: { id: string | number; onUndo: () => void })
  * The AI on every page (#308, round 3's quiet bar, no chips): one line at the bottom of the page.
  * Sending a question, the ✦ or Ctrl J (Cmd J on a Mac) opens the chat above it, 760 × 560 px to
  * start, resized from its top edge and top corners and remembered on this device. On phones the
- * bar sits above the tabs and the chat opens full screen. `button` is for pages with their own
- * message box, the chats: the AI waits there as the ✦ button instead of a second box.
+ * bar sits above the tabs and the chat opens full screen.
+ *
+ * `ownComposer` is for pages with their own message box at the bottom, the chats. On computers
+ * they get the same bar as every other page (Samuel, November 21: the chats opened the big chat
+ * instead, "I need it to remain simple"), and end above it. On phones their box takes the bottom
+ * of the screen, so the AI waits above it as the ✦ button instead of a second box.
  *
  * The person can minimize it to the ✦ button or hide it from pages (it then waits on the AI
  * page); that choice is saved per account (`dock`).
  */
-export function AiDock({ variant }: { variant: "bar" | "button" }) {
+export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
   const { draft, setDraft, ask, busy, loadStatus, announcement, current } = useAiChat();
   const { dock, setDock } = useAiDock();
   const router = useRouter();
@@ -182,10 +186,10 @@ export function AiDock({ variant }: { variant: "bar" | "button" }) {
     setDock("minimized");
   }
 
-  /** The ✦ button: the bar comes back, and with it the conversation if there is one. */
+  /** The ✦ button: the bar comes back, and with it the conversation if there is one. Phones open the chat. */
   function reopen() {
-    if (variant === "bar") setDock("open");
-    if (current?.turns?.length || variant === "button" || !wide) open();
+    setDock("open");
+    if (current?.turns?.length || !wide) open();
     else window.requestAnimationFrame(() => barInput.current?.focus());
   }
 
@@ -248,10 +252,10 @@ export function AiDock({ variant }: { variant: "bar" | "button" }) {
 
   const heightPx = Math.round(size.height * 16);
 
-  // In the chat's ⋯ menu, after "Open on the AI page". Minimizing makes sense only for the bar.
+  // In the chat's ⋯ menu, after "Open on the AI page". Minimizing makes sense only while the bar shows.
   const menuItems = (
     <>
-      {variant === "bar" && dock === "open" ? (
+      {dock === "open" ? (
         <DropdownMenuItem onSelect={minimize}>
           <Minimize2 />
           Minimize to a button
@@ -354,14 +358,13 @@ export function AiDock({ variant }: { variant: "bar" | "button" }) {
         </SheetContent>
       </Sheet>
 
-      {/* The ✦ button: minimized, or on the chats, which have their own message box (above that box there). */}
-      {!expanded && ((variant === "button" && shown) || (variant === "bar" && dock === "minimized")) ? (
+      {/* The ✦ button: minimized, and on a phone's chats, which have their own message box (above that box there). */}
+      {!expanded && (dock === "minimized" || (ownComposer && dock === "open")) ? (
         <div
           className={cn(
-            "group/bubble z-30 h-14 w-14",
-            variant === "button"
-              ? "absolute bottom-24 right-6 max-lg:fixed max-lg:bottom-[calc(8.75rem+max(0.5rem,env(safe-area-inset-bottom)))] max-lg:right-3"
-              : "absolute bottom-6 right-6 max-lg:fixed max-lg:bottom-[calc(3.9375rem+max(0.5rem,env(safe-area-inset-bottom)))] max-lg:right-3",
+            "group/bubble absolute bottom-6 right-6 z-30 h-14 w-14 max-lg:fixed max-lg:right-3",
+            ownComposer ? "max-lg:bottom-[calc(8.75rem+max(0.5rem,env(safe-area-inset-bottom)))]" : "max-lg:bottom-[calc(3.9375rem+max(0.5rem,env(safe-area-inset-bottom)))]",
+            dock === "open" && "lg:hidden",
           )}
         >
           <button
@@ -389,7 +392,7 @@ export function AiDock({ variant }: { variant: "bar" | "button" }) {
         </div>
       ) : null}
 
-      {variant === "bar" && dock === "open" && !expanded ? (
+      {dock === "open" && !expanded ? (
         <>
           <form
             aria-label="Ask AI Multi"
@@ -441,22 +444,25 @@ export function AiDock({ variant }: { variant: "bar" | "button" }) {
             </button>
           </form>
 
-          {/* Phones: the same line above the tabs. Tapping it opens the chat full screen, where the typing happens. */}
-          <button
-            type="button"
-            onClick={open}
-            aria-label={`Ask AI Multi: ${ready ? draft.trim() : AI_PLACEHOLDER_SHORT}`}
-            className={cn(
-              BAR_SHADOW,
-              "fixed inset-x-3 bottom-[calc(3.9375rem+max(0.5rem,env(safe-area-inset-bottom)))] z-30 flex h-14 items-center gap-2 rounded-full border border-line bg-raised pl-4 pr-1.5 text-left lg:hidden",
-            )}
-          >
-            <AiSpark />
-            <span className={cn("min-w-0 flex-1 truncate text-sm", ready ? "text-ink" : "text-muted")}>{ready ? draft.trim() : AI_PLACEHOLDER_SHORT}</span>
-            <span aria-hidden="true" className={cn(sendButtonClass(ready), "h-11 w-11")}>
-              <ArrowUp className="h-5 w-5" strokeWidth={2.25} />
-            </span>
-          </button>
+          {/* Phones: the same line above the tabs. Tapping it opens the chat full screen, where the typing happens.
+              The chats keep the ✦ button above their own box instead. */}
+          {ownComposer ? null : (
+            <button
+              type="button"
+              onClick={open}
+              aria-label={`Ask AI Multi: ${ready ? draft.trim() : AI_PLACEHOLDER_SHORT}`}
+              className={cn(
+                BAR_SHADOW,
+                "fixed inset-x-3 bottom-[calc(3.9375rem+max(0.5rem,env(safe-area-inset-bottom)))] z-30 flex h-14 items-center gap-2 rounded-full border border-line bg-raised pl-4 pr-1.5 text-left lg:hidden",
+              )}
+            >
+              <AiSpark />
+              <span className={cn("min-w-0 flex-1 truncate text-sm", ready ? "text-ink" : "text-muted")}>{ready ? draft.trim() : AI_PLACEHOLDER_SHORT}</span>
+              <span aria-hidden="true" className={cn(sendButtonClass(ready), "h-11 w-11")}>
+                <ArrowUp className="h-5 w-5" strokeWidth={2.25} />
+              </span>
+            </button>
+          )}
         </>
       ) : null}
     </>

@@ -112,6 +112,7 @@ test.describe("on a computer", () => {
     await page.goto("/chats");
     await expect(page.getByRole("heading", { name: "Chats" }).first()).toBeVisible();
     await expect(bubble(page)).toHaveCount(0);
+    await expect(bar(page)).toHaveCount(0);
     await page.goto("/notes");
     await expect(page.getByRole("heading", { level: 1, name: "Notes" })).toBeVisible();
     await expect(async () => {

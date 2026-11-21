@@ -1085,12 +1085,13 @@ export function AppShell({
   const isPublicPage = publicPaths.has(pathname) || isLoggedOutLanding;
   const showWorkspaceShell = Boolean(currentUser && initialNav && !isPublicPage);
   const fullHeight = isFullHeightPage(pathname);
-  // The AI bar (#308): on every page but the AI page, which has its own message box. The chats have
-  // theirs too, so there it waits as the ✦ button. Guests can't use the assistant.
-  const aiDock = !currentUser || currentUser.isGuest || pathname === "/ai" ? null : fullHeight ? "button" : "bar";
+  // The AI bar (#308): on every page but the AI page, which has its own message box. The chats get
+  // the same simple bar on computers (Samuel, November 21); on phones, where their message box takes
+  // the bottom of the screen, it waits above that box as the ✦ button. Guests can't use the assistant.
+  const aiDock = Boolean(currentUser && !currentUser.isGuest && pathname !== "/ai");
   // Hidden from pages, it leaves nothing to make room for.
   const { dock } = useAiDock();
-  const aiBarShown = aiDock === "bar" && dock !== "hidden";
+  const aiBarShown = aiDock && dock !== "hidden";
 
   const [nav, setNav] = useState(initialNav);
   const [sidebar, setSidebar] = useState<PanelSize>({ width: initialSidebarWidth, collapsed: initialSidebarCollapsed });
@@ -1393,18 +1394,25 @@ export function AppShell({
           {/* relative: hidden (sr-only) text is absolutely positioned, and it scrolls only inside a positioned
               scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar.
               Pages end above the AI bar, and on phones above the bar and the tabs: --page-end is that space,
-              which a page's own floating bar keeps clear too (the Tasks page's bulk bar, #520).
+              which a page's own floating bar keeps clear too (the Tasks page's bulk bar, #520). The chats
+              end above the bar on computers too; on phones their tabs take their own row, and the ✦ floats.
               A page whose root has data-page-surface turns main, that space included, its surface color. */}
           <main
             id="main-content"
             className={cn(
               "relative min-h-0 flex-1 overflow-y-auto pb-(--page-end) has-[>[data-page-surface]]:bg-surface",
-              fullHeight ? "[--page-end:0rem]" : aiBarShown ? "[--page-end:9rem] lg:[--page-end:6rem]" : "[--page-end:6rem] lg:[--page-end:0rem]",
+              fullHeight
+                ? aiBarShown
+                  ? "[--page-end:0rem] lg:[--page-end:6rem]"
+                  : "[--page-end:0rem]"
+                : aiBarShown
+                  ? "[--page-end:9rem] lg:[--page-end:6rem]"
+                  : "[--page-end:6rem] lg:[--page-end:0rem]",
             )}
           >
             {children}
           </main>
-          {aiDock ? <AiDock variant={aiDock} /> : null}
+          {aiDock ? <AiDock ownComposer={fullHeight} /> : null}
           <MobileTabs pathname={pathname} onNewTask={openNewTask} onQuickAdd={openQuickAdd} inFlow={fullHeight} />
         </div>
       </MobileMenuContext.Provider>

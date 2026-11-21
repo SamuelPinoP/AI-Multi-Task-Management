@@ -355,7 +355,8 @@ export function ChatsHub({
   const compact = listSize.collapsed;
 
   return (
-    <div className="flex h-full min-h-0">
+    // On computers the AI bar sits in a band under the page (#308), so the list and the chat end on a line.
+    <div className="flex h-full min-h-0 lg:border-b lg:border-line">
       {/* Phones show the list or the chat. On desktop the list always sits beside the chat, at the width
           its edge was dragged to (#416, design 2B), and never takes the conversation below 360 px. */}
       <section
