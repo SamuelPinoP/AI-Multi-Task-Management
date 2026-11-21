@@ -52,12 +52,12 @@ const emptyResults: SearchData = { projects: [], notes: [], tasks: [], events: [
 const pages: Array<{ href: string; label: string; icon: LucideIcon | ComponentType<{ className?: string }>; keywords?: string }> = [
   { href: "/", label: "Home", icon: House, keywords: "dashboard" },
   { href: "/ai", label: "AI", icon: AiSpark, keywords: "ask ai multi assistant chat question work agent" },
-  { href: "/today", label: "My day", icon: Sun, keywords: "today focus" },
   { href: "/chats", label: "Chats", icon: MessagesSquare, keywords: "messages discussion unread" },
   { href: "/tasks", label: "Tasks", icon: SquareCheckBig },
   { href: "/events", label: "Calendar: Agenda", icon: CalendarClock, keywords: "events upcoming schedule" },
   { href: "/events/calendar", label: "Calendar: Month", icon: CalendarDays, keywords: "events month grid" },
   { href: "/notes", label: "Notes", icon: NotebookPen },
+  { href: "/today", label: "My day", icon: Sun, keywords: "today focus" },
   { href: "/board", label: "Boards", icon: SquareKanban, keywords: "kanban task board" },
   { href: "/tree", label: "Tree view", icon: ListTree, keywords: "tree pages hierarchy outline mind map" },
   { href: "/projects", label: "Projects", icon: FolderKanban },
