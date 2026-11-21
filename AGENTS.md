@@ -33,6 +33,8 @@ Every issue is a ticket someone else could pick up without asking questions. The
 
 ## Pull requests
 
+When an AI agent finishes an issue, it opens a pull request without being asked, and leaves merging to the owner.
+
 Every pull request description follows [`.github/pull_request_template.md`](.github/pull_request_template.md), in this order: **Description**, **Testing evidence**, **QA**. GitHub fills the template in for PRs opened on the website; with `gh pr create --body-file`, start from the template yourself. AI agents write all three sections without being asked (#231).
 
 Give the PR a title that says what changes for the user, in plain words.
