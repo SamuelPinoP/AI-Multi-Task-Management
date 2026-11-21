@@ -122,8 +122,10 @@ function errorName(error: unknown) {
 
 export type DeployMigrationsInput = {
   env: Record<string, string | undefined>;
-  /** The URL Prisma migrates (resolveDatabaseUrl in src/lib/database-url.ts). */
+  /** The URL Prisma migrates (resolveMigrationDatabaseUrl in src/lib/database-url.ts). */
   databaseUrl: string | undefined;
+  /** Which address that is, for the build log (describeMigrationConnection, #517). */
+  connection?: string;
   readMigrations(): Promise<MigrationFile[]>;
   /** The record store, or null when R2 isn't configured. It may throw when R2's settings are invalid. */
   openStore(): DeployRecordStore | null;
@@ -198,6 +200,7 @@ export async function runDeployMigrations(input: DeployMigrationsInput): Promise
   }
 
   log(`Running prisma migrate deploy against the ${target} database: ${reason}.`);
+  if (input.connection) log(`Prisma connects with ${input.connection}.`);
   if (!(await input.migrate())) return { status: "failed", reason };
 
   // Only a successful run is recorded, and only what this build carried.

@@ -2,7 +2,7 @@
 // npm install --save-dev prisma dotenv
 import "dotenv/config";
 import { defineConfig, env } from "prisma/config";
-import { resolveDatabaseUrl } from "./src/lib/database-url";
+import { resolveMigrationDatabaseUrl } from "./src/lib/database-url";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -11,6 +11,9 @@ export default defineConfig({
   },
   datasource: {
     // Previews use PREVIEW_DATABASE_URL; env() keeps Prisma's own error when nothing is set.
-    url: resolveDatabaseUrl() ?? env("DATABASE_URL"),
+    // The CLI takes the direct (_UNPOOLED) address when it's the same database, because
+    // migrate's advisory lock can stay held through Neon's pooler (#517). The app keeps the
+    // pooled one (src/lib/prisma.ts).
+    url: resolveMigrationDatabaseUrl()?.url ?? env("DATABASE_URL"),
   },
 });
