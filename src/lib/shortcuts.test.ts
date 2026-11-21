@@ -37,6 +37,13 @@ test("every go target is a different page", () => {
   assert.equal(new Set(hrefs).size, hrefs.length);
 });
 
+test("the shortcuts help lists the go targets in the sidebar's order (#519)", () => {
+  assert.deepEqual(
+    Object.entries(goTargets).map(([key, target]) => `${key} ${target.label}`),
+    ["h Home", "m Chats", "t Tasks", "e Calendar: Agenda", "c Calendar: Month", "n Notes", "d My day", "b Boards", "p Projects"],
+  );
+});
+
 test("in a chat, Enter sends and Shift+Enter starts a new line", () => {
   assert.equal(sendsChatMessage(press(), false), true);
   assert.equal(sendsChatMessage(press({ shiftKey: true }), false), false);

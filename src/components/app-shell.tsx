@@ -450,9 +450,9 @@ function Sidebar({
   onSendFeedback: () => void;
   onNavigate?: () => void;
 }) {
+  // Tasks sits with Home and Chats, and My day under Notes (#519).
   const mainItems: NavItem[] = [
     { href: "/", label: "Home", icon: House },
-    { href: "/today", label: "My day", icon: Sun },
     {
       href: "/chats",
       label: "Chats",
@@ -461,11 +461,12 @@ function Sidebar({
         ? { value: nav.unreadChats, label: `${nav.unreadChats} with new messages` }
         : undefined,
     },
+    { href: "/tasks", label: "Tasks", icon: SquareCheckBig, exact: true, count: nav.openTasks },
   ];
   const workItems: NavItem[] = [
-    { href: "/tasks", label: "Tasks", icon: SquareCheckBig, exact: true, count: nav.openTasks },
     useCalendarItem(),
     { href: "/notes", label: "Notes", icon: NotebookPen },
+    { href: "/today", label: "My day", icon: Sun },
     { href: "/board", label: "Boards", icon: SquareKanban, match: ["/tasks/board", "/tree"] },
   ];
   const toolItems: NavItem[] = [
