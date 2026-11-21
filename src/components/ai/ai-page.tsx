@@ -4,7 +4,7 @@ import { ChevronDown, ChevronLeft, Ellipsis, EyeOff, History, Maximize2, Minimiz
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AiChatList, KEPT_CHATS_TEXT } from "@/components/ai/ai-chat-list";
 import { useAiChat, useAiDock } from "@/components/ai/ai-chat-provider";
-import { AiComposer } from "@/components/ai/ai-composer";
+import { AiComposer, AiFooter } from "@/components/ai/ai-composer";
 import { AiNotice } from "@/components/ai/ai-notice";
 import { AiSpark } from "@/components/ai/ai-spark";
 import { AI_SUGGESTIONS } from "@/components/ai/ai-suggestions";
@@ -68,10 +68,11 @@ function GuestAiPage() {
 const iconButtonClass =
   "grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink max-lg:h-11 max-lg:w-11";
 
+// "AI bar: visible", "AI bar: minimized" or "AI bar: hidden" (Samuel, November 21), each with a line on where that leaves it.
 const DOCK_TEXT: Record<AiDock, { label: string; about: string }> = {
-  open: { label: "AI bar: on every page", about: "The AI bar is at the bottom of every page." },
+  open: { label: "AI bar: visible", about: "The AI bar is at the bottom of every page." },
   minimized: { label: "AI bar: minimized", about: "The AI bar is a ✦ button at the bottom right of every page." },
-  hidden: { label: "AI bar hidden", about: "The AI bar is hidden from your pages." },
+  hidden: { label: "AI bar: hidden", about: "The AI bar is hidden from your pages." },
 };
 
 /**
@@ -301,7 +302,6 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
           </p>
           <ChatOptions />
           <span aria-hidden="true" className="flex-1" />
-          {allowance ? <span className="whitespace-nowrap text-xs text-muted max-lg:hidden">{allowance}</span> : null}
           <span className="max-lg:hidden">
             <AiBarMenu />
           </span>
@@ -359,10 +359,7 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
 
         <div className="mx-auto w-full max-w-[49rem] shrink-0 px-3 pt-1">
           <AiComposer ref={composer} />
-          <p className="px-3 pb-2.5 pt-1.5 text-center text-[0.71875rem] text-muted">
-            <span className="lg:hidden">{allowance ? `${allowance} · ` : ""}Nothing changes until you confirm</span>
-            <span className="max-lg:hidden">Answers can be wrong. Nothing changes until you confirm it.</span>
-          </p>
+          <AiFooter allowance={allowance} />
         </div>
       </section>
 

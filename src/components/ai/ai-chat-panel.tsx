@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { AiChatList, KEPT_CHATS_TEXT } from "@/components/ai/ai-chat-list";
 import { useAiChat } from "@/components/ai/ai-chat-provider";
-import { AI_PLACEHOLDER, AiComposer } from "@/components/ai/ai-composer";
+import { AI_PLACEHOLDER, AiComposer, AiFooter } from "@/components/ai/ai-composer";
 import { AiNotice } from "@/components/ai/ai-notice";
 import { AiSpark } from "@/components/ai/ai-spark";
 import { AI_SUGGESTIONS } from "@/components/ai/ai-suggestions";
@@ -190,10 +190,8 @@ export function AiChatPanel({
           </div>
           <div className="shrink-0 px-3">
             <AiComposer ref={composerRef} />
+            <AiFooter allowance={allowance} />
           </div>
-          <p className="px-3 pb-2.5 pt-1.5 text-center text-[0.71875rem] text-muted">
-            {allowance ? `${allowance} · ` : ""}Answers can be wrong. Nothing changes until you confirm it.
-          </p>
         </>
       )}
 

@@ -89,3 +89,21 @@ export function AiComposer({ className, ref }: { className?: string; ref?: Ref<H
     </form>
   );
 }
+
+/**
+ * The line under the message box, on the AI page and in the bar's chat (Samuel, November 21): the
+ * reminder on the left, lined up with the box's text, and today's allowance on the right, lined up
+ * with the send button. Phones get the shorter reminder so both fit on one line; on a narrower
+ * screen the allowance wraps and stays on the right.
+ */
+export function AiFooter({ allowance, className }: { allowance: string | null; className?: string }) {
+  return (
+    <div className={cn("flex flex-wrap items-baseline gap-x-3 gap-y-0.5 pb-2.5 pl-3.5 pr-2 pt-1.5 text-[0.71875rem] leading-4 text-muted", className)}>
+      <p className="min-w-0">
+        <span className="sm:hidden">Nothing changes until you confirm</span>
+        <span className="max-sm:hidden">Answers can be wrong. Nothing changes until you confirm it.</span>
+      </p>
+      {allowance ? <p className="ml-auto whitespace-nowrap tabular-nums">{allowance}</p> : null}
+    </div>
+  );
+}
