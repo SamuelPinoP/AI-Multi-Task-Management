@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { continueAsGuest, uniqueName } from "./helpers";
 
 // Labels on tasks (#276): create one from a task, filter by it, rename it and delete it.
-test("labels: create from a task, filter by it, rename and delete", async ({ page }) => {
+test("labels: create from a task, filter by it, rename and delete", async ({ page, isMobile }) => {
   const labeled = uniqueName("Labeled task");
   const other = uniqueName("Other task");
   const label = uniqueName("design").toLowerCase();
@@ -31,17 +31,36 @@ test("labels: create from a task, filter by it, rename and delete", async ({ pag
   const row = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: labeled, exact: true }) });
   await expect(row).toContainText(label);
 
-  // Filter (#520): only the labeled task stays. (The quick add has a Labels button too.)
-  const filters = page.getByRole("search", { name: "Filter tasks" });
-  await filters.getByRole("button", { name: "Filter", exact: true }).click();
-  await page.getByRole("menuitemcheckbox", { name: label }).click();
-  await page.keyboard.press("Escape");
-  await expect(filters.getByRole("button", { name: "Filter, 1 on" })).toBeVisible();
+  // Filter (#520): only the labeled task stays. (The quick add has a Labels button too.) Phones filter from the
+  // Filter and sort sheet (#521).
+  if (isMobile) {
+    const sheet = page.getByRole("dialog", { name: "Filter and sort" });
+    await page.getByRole("button", { name: "Filter and sort", exact: true }).click();
+    await sheet.getByRole("group", { name: "Labels" }).getByRole("button", { name: label }).click();
+    await sheet.getByRole("button", { name: "Show 1 task" }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByRole("button", { name: "Filter and sort, 1 on" })).toBeVisible();
+  } else {
+    const filters = page.getByRole("search", { name: "Filter tasks" });
+    await filters.getByRole("button", { name: "Filter", exact: true }).click();
+    await page.getByRole("menuitemcheckbox", { name: label }).click();
+    await page.keyboard.press("Escape");
+    await expect(filters.getByRole("button", { name: "Filter, 1 on" })).toBeVisible();
+  }
   await expect(page.getByRole("button", { name: labeled, exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: other, exact: true })).toHaveCount(0);
-  await filters.getByRole("button", { name: "Filter, 1 on" }).click();
-  await page.getByRole("menuitem", { name: "Clear filters" }).click();
-  await expect(filters.getByRole("button", { name: "Filter", exact: true })).toBeVisible();
+  if (isMobile) {
+    const sheet = page.getByRole("dialog", { name: "Filter and sort" });
+    await page.getByRole("button", { name: "Filter and sort, 1 on" }).click();
+    await sheet.getByRole("button", { name: "Clear", exact: true }).click();
+    await sheet.getByRole("button", { name: "Show 2 tasks" }).click();
+    await expect(page.getByRole("button", { name: "Filter and sort", exact: true })).toBeVisible();
+  } else {
+    const filters = page.getByRole("search", { name: "Filter tasks" });
+    await filters.getByRole("button", { name: "Filter, 1 on" }).click();
+    await page.getByRole("menuitem", { name: "Clear filters" }).click();
+    await expect(filters.getByRole("button", { name: "Filter", exact: true })).toBeVisible();
+  }
   await expect(page.getByRole("button", { name: other, exact: true })).toBeVisible();
 
   // Rename it from Edit labels; every task shows the new name.

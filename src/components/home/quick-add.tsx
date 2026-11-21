@@ -10,13 +10,14 @@ import { loadProjectMembers } from "@/components/tasks/load-members";
 import { MemberAvatar } from "@/components/tasks/member-avatar";
 import { PropertyPicker } from "@/components/tasks/property-picker";
 import type { Member } from "@/components/tasks/types";
+import { uiPrimaryButtonClass } from "@/components/ui";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import { isPressingPriority, PRIORITY_MENU_ORDER, priorityLabels, type Priority } from "@/lib/priority";
 import { projectColor } from "@/lib/project-color";
 import { parseQuickAdd, type QuickAddKind, type QuickAddResult } from "@/lib/quick-add-parse";
 import { TASK_TITLE_MAX } from "@/lib/task-history";
-import { notifyWorkspaceChanged, openGuestSignupFor, QUICK_ADD_IN_PROJECT_EVENT } from "@/lib/workspace-events";
+import { notifyWorkspaceChanged, openGuestSignupFor, openNewTask, QUICK_ADD_IN_PROJECT_EVENT, type NewTaskDraft } from "@/lib/workspace-events";
 
 export const QUICK_ADD_INPUT_ID = "quick-add-input";
 
@@ -37,8 +38,16 @@ type QuickAddProps = {
   /**
    * "box" (default) is a rounded box with icon buttons. "row" is the Tasks page's full-width row
    * (#520), whose buttons say what they are from 640px, so "Due date" isn't mistaken for a calendar.
+   * "sheet" fills the phone's add sheet (#521, design 2A): a big field, the buttons as named chips,
+   * then More details and Add task.
    */
-  variant?: "box" | "row";
+  variant?: "box" | "row" | "sheet";
+  /** The field's id; a page with two quick adds (the Tasks page's row and its phone sheet) gives each its own. */
+  inputId?: string;
+  /** A project picked from the start, as a project's + picks it: "" for no project. */
+  initialProjectId?: string;
+  /** The sheet's More details handed what was typed to the full New task form, so the sheet can close. */
+  onMoreDetails?: () => void;
 };
 
 type ProjectOption = { id: string; name: string; color: string | null };
@@ -55,6 +64,10 @@ const pickerClass =
 /** The row's buttons: an icon on phones, the icon and its name from 640px. */
 const namedPickerClass =
   "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[0.8125rem] font-medium text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent max-sm:w-8 max-sm:px-0 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0";
+
+/** The sheet's buttons (#521): named chips a thumb can hit, 36px tall. */
+const sheetPickerClass =
+  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 text-sm font-semibold text-muted outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-accent [&_svg]:h-3.75 [&_svg]:w-3.75 [&_svg]:shrink-0";
 
 /** A button that puts the cursor in the page's quick add, for empty states that say "Add a task". */
 export function QuickAddFocusButton({ className, children }: { className?: string; children: ReactNode }) {
@@ -100,16 +113,22 @@ export function QuickAdd({
   editHref = (id) => `/tasks/${id}`,
   quiet = false,
   variant = "box",
+  inputId = QUICK_ADD_INPUT_ID,
+  initialProjectId,
+  onMoreDetails,
 }: QuickAddProps = {}) {
   const router = useRouter();
   const smart = endpoint === TASKS_ENDPOINT && field === "title";
   const named = variant === "row";
+  const sheet = variant === "sheet";
+  const detailsId = inputId + "-details";
+  const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const [ignore, setIgnore] = useState<ReadonlySet<QuickAddKind>>(new Set());
   const [projects, setProjects] = useState<ProjectOption[] | undefined>(undefined);
   const [members, setMembers] = useState<{ projectId: string; list: Member[] } | null>(null);
-  const [picked, setPicked] = useState<Picked>({});
+  const [picked, setPicked] = useState<Picked>(() => (initialProjectId !== undefined ? { projectId: initialProjectId } : {}));
   const allLabels = useLabels();
   const projectsRequest = useRef<Promise<ProjectOption[]> | null>(null);
 
@@ -207,26 +226,55 @@ export function QuickAdd({
     }
   }
 
-  // A project's + on the Tasks page picks that project here and puts the cursor in the box (#520).
-  const startInProject = useEffectEvent((projectId: string) => {
+  // A project's + on the Tasks page picks that project here and puts the cursor in the box (#520). A box that's
+  // hidden, as the Tasks page's row is on phones, where the page opens its sheet instead (#521), leaves it alone.
+  const startInProject = useEffectEvent((projectId: string | undefined) => {
+    const input = inputRef.current;
+    if (!input?.checkVisibility()) return;
     void loadProjects();
-    setPicked((current) => ({ ...current, projectId, assigneeId: undefined, labelIds: undefined }));
-    document.getElementById(QUICK_ADD_INPUT_ID)?.focus();
+    if (projectId !== undefined) setPicked((current) => ({ ...current, projectId, assigneeId: undefined, labelIds: undefined }));
+    input.focus();
   });
   useEffect(() => {
     if (!smart) return;
-    const listener = (event: Event) => startInProject((event as CustomEvent<{ projectId?: string }>).detail?.projectId ?? "");
+    const listener = (event: Event) => startInProject((event as CustomEvent<{ projectId?: string }>).detail?.projectId);
     window.addEventListener(QUICK_ADD_IN_PROJECT_EVENT, listener);
     return () => window.removeEventListener(QUICK_ADD_IN_PROJECT_EVENT, listener);
   }, [smart]);
 
-  /** A picker button: an icon with a tooltip in the box, the icon and its name in the row. */
+  // Opened in a project, the sheet names it as soon as the projects load.
+  const loadOnOpen = useEffectEvent(() => {
+    if (initialProjectId) void loadProjects();
+  });
+  useEffect(() => loadOnOpen(), []);
+
+  /** The sheet's More details: the full New task form, starting from what's typed and picked here (#521). */
+  function moreDetails() {
+    const result = smart ? parse(text.trim()) : null;
+    const project = picked.projectId !== undefined ? picked.projectId : result?.project?.id;
+    const draft: NewTaskDraft = {
+      title: result?.title ?? text.trim(),
+      dueDate: (picked.dueDate !== undefined ? picked.dueDate : result?.dueDate) || undefined,
+      priority: picked.priority ?? result?.priority ?? undefined,
+      projectId: project || undefined,
+      assigneeId: project ? (picked.assigneeId ?? (project === result?.project?.id ? result?.assignee?.id : undefined)) : undefined,
+      labelIds: picked.labelIds,
+    };
+    setText("");
+    setIgnore(new Set());
+    setPicked({});
+    onMoreDetails?.();
+    openNewTask(draft);
+  }
+
+  /** A picker button: an icon with a tooltip in the box, the icon and its name in the row, a named chip in the sheet. */
   function pickerButton(name: string, active: unknown) {
+    if (sheet) return { className: cn(sheetPickerClass, Boolean(active) && "border-accent bg-accent-soft text-accent") };
     return named
       ? { className: cn(namedPickerClass, Boolean(active) && "text-accent") }
       : { "aria-label": name, title: name, className: cn(pickerClass, Boolean(active) && "text-accent") };
   }
-  const pickerName = (name: string) => (named ? <span className="max-sm:sr-only">{name}</span> : null);
+  const pickerName = (name: string) => (sheet ? <span>{name}</span> : named ? <span className="max-sm:sr-only">{name}</span> : null);
 
   function keepAsText(kind: QuickAddKind) {
     setIgnore((current) => new Set(current).add(kind));
@@ -248,7 +296,8 @@ export function QuickAdd({
     pickedChips.push({
       key: "projectId",
       name: "Project",
-      value: pickedProject?.name ?? "No project",
+      // An id whose project hasn't loaded yet shows "…", not "No project".
+      value: pickedProject?.name ?? (picked.projectId ? "…" : "No project"),
       icon: <span aria-hidden="true" className="h-2 w-2 rounded-[3px]" style={{ backgroundColor: pickedProject ? projectColor(pickedProject) : "transparent" }} />,
     });
   }
@@ -316,20 +365,23 @@ export function QuickAdd({
       onSubmit={handleSubmit}
       // One minmax(0, 1fr) column: an auto column would grow to the row's one-line width and widen the page on phones (#288).
       className={cn(
-        "grid grid-cols-[minmax(0,1fr)] bg-surface transition-colors",
-        named
-          ? "gap-1.5 border-b border-line px-4 py-2 focus-within:border-b-accent/60 sm:px-6"
-          : "gap-2 rounded-xl border border-line px-3 py-2 focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft",
+        "grid grid-cols-[minmax(0,1fr)] transition-colors",
+        sheet
+          ? "gap-3"
+          : named
+            ? "gap-1.5 border-b border-line bg-surface px-4 py-2 focus-within:border-b-accent/60 sm:px-6"
+            : "gap-2 rounded-xl border border-line bg-surface px-3 py-2 focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft",
       )}
     >
-      {/* On phones the buttons take a row of their own, so the text keeps the full width. */}
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-        <Plus aria-hidden="true" className="h-4 w-4 shrink-0 text-accent" />
-        <label htmlFor={QUICK_ADD_INPUT_ID} className="sr-only">
+      {/* On phones the buttons take a row of their own, so the text keeps the full width. The sheet stacks them. */}
+      <div className={sheet ? "grid grid-cols-[minmax(0,1fr)] gap-3" : "flex flex-wrap items-center gap-x-2.5 gap-y-1"}>
+        {sheet ? null : <Plus aria-hidden="true" className="h-4 w-4 shrink-0 text-accent" />}
+        <label htmlFor={inputId} className="sr-only">
           {label}
         </label>
         <input
-          id={QUICK_ADD_INPUT_ID}
+          ref={inputRef}
+          id={inputId}
           value={text}
           onChange={(event) => {
             setText(event.target.value);
@@ -339,12 +391,23 @@ export function QuickAdd({
           placeholder={placeholder ?? (smart ? "Add a task: Draft slides fri #project !high" : "Add a task and press Enter")}
           maxLength={TASK_TITLE_MAX}
           autoComplete="off"
-          aria-describedby={smart ? "quick-add-details" : undefined}
-          className="min-w-0 flex-1 bg-transparent py-1 text-sm text-ink outline-none placeholder:text-muted"
+          aria-describedby={smart ? detailsId : undefined}
+          className={cn(
+            "min-w-0 bg-transparent text-ink outline-none placeholder:text-muted",
+            sheet ? "h-11 w-full px-0.5 text-[1.0625rem]" : "flex-1 py-1 text-sm",
+          )}
         />
         {smart ? (
           // Buttons that open the same pickers as the task page (#362, design 1B); typed codes keep working.
-          <div role="group" aria-label="Task details" className={cn("flex shrink-0 items-center max-sm:w-full max-sm:pl-4.5", named && "gap-0.5")} onFocus={() => void loadProjects()}>
+          <div
+            role="group"
+            aria-label="Task details"
+            className={cn(
+              sheet ? "-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]" : "flex shrink-0 items-center max-sm:w-full max-sm:pl-4.5",
+              named && "gap-0.5",
+            )}
+            onFocus={() => void loadProjects()}
+          >
             <DueDatePicker value={picked.dueDate ?? parsed?.dueDate ?? ""} onChange={(key) => pick({ dueDate: key ?? "" })}>
               <button type="button" {...pickerButton("Due date", picked.dueDate)}>
                 <CalendarDays aria-hidden="true" />
@@ -416,10 +479,10 @@ export function QuickAdd({
             </LabelPicker>
           </div>
         ) : null}
-        <kbd className="hidden rounded border border-line px-1.5 font-mono text-2xs text-muted sm:inline">Enter</kbd>
+        {sheet ? null : <kbd className="hidden rounded border border-line px-1.5 font-mono text-2xs text-muted sm:inline">Enter</kbd>}
       </div>
       {smart ? (
-        <div id="quick-add-details" aria-live="polite" className={cn("flex flex-wrap items-center gap-1.5 pl-6", !showDetails && "hidden")}>
+        <div id={detailsId} aria-live="polite" className={cn("flex flex-wrap items-center gap-1.5", !sheet && "pl-6", !showDetails && "hidden")}>
           {showDetails ? (
             <>
               {pickedChips.length ? (
@@ -480,6 +543,21 @@ export function QuickAdd({
               ))}
             </>
           ) : null}
+        </div>
+      ) : null}
+      {sheet ? (
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={moreDetails}
+            className="-ml-1 rounded-lg px-1 py-2.5 text-[0.9375rem] font-semibold text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            More details
+          </button>
+          <span aria-hidden="true" className="flex-1" />
+          <button type="submit" disabled={!text.trim() || saving} className={cn(uiPrimaryButtonClass, "h-11 px-4.5 text-[0.9375rem]")}>
+            Add task
+          </button>
         </div>
       ) : null}
     </form>

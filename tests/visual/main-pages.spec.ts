@@ -1,12 +1,13 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { AI_NOTICE_VERSION } from "../../src/lib/ai/notice";
-import { continueAsGuest, openAccountMenu, signUpAndLogIn } from "../e2e/helpers";
+import { continueAsGuest, openAccountMenu, plusTab, signUpAndLogIn } from "../e2e/helpers";
 
 /*
  * Screenshots of the main pages, compared with reference images (TEST-05, #269).
  * Home is also taken in dark mode (DES-10), with a teammate who has left an
  * unread message in Team chat (DES-11), and Tasks with the Blue accent and the
- * account menu open (DES-15).
+ * account menu open (DES-15). On phones, Tasks also has its Filter and sort sheet
+ * and its add box taken (#521).
  *
  * Each test signs up a new account, always named "E2E visual", and adds the same data (guest
  * workspaces hold too little for it since #458; the last test shows the guest profile). Due dates are
@@ -125,6 +126,31 @@ test("Tasks with the Blue accent", async ({ page }) => {
   await openAccountMenu(page);
   await expect(page.getByRole("menuitemradio", { name: "Blue" })).toHaveAttribute("aria-checked", "true");
   await expect(page).toHaveScreenshot("tasks-blue.png", { mask: changing(page) });
+});
+
+// The phone's Filter and sort sheet, with a chip on, and its add box with text typed (#521).
+test("Tasks on a phone: Filter and sort, and the add box", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "Phones only: computers filter from menus and add from the box on the page.");
+  await signUp(page);
+  await addTasks(page);
+
+  await page.goto("/tasks");
+  await expect(page.getByRole("button", { name: "Plan the next sprint", exact: true })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Filter and sort", exact: true }).click();
+  const filters = page.getByRole("dialog", { name: "Filter and sort" });
+  await filters.getByRole("group", { name: "Priority", exact: true }).getByRole("button", { name: "High", exact: true }).click();
+  await expect(filters.getByRole("button", { name: "Show 2 tasks" })).toBeVisible();
+  await expect(page).toHaveScreenshot("tasks-filter-sheet.png", { mask: changing(page) });
+  await filters.getByRole("button", { name: "Clear", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(filters).toBeHidden();
+
+  // No date in the text: a date chip shows the day, which changes from run to run.
+  await plusTab(page).click();
+  await page.getByRole("dialog", { name: "Add a task" }).getByRole("textbox", { name: "Add a task", exact: true }).fill("Draft the launch email !high");
+  await expect(page.getByRole("list", { name: "Details from your text" })).toContainText("High");
+  await expect(page).toHaveScreenshot("tasks-add-sheet.png", { mask: changing(page) });
 });
 
 test("Boards", async ({ page }) => {

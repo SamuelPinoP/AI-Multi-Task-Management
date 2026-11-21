@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { continueAsGuest, uniqueName } from "./helpers";
 
-test("subtasks, dependencies, the board and the planner (SMART-02)", async ({ page }) => {
+test("subtasks, dependencies, the board and the planner (SMART-02)", async ({ page, isMobile }) => {
   await continueAsGuest(page);
   const launch = uniqueName("Launch site");
   const deploy = uniqueName("Deploy");
@@ -40,6 +40,8 @@ test("subtasks, dependencies, the board and the planner (SMART-02)", async ({ pa
   const launchRow = page.locator("li", { has: page.getByRole("button", { name: launch, exact: true }) });
   await expect(launchRow).toContainText("1 of 2 subtasks done");
   await expect(page.getByRole("button", { name: "Fix links", exact: true })).toHaveCount(0);
+  // A phone's search opens from its button (#521).
+  if (isMobile) await page.getByRole("button", { name: "Search tasks" }).click();
   await page.getByRole("searchbox", { name: "Search tasks" }).fill("Fix links");
   await expect(page.getByRole("button", { name: "Fix links", exact: true })).toBeVisible();
   await page.getByRole("searchbox", { name: "Search tasks" }).fill("");

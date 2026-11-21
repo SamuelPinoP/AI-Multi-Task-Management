@@ -16,9 +16,14 @@
  * - `?task=<id>` opens that task's page (links from search, Home and the Planner).
  * - Subtasks live inside their parent; the row shows a progress ring, and "Blocked" while the task
  *   waits on open tasks (SMART-02).
+ *
+ * Phones (#521, design 2A, below 640px): the title shares its line with a search button and Filter,
+ * which opens "Filter and sort" as a sheet; the tabs sit under it. Each task is two lines
+ * (`TaskRowPhone`), with a circle to mark it done; pressing and holding selects. The add box leaves
+ * the page: the bottom bar's + and a project's "New task in …" open it as a sheet.
  */
 
-import { CalendarDays, ChevronDown, FolderOpen, MoreHorizontal, NotebookText, Plus, Search } from "lucide-react";
+import { CalendarDays, ChevronDown, FolderOpen, ListFilter, MoreHorizontal, NotebookText, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
@@ -27,14 +32,24 @@ import { QuickAdd } from "@/components/home/quick-add";
 import { BulkBar, type BulkNames } from "@/components/tasks/bulk-bar";
 import { loadLabels, useLabels } from "@/components/tasks/label-store";
 import { PriorityBadge } from "@/components/tasks/priority-badge";
-import { NO_PROJECT, noTaskFilters, TaskDisplayMenu, TaskFilterMenu, type TaskFilters, type TaskSort } from "@/components/tasks/task-list-menus";
+import {
+  NO_PROJECT,
+  noTaskFilters,
+  TaskDisplayMenu,
+  taskFilterCount,
+  TaskFilterMenu,
+  TaskFilterSheet,
+  type TaskFilters,
+  type TaskSort,
+} from "@/components/tasks/task-list-menus";
 import { TASK_ORDER_KEY } from "@/components/tasks/task-page-view";
-import { TaskRow } from "@/components/tasks/task-row";
+import { TaskRow, TaskRowPhone } from "@/components/tasks/task-row";
 import { taskRequestBody } from "@/components/tasks/task-sheet";
 import type { Project, Task, TaskInput, TaskStatus } from "@/components/tasks/types";
 import { uiButtonClass } from "@/components/ui";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
 import { daysFrom } from "@/lib/home-summary";
@@ -45,7 +60,14 @@ import { describeBulkChange, type BulkTaskChange, type TaskSnapshot } from "@/li
 import { compareTaskDueDates, formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { topLevelTasks } from "@/lib/task-relations";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
-import { notifyWorkspaceChanged, quickAddInProject, TASK_CREATED_EVENT } from "@/lib/workspace-events";
+import { usePhoneLayout } from "@/lib/use-phone-layout";
+import {
+  notifyWorkspaceChanged,
+  PHONE_LAYOUT_QUERY,
+  QUICK_ADD_IN_PROJECT_EVENT,
+  quickAddInProject,
+  TASK_CREATED_EVENT,
+} from "@/lib/workspace-events";
 
 /** A project from /api/projects, with the caller's access. */
 type ProjectItem = Project & { status?: string; updatedAt?: string };
@@ -69,9 +91,13 @@ const sectionTitles: Record<SectionKey, string> = {
   DONE: "Done",
 };
 
-/** The band's small square buttons: + and ⋯. */
+/** The band's small square buttons: + and ⋯; a thumb-sized ⋯ on phones. */
 const bandButtonClass =
-  "grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover data-[state=open]:text-ink";
+  "grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent data-[state=open]:bg-surface-hover data-[state=open]:text-ink max-sm:h-11 max-sm:w-11 max-sm:rounded-[0.625rem]";
+
+/** The phone header's search and Filter buttons (#521): 44px, beside the title. */
+const phoneHeaderButtonClass =
+  "relative grid h-11 w-11 shrink-0 place-items-center rounded-[0.625rem] text-ink outline-none transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent sm:hidden [&_svg]:h-5 [&_svg]:w-5";
 
 function sectionFor(task: Task, now: Date): SectionKey {
   if (task.status === "DONE") return "DONE";
@@ -136,6 +162,32 @@ export default function TasksPage() {
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const linkedRowRef = useRef<HTMLLIElement | null>(null);
+
+  // Phones (#521): the search field opens from its button, and Filter and the add box are sheets.
+  const phone = usePhoneLayout();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [addSheet, setAddSheet] = useState<{ projectId?: string } | null>(null);
+
+  // The bottom bar's + and a project's "New task in …" ask for the add box; on a phone it opens as a sheet.
+  const openAddSheet = useEffectEvent((projectId: string | undefined) => {
+    if (window.matchMedia(PHONE_LAYOUT_QUERY).matches) setAddSheet({ projectId });
+  });
+  useEffect(() => {
+    const listener = (event: Event) => openAddSheet((event as CustomEvent<{ projectId?: string }>).detail?.projectId);
+    window.addEventListener(QUICK_ADD_IN_PROJECT_EVENT, listener);
+    return () => window.removeEventListener(QUICK_ADD_IN_PROJECT_EVENT, listener);
+  }, []);
+
+  function toggleSearch() {
+    // A search that's out of sight would hide tasks for no reason shown, so closing it clears it.
+    if (searchOpen) setSearchQuery("");
+    setSearchOpen(!searchOpen);
+  }
+  useEffect(() => {
+    if (searchOpen) searchRef.current?.focus();
+  }, [searchOpen]);
 
   async function fetchTasks(showLoading = true) {
     try {
@@ -439,9 +491,36 @@ export default function TasksPage() {
     // No side margins (#520): the bands and rows run from the sidebar to the scrollbar, on the surface color down to
     // the bottom of the page (data-page-surface, read by the app shell's main).
     <div data-page-surface className="flex min-h-full flex-col bg-surface">
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-canvas px-4 py-3 sm:pl-6 sm:pr-4">
+      {/* Computers (1D): one row. Phones (2A): the title with the search and Filter buttons, then the search field
+          while it's open, then the tabs across the screen. */}
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-canvas px-4 py-3 max-sm:gap-x-0 max-sm:pb-3 max-sm:pt-0 sm:pl-6 sm:pr-4">
         <h1 className="text-title">Tasks</h1>
-        <div role="radiogroup" aria-label="Status" className="flex shrink-0 rounded-[0.625rem] bg-sunken p-[0.1875rem]">
+        <span aria-hidden="true" className="flex-1 sm:hidden" />
+        <button
+          type="button"
+          aria-label="Search tasks"
+          aria-expanded={searchOpen}
+          aria-controls="tasks-search"
+          onClick={toggleSearch}
+          className={cn(phoneHeaderButtonClass, searchOpen && "bg-surface-hover")}
+        >
+          <Search aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          aria-label={taskFilterCount(filters) ? `Filter and sort, ${taskFilterCount(filters)} on` : "Filter and sort"}
+          aria-haspopup="dialog"
+          onClick={() => setFilterSheetOpen(true)}
+          className={cn(phoneHeaderButtonClass, "-mr-2")}
+        >
+          <ListFilter aria-hidden="true" />
+          {taskFilterCount(filters) ? (
+            <span aria-hidden="true" className="absolute right-1.25 top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[0.625rem] font-bold text-accent-ink">
+              {taskFilterCount(filters)}
+            </span>
+          ) : null}
+        </button>
+        <div role="radiogroup" aria-label="Status" className="flex shrink-0 rounded-[0.625rem] bg-sunken p-[0.1875rem] max-sm:order-last max-sm:basis-full">
           {statusTabs.map(([value, label]) => (
             <button
               key={value}
@@ -450,7 +529,7 @@ export default function TasksPage() {
               aria-checked={statusFilter === value}
               onClick={() => setStatusFilter(value)}
               className={cn(
-                "rounded-[0.4375rem] px-3 py-1 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent",
+                "rounded-[0.4375rem] px-3 py-1 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent max-sm:h-8.5 max-sm:flex-1 max-sm:rounded-lg max-sm:text-[0.9375rem]",
                 statusFilter === value ? "bg-surface text-ink shadow-card" : "text-muted hover:text-ink",
               )}
             >
@@ -458,24 +537,36 @@ export default function TasksPage() {
             </button>
           ))}
         </div>
-        <div role="search" aria-label="Filter tasks" className="flex min-w-0 flex-1 items-center justify-end gap-2 max-sm:basis-full sm:gap-3">
+        <div
+          id="tasks-search"
+          role="search"
+          aria-label="Filter tasks"
+          className={cn("flex min-w-0 flex-1 items-center justify-end gap-2 max-sm:basis-full sm:gap-3", !searchOpen && "max-sm:hidden")}
+        >
           <label className="relative flex min-w-30 basis-60 items-center max-sm:flex-1">
             <span className="sr-only">Search tasks</span>
-            <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 h-4 w-4 text-muted" />
+            <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 h-4 w-4 text-muted max-sm:left-3" />
             <input
+              ref={searchRef}
               type="search"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search tasks"
-              className="h-8.5 w-full min-w-0 rounded-lg border border-line bg-surface pl-8 pr-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
+              className="h-8.5 w-full min-w-0 rounded-lg border border-line bg-surface pl-8 pr-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25 max-sm:h-10 max-sm:rounded-[0.625rem] max-sm:pl-9"
             />
           </label>
-          <TaskFilterMenu filters={filters} projects={projects} labels={labels ?? []} onChange={setFilters} />
-          <TaskDisplayMenu sort={sortBy} showDescriptions={showDescriptions} onSortChange={setSortBy} onShowDescriptionsChange={setShowDescriptions} />
+          {/* Phones filter and sort from a sheet instead. */}
+          <div className="contents max-sm:hidden">
+            <TaskFilterMenu filters={filters} projects={projects} labels={labels ?? []} onChange={setFilters} />
+            <TaskDisplayMenu sort={sortBy} showDescriptions={showDescriptions} onSortChange={setSortBy} onShowDescriptionsChange={setShowDescriptions} />
+          </div>
         </div>
       </header>
 
-      <QuickAdd variant="row" onAdded={() => void fetchTasks(false)} />
+      {/* On phones the add box is a sheet, from the bottom bar's + (#521). */}
+      <div className="max-sm:hidden">
+        <QuickAdd variant="row" onAdded={() => void fetchTasks(false)} />
+      </div>
 
       {loadError ? (
         <p role="alert" className="border-b border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger sm:px-6">
@@ -497,7 +588,9 @@ export default function TasksPage() {
           <h2 className="text-base font-semibold">{tasks.length === 0 ? "No tasks yet." : "No tasks match these filters."}</h2>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted">
             {tasks.length === 0
-              ? "Type one in the box above and press Enter, or press N for the full form."
+              ? phone
+                ? "Tap + at the bottom of the screen to add one."
+                : "Type one in the box above and press Enter, or press N for the full form."
               : "Clear the search or switch back to all tasks."}
           </p>
           {tasks.length !== 0 && filtersActive ? (
@@ -516,7 +609,7 @@ export default function TasksPage() {
             return (
               <section key={group.key} aria-labelledby={`group-${group.key}`}>
                 {/* One line at any width: a long project name truncates rather than pushing the buttons onto a second row. */}
-                <div className={cn("flex h-10 items-center gap-2 border-b border-line bg-sunken pl-2.5 pr-2 sm:pr-3", index > 0 && "border-t")}>
+                <div className={cn("flex h-10 items-center gap-2 border-b border-line bg-sunken pl-2.5 pr-2 max-sm:h-11 max-sm:pr-1 sm:pr-3", index > 0 && "border-t")}>
                   <button
                     type="button"
                     aria-expanded={group.open}
@@ -524,14 +617,14 @@ export default function TasksPage() {
                     aria-label={`${group.open ? "Fold" : "Unfold"} ${group.name}`}
                     title={group.open ? "Fold" : "Unfold"}
                     onClick={() => setFolded((current) => toggled(current, group.key))}
-                    className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent max-sm:h-7 max-sm:w-7"
                   >
                     <ChevronDown aria-hidden="true" className={cn("h-3.5 w-3.5 transition-transform", !group.open && "-rotate-90")} />
                   </button>
                   {group.projectId ? (
                     <>
                       <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: group.color ?? undefined }} />
-                      <h2 id={`group-${group.key}`} className="min-w-0 truncate text-[0.90625rem] font-semibold">
+                      <h2 id={`group-${group.key}`} className="min-w-0 truncate text-[0.90625rem] font-semibold max-sm:text-[0.9375rem]">
                         <Link href={`/projects/${group.projectId}`} title={group.name} className="rounded outline-none hover:text-accent focus-visible:ring-2 focus-visible:ring-accent">
                           {group.name}
                         </Link>
@@ -586,22 +679,32 @@ export default function TasksPage() {
                     <span className="sr-only"> active</span>
                   </span>
                   <span aria-hidden="true" className="flex-1" />
-                  {/* The add box above, with this band's project picked. */}
+                  {/* The add box above, with this band's project picked. Phones have it in ⋯ instead. */}
                   <button
                     type="button"
                     onClick={() => quickAddInProject(group.projectId ?? "")}
                     aria-label={group.projectId ? `New task in ${group.name}` : "New task with no project"}
                     title={group.projectId ? `New task in ${group.name}` : "New task with no project"}
-                    className={bandButtonClass}
+                    className={cn(bandButtonClass, "max-sm:hidden")}
                   >
                     <Plus aria-hidden="true" className="h-4 w-4" />
                   </button>
                   {/* The project's Calendar and notes moved in here (#520), so the band holds one calendar-free line. */}
                   <DropdownMenu>
                     <DropdownMenuTrigger aria-label={`More for ${group.name}`} title="More" className={bandButtonClass}>
-                      <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
+                      <MoreHorizontal aria-hidden="true" className="h-4 w-4 max-sm:h-5 max-sm:w-5" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {phone ? (
+                        <>
+                          {/* The add box as a sheet, with this band's project picked (#521). */}
+                          <DropdownMenuItem onSelect={() => quickAddInProject(group.projectId ?? "")}>
+                            <Plus />
+                            {group.projectId ? `New task in ${group.name}` : "New task with no project"}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                        </>
+                      ) : null}
                       <DropdownMenuItem asChild>
                         <Link href={`/events/calendar?project=${scope}`}>
                           <CalendarDays />
@@ -637,7 +740,7 @@ export default function TasksPage() {
                           <h3
                             id={headingId}
                             className={cn(
-                              "flex h-8 items-end gap-2 pb-1 pl-11 pr-4 text-2xs font-semibold uppercase tracking-wider sm:pl-13",
+                              "flex h-8 items-end gap-2 pb-1 pl-13 pr-4 text-2xs font-semibold uppercase tracking-wider",
                               section.key === "OVERDUE" ? "text-danger" : "text-muted",
                             )}
                           >
@@ -663,24 +766,41 @@ export default function TasksPage() {
                           </h3>
                           {section.shut ? null : (
                             <ul id={sectionTasksId}>
-                              {section.tasks.map((task) => (
-                                <TaskRow
-                                  key={task.id}
-                                  ref={task.id === linkedTaskId ? linkedRowRef : undefined}
-                                  task={task}
-                                  now={now}
-                                  highlighted={task.id === linkedTaskId}
-                                  busy={busyIds.includes(task.id)}
-                                  showProject={false}
-                                  showDescription={showDescriptions}
-                                  onToggle={(item) => void toggleTask(item)}
-                                  onOpen={openTask}
-                                  onDelete={setConfirmDelete}
-                                  selected={selected.has(task.id)}
-                                  selecting={selectedTasks.length > 0}
-                                  onSelect={selectTask}
-                                />
-                              ))}
+                              {section.tasks.map((task) =>
+                                phone ? (
+                                  <TaskRowPhone
+                                    key={task.id}
+                                    ref={task.id === linkedTaskId ? linkedRowRef : undefined}
+                                    task={task}
+                                    now={now}
+                                    highlighted={task.id === linkedTaskId}
+                                    busy={busyIds.includes(task.id)}
+                                    showDescription={showDescriptions}
+                                    onToggle={(item) => void toggleTask(item)}
+                                    onOpen={openTask}
+                                    selected={selected.has(task.id)}
+                                    selecting={selectedTasks.length > 0}
+                                    onSelect={selectTask}
+                                  />
+                                ) : (
+                                  <TaskRow
+                                    key={task.id}
+                                    ref={task.id === linkedTaskId ? linkedRowRef : undefined}
+                                    task={task}
+                                    now={now}
+                                    highlighted={task.id === linkedTaskId}
+                                    busy={busyIds.includes(task.id)}
+                                    showProject={false}
+                                    showDescription={showDescriptions}
+                                    onToggle={(item) => void toggleTask(item)}
+                                    onOpen={openTask}
+                                    onDelete={setConfirmDelete}
+                                    selected={selected.has(task.id)}
+                                    selecting={selectedTasks.length > 0}
+                                    onSelect={selectTask}
+                                  />
+                                ),
+                              )}
                             </ul>
                           )}
                         </section>
@@ -713,6 +833,37 @@ export default function TasksPage() {
           </div>
         </div>
       ) : null}
+
+      {/* Phones (#521): Filter and sort as a sheet of chips, and the add box as a sheet. */}
+      <TaskFilterSheet
+        open={filterSheetOpen}
+        onOpenChange={setFilterSheetOpen}
+        filters={filters}
+        onChange={setFilters}
+        sort={sortBy}
+        onSortChange={setSortBy}
+        projects={projects}
+        labels={labels ?? []}
+        resultCount={visibleTasks.length}
+      />
+      <Sheet open={addSheet !== null} onOpenChange={(open) => (open ? undefined : setAddSheet(null))}>
+        <SheetContent side="bottom" hideClose aria-describedby={undefined} className="gap-1 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-2">
+          <span aria-hidden="true" className="mx-auto mb-1 h-1 w-9 shrink-0 rounded-full bg-line" />
+          <SheetTitle className="sr-only">Add a task</SheetTitle>
+          {addSheet ? (
+            <QuickAdd
+              variant="sheet"
+              inputId="quick-add-sheet-input"
+              initialProjectId={addSheet.projectId}
+              onAdded={() => {
+                setAddSheet(null);
+                void fetchTasks(false);
+              }}
+              onMoreDetails={() => setAddSheet(null)}
+            />
+          ) : null}
+        </SheetContent>
+      </Sheet>
 
       <ConfirmDialog
         open={confirmBulkDelete}
