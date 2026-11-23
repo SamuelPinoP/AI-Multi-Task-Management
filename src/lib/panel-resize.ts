@@ -4,8 +4,9 @@
  * with everything else; the pointer gives pixels, which the edge divides by the root font size.
  *
  * Dragged past its narrowest open width, a panel that can collapse snaps to its collapsed
- * width (the sidebar's icon rail, the Chats list's photo column), as VS Code collapses a
- * panel. One without a collapsed width stops at its narrowest.
+ * width (the sidebar's icon rail, the Chats list's photo column, the AI page's icon rail), as
+ * VS Code collapses a panel. A click on the edge, without dragging, collapses an open panel and
+ * opens a collapsed one. One without a collapsed width stops at its narrowest.
  */
 
 export type PanelLimits = {
@@ -13,7 +14,7 @@ export type PanelLimits = {
   min: number;
   /** The widest, in rem. */
   max: number;
-  /** The width it opens at, and what a double-click on the edge restores, in rem. */
+  /** The width it opens at, in rem. */
   initial: number;
   /** The width when collapsed, in rem. Leave it out for a panel that never collapses. */
   collapsed?: number;
@@ -25,11 +26,20 @@ export const SIDEBAR_LIMITS = { min: 11, max: 22.5, initial: 14, collapsed: 3.5 
 /** The Chats list (#416): 310 px by default (design 2B), 240 to 480 px, or a 72 px column of photos. */
 export const CHAT_LIST_LIMITS = { min: 15, max: 30, initial: 19.375, collapsed: 4.5 } satisfies PanelLimits;
 
-/** The AI page's list of chats (#308, round 3): 264 px by default, 220 to 360 px; it never collapses. */
-export const AI_CHAT_LIST_LIMITS: PanelLimits = { min: 13.75, max: 22.5, initial: 16.5 };
+/** The AI page's list of chats (#308, round 3): 264 px by default, 220 to 360 px, or a 56 px rail of icons like the sidebar's. */
+export const AI_CHAT_LIST_LIMITS = { min: 13.75, max: 22.5, initial: 16.5, collapsed: 3.5 } satisfies PanelLimits;
 
 /** Cookie that remembers the width the AI page's list of chats was dragged to, in rem. */
 export const AI_CHAT_LIST_WIDTH_COOKIE = "ai-chats-width";
+
+/** Cookie that remembers whether the AI page's list of chats is down to its rail ("1") or open ("0"). */
+export const AI_CHAT_LIST_COLLAPSED_COOKIE = "ai-chats-collapsed";
+
+/**
+ * How far the pointer may wander, in CSS pixels, before pressing the edge counts as a drag rather
+ * than a click. A hand on a trackpad moves a pixel or two while clicking.
+ */
+export const CLICK_SLOP_PX = 4;
 
 /** Where a panel is: its open width, and whether it's collapsed (the width comes back when it opens). */
 export type PanelSize = { width: number; collapsed: boolean };
@@ -66,12 +76,21 @@ export function dragTo(pointer: number, limits: PanelLimits, restore: number): P
 }
 
 /**
+ * A click on the edge: an open panel collapses, keeping its width for later, and a collapsed one
+ * opens at that width. A panel that never collapses has nothing to do (null).
+ */
+export function clickTo(size: PanelSize, limits: PanelLimits): PanelSize | null {
+  if (limits.collapsed === undefined) return null;
+  return { width: size.width, collapsed: !size.collapsed };
+}
+
+/**
  * The edge's keys, after the WAI-ARIA window splitter: ← and → step by KEYBOARD_STEP (← at the
  * narrowest collapses, → when collapsed opens at the narrowest), Home collapses, End opens it all
- * the way, and Enter collapses or brings back the width it had. Other keys return null.
+ * the way, and Enter collapses or brings back the width it had, like a click. Other keys return null.
  *
  * A panel that never collapses stops at its narrowest instead: Home goes there, and Enter brings
- * back the width it opens at, like a double-click.
+ * back the width it opens at.
  */
 export function keyTo(key: string, size: PanelSize, limits: PanelLimits): PanelSize | null {
   if (limits.collapsed === undefined) {
@@ -103,7 +122,7 @@ export function keyTo(key: string, size: PanelSize, limits: PanelLimits): PanelS
     case "End":
       return { width: limits.max, collapsed: false };
     case "Enter":
-      return { width: size.width, collapsed: !size.collapsed };
+      return clickTo(size, limits);
     default:
       return null;
   }

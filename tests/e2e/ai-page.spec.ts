@@ -299,35 +299,104 @@ test("a chat is renamed and deleted from its ⋯ menu, and every chat with Delet
   await expect(chats.getByText("Your chats will show here.")).toBeVisible();
 });
 
-test("the chats list resizes from 220 to 360 px, like the sidebar, and keeps its width", async ({ page, isMobile }) => {
+test("the chats list resizes from 220 to 360 px and folds to a rail, like the sidebar, and keeps both", async ({ page, isMobile }) => {
   test.skip(isMobile, "Phones show the list full screen.");
   await signUpAndLogIn(page, "E2E AI resize");
   await page.goto("/ai");
   const edge = page.getByRole("separator", { name: "Resize your chats" });
   const list = page.locator("#ai-chats");
+  const width = async () => Math.round((await list.boundingBox())!.width);
+  const rail = page.getByRole("button", { name: "Show your chats" });
   await expect(edge).toHaveAttribute("aria-valuenow", "264");
-  expect(Math.round((await list.boundingBox())!.width)).toBe(264);
+  await expect.poll(width).toBe(264);
 
   await edge.focus();
   await page.keyboard.press("End");
   await expect(edge).toHaveAttribute("aria-valuenow", "360");
   await page.reload();
   await expect(edge).toHaveAttribute("aria-valuenow", "360");
-  expect(Math.round((await list.boundingBox())!.width)).toBe(360);
+  await expect.poll(width).toBe(360);
 
-  // It never collapses: Home and a drag far to the left stop at 220 px.
-  await edge.focus();
-  await page.keyboard.press("Home");
-  await expect(edge).toHaveAttribute("aria-valuenow", "220");
+  // A drag holds at 220 px, then past it snaps to a 56 px rail of icons.
   const box = (await edge.boundingBox())!;
-  await page.mouse.move(box.x + box.width / 2, box.y + 200);
+  const left = (await list.boundingBox())!.x;
+  const y = box.y + 200;
+  await page.mouse.move(box.x + box.width / 2, y);
   await page.mouse.down();
-  await page.mouse.move(box.x - 300, box.y + 200, { steps: 5 });
-  await page.mouse.up();
+  await page.mouse.move(left + 180, y, { steps: 5 });
   await expect(edge).toHaveAttribute("aria-valuenow", "220");
-  await expect(list).toBeVisible();
+  await page.mouse.move(left + 40, y, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(width).toBe(56);
+  await expect(edge).toHaveAttribute("aria-valuetext", "Icons only");
+  await expect(rail).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Chats", exact: true })).toBeHidden();
 
-  // Double-click brings back 264 px.
-  await edge.dblclick();
-  await expect(edge).toHaveAttribute("aria-valuenow", "264");
+  // The rail survives a reload, and a click on the edge opens the list at the width from before the drag.
+  await page.reload();
+  await expect(rail).toBeVisible();
+  await expect.poll(width).toBe(56);
+  await edge.click();
+  await expect.poll(width).toBe(360);
+  await expect(rail).toBeHidden();
+
+  // A click folds it again; the rail's magnifier opens the list with the cursor in its search.
+  await edge.click();
+  await expect.poll(width).toBe(56);
+  await page.getByRole("button", { name: "Search chats" }).click();
+  await expect.poll(width).toBe(360);
+  await expect(page.getByRole("searchbox", { name: "Search chats" })).toBeFocused();
+
+  // The list's own button folds it too, and the rail's first button opens it.
+  await page.getByRole("button", { name: "Collapse your chats" }).click();
+  await expect.poll(width).toBe(56);
+  await rail.click();
+  await expect.poll(width).toBe(360);
+  await page.reload();
+  await expect.poll(width).toBe(360);
+});
+
+// #536: the conversation follows its newest words while the reader is at the end, and only the reader
+// scrolling up stops that. This plays out the race that broke it: the content grows by more than a
+// screen (as when the card of changes lands under an answer) and a scroll event arrives before
+// anything has scrolled. The old handler read that as the reader leaving the end and stopped.
+test("a conversation keeps following its end as it grows, until the reader scrolls up (#536)", async ({ page }) => {
+  await signUpAndLogIn(page, "E2E AI follow");
+  expect((await page.request.post("/api/agent/notice", { data: { version: AI_NOTICE_VERSION } })).ok()).toBe(true);
+  await page.goto("/ai");
+  await ask(page, "First question");
+  await expect(conversation(page).getByText("You asked: First question")).toBeVisible();
+  const scroller = conversation(page).locator("[data-follows-end]");
+  const fromEnd = () => scroller.evaluate((element) => Math.round(element.scrollHeight - element.scrollTop - element.clientHeight));
+  /** Two frames: ResizeObserver callbacks have run by then. */
+  const settle = () => scroller.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect.poll(fromEnd).toBeLessThan(2);
+
+  // The content grows, and a scroll event lands before anything scrolls: it keeps following.
+  await scroller.evaluate((element) => {
+    (element.firstElementChild as HTMLElement).style.paddingBottom = "1500px";
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await expect.poll(fromEnd).toBeLessThan(2);
+
+  // Scrolled up, it stays where the reader left it while more arrives.
+  await scroller.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await settle();
+  await scroller.evaluate((element) => {
+    (element.firstElementChild as HTMLElement).style.paddingBottom = "3000px";
+  });
+  await settle();
+  expect(await scroller.evaluate((element) => element.scrollTop)).toBe(0);
+
+  // Back at the end, it follows again.
+  await scroller.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await settle();
+  await scroller.evaluate((element) => {
+    (element.firstElementChild as HTMLElement).style.paddingBottom = "4500px";
+  });
+  await expect.poll(fromEnd).toBeLessThan(2);
 });
