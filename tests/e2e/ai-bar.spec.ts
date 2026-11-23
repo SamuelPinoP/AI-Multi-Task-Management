@@ -98,7 +98,18 @@ test.describe("on a computer", () => {
     await expect(notice).toBeVisible();
     await notice.getByRole("button", { name: "Agree and continue" }).click();
     await expect(chat(page).getByText(`list_open_tasks found 1: ${task}`)).toBeVisible();
-    await expect(chat(page).getByText("38 of 40 left today · Answers can be wrong. Nothing changes until you confirm it.")).toBeVisible();
+    // Under the box: the reminder on the left, today's allowance on the right (Samuel, November 21).
+    const reminder = chat(page).getByText("Answers can be wrong. Nothing changes until you confirm it.");
+    const left = chat(page).getByText("38 of 40 left today", { exact: true });
+    await expect(reminder).toBeVisible();
+    await expect(left).toBeVisible();
+    const box = (await chatBox(page).locator("xpath=ancestor::form[1]").boundingBox())!;
+    const reminderBox = (await reminder.boundingBox())!;
+    const leftBox = (await left.boundingBox())!;
+    expect(reminderBox.y).toBeGreaterThan(box.y + box.height - 1);
+    expect(reminderBox.x - box.x).toBeLessThan(20);
+    expect(box.x + box.width - (leftBox.x + leftBox.width)).toBeLessThan(20);
+    expect(Math.abs(reminderBox.y - leftBox.y)).toBeLessThan(2);
     // The chat's title is its first question.
     await expect(chat(page).getByText("What's on my plate? list_open_tasks", { exact: true }).first()).toBeVisible();
 

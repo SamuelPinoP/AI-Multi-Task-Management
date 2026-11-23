@@ -62,7 +62,18 @@ test("nothing is sent before the notice; agreeing sends the question, and the an
   expect(await fromGermany.json()).toMatchObject({ mode: "planner", reason: "region" });
 
   await page.goto("/ai");
-  await expect(page.getByText(/^40 of 40 left today/).filter({ visible: true })).toBeVisible();
+  // Today's allowance sits under the message box on the right, the reminder on the left (Samuel, November 21).
+  const allowance = page.getByText("40 of 40 left today", { exact: true });
+  await expect(allowance).toBeVisible();
+  const box = (await messageBox(page).locator("xpath=ancestor::form[1]").boundingBox())!;
+  const allowanceBox = (await allowance.boundingBox())!;
+  expect(allowanceBox.y).toBeGreaterThan(box.y + box.height - 1);
+  expect(box.x + box.width - (allowanceBox.x + allowanceBox.width)).toBeLessThan(20);
+  const reminder = page.getByText(isMobile ? "Nothing changes until you confirm" : "Answers can be wrong. Nothing changes until you confirm it.", { exact: true });
+  const reminderBox = (await reminder.boundingBox())!;
+  expect(reminderBox.x - box.x).toBeLessThan(20);
+  // Only there: the header no longer repeats it.
+  await expect(allowance).toHaveCount(1);
   const send = page.getByRole("button", { name: "Send", exact: true });
   await expect(send).not.toHaveClass(/\bai-send\b/);
 
