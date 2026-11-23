@@ -131,7 +131,7 @@ test("a message that arrives while the chat is open counts as read", async () =>
   await expect(chatRow(teammate)).not.toHaveAccessibleName(/unread/);
 });
 
-test("on desktop the list stays beside the open chat, resizes from its edge, shrinks to photos and is remembered", async () => {
+test("on desktop the list stays beside the open chat, resizes from its edge, shrinks to photos on a drag or a click, and is remembered", async () => {
   // A second chat with a message the owner hasn't read, so the column of photos has a count to show.
   const otherName = uniqueName("Chats hub other project");
   const otherId = (await ok<{ id: string }>(await teammate.request.post("/api/projects", { data: { name: otherName } }))).id;
@@ -178,12 +178,15 @@ test("on desktop the list stays beside the open chat, resizes from its edge, shr
   await expect.poll(width).toBe(310);
   await expect(owner.getByLabel("Search people")).toBeFocused();
 
-  // The keyboard works the edge too, and a double-click goes back to 310 px.
+  // The keyboard works the edge too, and a click on it shrinks the list to photos and opens it again.
   await edge.focus();
   await owner.keyboard.press("ArrowLeft");
   await expect.poll(width).toBe(294);
-  await edge.dblclick();
-  await expect.poll(width).toBe(310);
+  await edge.click();
+  await expect.poll(width).toBe(72);
+  await expect(list.getByRole("link", { name: `${otherName}, 1 unread message` })).toBeVisible();
+  await edge.click();
+  await expect.poll(width).toBe(294);
 
   // With no chat open, the list is the page.
   await owner.goto("/chats");
