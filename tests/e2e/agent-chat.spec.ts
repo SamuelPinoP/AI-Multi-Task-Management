@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type APIRequestContext, type BrowserContext } from "@playwright/test";
 import { AI_NOTICE_VERSION } from "../../src/lib/ai/notice";
-import { continueAsGuest, queryDatabase, signUpAndLogIn, uniqueName } from "./helpers";
+import { continueAsGuest, queryDatabase, resetsInPattern, signUpAndLogIn, uniqueName } from "./helpers";
 
 // The AI assistant's endpoint (#307) and its chat history (#452), end to end against the real
 // database. The server runs with AI_PROVIDER="fake" (scripts/run-playwright-e2e.mjs), whose rules are
@@ -227,9 +227,11 @@ test("once today's allowance is used, the planner answers and says when it comes
     [filler, remaining, myEmail],
   );
   try {
+    const sent = new Date();
     const events = await ask(me, "list_open_tasks");
     expect(events[0]).toMatchObject({ type: "start", mode: "planner", reason: "user_limit" });
-    expect(String(events[0].message)).toMatch(/^You've used today's AI allowance of \d+ requests\. It resets in about \d+ hours?\./);
+    // In the words the app uses at this moment: "about an hour" in the last hour before the reset (#538).
+    expect(String(events[0].message)).toMatch(new RegExp(`^You've used today's AI allowance of \\d+ requests\\. ${resetsInPattern(sent, new Date())}`));
     expect(events.some((event) => event.type === "tool")).toBe(false);
     expect(answerText(events)).toContain(myTask);
     expect(events.at(-1)).toMatchObject({ type: "done", outcome: "USER_LIMIT" });
