@@ -5,6 +5,7 @@ import {
   AGENT_LIMITS,
   EMPTY_ANSWER_MESSAGE,
   INVALID_ARGUMENTS_MESSAGE,
+  INVALID_PROPOSAL_MESSAGE,
   runAgentLoop,
   STEP_LIMIT_MESSAGE,
   type LoopEvent,
@@ -122,6 +123,25 @@ test("ends the message on a second invalid call", async () => {
   assert.equal(result.modelRequests, 2);
   assert.deepEqual(runs, []);
   assert.equal(texts(events), INVALID_ARGUMENTS_MESSAGE);
+});
+
+test("a change the model couldn't fill in twice ends with a message about the change, not a lookup (#433)", async () => {
+  const proposeTool = defineTool({
+    name: "propose_item",
+    label: "Preparing an item",
+    description: "Proposes an item.",
+    input: z.strictObject({ title: z.string().min(1) }),
+    access: "propose",
+    async run() {
+      return { data: { proposed: "Item" }, sources: [] };
+    },
+  });
+  const { events, result } = await run(
+    [{ toolCalls: [{ name: "propose_item", args: {} }] }, { toolCalls: [{ name: "propose_item", args: { title: "" } }] }],
+    { tools: [proposeTool] },
+  );
+  assert.equal(result.outcome, "invalid_arguments");
+  assert.equal(texts(events), INVALID_PROPOSAL_MESSAGE);
 });
 
 test("a model can't choose whose data a tool reads: unknown arguments are refused", async () => {

@@ -152,6 +152,32 @@ export function parseApplyRequest(raw: string): { ok: true; steps: number[] | nu
   return parsed.success ? { ok: true, steps: parsed.data.steps ?? null } : { ok: false, error: CHOOSE_CHANGES };
 }
 
+/** The longest description a draft ticket takes (#433): a long ticket, with room for the person's additions. */
+export const DRAFT_DESCRIPTION_MAX = 20_000;
+
+const DRAFT_EDIT_INVALID = "Those aren't changes to a draft.";
+const draftEdit = z.strictObject({ step: z.number().int().min(0).max(MAX_PROPOSAL_STEPS - 1), description: z.string() });
+
+/**
+ * A change to a pending proposal's draft (#433): `{ "step": 1, "description": "## Summary…" }` is
+ * the new description of the new task at that index, as the person edited it before applying it.
+ */
+export function parseDraftEdit(raw: string): { ok: true; step: number; description: string } | { ok: false; error: string } {
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return { ok: false, error: DRAFT_EDIT_INVALID };
+  }
+  const parsed = draftEdit.safeParse(body);
+  if (!parsed.success) return { ok: false, error: DRAFT_EDIT_INVALID };
+  const description = parsed.data.description.trim();
+  if (description.length > DRAFT_DESCRIPTION_MAX) {
+    return { ok: false, error: `Keep the description under ${DRAFT_DESCRIPTION_MAX.toLocaleString("en-US")} characters.` };
+  }
+  return { ok: true, step: parsed.data.step, description };
+}
+
 /** What the person is told when the app's rules refuse a step: nothing changed, and why, in plain words. */
 export function refusalMessage(step: ProposalStep, refusal: { status: number; error: string }) {
   const title = `“${stepTitle(step)}”`;

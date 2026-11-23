@@ -1,6 +1,7 @@
 "use client";
 
-import { CalendarDays, ChevronRight, CircleAlert, CircleCheck, FolderKanban, Info, Pencil, SquareCheckBig, Trash2, type LucideIcon } from "lucide-react";
+import { CalendarDays, ChevronRight, CircleAlert, CircleCheck, FolderKanban, Info, PanelRightOpen, Pencil, SquareCheckBig, Trash2, type LucideIcon } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -11,6 +12,10 @@ import { NOT_PENDING_MESSAGES, needsNote, proposalRows, stepChoices, toggleStep,
 import { cn } from "@/lib/cn";
 import { formatTaskDayKey } from "@/lib/task-date-buckets";
 import { notifyWorkspaceChanged, TASK_CREATED_EVENT } from "@/lib/workspace-events";
+
+// A ticket's draft (#433), with its Markdown renderer, loads once a card holds a ticket, not with
+// every page the AI bar is on.
+const AiTicketDraft = dynamic(() => import("@/components/ai/ai-ticket-draft").then((module) => module.AiTicketDraft), { ssr: false });
 
 const ICONS: Record<ProposalRowKind, LucideIcon> = {
   project: FolderKanban,
@@ -76,6 +81,7 @@ function ChangeRow({
   open,
   onToggle,
   onOpen,
+  onOpenDraft,
 }: {
   row: ProposalRow;
   checked: boolean;
@@ -85,6 +91,8 @@ function ChangeRow({
   open: boolean;
   onToggle: () => void;
   onOpen: () => void;
+  /** Opens a ticket's draft beside the chat (#433). */
+  onOpenDraft: () => void;
 }) {
   const Icon = ICONS[row.kind];
   const tone = TONES[row.kind];
@@ -109,10 +117,12 @@ function ChangeRow({
                 {change.label} <s>{change.from}</s> → <span className="font-medium text-ink">{change.to}</span>{" "}
               </span>
             ))}
+            {row.ticket?.summary ? <span className="mt-0.5 line-clamp-2 text-[0.78125rem] leading-[1.1875rem] text-ink [overflow-wrap:anywhere]">{row.ticket.summary}</span> : null}{" "}
+            {row.ticket?.facts ? <span className="text-xs leading-[1.125rem] text-muted">{row.ticket.facts}</span> : null}
             {blockedNote ? <span className="text-xs leading-[1.125rem] text-warning">{blockedNote}</span> : null}
           </span>
         </label>
-        {row.description ? (
+        {row.description && !row.ticket ? (
           <button
             type="button"
             aria-label={`${open ? "Hide" : "Show"} details of ${row.title}`}
@@ -125,7 +135,22 @@ function ChangeRow({
           </button>
         ) : null}
       </div>
-      {row.description && open ? (
+      {row.ticket ? (
+        // Under the title: past the checkbox, its gap, the icon and its gap.
+        <div className="mt-1.5 pl-16">
+          <button
+            type="button"
+            onClick={onOpenDraft}
+            disabled={disabled}
+            aria-label={`Open draft of ${row.title}`}
+            className={cn(uiButtonClass, "h-9 gap-1.5 px-2.5 py-0 text-xs max-sm:h-11 max-sm:text-sm")}
+          >
+            <PanelRightOpen aria-hidden="true" className="h-3.5 w-3.5" />
+            Open draft
+          </button>
+        </div>
+      ) : null}
+      {row.description && !row.ticket && open ? (
         // Under the title: past the checkbox, its gap, the icon and its gap.
         <p id={descriptionId} className="mt-1 whitespace-pre-wrap pl-16 text-[0.78125rem] leading-[1.1875rem] text-ink [overflow-wrap:anywhere]">
           {row.description}
@@ -146,6 +171,8 @@ export function AiProposalCard({ proposal, onNavigate }: { proposal: ProposalVie
   const router = useRouter();
   const [leftOut, setLeftOut] = useState<Set<number>>(() => new Set());
   const [open, setOpen] = useState<Set<number>>(() => new Set());
+  // The ticket whose draft is open beside the chat, by its step's index (#433).
+  const [draft, setDraft] = useState<number | null>(null);
   const [busy, setBusy] = useState<"apply" | "cancel" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const result = useRef<HTMLDivElement>(null);
@@ -282,6 +309,7 @@ export function AiProposalCard({ proposal, onNavigate }: { proposal: ProposalVie
                   return next;
                 })
               }
+              onOpenDraft={() => setDraft(row.index)}
             />
           );
         })}
@@ -291,6 +319,12 @@ export function AiProposalCard({ proposal, onNavigate }: { proposal: ProposalVie
           {error}
         </p>
       ) : null}
+      {rows.map((row) =>
+        // An open draft stays open even once its last section is removed and it's no longer a ticket.
+        row.ticket || draft === row.index ? (
+          <AiTicketDraft key={row.index} proposal={proposal} row={row} open={draft === row.index} onOpenChange={(now) => setDraft(now ? row.index : null)} />
+        ) : null,
+      )}
       <div className="flex items-center gap-2 border-t border-line px-3 py-2.5">
         <button
           type="button"

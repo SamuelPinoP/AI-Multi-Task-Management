@@ -1,0 +1,190 @@
+[
+  {
+    "id": "tickets-feature",
+    "ability": "tickets",
+    "summary": "Turns a one-line request into a complete ticket: every section, testable criteria, the open questions, and no invented dates, amounts or limits (#433).",
+    "request": "Create a ticket to let people export their tasks as a CSV file from the Tasks page.",
+    "expect": {
+      "tools": [{ "name": "create_ticket", "args": { "title": "CSV" } }],
+      "notTools": ["create_task"],
+      "proposal": [
+        {
+          "kind": "create_task",
+          "title": "CSV",
+          "ticket": {
+            "sections": ["Summary", "Acceptance criteria", "Open questions", "Original request"],
+            "minCriteria": 2,
+            "minQuestions": 1,
+            "notInvented": ["@inventedFacts"]
+          }
+        }
+      ],
+      "facts": ["@awaitsApply"],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [
+      {
+        "toolCalls": [
+          {
+            "name": "create_ticket",
+            "args": {
+              "title": "Export tasks as a CSV file",
+              "summary": "Let people download their tasks as a CSV file from the Tasks page, so they can use them in a spreadsheet.",
+              "background": ["The person asked for a CSV export on the Tasks page."],
+              "acceptanceCriteria": [
+                "The Tasks page has an Export button that downloads a CSV file of the tasks it shows",
+                "The file has a column for each of the task's title, status, priority, due date and project",
+                "A unit test checks the file's columns, and an e2e test downloads it"
+              ],
+              "outOfScope": ["Importing tasks from a CSV file"],
+              "openQuestions": ["Should done tasks and subtasks be in the file too?", "Should the export follow the page's filters?"]
+            }
+          }
+        ]
+      },
+      { "text": "Here's the ticket I'd add: Export tasks as a CSV file. Review it below, open the draft to change anything, and apply it when it looks right." }
+    ]
+  },
+  {
+    "id": "tickets-in-project",
+    "ability": "tickets",
+    "summary": "Writes the ticket in the project the person named, found by its name (#433).",
+    "request": "Write a ticket in Mobile app launch for adding a dark mode to the app.",
+    "expect": {
+      "tools": [{ "name": "create_ticket", "args": { "project": "Mobile" } }],
+      "proposal": [
+        {
+          "kind": "create_task",
+          "title": "dark",
+          "project": "Mobile app launch",
+          "ticket": {
+            "sections": ["Summary", "Acceptance criteria", "Original request"],
+            "minCriteria": 2,
+            "notInvented": ["@inventedFacts"]
+          }
+        }
+      ],
+      "facts": ["Mobile app launch", "@awaitsApply"],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [
+      {
+        "toolCalls": [
+          {
+            "name": "create_ticket",
+            "args": {
+              "title": "Add a dark mode to the mobile app",
+              "summary": "Give the mobile app a dark mode, so it's easier on the eyes in the dark.",
+              "acceptanceCriteria": [
+                "A person can turn the dark mode on and off in the app's settings",
+                "Every screen is readable in the dark mode",
+                "A test checks that the setting is kept after the app restarts"
+              ],
+              "openQuestions": ["Should the app follow the phone's own setting at first?"],
+              "project": "Mobile app launch"
+            }
+          }
+        ]
+      },
+      { "text": "Here's a ticket for Mobile app launch: Add a dark mode to the mobile app. Review it below and apply it if it looks right." }
+    ]
+  },
+  {
+    "id": "tickets-bug-structure",
+    "ability": "tickets",
+    "summary": "Follows the structure the person asked for: a bug report with their own sections, in their order (#433).",
+    "request": "Write a bug report: the calendar shows events a day late. Use the sections Steps to reproduce, Expected result and Actual result.",
+    "expect": {
+      "tools": [{ "name": "create_ticket" }],
+      "proposal": [
+        {
+          "kind": "create_task",
+          "title": "calendar",
+          "ticket": {
+            "sections": ["Summary", "Steps to reproduce", "Expected result", "Actual result", "Original request"],
+            "notInvented": ["@inventedFacts"]
+          }
+        }
+      ],
+      "facts": ["@awaitsApply"],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [
+      {
+        "toolCalls": [
+          {
+            "name": "create_ticket",
+            "args": {
+              "title": "The calendar shows events a day late",
+              "summary": "Events show on the calendar a day after the day they're on.",
+              "sections": [
+                { "title": "Steps to reproduce", "items": ["Create an event", "Open the calendar", "Find the day the event is on"] },
+                { "title": "Expected result", "text": "The event shows on its own day." },
+                { "title": "Actual result", "text": "The event shows on the next day." }
+              ],
+              "acceptanceCriteria": ["Events show on their own day in every calendar view", "An automated test shows an event on its own day"],
+              "openQuestions": ["Does it happen to all-day events, timed events or both?", "Which time zone was the calendar in?"]
+            }
+          }
+        ]
+      },
+      { "text": "Here's the bug report I'd add: The calendar shows events a day late, with the steps to reproduce and the expected and actual results. Review it below and apply it if it's right." }
+    ]
+  },
+  {
+    "id": "tickets-cost-section",
+    "ability": "tickets",
+    "summary": "Adds the Cost section the person asked for without making up amounts: what isn't known yet becomes an open question (#433).",
+    "request": "Make a ticket for buying a family car. Add a Cost section with the down payment and the monthly payment.",
+    "expect": {
+      "tools": [{ "name": "create_ticket" }],
+      "proposal": [
+        {
+          "kind": "create_task",
+          "title": "car",
+          "ticket": {
+            "sections": ["Summary", "Cost", "Original request"],
+            "minQuestions": 1,
+            "notInvented": ["@inventedFacts"]
+          }
+        }
+      ],
+      "facts": ["@awaitsApply"],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [
+      {
+        "toolCalls": [
+          {
+            "name": "create_ticket",
+            "args": {
+              "title": "Buy a family car",
+              "summary": "Choose and buy a car for the family.",
+              "sections": [{ "title": "Cost", "items": ["Down payment: to be decided", "Monthly payment: to be decided"] }],
+              "acceptanceCriteria": ["A car is chosen that fits the family", "The down payment and the monthly payment are agreed"],
+              "openQuestions": ["What budget should the down payment and the monthly payment stay within?", "How many seats does the family need?"]
+            }
+          }
+        ]
+      },
+      { "text": "Here's the ticket I'd add: Buy a family car, with a Cost section for the down payment and the monthly payment. Review it below and apply it when you're ready." }
+    ]
+  },
+  {
+    "id": "tickets-plain-task",
+    "ability": "tickets",
+    "summary": "A plain task stays a plain task: nobody asked for a ticket, so it doesn't write one (#433).",
+    "request": "Add a task to call the plumber tomorrow.",
+    "expect": {
+      "tools": [{ "name": "create_task", "args": { "title": "plumber", "dueDate": "2026-11-20" } }],
+      "notTools": ["create_ticket"],
+      "proposal": [{ "kind": "create_task", "title": "plumber", "dueDate": "2026-11-20" }],
+      "facts": ["@awaitsApply"],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "create_task", "args": { "title": "Call the plumber", "dueDate": "2026-11-20" } }] },
+      { "text": "Here's the task: Call the plumber, due tomorrow. Apply it below to add it." }
+    ]
+  }
+]

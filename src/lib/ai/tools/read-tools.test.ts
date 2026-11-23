@@ -286,6 +286,7 @@ test("every tool has a provider-safe name and a schema without patterns; only th
     "list_goals",
     "create_project",
     "create_task",
+    "create_ticket",
     "update_task",
     "complete_task",
     "create_event",

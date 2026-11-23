@@ -24,6 +24,8 @@ export type ToolContext = {
    * a new one for each message; without one, those tools refuse.
    */
   draft?: ProposalDraft;
+  /** The person's message the answer replies to: a ticket quotes it as its Original request (#433). */
+  request?: string;
 };
 
 /** An item a tool looked up, as a link the chat panel can show (#308). Never sent to the model. */

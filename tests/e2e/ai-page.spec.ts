@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { AI_NOTICE_VERSION } from "../../src/lib/ai/notice";
-import { continueAsGuest, queryDatabase, signUpAndLogIn, uniqueName } from "./helpers";
+import { continueAsGuest, queryDatabase, resetsInPattern, signUpAndLogIn, uniqueName } from "./helpers";
 
 // The AI page (#308) and its stored chats (#452), end to end against the real endpoint and database.
 // The server runs with AI_PROVIDER="fake" (src/lib/ai/providers/fake.ts): a message naming a tool
@@ -173,8 +173,12 @@ test("when the model is busy or today's allowance is used up, the planner answer
   try {
     await page.reload();
     await expect(page.getByText(/^0 of 40 left today/).filter({ visible: true })).toBeVisible();
+    const sent = new Date();
     await ask(page, "list_open_tasks");
-    await expect(conversation(page).getByText(/^You've used today's AI allowance of 40 requests\. It resets in about \d+ hours?\./)).toBeVisible();
+    const limit = conversation(page).getByText(/^You've used today's AI allowance of 40 requests\./);
+    await expect(limit).toBeVisible();
+    // In the words the app uses at this moment: "about an hour" in the last hour before the reset (#538).
+    await expect(limit).toHaveText(new RegExp(`^You've used today's AI allowance of 40 requests\\. ${resetsInPattern(sent, new Date())}`));
     await expect(conversation(page).getByText(new RegExp(`${task}: `))).toBeVisible();
     // The planner looked nothing up through the model.
     await expect(conversation(page).getByText("Checked your open tasks")).toHaveCount(0);

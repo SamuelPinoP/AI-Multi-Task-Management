@@ -7,7 +7,8 @@ import { continueAsGuest, openAccountMenu, plusTab, signUpAndLogIn } from "../e2
  * Home is also taken in dark mode (DES-10), with a teammate who has left an
  * unread message in Team chat (DES-11), and Tasks with the Blue accent and the
  * account menu open (DES-15). On phones, Tasks also has its Filter and sort sheet
- * and its add box taken (#521).
+ * and its add box taken (#521). The AI page is taken with a ticket's card and its
+ * draft, and a task's page with its description in sections (#433).
  *
  * Each test signs up a new account, always named "E2E visual", and adds the same data (guest
  * workspaces hold too little for it since #458; the last test shows the guest profile). Due dates are
@@ -223,6 +224,68 @@ test("AI changes to apply", async ({ page }) => {
   await expect(page.getByRole("region", { name: "Changes to apply" })).toContainText("5 of 5 selected");
   await page.waitForLoadState("networkidle");
   await expect(page).toHaveScreenshot("ai-changes.png", { mask: changing(page) });
+});
+
+// #433: a ticket the AI wrote, as its card sums it up and as its draft opens beside the chat (full
+// screen on a phone), where each section folds and edits on its own.
+test("AI ticket and its draft", async ({ page }) => {
+  await signUp(page);
+  expect((await page.request.post("/api/agent/notice", { data: { version: AI_NOTICE_VERSION } })).ok()).toBe(true);
+  const ticket = {
+    title: "Export tasks as a CSV file",
+    summary: "Let people download their tasks as a CSV file from the Tasks page.",
+    acceptanceCriteria: ["The Tasks page has an Export button", "The file has a column for each field", "A test downloads the file"],
+    outOfScope: ["Importing tasks from a CSV file"],
+    openQuestions: ["Should done tasks be in the file?"],
+  };
+  await page.goto("/ai");
+  await page.getByRole("textbox", { name: "Message the AI" }).fill(`create_ticket ${JSON.stringify(ticket)}`);
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  const open = page.getByRole("button", { name: `Open draft of ${ticket.title}` });
+  await expect(open).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await expect(page).toHaveScreenshot("ai-ticket.png", { mask: changing(page) });
+
+  await open.click();
+  await expect(page.getByRole("dialog", { name: ticket.title })).toBeVisible();
+  await expect(page).toHaveScreenshot("ai-ticket-draft.png", { mask: changing(page) });
+});
+
+// #433: a task's page with its description in sections: a Cost section the person added, a
+// checklist with one box ticked, and the request folded at the end.
+test("Task page with sections", async ({ page }) => {
+  await signUp(page);
+  const { id } = await post(page, "/api/tasks", {
+    title: "Buy a family car",
+    priority: "HIGH",
+    dueDate: dateInputValue(1),
+    description: [
+      "## Summary",
+      "",
+      "Choose and buy a car for the family.",
+      "",
+      "## Cost",
+      "",
+      "- Down payment: $4,000",
+      "- Monthly payment: $350",
+      "",
+      "## Acceptance criteria",
+      "",
+      "- [x] Test-drive three cars",
+      "- [ ] Agree on the price",
+      "- [ ] Sign the papers",
+      "",
+      "## Original request",
+      "",
+      "> Make a ticket for buying a family car, with a Cost section.",
+    ].join("\n"),
+  });
+  // Tall enough for the whole description, which a phone shows under the task's properties.
+  await page.setViewportSize({ width: page.viewportSize()!.width, height: 1400 });
+  await page.goto(`/tasks/${id}`);
+  await expect(page.getByRole("heading", { level: 2, name: "Acceptance criteria 1 of 3" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await expect(page).toHaveScreenshot("task-sections.png", { mask: [...changing(page), page.getByRole("region", { name: "Activity" })] });
 });
 
 test("Calendar", async ({ page }) => {

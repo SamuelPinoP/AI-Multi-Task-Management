@@ -6,6 +6,8 @@ import { AGENT_LIMITS } from "@/lib/ai/agent-loop";
 import { factAlternatives, patternSources, type EvalCase, type ExpectedCall, type ExpectedStep } from "@/lib/ai/evals/case";
 import type { Workspace } from "@/lib/ai/evals/workspace";
 import type { ProposalStep } from "@/lib/ai/proposals";
+import { TICKET_SECTIONS } from "@/lib/ai/ticket-sections";
+import { listItems, parseDescription } from "@/lib/description-sections";
 
 export type Check = { name: string; passed: boolean; detail?: string };
 
@@ -111,7 +113,10 @@ function stepFacts(step: ProposalStep) {
 export function stepMatches(step: ProposalStep, expected: ExpectedStep) {
   if (step.kind !== expected.kind) return false;
   const facts: Record<string, string | undefined> = stepFacts(step);
-  return Object.entries(expected).every(([key, value]) => {
+  // A ticket's description has checks of its own (ticketChecks).
+  const { ticket, ...fields } = expected;
+  void ticket;
+  return Object.entries(fields).every(([key, value]) => {
     if (key === "kind" || value === undefined) return true;
     const actual = facts[key];
     if (actual === undefined) return false;
@@ -149,6 +154,44 @@ function describeFact(fact: string | string[]) {
   return alternatives.length === 1 ? `"${alternatives[0]}"` : `one of ${quoteList(alternatives)}`;
 }
 
+/** Sections whose text may hold what the request left open, or the person's own words. */
+const UNSTATED = new Set([TICKET_SECTIONS.openQuestions, TICKET_SECTIONS.originalRequest].map((title) => title.toLowerCase()));
+
+/**
+ * A ticket's checks (#433): its sections in order, enough testable criteria, the open questions
+ * the request leaves, and no facts the request didn't give, outside its open questions and the
+ * person's own words.
+ */
+function ticketChecks(expected: NonNullable<ExpectedStep["ticket"]>, step: ProposalStep | undefined, check: (name: string, passed: boolean, detail?: () => string) => void) {
+  const sections = step?.kind === "create_task" ? parseDescription(step.description ?? "").sections : [];
+  const titles = sections.map((section) => section.title.toLowerCase());
+  let at = -1;
+  const inOrder = expected.sections.every((title) => {
+    at = titles.indexOf(title.toLowerCase(), at + 1);
+    return at >= 0;
+  });
+  check(`Writes a ticket with ${expected.sections.join(", ")}`, inOrder, () => `Its sections were ${sections.map((section) => section.title).join(", ") || "none"}.`);
+  const items = (title: string) => {
+    const section = sections.find((candidate) => candidate.title.toLowerCase() === title.toLowerCase());
+    return section ? listItems(section.body) : [];
+  };
+  if (expected.minCriteria !== undefined) {
+    const criteria = items(TICKET_SECTIONS.acceptanceCriteria);
+    check(`Gives at least ${expected.minCriteria} acceptance ${expected.minCriteria === 1 ? "criterion" : "criteria"}`, criteria.length >= expected.minCriteria, () => `It gave ${criteria.length}.`);
+  }
+  if (expected.minQuestions !== undefined) {
+    const questions = items(TICKET_SECTIONS.openQuestions);
+    check(`Asks at least ${expected.minQuestions} open ${expected.minQuestions === 1 ? "question" : "questions"}`, questions.length >= expected.minQuestions, () => `It asked ${questions.length}.`);
+  }
+  const stated = normalize(sections.filter((section) => !UNSTATED.has(section.title.toLowerCase())).map((section) => `${section.title}\n${section.body}`).join("\n"));
+  for (const entry of expected.notInvented) {
+    const hit = patternSources(entry)
+      .map((source) => new RegExp(source, "iu").exec(stated)?.[0])
+      .find((match) => match !== undefined);
+    check(`States nothing the request didn't give (${entry})`, hit === undefined, () => `It stated "${hit}".`);
+  }
+}
+
 export function scoreCase(evalCase: EvalCase, observed: Observed, workspace: Pick<Workspace, "hiddenTitles" | "ids">): Check[] {
   const { expect } = evalCase;
   const answer = observed.answer;
@@ -182,16 +225,18 @@ export function scoreCase(evalCase: EvalCase, observed: Observed, workspace: Pic
 
   // The changes it proposed (#310): exactly the expected ones, and none when nobody asked.
   const unmatched = [...observed.proposal];
-  const missing = expect.proposal.filter((wanted) => {
+  const pairs = expect.proposal.map((wanted) => {
     const index = unmatched.findIndex((step) => stepMatches(step, wanted));
-    if (index >= 0) unmatched.splice(index, 1);
-    return index < 0;
+    return { wanted, step: index >= 0 ? unmatched.splice(index, 1)[0] : undefined };
   });
   check(
     expect.proposal.length ? `Proposes ${describeSteps(expect.proposal)}, and nothing else` : "Proposes no changes",
-    missing.length === 0 && unmatched.length === 0,
+    pairs.every((pair) => pair.step) && unmatched.length === 0,
     () => `It proposed ${describeSteps(observed.proposal)}.`,
   );
+  for (const { wanted, step } of pairs) {
+    if (wanted.ticket) ticketChecks(wanted.ticket, step, check);
+  }
   check("Changes nothing until the person applies it", !observed.workspaceChanged);
 
   // The rules every answer keeps. A title the person typed themselves may come back.

@@ -10,10 +10,11 @@ import { createMemoryDb, type Tables } from "../evals/memory-db";
 import { loadWorkspace } from "../evals/workspace";
 import { MAX_PROPOSAL_STEPS, newDraft, type ProposalStep } from "../proposals";
 import type { AgentTool, ToolContext } from "./define";
-import { completeTask, createEvent, createProject, createTask, trashTask, updateTask } from "./write-tools";
+import { parseDescription } from "../../description-sections";
+import { completeTask, createEvent, createProject, createTask, createTicket, trashTask, updateTask } from "./write-tools";
 
 /** The sample workspace as Alex sees it on Thursday, November 19, 2026, at 9:20 AM in Los Angeles. */
-function setup({ edit, chat = true }: { edit?: (tables: Tables) => void; chat?: boolean } = {}) {
+function setup({ edit, chat = true, request }: { edit?: (tables: Tables) => void; chat?: boolean; request?: string } = {}) {
   const workspace = loadWorkspace("main");
   edit?.(workspace.tables);
   const before = JSON.stringify(workspace.tables);
@@ -26,6 +27,7 @@ function setup({ edit, chat = true }: { edit?: (tables: Tables) => void; chat?: 
     timeZone: workspace.clock.timeZone,
     db: createMemoryDb(workspace.tables),
     ...(chat ? { draft } : {}),
+    ...(request ? { request } : {}),
   };
   /** Runs a tool as the agent loop does, with its arguments validated first; returns what the model reads. */
   async function call<Input extends z.ZodType>(tool: AgentTool<Input>, args: unknown) {
@@ -99,6 +101,57 @@ test("a subtask goes in its parent's project, and a subtask can't have subtasks 
     reason: '"Pick the next book" is a subtask, and subtasks can\'t have their own subtasks.',
   });
   assert.equal(draft.steps.length, 3, "nothing is added when a tool proposes nothing");
+});
+
+test("a ticket is a new task whose description the server writes from its parts, ending with the person's words (#433)", async () => {
+  const request = "Create a ticket in Mobile app launch: let people sign in with a passkey";
+  const { draft, call, unchanged } = setup({ request });
+  assert.deepEqual(
+    await call(createTicket, {
+      title: "Sign in with a passkey",
+      summary: "Let people sign in to the mobile app with a passkey instead of a password.",
+      background: ["Asked for in Mobile app launch."],
+      acceptanceCriteria: ["A person can add a passkey in Settings", "A person can sign in with it", "An e2e test signs in with a passkey"],
+      openQuestions: ["Which platforms come first?"],
+      project: "Mobile",
+      priority: "HIGH",
+    }),
+    { proposed: 'New task written as a ticket "Sign in with a passkey" in "Mobile app launch"', ref: "new-1", proposedSoFar: 1 },
+  );
+  const [step] = draft.steps;
+  assert.ok(step.kind === "create_task");
+  assert.deepEqual({ ...step, description: undefined }, {
+    kind: "create_task",
+    ref: "new-1",
+    title: "Sign in with a passkey",
+    description: undefined,
+    dueDate: null,
+    priority: "HIGH",
+    project: { id: "proj-mobile", name: "Mobile app launch" },
+    parent: null,
+  });
+  const sections = parseDescription(step.description ?? "").sections;
+  assert.deepEqual(
+    sections.map((section) => section.title),
+    ["Summary", "Background", "Acceptance criteria", "Open questions", "Original request"],
+  );
+  assert.deepEqual(sections[2].body.split("\n"), ["- [ ] A person can add a passkey in Settings", "- [ ] A person can sign in with it", "- [ ] An e2e test signs in with a passkey"]);
+  assert.equal(sections[4].body, `> ${request}`);
+  assert.ok(unchanged());
+});
+
+test("a ticket can be a subtask, and without criteria or the person's own sections it isn't valid (#433)", async () => {
+  const { draft, call } = setup();
+  await call(createTicket, { title: "Fix the crash", summary: "The app crashes on launch.", sections: [{ title: "Steps to reproduce", items: ["Open the app"] }], parent: "Buy plants" });
+  const [step] = draft.steps;
+  assert.ok(step.kind === "create_task");
+  assert.equal(step.parent?.name, "Buy plants for the garden");
+  // Outside a chat there are no words to quote.
+  assert.deepEqual(parseDescription(step.description ?? "").sections.map((section) => section.title), ["Summary", "Steps to reproduce"]);
+  const invalid = createTicket.input.safeParse({ title: "No criteria", summary: "Something" });
+  assert.equal(invalid.success, false);
+  assert.match(JSON.stringify(invalid.error?.issues), /acceptanceCriteria/);
+  assert.equal(createTicket.input.safeParse({ title: "Extra field", summary: "S", acceptanceCriteria: ["Done"], description: "free text" }).success, false);
 });
 
 test("a change to a task lists each field, before and after, and nothing to change proposes nothing (#310)", async () => {

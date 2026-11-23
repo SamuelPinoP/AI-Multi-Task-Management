@@ -13,6 +13,7 @@ import { cn } from "@/lib/cn";
 import { daysFrom, dueLabel } from "@/lib/home-summary";
 import { paletteColor, projectColor } from "@/lib/project-color";
 import { labelsOfTask } from "@/lib/labels";
+import { descriptionPreview } from "@/lib/description-sections";
 import { openBlockers, subtaskProgress } from "@/lib/task-relations";
 import { LabelChips } from "./label-chip";
 import { PriorityBadge } from "./priority-badge";
@@ -62,7 +63,8 @@ export function TaskRow({
   const late = !done && Boolean(task.dueDate) && daysFrom(task.dueDate as string, now) < 0;
   const progress = subtaskProgress(task.subtasks);
   const blockers = done ? [] : openBlockers(task.blockedBy);
-  const description = showDescription ? task.description : null;
+  // A ticket's summary rather than its Markdown (#433); plain text as it is.
+  const description = showDescription ? descriptionPreview(task.description) || null : null;
 
   return (
     <li
@@ -295,7 +297,8 @@ export function TaskRowPhone({
   const progress = subtaskProgress(task.subtasks);
   const blockers = done ? [] : openBlockers(task.blockedBy);
   const labels = labelsOfTask(task);
-  const description = showDescription ? task.description : null;
+  // A ticket's summary rather than its Markdown (#433); plain text as it is.
+  const description = showDescription ? descriptionPreview(task.description) || null : null;
   const press = useLongPress(() => onSelect(task, false));
   const hasDetails = Boolean(
     task.status === "IN_PROGRESS" || task.dueDate || labels.length || blockers.length || progress.total || task.assignee || description,
