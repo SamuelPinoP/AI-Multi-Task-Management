@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { AI_NOTICE_VERSION } from "../../src/lib/ai/notice";
-import { continueAsGuest, queryDatabase, signUpAndLogIn, uniqueName } from "./helpers";
+import { continueAsGuest, queryDatabase, resetsInPattern, signUpAndLogIn, uniqueName } from "./helpers";
 
 // The AI page (#308) and its stored chats (#452), end to end against the real endpoint and database.
 // The server runs with AI_PROVIDER="fake" (src/lib/ai/providers/fake.ts): a message naming a tool
@@ -62,7 +62,18 @@ test("nothing is sent before the notice; agreeing sends the question, and the an
   expect(await fromGermany.json()).toMatchObject({ mode: "planner", reason: "region" });
 
   await page.goto("/ai");
-  await expect(page.getByText(/^40 of 40 left today/).filter({ visible: true })).toBeVisible();
+  // Today's allowance sits under the message box on the right, the reminder on the left (Samuel, November 21).
+  const allowance = page.getByText("40 of 40 left today", { exact: true });
+  await expect(allowance).toBeVisible();
+  const box = (await messageBox(page).locator("xpath=ancestor::form[1]").boundingBox())!;
+  const allowanceBox = (await allowance.boundingBox())!;
+  expect(allowanceBox.y).toBeGreaterThan(box.y + box.height - 1);
+  expect(box.x + box.width - (allowanceBox.x + allowanceBox.width)).toBeLessThan(20);
+  const reminder = page.getByText(isMobile ? "Nothing changes until you confirm" : "Answers can be wrong. Nothing changes until you confirm it.", { exact: true });
+  const reminderBox = (await reminder.boundingBox())!;
+  expect(reminderBox.x - box.x).toBeLessThan(20);
+  // Only there: the header no longer repeats it.
+  await expect(allowance).toHaveCount(1);
   const send = page.getByRole("button", { name: "Send", exact: true });
   await expect(send).not.toHaveClass(/\bai-send\b/);
 
@@ -162,8 +173,12 @@ test("when the model is busy or today's allowance is used up, the planner answer
   try {
     await page.reload();
     await expect(page.getByText(/^0 of 40 left today/).filter({ visible: true })).toBeVisible();
+    const sent = new Date();
     await ask(page, "list_open_tasks");
-    await expect(conversation(page).getByText(/^You've used today's AI allowance of 40 requests\. It resets in about \d+ hours?\./)).toBeVisible();
+    const limit = conversation(page).getByText(/^You've used today's AI allowance of 40 requests\./);
+    await expect(limit).toBeVisible();
+    // In the words the app uses at this moment: "about an hour" in the last hour before the reset (#538).
+    await expect(limit).toHaveText(new RegExp(`^You've used today's AI allowance of 40 requests\\. ${resetsInPattern(sent, new Date())}`));
     await expect(conversation(page).getByText(new RegExp(`${task}: `))).toBeVisible();
     // The planner looked nothing up through the model.
     await expect(conversation(page).getByText("Checked your open tasks")).toHaveCount(0);

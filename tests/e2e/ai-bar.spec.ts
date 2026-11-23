@@ -32,7 +32,7 @@ function middle(box: { x: number; y: number; width: number; height: number }) {
 test.describe("on a computer", () => {
   test.skip(({ isMobile }) => isMobile, "Phones get the bar as a button above the tabs; see below.");
 
-  test("the bar is at the bottom of every page but the AI page, and the chats get the ✦ button", async ({ page }) => {
+  test("the bar is at the bottom of every page but the AI page, the chats included", async ({ page }) => {
     await signUpAndLogIn(page, "E2E AI bar");
     for (const path of ["/", "/tasks", "/events", "/account"]) {
       await page.goto(path);
@@ -51,11 +51,24 @@ test.describe("on a computer", () => {
     await expect(page.getByRole("region", { name: "Conversation" })).toBeVisible();
     await expect(bar(page)).toHaveCount(0);
 
-    // The chats have their own message box: the AI waits as the ✦ button there.
-    await page.goto("/chats");
-    await expect(page.getByRole("button", { name: "Ask AI Multi" })).toBeVisible();
-    await expect(bar(page)).toHaveCount(0);
-    await page.getByRole("button", { name: "Ask AI Multi" }).click();
+    // The chats get the same simple bar, not the ✦ button that opened the whole chat (Samuel, November 21).
+    // They end above it, so their own message box stays clear of it.
+    const project = (await (await page.request.post("/api/projects", { data: { name: uniqueName("AI bar chats") } })).json()) as { id: string };
+    await page.request.post(`/api/projects/${project.id}/comments`, { multipart: { message: "Hello from the chat" } });
+    for (const path of ["/chats", `/chats?project=${project.id}`, `/projects/${project.id}/chat`]) {
+      await page.goto(path);
+      await expect(bar(page), path).toBeVisible();
+      await expect(page.getByRole("button", { name: "Ask AI Multi", exact: true }), path).toHaveCount(0);
+      await expect(chat(page), path).toHaveCount(0);
+      const barBox = (await bar(page).boundingBox())!;
+      expect(Math.round(page.viewportSize()!.height - (barBox.y + barBox.height)), path).toBe(24);
+      if (path !== "/chats") {
+        const send = (await page.getByRole("button", { name: "Send message" }).boundingBox())!;
+        expect(send.y + send.height, path).toBeLessThan(barBox.y);
+      }
+    }
+    // Its ✦ opens the chat there as on any page.
+    await bar(page).getByRole("button", { name: "Open the AI chat" }).click();
     await expect(chat(page)).toBeVisible();
     await expect(chatBox(page)).toBeFocused();
   });
@@ -85,7 +98,18 @@ test.describe("on a computer", () => {
     await expect(notice).toBeVisible();
     await notice.getByRole("button", { name: "Agree and continue" }).click();
     await expect(chat(page).getByText(`list_open_tasks found 1: ${task}`)).toBeVisible();
-    await expect(chat(page).getByText("38 of 40 left today · Answers can be wrong. Nothing changes until you confirm it.")).toBeVisible();
+    // Under the box: the reminder on the left, today's allowance on the right (Samuel, November 21).
+    const reminder = chat(page).getByText("Answers can be wrong. Nothing changes until you confirm it.");
+    const left = chat(page).getByText("38 of 40 left today", { exact: true });
+    await expect(reminder).toBeVisible();
+    await expect(left).toBeVisible();
+    const box = (await chatBox(page).locator("xpath=ancestor::form[1]").boundingBox())!;
+    const reminderBox = (await reminder.boundingBox())!;
+    const leftBox = (await left.boundingBox())!;
+    expect(reminderBox.y).toBeGreaterThan(box.y + box.height - 1);
+    expect(reminderBox.x - box.x).toBeLessThan(20);
+    expect(box.x + box.width - (leftBox.x + leftBox.width)).toBeLessThan(20);
+    expect(Math.abs(reminderBox.y - leftBox.y)).toBeLessThan(2);
     // The chat's title is its first question.
     await expect(chat(page).getByText("What's on my plate? list_open_tasks", { exact: true }).first()).toBeVisible();
 

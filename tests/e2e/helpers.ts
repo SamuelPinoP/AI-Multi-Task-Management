@@ -2,9 +2,21 @@ import "dotenv/config";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import { allowanceFor, untilReset } from "../../src/lib/ai/allowance";
 
 export function uniqueName(prefix: string) {
   return `${prefix} ${randomUUID().slice(0, 8)}`;
+}
+
+/**
+ * A pattern for when the AI's message says today's used-up allowance comes back, as the server writes
+ * it at some moment between `from` and `to`: "It resets in about 7 hours.", or "about an hour" in the
+ * last hour before midnight Pacific time, when the allowance resets (#307). Both wordings, if the hour
+ * turns in between. Tests that accepted only a number of hours failed every run in that last hour (#538).
+ */
+export function resetsInPattern(from: Date, to: Date) {
+  const words = (now: Date) => untilReset(allowanceFor({ user: 0, app: 0 }, { userDailyRequests: 0, appDailyRequests: 0 }, now), now);
+  return `It resets in (?:${[...new Set([words(from), words(to)])].join("|")})\\.`;
 }
 
 /** Waits for the signed-in home screen ("Good morning", "Good afternoon", ...). */
