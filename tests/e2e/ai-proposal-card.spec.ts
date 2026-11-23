@@ -51,6 +51,8 @@ test("the person ticks what to apply: leaving out a new project leaves out what 
   );
   const card = page.getByRole("region", { name: "Changes to apply" });
   await expect(card).toContainText("3 of 3 selected");
+  // The conversation follows the answer down to the card, so Apply is on screen without scrolling (#536).
+  await expect(card.getByRole("button", { name: "Apply all 3" })).toBeInViewport();
   const projectBox = card.getByRole("checkbox", { name: `New project ${project}` });
   const taskBox = card.getByRole("checkbox", { name: `New task ${task}` });
   const finishedBox = card.getByRole("checkbox", { name: `Mark as done ${finished}` });

@@ -24,6 +24,7 @@ import { AiNotice } from "@/components/ai/ai-notice";
 import { AiSpark } from "@/components/ai/ai-spark";
 import { AI_SUGGESTIONS } from "@/components/ai/ai-suggestions";
 import { AiThread, AiThreadLoading } from "@/components/ai/ai-thread";
+import { useFollowEnd } from "@/components/ai/use-follow-end";
 import { MobileMenuButton } from "@/components/mobile-menu";
 import { uiPrimaryButtonClass } from "@/components/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -224,7 +225,9 @@ export function AiPage({ firstName, initialList }: { firstName: string; initialL
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // New words keep the conversation scrolled to its end, unless the reader has scrolled up.
+  // New words, and the card of changes under an answer, keep the conversation scrolled to its end,
+  // unless the reader has scrolled up (#536). The effect covers a chat swapped for one as tall.
+  const { attach: followThread, onScroll: onScrollThread } = useFollowEnd(thread, atEnd);
   const turns = current?.turns;
   useEffect(() => {
     const element = thread.current;
@@ -391,11 +394,9 @@ export function AiPage({ firstName, initialList }: { firstName: string; initialL
         </div>
 
         <div
-          ref={thread}
-          onScroll={(event) => {
-            const element = event.currentTarget;
-            atEnd.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
-          }}
+          ref={followThread}
+          data-follows-end=""
+          onScroll={onScrollThread}
           className="flex min-h-0 flex-1 flex-col overflow-y-auto"
         >
           {opening ? (

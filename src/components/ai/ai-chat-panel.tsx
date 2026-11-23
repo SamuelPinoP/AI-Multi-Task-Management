@@ -10,6 +10,7 @@ import { AiNotice } from "@/components/ai/ai-notice";
 import { AiSpark } from "@/components/ai/ai-spark";
 import { AI_SUGGESTIONS } from "@/components/ai/ai-suggestions";
 import { AiThread, AiThreadLoading } from "@/components/ai/ai-thread";
+import { useFollowEnd } from "@/components/ai/use-follow-end";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { allowanceLine } from "@/lib/ai/chat-client";
 import { cn } from "@/lib/cn";
@@ -63,6 +64,9 @@ export function AiChatPanel({
     loadChats();
   }, [loadChats]);
 
+  // New words, and the card of changes under an answer, keep the conversation at its end unless
+  // the reader has scrolled up (#536). The effect covers a chat swapped for one as tall.
+  const { attach: followBody, onScroll: onScrollBody } = useFollowEnd(body, atEnd);
   const turns = current?.turns;
   useEffect(() => {
     const element = body.current;
@@ -151,11 +155,9 @@ export function AiChatPanel({
       ) : (
         <>
           <div
-            ref={body}
-            onScroll={(event) => {
-              const element = event.currentTarget;
-              atEnd.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
-            }}
+            ref={followBody}
+            data-follows-end=""
+            onScroll={onScrollBody}
             className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-4 pt-2 max-sm:px-4"
           >
             {opening ? (

@@ -344,3 +344,48 @@ test("the chats list resizes from 220 to 360 px and folds to a rail, like the si
   await page.reload();
   await expect.poll(width).toBe(360);
 });
+
+// #536: the conversation follows its newest words while the reader is at the end, and only the reader
+// scrolling up stops that. This plays out the race that broke it: the content grows by more than a
+// screen (as when the card of changes lands under an answer) and a scroll event arrives before
+// anything has scrolled. The old handler read that as the reader leaving the end and stopped.
+test("a conversation keeps following its end as it grows, until the reader scrolls up (#536)", async ({ page }) => {
+  await signUpAndLogIn(page, "E2E AI follow");
+  expect((await page.request.post("/api/agent/notice", { data: { version: AI_NOTICE_VERSION } })).ok()).toBe(true);
+  await page.goto("/ai");
+  await ask(page, "First question");
+  await expect(conversation(page).getByText("You asked: First question")).toBeVisible();
+  const scroller = conversation(page).locator("[data-follows-end]");
+  const fromEnd = () => scroller.evaluate((element) => Math.round(element.scrollHeight - element.scrollTop - element.clientHeight));
+  /** Two frames: ResizeObserver callbacks have run by then. */
+  const settle = () => scroller.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect.poll(fromEnd).toBeLessThan(2);
+
+  // The content grows, and a scroll event lands before anything scrolls: it keeps following.
+  await scroller.evaluate((element) => {
+    (element.firstElementChild as HTMLElement).style.paddingBottom = "1500px";
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await expect.poll(fromEnd).toBeLessThan(2);
+
+  // Scrolled up, it stays where the reader left it while more arrives.
+  await scroller.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await settle();
+  await scroller.evaluate((element) => {
+    (element.firstElementChild as HTMLElement).style.paddingBottom = "3000px";
+  });
+  await settle();
+  expect(await scroller.evaluate((element) => element.scrollTop)).toBe(0);
+
+  // Back at the end, it follows again.
+  await scroller.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await settle();
+  await scroller.evaluate((element) => {
+    (element.firstElementChild as HTMLElement).style.paddingBottom = "4500px";
+  });
+  await expect.poll(fromEnd).toBeLessThan(2);
+});
