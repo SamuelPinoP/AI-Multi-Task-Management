@@ -184,6 +184,23 @@ test("AI page", async ({ page }) => {
   await expect(page).toHaveScreenshot("ai.png", { mask: changing(page) });
 });
 
+// #529: a click on a panel's edge folds it. The sidebar on its icon rail and the AI page's chats on
+// theirs, side by side. Computers only: on phones the sidebar is a menu and the chats are full screen.
+test("AI page with the sidebar and the chats folded", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Phones have no rails.");
+  await signUp(page);
+  await page.goto("/ai");
+  await page.getByRole("separator", { name: "Resize sidebar" }).click();
+  await page.getByRole("separator", { name: "Resize your chats" }).click();
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show your chats" })).toBeVisible();
+  // Both rails have finished narrowing (200 ms) before the picture.
+  await expect.poll(async () => Math.round((await page.locator("#app-sidebar").boundingBox())!.width)).toBe(56);
+  await expect.poll(async () => Math.round((await page.locator("#ai-chats").boundingBox())!.width)).toBe(56);
+  await page.waitForLoadState("networkidle");
+  await expect(page).toHaveScreenshot("ai-folded.png", { mask: changing(page) });
+});
+
 // #310: the changes an answer proposes, each with a checkbox, before the person applies them. The
 // e2e server's fake model calls the tools the message names. A fixed clock keeps "Due today" and
 // this year's dates as they are.
