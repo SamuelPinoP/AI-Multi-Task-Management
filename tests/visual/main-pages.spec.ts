@@ -253,6 +253,24 @@ test("AI ticket and its draft", async ({ page }) => {
   await expect(page).toHaveScreenshot("ai-ticket-draft.png", { mask: changing(page) });
 });
 
+// #434: a ticket for work over 2 days, with the subtasks that split it offered unticked under it.
+test("AI ticket with the subtasks that split it", async ({ page }) => {
+  await signUp(page);
+  expect((await page.request.post("/api/agent/notice", { data: { version: AI_NOTICE_VERSION } })).ok()).toBe(true);
+  const ticket = {
+    title: "Add two-step sign-in",
+    summary: "Ask for a code from an authenticator app after the password.",
+    estimate: { size: "1 week", reason: "An app to set up, a code at sign-in, recovery codes, and tests for each." },
+    split: ["Set up an authenticator app", "Ask for the code at sign-in", "Recovery codes"],
+  };
+  await page.goto("/ai");
+  await page.getByRole("textbox", { name: "Message the AI" }).fill(`create_ticket ${JSON.stringify(ticket)}`);
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Changes to apply" })).toContainText("1 of 4 selected");
+  await page.waitForLoadState("networkidle");
+  await expect(page).toHaveScreenshot("ai-ticket-split.png", { mask: changing(page) });
+});
+
 // #433: a task's page with its description in sections: a Cost section the person added, a
 // checklist with one box ticked, the AI's estimate (#434), and the request folded at the end.
 test("Task page with sections", async ({ page }) => {
