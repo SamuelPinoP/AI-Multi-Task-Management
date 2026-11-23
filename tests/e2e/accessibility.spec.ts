@@ -177,6 +177,7 @@ for (const theme of ["light", "dark"] as const) {
 // data notice, and an answer with links to what it used, from the e2e server's fake model.
 for (const theme of ["light", "dark"] as const) {
   test(`the AI page has no WCAG A/AA violations (${theme})`, async ({ page, isMobile }) => {
+    test.setTimeout(120_000);
     await signUpAndLogIn(page, "A11y AI");
     expect((await page.request.post("/api/tasks", { data: { title: "Rotate the API keys" } })).status()).toBe(201);
     await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
@@ -200,6 +201,30 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.getByRole("region", { name: "Chats", exact: true })).toBeVisible();
       found.push(...(await violations(page, "AI page, the list of chats on a phone")));
     }
+
+    // A ticket (#433): its card, its draft with a section being edited, and the task's page.
+    const ticket = { title: "Export tasks as CSV", summary: "Download the tasks as a CSV file.", acceptanceCriteria: ["An Export button downloads the file"], openQuestions: ["Should done tasks be in it?"] };
+    await page.goto("/ai");
+    await page.getByRole("textbox", { name: "Message the AI" }).fill(`Write a ticket. create_ticket ${JSON.stringify(ticket)}`);
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    const card = page.getByRole("region", { name: "Changes to apply" });
+    await expect(card.getByRole("button", { name: `Open draft of ${ticket.title}` })).toBeVisible();
+    found.push(...(await violations(page, "AI page, a ticket's card")));
+    await card.getByRole("button", { name: `Open draft of ${ticket.title}` }).click();
+    const draft = page.getByRole("dialog", { name: ticket.title });
+    await draft.getByRole("button", { name: "Edit Summary" }).click();
+    await expect(draft.getByRole("group", { name: "Editing Summary" })).toBeVisible();
+    found.push(...(await violations(page, "AI page, a ticket's draft with a section being edited")));
+    await page.keyboard.press("Escape");
+    await expect(draft.getByRole("group", { name: "Editing Summary" })).toHaveCount(0);
+    await expect(draft).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(draft).toBeHidden();
+    await card.getByRole("button", { name: "Apply all 1" }).click();
+    await page.getByRole("region", { name: "Applied changes" }).getByRole("link", { name: ticket.title }).click();
+    await page.getByRole("button", { name: "Edit Summary" }).click();
+    await expect(page.getByRole("group", { name: "Editing Summary" })).toBeVisible();
+    found.push(...(await violations(page, "a ticket's task page with a section being edited")));
     expect(found).toEqual([]);
   });
 }

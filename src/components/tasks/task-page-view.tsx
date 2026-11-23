@@ -35,6 +35,7 @@ import { PRIORITY_MENU_ORDER, priorityLabels } from "@/lib/priority";
 import { projectColor } from "@/lib/project-color";
 import { formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { TASK_TITLE_MAX } from "@/lib/task-history";
+import { TASK_ORDER_KEY } from "@/lib/task-order";
 import { openBlockers, subtaskProgress } from "@/lib/task-relations";
 import { notifyWorkspaceChanged, openGuestSignupForResponse } from "@/lib/workspace-events";
 import { dueDayName, DueDatePicker } from "./due-date-picker";
@@ -47,13 +48,11 @@ import { PriorityBadge } from "./priority-badge";
 import { PropertyPicker } from "./property-picker";
 import { ProgressRing } from "./task-badges";
 import { TaskActivity } from "./task-activity";
+import { TaskDescription } from "./task-description";
 import { taskRequestBody } from "./task-sheet";
 import { recurrenceLabels, statusLabels, type Member, type Project, type Recurrence, type RelatedTask, type Task, type TaskInput, type TaskStatus } from "./types";
 
 type ProjectItem = Project & { status?: string };
-
-/** The Tasks page keeps the order it showed, so a task page can step to the previous and next task. */
-export const TASK_ORDER_KEY = "tasks:order";
 
 const valueClass =
   "flex min-h-9 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-sm text-ink outline-none transition-colors hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default disabled:hover:bg-transparent";
@@ -114,7 +113,6 @@ export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Ta
   const [task, setTask] = useState(initialTask);
   const [loadedId, setLoadedId] = useState(initialTask.id);
   const [title, setTitle] = useState(initialTask.title);
-  const [description, setDescription] = useState(initialTask.description ?? "");
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [members, setMembers] = useState<{ projectId: string; list: Member[] } | null>(null);
   const [candidates, setCandidates] = useState<Task[] | null>(null);
@@ -128,7 +126,6 @@ export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Ta
     setLoadedId(initialTask.id);
     setTask(initialTask);
     setTitle(initialTask.title);
-    setDescription(initialTask.description ?? "");
     setCandidates(null);
   }
 
@@ -239,10 +236,6 @@ export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Ta
       return;
     }
     if (next !== task.title) void save({ title: next });
-  }
-
-  function saveDescription() {
-    if (description.trim() !== (task.description ?? "")) void save({ description: description.trim() });
   }
 
   async function setSubtaskStatus(subtask: RelatedTask) {
@@ -700,21 +693,8 @@ export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Ta
         </aside>
 
         <div className="grid content-start gap-8 lg:col-start-1 lg:row-start-2">
-          <div>
-            <label htmlFor="task-description" className="sr-only">
-              Description
-            </label>
-            <textarea
-              id="task-description"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              onBlur={saveDescription}
-              readOnly={!canEdit}
-              placeholder={canEdit ? "Add a description…" : "No description."}
-              rows={3}
-              className="block min-h-24 w-full resize-y rounded-lg bg-transparent text-[0.9375rem] leading-7 text-ink outline-none [field-sizing:content] placeholder:text-muted focus:ring-2 focus:ring-accent/25"
-            />
-          </div>
+          {/* Plain text, or sections such as a ticket the AI wrote (#433). */}
+          <TaskDescription key={task.id} description={task.description ?? ""} canEdit={canEdit} onSave={(next) => save({ description: next })} />
 
           {!isSubtask ? (
             <section aria-labelledby="subtasks-heading" className="grid gap-2">

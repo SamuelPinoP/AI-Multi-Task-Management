@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { descriptionPreview } from "@/lib/description-sections";
 import { formatTaskDueDate } from "@/lib/task-date-buckets";
 import { priorityLabels, type Priority } from "@/lib/priority";
 
@@ -84,7 +85,7 @@ export function ProjectAssignedTasksSection({ projectId, tasks, members }: Proje
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-semibold">{task.title}</h3>
-                    <p className="mt-2 text-zinc-700 dark:text-zinc-300">{task.description || "No description."}</p>
+                    <p className="mt-2 text-zinc-700 dark:text-zinc-300">{descriptionPreview(task.description) || "No description."}</p>
                   </div>
                   <div className="min-w-44">
                     <label htmlFor={`assignee-${task.id}`} className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">

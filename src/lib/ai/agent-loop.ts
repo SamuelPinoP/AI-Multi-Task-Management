@@ -20,12 +20,15 @@ export type AgentLimits = {
 export const AGENT_LIMITS: AgentLimits = {
   maxModelRequests: 4,
   deadlineMs: 30_000,
-  maxOutputTokens: 1024,
+  // Room for a ticket or two (#433), whose parts the model writes out in one tool call.
+  maxOutputTokens: 2048,
   maxValidationFailures: 1,
 };
 
 export const STEP_LIMIT_MESSAGE = "That needed more lookups than I can do for one message. Try asking something narrower.";
 export const INVALID_ARGUMENTS_MESSAGE = "I couldn't look that up. Try asking in a different way.";
+/** When the model couldn't fill in a change (#433): a ticket that still doesn't pass its checks. */
+export const INVALID_PROPOSAL_MESSAGE = "I couldn't put those changes together. Try asking in a different way, or with fewer changes at once.";
 export const EMPTY_ANSWER_MESSAGE = "I don't have an answer for that. Try asking in a different way.";
 
 /** What the loop shows the person while it runs. */
@@ -83,6 +86,8 @@ export async function runAgentLoop({
     usage: { inputTokens: 0, outputTokens: 0 },
   };
   const stopped = (): LoopOutcome | null => (signal.aborted ? "cancelled" : deadline.signal.aborted ? "timed_out" : null);
+  // What the last invalid call was for: a lookup, or a change to propose.
+  let lastInvalid = "read" as AgentTool["access"];
 
   async function runTool(call: ToolCall): Promise<ToolResult> {
     result.toolCalls.push(call.name);
@@ -96,6 +101,7 @@ export async function runAgentLoop({
     const parsed = tool.input.safeParse(call.args);
     if (!parsed.success) {
       result.validationFailures += 1;
+      lastInvalid = tool.access;
       return reply({ error: describeInvalidArguments(parsed.error) });
     }
     emit({ type: "tool", name: tool.name, label: tool.label });
@@ -169,7 +175,7 @@ export async function runAgentLoop({
       for (const { call, index } of order) results[index] = await runTool(call);
       if (result.validationFailures > limits.maxValidationFailures) {
         result.outcome = "invalid_arguments";
-        emit({ type: "text", text: INVALID_ARGUMENTS_MESSAGE });
+        emit({ type: "text", text: lastInvalid === "propose" ? INVALID_PROPOSAL_MESSAGE : INVALID_ARGUMENTS_MESSAGE });
         break;
       }
       history.push({ role: "tool", results });

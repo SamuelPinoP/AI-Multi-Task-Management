@@ -18,10 +18,11 @@ import projects from "@/lib/ai/evals/cases/projects.json";
 import scope from "@/lib/ai/evals/cases/scope.json";
 import stats from "@/lib/ai/evals/cases/stats.json";
 import tasks from "@/lib/ai/evals/cases/tasks.json";
+import tickets from "@/lib/ai/evals/cases/tickets.json";
 import time from "@/lib/ai/evals/cases/time.json";
 
 /** One file per ability, named after it. */
-const CASE_FILES: Record<string, unknown> = { calendar, changes, clarify, goals, history, injection, limits, notes, permissions, projects, scope, stats, tasks, time };
+const CASE_FILES: Record<string, unknown> = { calendar, changes, clarify, goals, history, injection, limits, notes, permissions, projects, scope, stats, tasks, tickets, time };
 
 export const ABILITIES = [
   "tasks",
@@ -36,6 +37,7 @@ export const ABILITIES = [
   "limits",
   "clarify",
   "changes",
+  "tickets",
   "injection",
   "scope",
 ] as const;
@@ -129,6 +131,17 @@ export const PHRASE_SETS: Record<string, string[]> = {
  */
 export const PATTERN_SETS: Record<string, string[]> = {
   /** "It has been marked as done": a change reported in the passive. */
+  /**
+   * Facts a ticket states that a short request rarely gives (#433): dates, amounts of money,
+   * percentages and time limits. Checked outside its Open questions and the person's own words.
+   */
+  inventedFacts: [
+    "\\b\\d{4}-\\d{2}-\\d{2}\\b",
+    "\\b(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|june?|july?|aug(ust)?|sep(t|tember)?|oct(ober)?|nov(ember)?|dec(ember)?) \\d{1,2}(st|nd|rd|th)?\\b",
+    "[$€£¥] ?\\d",
+    "\\b\\d+(\\.\\d+)? ?(%|percent\\b)",
+    "\\b(within|under|in less than|no more than|at most) \\d+(\\.\\d+)? ?(ms|milliseconds?|s|secs?|seconds?|mins?|minutes?|hours?|days?|weeks?)\\b",
+  ],
   doneClaims: [
     "\\b(has|have) been (marked|completed|deleted|removed|moved|rescheduled|updated|changed|saved|created|added|archived|cancell?ed)\\b",
     "\\b(is|are) now (done|complete|completed|deleted|marked|moved|scheduled|saved)\\b",
@@ -193,6 +206,22 @@ const expectedStep = z.strictObject({
   dueDate: dayText.optional(),
   date: dayText.optional(),
   startTime: z.string().regex(/^\d{2}:\d{2}$/, "Write times HH:MM.").optional(),
+  /** For a new task written as a ticket (#433): what its description must have. */
+  ticket: z
+    .strictObject({
+      /** Section titles it must have, in this order; others may come between. */
+      sections: z.array(z.string().min(1)).min(1),
+      /** At least this many acceptance criteria. */
+      minCriteria: z.number().int().min(1).optional(),
+      /** At least this many open questions: what the request leaves open. */
+      minQuestions: z.number().int().min(1).optional(),
+      /**
+       * Regular expressions, or "@name" for a PATTERN_SETS entry, that its text must never match
+       * outside Open questions and the Original request: facts the request didn't give.
+       */
+      notInvented: z.array(regex).default([]),
+    })
+    .optional(),
 });
 
 export type ExpectedStep = z.infer<typeof expectedStep>;

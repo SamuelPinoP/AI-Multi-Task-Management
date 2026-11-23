@@ -25,9 +25,17 @@ as "What's overdue?", "What's on my calendar tomorrow?" or "Which projects are
 at risk?". It lives in the AI bar at the bottom of every page and on the AI page
 (`/ai`), streams its answers, and keeps each person's latest 20 chats.
 
-It only reads. Six tools look things up for it, each limited to what the person
-can see: `list_open_tasks`, `list_events`, `list_projects`, `search_notes`,
-`list_goals` and `task_stats`. Asked to change something, it says it can't yet.
+Six tools look things up for it, each limited to what the person can see:
+`list_open_tasks`, `list_events`, `list_projects`, `search_notes`, `list_goals`
+and `task_stats`. Seven more propose changes (#310): new projects, tasks,
+tickets and events, changes to a task, marking tasks done and moving them to
+the Trash. Proposing changes nothing: the chat shows every change as one card,
+and only the person applies the ones they tick. Asked for a ticket, it writes a
+complete one (#433), the way this repository's issues are written: a summary,
+background, testable acceptance criteria, what's out of scope, open questions
+and the person's own words. The person can change any section in a draft before
+applying it, and on the task's page afterwards, where anyone can add sections
+of their own.
 When no model can answer, because a daily cap is used up, the provider fails or
 the person is somewhere Gemini's free tier may not serve, the rule-based planner
 answers instead and says why.
@@ -64,8 +72,9 @@ flowchart LR
   "ignore your instructions" inside one must stay text. The evaluations plant
   such text in a task title, a note and an event title.
 - **Bounded and capped.** A message gets at most 4 model requests, 30 seconds
-  and 1,024 output tokens. Daily caps per person (40) and for the whole app
-  (400) keep it inside Gemini's free tier of about 500 requests a day.
+  and 2,048 output tokens a request, room for a ticket or two. Daily caps per
+  person (40) and for the whole app (400) keep it inside Gemini's free tier of
+  about 500 requests a day.
 - **Free-tier terms.** Gemini's free tier may not serve people in the EEA,
   Switzerland or the UK, so they get the planner, and nothing of theirs goes to
   Google.
@@ -79,7 +88,7 @@ flowchart LR
 
 ### Evaluations
 
-`src/lib/ai/evals/` scores the agent on 53 cases (#311, #502). Each case is data: a
+`src/lib/ai/evals/` scores the agent on 67 cases (#311, #502). Each case is data: a
 sample workspace, a fixed clock and time zone, the question, and what a good
 answer does, meaning the tools it calls and with which arguments, the facts it
 states, what it must not call or say, and whether it asks a question back.
@@ -91,8 +100,10 @@ The sample workspace belongs to Alex, in Los Angeles, on Thursday, November 19,
 2026 at 9:20 AM. It has shared and private projects, other people's tasks,
 deleted items, and instructions hidden in a task title, a note and an event
 title. The cases cover every tool, permissions, the caps and the planner
-fallback, clarifying questions, requests to change things, prompt injection,
-off-topic requests, follow-ups and time zones.
+fallback, clarifying questions, requests to change things, tickets, prompt
+injection, off-topic requests, follow-ups and time zones. A ticket's case also
+checks its sections, in order, how many acceptance criteria and open questions
+it has, and that it invents no dates, amounts or limits the request didn't give.
 
 ```powershell
 npm run agent:eval -- --provider reference
@@ -130,7 +141,7 @@ own, so a run never uses the app's daily allowance, and clear it with
 
 | Run | Cases passed | Cost per 1,000 messages | Model time per message, median / 95th percentile | Messages a day on the free plan |
 | --- | --- | --- | --- | --- |
-| Reference answers, no model | 53 of 53 | – | – | – |
+| Reference answers, no model | 67 of 67 | – | – | – |
 | Gemini 3.1 Flash-Lite | 38 of 42 (90%) | $0.80 | 6.8 s / 59.6 s | About 240 |
 | gpt-oss-120b on Groq | 37 of 42 (88%) | $0.41 | 2.4 s / 14.9 s | About 88 |
 | Claude Haiku 5.5 | Not run: its API needs paid credits | | | |

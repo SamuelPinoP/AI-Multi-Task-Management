@@ -7,6 +7,7 @@ import test from "node:test";
 import { systemPrompt } from "../prompt";
 import type { ProposalStep } from "../proposals";
 import { createScriptedProvider } from "../providers/fake";
+import { ticketDescription, type TicketParts } from "../ticket";
 import { AGENT_TOOLS } from "../tools";
 import { ProviderError, type ProviderEvent, type ProviderRequest } from "../types";
 import { ABILITIES, caseSchema, factAlternatives, loadCases, PHRASE_SETS, type EvalCase } from "./case";
@@ -115,6 +116,43 @@ function failedChecks(evalCase: EvalCase, run: Observed) {
     .filter((check) => !check.passed)
     .map((check) => check.name);
 }
+
+test("the scorer checks a ticket's sections, criteria, open questions and invented facts (#433)", () => {
+  const feature = caseNamed("tickets-feature");
+  const call = { name: "create_ticket", args: { title: "Export tasks as a CSV file" } };
+  const run = (parts: TicketParts) =>
+    observed({
+      answer: "Here's the ticket. Review it below and apply it.",
+      attemptedCalls: [call],
+      executedCalls: [call],
+      proposal: [
+        { kind: "create_task", ref: "new-1", title: "Export tasks as a CSV file", description: ticketDescription(parts, feature.request), dueDate: null, priority: "NONE", project: null, parent: null },
+      ],
+    });
+  const good: TicketParts = {
+    summary: "Let people export their tasks.",
+    acceptanceCriteria: ["An Export button downloads a CSV file", "A test checks the columns"],
+    openQuestions: ["Should done tasks be in it?"],
+  };
+  assert.deepEqual(failedChecks(feature, run(good)), []);
+  assert.deepEqual(failedChecks(feature, run({ ...good, openQuestions: undefined })), [
+    "Writes a ticket with Summary, Acceptance criteria, Open questions, Original request",
+    "Asks at least 1 open question",
+  ]);
+  assert.deepEqual(failedChecks(feature, run({ ...good, acceptanceCriteria: ["It works"] })), ["Gives at least 2 acceptance criteria"]);
+  for (const invented of ["It ships on 2026-12-01", "It ships by December 1st", "It costs $500", "It cuts the work by 30%", "Exports finish within 2 seconds"]) {
+    assert.deepEqual(failedChecks(feature, run({ ...good, background: [invented] })), ["States nothing the request didn't give (@inventedFacts)"], invented);
+  }
+  // What the request leaves open may name a date, and so may the person's own words.
+  assert.deepEqual(failedChecks(feature, run({ ...good, openQuestions: ["Should it ship by 2026-12-01?"] })), []);
+  // No ticket at all fails every ticket check.
+  const plain = observed({ ...run(good), proposal: [{ ...run(good).proposal[0], description: "Export tasks" } as ProposalStep] });
+  assert.deepEqual(failedChecks(feature, plain), [
+    "Writes a ticket with Summary, Acceptance criteria, Open questions, Original request",
+    "Gives at least 2 acceptance criteria",
+    "Asks at least 1 open question",
+  ]);
+});
 
 test("the scorer checks the expected tool call, the facts and what mustn't be said", () => {
   const overdue = caseNamed("tasks-overdue");

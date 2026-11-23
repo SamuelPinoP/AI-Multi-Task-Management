@@ -6,7 +6,7 @@ import "server-only";
 // in one transaction, so either all of those change or none does; it re-checks what the person may
 // change, and it makes no model request. Nothing the model says can apply a proposal: only these
 // functions do, behind the person's Apply button.
-import { PROPOSAL_SELECT, proposalView, refusalMessage, taskUpdateInput } from "@/lib/ai/proposals-core";
+import { PROPOSAL_SELECT, proposalView, refusalMessage, storedSteps, taskUpdateInput } from "@/lib/ai/proposals-core";
 import {
   NOT_PENDING_MESSAGES,
   PROPOSAL_NOT_FOUND,
@@ -166,18 +166,21 @@ export async function applyProposal(person: WriteActor, proposalId: string, chos
 
   const actor: WriteActor = { id: person.id, name: person.name, email: person.email, via: "AI Multi" };
   try {
-    const { followUps, links } = await prisma.$transaction(async (tx) => {
+    const { followUps, links, steps: appliedSteps } = await prisma.$transaction(async (tx) => {
       const claimed = await tx.agentProposal.updateMany({
         where: { id: proposalId, userId: actor.id, status: "PENDING", expiresAt: { gt: now } },
         data: { status: "APPLIED", decidedAt: now, applied },
       });
       if (!claimed.count) throw new NotPending();
-      const result = await applySteps(actor, view.steps, applied, tx);
+      // The steps as they are now, once claimed: a draft ticket edited a moment ago goes in as edited (#433).
+      const stored = await tx.agentProposal.findUnique({ where: { id: proposalId }, select: { steps: true } });
+      const current = storedSteps(stored?.steps) ?? view.steps;
+      const result = await applySteps(actor, current, applied, tx);
       await tx.agentProposal.update({ where: { id: proposalId }, data: { links: result.links } });
-      return result;
+      return { ...result, steps: current };
     }, APPLY_TRANSACTION);
     runFollowUps(actor, followUps);
-    return { ok: true, proposal: { ...view, state: "applied", applied, links } };
+    return { ok: true, proposal: { ...view, steps: appliedSteps, state: "applied", applied, links } };
   } catch (error) {
     if (error instanceof NotPending) return notPending(await currentView(person.id, proposalId, now));
     if (!(error instanceof StepRefused)) throw error;
@@ -187,6 +190,29 @@ export async function applyProposal(person: WriteActor, proposalId: string, chos
     });
     return { ok: false, status: 409, error: error.message, proposal: { ...view, state: "failed", error: error.message } };
   }
+}
+
+/**
+ * Changes the description of a new task in a pending proposal of the person's (#433): their edits
+ * to its draft ticket, before they apply it. Nothing else in a step can change, so the card still
+ * says what applying it does. One UPDATE writes just that description, so two edits at once don't
+ * undo each other, and none lands once the proposal is applied or cancelled. Nothing in the
+ * workspace changes.
+ */
+export async function editDraft(userId: string, proposalId: string, step: number, description: string, now = new Date()): Promise<ProposalOutcome> {
+  const view = await currentView(userId, proposalId, now);
+  if (!view || view.state !== "pending") return notPending(view);
+  if (view.steps[step]?.kind !== "create_task") {
+    return { ok: false, status: 400, error: "Only a new task's description can be changed before it's applied.", proposal: view };
+  }
+  const value = description || null;
+  const changed = await prisma.$executeRaw`
+    UPDATE "AgentProposal"
+    SET "steps" = jsonb_set("steps", ARRAY[${String(step)}::text, 'description'], COALESCE(to_jsonb(${value}::text), 'null'::jsonb))
+    WHERE "id" = ${proposalId} AND "userId" = ${userId} AND "status" = 'PENDING' AND "steps" -> ${step}::int ->> 'kind' = 'create_task'`;
+  const updated = await currentView(userId, proposalId, now);
+  if (!changed || !updated) return notPending(updated);
+  return { ok: true, proposal: updated };
 }
 
 /** Cancels a pending proposal of the person's. Nothing changes. */

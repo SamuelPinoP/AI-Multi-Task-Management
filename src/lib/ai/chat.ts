@@ -260,7 +260,7 @@ export async function runAgentChat(
       system: systemPrompt({ realNow: now, timeZone: context.timeZone }),
       messages: modelMessages(input.history, input.question),
       tools: deps.tools,
-      context: { ...context, draft },
+      context: { ...context, draft, request: input.question },
       signal: deps.signal,
       limits: deps.limits,
       emit: send,

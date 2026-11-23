@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseTaskDueDateForStorage } from "../task-date-buckets";
 import { isExisting, type ItemRef, type ProposalStep } from "./proposals";
-import { parseApplyRequest, proposalView, refusalMessage, storedLinks, storedSteps, taskUpdateInput, type CurrentTask } from "./proposals-core";
+import { DRAFT_DESCRIPTION_MAX, parseApplyRequest, parseDraftEdit, proposalView, refusalMessage, storedLinks, storedSteps, taskUpdateInput, type CurrentTask } from "./proposals-core";
 
 const whitewall = { ref: "new-1", name: "Whitewall" };
 const releaseNotes = { id: "task-release-notes", name: "Write the release notes", project: "Mobile app launch", dueDate: "2026-11-19" };
@@ -95,6 +95,16 @@ test("Apply takes the ticked steps by index, or all of them without a body (#310
   for (const raw of ["{", "null", "[0]", '{"steps":"all"}', '{"steps":[1.5]}', '{"steps":["0"]}', '{"steps":[0],"force":true}', JSON.stringify({ steps: Array.from({ length: 21 }, (_, index) => index) })]) {
     assert.deepEqual(parseApplyRequest(raw), { ok: false, error: "Choose which changes to apply." }, raw);
   }
+});
+
+test("a draft edit names a new task's step and its whole new description, trimmed (#433)", () => {
+  assert.deepEqual(parseDraftEdit(JSON.stringify({ step: 1, description: "  ## Summary\n\nBetter  " })), { ok: true, step: 1, description: "## Summary\n\nBetter" });
+  assert.deepEqual(parseDraftEdit('{"step":0,"description":""}'), { ok: true, step: 0, description: "" });
+  for (const raw of ["", "{", "null", '{"step":1}', '{"description":"x"}', '{"step":-1,"description":"x"}', '{"step":20,"description":"x"}', '{"step":1.5,"description":"x"}', '{"step":1,"description":"x","title":"y"}']) {
+    assert.deepEqual(parseDraftEdit(raw), { ok: false, error: "Those aren't changes to a draft." }, raw);
+  }
+  assert.deepEqual(parseDraftEdit(JSON.stringify({ step: 1, description: "x".repeat(DRAFT_DESCRIPTION_MAX + 1) })), { ok: false, error: "Keep the description under 20,000 characters." });
+  assert.equal(parseDraftEdit(JSON.stringify({ step: 1, description: ` ${"x".repeat(DRAFT_DESCRIPTION_MAX)} ` })).ok, true);
 });
 
 test("a refused step says that nothing changed and why, naming the item (#310)", () => {

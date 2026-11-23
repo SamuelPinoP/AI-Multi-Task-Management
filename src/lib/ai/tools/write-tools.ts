@@ -15,6 +15,7 @@ import {
   type TaskChange,
   type TaskStatus,
 } from "@/lib/ai/proposals";
+import { ticketDescription, ticketFields, ticketProblem } from "@/lib/ai/ticket";
 import { defineTool, type ToolContext, type ToolOutput } from "@/lib/ai/tools/define";
 import { dayKey } from "@/lib/ai/tools/read-tools";
 import { parseEventTimes } from "@/lib/event-time";
@@ -212,6 +213,56 @@ export const createProject = defineTool({
   },
 });
 
+/** Where a new task goes and when it's due: what create_task and create_ticket share. */
+const newTaskFields = {
+  dueDate: dayKey("When it's due, YYYY-MM-DD.").optional(),
+  priority: priorityInput.optional().describe("Only when the person asked for one."),
+  project: z
+    .string()
+    .trim()
+    .min(1)
+    .max(NAME_MAX)
+    .optional()
+    .describe("The project it goes in: the name or id of one of the person's projects, or the ref create_project returned."),
+  parent: reference("To make it a subtask: the parent task's title or id, or the ref create_task or create_ticket returned for a new one.").optional(),
+};
+
+type NewTask = { title: string; dueDate?: string; priority?: Exclude<Priority, "NONE">; project?: string; parent?: string };
+
+/** Adds a new task to the answer's proposal, with its project or parent looked up. `noun` says what the model reads back. */
+async function proposeTask({ title, dueDate, priority, project, parent }: NewTask, description: string | null, context: ToolContext, noun: "task" | "ticket") {
+  const { draft, problem } = draftFor(context);
+  if (problem) return problem;
+
+  let projectRef: ItemRef | null = null;
+  let parentRef: ItemRef | null = null;
+  if (parent) {
+    // A subtask goes in its parent's project, as in the app (SMART-02).
+    const found = await findParent(parent, context, draft);
+    if (found.problem) return found.problem;
+    parentRef = found.parent;
+    projectRef = found.project;
+  } else if (project) {
+    const found = await findProject(project, context, draft);
+    if (found.problem) return found.problem;
+    projectRef = found.item;
+  }
+
+  const step: ProposalStep = {
+    kind: "create_task",
+    ref: takeRef(draft),
+    title,
+    description,
+    dueDate: dueDate ?? null,
+    priority: priority ?? "NONE",
+    project: projectRef,
+    parent: parentRef,
+  };
+  const where = parentRef ? ` under "${parentRef.name}"` : projectRef ? ` in "${projectRef.name}"` : "";
+  const what = noun === "ticket" ? `${parentRef ? "subtask" : "task"} written as a ticket` : parentRef ? "subtask" : "task";
+  return proposed(draft, step, `New ${what} "${title}"${where}`);
+}
+
 export const createTask = defineTool({
   name: "create_task",
   label: "Preparing a new task",
@@ -220,48 +271,32 @@ export const createTask = defineTool({
   input: z.strictObject({
     title: z.string().trim().min(1).max(TITLE_MAX).describe("The task's title."),
     description: z.string().trim().max(TEXT_MAX).optional().describe("Details, when the person gave some."),
-    dueDate: dayKey("When it's due, YYYY-MM-DD.").optional(),
-    priority: priorityInput.optional().describe("Only when the person asked for one."),
-    project: z
-      .string()
-      .trim()
-      .min(1)
-      .max(NAME_MAX)
-      .optional()
-      .describe("The project it goes in: the name or id of one of the person's projects, or the ref create_project returned."),
-    parent: reference("To make it a subtask: the parent task's title or id, or the ref create_task returned for a new one.").optional(),
+    ...newTaskFields,
   }),
   access: "propose",
-  async run({ title, description, dueDate, priority, project, parent }, context) {
-    const { draft, problem } = draftFor(context);
-    if (problem) return problem;
+  async run({ description, ...task }, context) {
+    return proposeTask(task, description || null, context, "task");
+  },
+});
 
-    let projectRef: ItemRef | null = null;
-    let parentRef: ItemRef | null = null;
-    if (parent) {
-      // A subtask goes in its parent's project, as in the app (SMART-02).
-      const found = await findParent(parent, context, draft);
-      if (found.problem) return found.problem;
-      parentRef = found.parent;
-      projectRef = found.project;
-    } else if (project) {
-      const found = await findProject(project, context, draft);
-      if (found.problem) return found.problem;
-      projectRef = found.item;
-    }
-
-    const step: ProposalStep = {
-      kind: "create_task",
-      ref: takeRef(draft),
-      title,
-      description: description || null,
-      dueDate: dueDate ?? null,
-      priority: priority ?? "NONE",
-      project: projectRef,
-      parent: parentRef,
-    };
-    const where = parentRef ? ` under "${parentRef.name}"` : projectRef ? ` in "${projectRef.name}"` : "";
-    return proposed(draft, step, `New ${parentRef ? "subtask" : "task"} "${title}"${where}`);
+export const createTicket = defineTool({
+  name: "create_ticket",
+  label: "Writing a ticket",
+  description:
+    "Proposes a new task written as a complete ticket, the way a good GitHub issue is written. Use it when the person asks for a ticket, an issue, a story or a bug report, or to write a task up properly. Work from what the person said and what the tools found: never invent facts, names, numbers or dates; put whatever you assume or don't know under openQuestions. Follow any structure the person asks for. The app writes the description from these parts and adds the person's own words at the end. Nothing changes until the person applies the proposal in the app. Returns a ref that later calls can use as a parent.",
+  input: z
+    .strictObject({
+      title: z.string().trim().min(1).max(TITLE_MAX).describe("The problem or the outcome, in plain words, such as \"Export tasks as a CSV file\"."),
+      ...ticketFields,
+      ...newTaskFields,
+    })
+    .superRefine((ticket, issues) => {
+      const problem = ticketProblem(ticket);
+      if (problem) issues.addIssue({ code: "custom", message: problem });
+    }),
+  access: "propose",
+  async run({ title, dueDate, priority, project, parent, ...ticket }, context) {
+    return proposeTask({ title, dueDate, priority, project, parent }, ticketDescription(ticket, context.request), context, "ticket");
   },
 });
 
@@ -402,4 +437,4 @@ export const trashTask = defineTool({
   },
 });
 
-export const WRITE_TOOLS = [createProject, createTask, updateTask, completeTask, createEvent, trashTask];
+export const WRITE_TOOLS = [createProject, createTask, createTicket, updateTask, completeTask, createEvent, trashTask];

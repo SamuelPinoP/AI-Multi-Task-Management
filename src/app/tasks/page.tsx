@@ -42,7 +42,6 @@ import {
   type TaskFilters,
   type TaskSort,
 } from "@/components/tasks/task-list-menus";
-import { TASK_ORDER_KEY } from "@/components/tasks/task-page-view";
 import { TaskRow, TaskRowPhone } from "@/components/tasks/task-row";
 import { taskRequestBody } from "@/components/tasks/task-sheet";
 import type { Project, Task, TaskInput, TaskStatus } from "@/components/tasks/types";
@@ -58,6 +57,7 @@ import { comparePriority, priorityLabels } from "@/lib/priority";
 import { projectColor } from "@/lib/project-color";
 import { describeBulkChange, type BulkTaskChange, type TaskSnapshot } from "@/lib/task-bulk";
 import { compareTaskDueDates, formatTaskDueDateInput } from "@/lib/task-date-buckets";
+import { TASK_ORDER_KEY } from "@/lib/task-order";
 import { topLevelTasks } from "@/lib/task-relations";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { usePhoneLayout } from "@/lib/use-phone-layout";
