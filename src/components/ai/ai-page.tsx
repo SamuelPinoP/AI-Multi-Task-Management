@@ -1,6 +1,21 @@
 "use client";
 
-import { ChevronDown, ChevronLeft, Ellipsis, EyeOff, History, Maximize2, Minimize2, Pencil, Search, SquarePen, Trash2, Undo2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  Ellipsis,
+  EyeOff,
+  History,
+  Maximize2,
+  Minimize2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pencil,
+  Search,
+  SquarePen,
+  Trash2,
+  Undo2,
+} from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AiChatList, KEPT_CHATS_TEXT } from "@/components/ai/ai-chat-list";
 import { useAiChat, useAiDock } from "@/components/ai/ai-chat-provider";
@@ -9,14 +24,16 @@ import { AiNotice } from "@/components/ai/ai-notice";
 import { AiSpark } from "@/components/ai/ai-spark";
 import { AI_SUGGESTIONS } from "@/components/ai/ai-suggestions";
 import { AiThread, AiThreadLoading } from "@/components/ai/ai-thread";
+import { useFollowEnd } from "@/components/ai/use-follow-end";
 import { MobileMenuButton } from "@/components/mobile-menu";
 import { uiPrimaryButtonClass } from "@/components/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ResizeHandle } from "@/components/ui/resize-handle";
+import { Tooltip } from "@/components/ui/tooltip";
 import { allowanceLine } from "@/lib/ai/chat-client";
 import type { AiDock } from "@/lib/ai/dock";
 import { cn } from "@/lib/cn";
-import { AI_CHAT_LIST_LIMITS, AI_CHAT_LIST_WIDTH_COOKIE, savePanelWidthCookie, type PanelSize } from "@/lib/panel-resize";
+import { AI_CHAT_LIST_COLLAPSED_COOKIE, AI_CHAT_LIST_LIMITS, AI_CHAT_LIST_WIDTH_COOKIE, savePanelCookies, shownWidth, type PanelSize } from "@/lib/panel-resize";
 import { isAskAiShortcut } from "@/lib/shortcuts";
 import { openGuestSignup } from "@/lib/workspace-events";
 
@@ -168,21 +185,26 @@ function ChatOptions() {
   );
 }
 
+const railButtonClass =
+  "grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent";
+
 /**
  * The AI page (#308, the classic layout picked on the round-3 canvas): the person's chats on the
  * left (their last 20, stored on the server, #452), in a list whose edge resizes from 220 to 360 px
- * like the sidebar's, and the conversation in a 760 px column with one message box. Phones show the
- * conversation, and the list full screen from the clock button. The chat itself lives above the
- * page (AiChatProvider in the root layout), so a conversation stays while people look at the items
- * it links to.
+ * like the sidebar's, or folds to a rail of icons (a click on the edge, its Collapse button, or a
+ * drag past its narrowest), and the conversation in a 760 px column with one message box. Phones
+ * show the conversation, and the list full screen from the clock button. The chat itself lives
+ * above the page (AiChatProvider in the root layout), so a conversation stays while people look at
+ * the items it links to.
  */
-export function AiPage({ firstName, initialListWidth }: { firstName: string; initialListWidth: number }) {
+export function AiPage({ firstName, initialList }: { firstName: string; initialList: PanelSize }) {
   const chat = useAiChat();
   const { enabled, chats, current, status, busy, opening, notice, announcement, listState, loadStatus, loadChats } = chat;
-  const [list, setList] = useState<PanelSize>({ width: initialListWidth, collapsed: false });
+  const [list, setList] = useState<PanelSize>(initialList);
   const [showList, setShowList] = useState(false);
   const [query, setQuery] = useState("");
   const composer = useRef<HTMLTextAreaElement>(null);
+  const search = useRef<HTMLInputElement>(null);
   const thread = useRef<HTMLDivElement>(null);
   // Whether the reader is at the end of the conversation, so new words keep it in view.
   const atEnd = useRef(true);
@@ -203,7 +225,9 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // New words keep the conversation scrolled to its end, unless the reader has scrolled up.
+  // New words, and the card of changes under an answer, keep the conversation scrolled to its end,
+  // unless the reader has scrolled up (#536). The effect covers a chat swapped for one as tall.
+  const { attach: followThread, onScroll: onScrollThread } = useFollowEnd(thread, atEnd);
   const turns = current?.turns;
   useEffect(() => {
     const element = thread.current;
@@ -222,10 +246,20 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
     composer.current?.focus();
   }
 
+  // The edge, the Collapse button and the rail all land here; the server reads the cookies, so the
+  // next visit starts the same way.
   function resizeList(next: PanelSize, done: boolean) {
-    setList({ width: next.width, collapsed: false });
-    if (done) savePanelWidthCookie(AI_CHAT_LIST_WIDTH_COOKIE, next.width);
+    setList(next);
+    if (done) savePanelCookies(AI_CHAT_LIST_WIDTH_COOKIE, AI_CHAT_LIST_COLLAPSED_COOKIE, next);
   }
+
+  /** The rail's magnifier: the whole list again, with the cursor in its search. */
+  function openListToSearch() {
+    resizeList({ ...list, collapsed: false }, true);
+    window.requestAnimationFrame(() => search.current?.focus());
+  }
+
+  const railed = list.collapsed;
 
   if (!enabled) return <GuestAiPage />;
 
@@ -240,55 +274,98 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
           "relative min-h-0 w-full flex-col bg-canvas transition-[width] duration-200 data-[resizing]:transition-none lg:w-[var(--ai-chats-width)] lg:shrink-0 lg:border-r lg:border-line",
           showList ? "flex" : "hidden lg:flex",
         )}
-        style={{ "--ai-chats-width": `${list.width}rem` } as CSSProperties}
+        style={{ "--ai-chats-width": `${shownWidth(list, AI_CHAT_LIST_LIMITS)}rem` } as CSSProperties}
       >
-        <div className="flex min-h-14 items-center gap-1.5 pb-2 pl-4 pr-2.5 pt-3 max-lg:pl-2">
-          <button type="button" onClick={() => setShowList(false)} aria-label="Back to the chat" className={cn(iconButtonClass, "lg:hidden")}>
-            <ChevronLeft aria-hidden="true" className="h-5 w-5" />
-          </button>
-          <h2 id="ai-chats-heading" className="min-w-0 flex-1 truncate text-[0.9375rem] font-semibold">
-            Chats
-          </h2>
-          <button type="button" onClick={startNewChat} aria-label="New chat" title="New chat" className={iconButtonClass}>
-            <SquarePen aria-hidden="true" className="h-4.5 w-4.5" />
-          </button>
-        </div>
-        <label className="relative mx-2.5 mb-1 block">
-          <span className="sr-only">Search chats</span>
-          <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search chats"
-            className="w-full rounded-lg border border-line bg-surface py-1.5 pl-8 pr-3 text-[0.8125rem] leading-5 text-ink outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
-          />
-        </label>
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-1">
-          <AiChatList
-            chats={matches}
-            emptyText={chats.length ? "No chats match." : undefined}
-            onOpen={(id) => {
-              chat.openChat(id);
-              setShowList(false);
-              atEnd.current = true;
-            }}
-          />
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-2 pb-1 pt-3">
-            <p className="text-xs text-muted">{KEPT_CHATS_TEXT}</p>
-            {hasStoredChats && listState === "ready" ? (
-              <button
-                type="button"
-                onClick={chat.deleteAllChats}
-                disabled={busy}
-                className="rounded-md text-xs font-semibold text-danger underline-offset-2 hover:underline disabled:opacity-50 max-lg:min-h-11"
-              >
-                Delete all chats
-              </button>
-            ) : null}
+        <div className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", railed && "lg:hidden")}>
+          <div className="flex min-h-14 items-center gap-1.5 pb-2 pl-4 pr-2.5 pt-3 max-lg:pl-2">
+            <button type="button" onClick={() => setShowList(false)} aria-label="Back to the chat" className={cn(iconButtonClass, "lg:hidden")}>
+              <ChevronLeft aria-hidden="true" className="h-5 w-5" />
+            </button>
+            <h2 id="ai-chats-heading" className="min-w-0 flex-1 truncate text-[0.9375rem] font-semibold">
+              Chats
+            </h2>
+            <button type="button" onClick={startNewChat} aria-label="New chat" title="New chat" className={iconButtonClass}>
+              <SquarePen aria-hidden="true" className="h-4.5 w-4.5" />
+            </button>
+            {/* As the sidebar's Collapse by its logo: the list folds to its rail. Computers only. */}
+            <button
+              type="button"
+              onClick={() => resizeList({ ...list, collapsed: true }, true)}
+              aria-label="Collapse your chats"
+              title="Collapse your chats"
+              className={cn(iconButtonClass, "max-lg:hidden")}
+            >
+              <PanelLeftClose aria-hidden="true" className="h-4.5 w-4.5" />
+            </button>
+          </div>
+          <label className="relative mx-2.5 mb-1 block">
+            <span className="sr-only">Search chats</span>
+            <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+            <input
+              ref={search}
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search chats"
+              className="w-full rounded-lg border border-line bg-surface py-1.5 pl-8 pr-3 text-[0.8125rem] leading-5 text-ink outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
+            />
+          </label>
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-1">
+            <AiChatList
+              chats={matches}
+              emptyText={chats.length ? "No chats match." : undefined}
+              onOpen={(id) => {
+                chat.openChat(id);
+                setShowList(false);
+                atEnd.current = true;
+              }}
+            />
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-2 pb-1 pt-3">
+              <p className="text-xs text-muted">{KEPT_CHATS_TEXT}</p>
+              {hasStoredChats && listState === "ready" ? (
+                <button
+                  type="button"
+                  onClick={chat.deleteAllChats}
+                  disabled={busy}
+                  className="rounded-md text-xs font-semibold text-danger underline-offset-2 hover:underline disabled:opacity-50 max-lg:min-h-11"
+                >
+                  Delete all chats
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
-        <ResizeHandle label="Resize your chats" controls="ai-chats" size={list} limits={AI_CHAT_LIST_LIMITS} onResize={resizeList} className="hidden lg:block" />
+
+        {/* Folded on a computer: a 56 px rail like the sidebar's (ChatGPT and Claude fold their chats the same way). */}
+        {railed ? (
+          <div className="hidden min-h-0 flex-1 flex-col items-center gap-1 pt-3 lg:flex">
+            <Tooltip content="Show your chats">
+              <button type="button" onClick={() => resizeList({ ...list, collapsed: false }, true)} aria-label="Show your chats" className={cn(railButtonClass, "mb-1")}>
+                <PanelLeftOpen aria-hidden="true" className="h-4.5 w-4.5" />
+              </button>
+            </Tooltip>
+            <Tooltip content="New chat">
+              <button type="button" onClick={startNewChat} aria-label="New chat" className={railButtonClass}>
+                <SquarePen aria-hidden="true" className="h-4.5 w-4.5" />
+              </button>
+            </Tooltip>
+            <Tooltip content="Search chats">
+              <button type="button" onClick={openListToSearch} aria-label="Search chats" className={railButtonClass}>
+                <Search aria-hidden="true" className="h-4.5 w-4.5" />
+              </button>
+            </Tooltip>
+          </div>
+        ) : null}
+
+        <ResizeHandle
+          label="Resize your chats"
+          controls="ai-chats"
+          size={list}
+          limits={AI_CHAT_LIST_LIMITS}
+          collapsedText="Icons only"
+          onResize={resizeList}
+          className="hidden lg:block"
+        />
       </section>
 
       <section aria-label="Conversation" className={cn("min-w-0 flex-1 flex-col bg-surface", showList ? "hidden lg:flex" : "flex")}>
@@ -317,11 +394,9 @@ export function AiPage({ firstName, initialListWidth }: { firstName: string; ini
         </div>
 
         <div
-          ref={thread}
-          onScroll={(event) => {
-            const element = event.currentTarget;
-            atEnd.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
-          }}
+          ref={followThread}
+          data-follows-end=""
+          onScroll={onScrollThread}
           className="flex min-h-0 flex-1 flex-col overflow-y-auto"
         >
           {opening ? (
