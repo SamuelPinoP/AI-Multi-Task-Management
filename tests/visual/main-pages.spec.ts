@@ -260,6 +260,7 @@ test("AI ticket with the subtasks that split it", async ({ page }) => {
   const ticket = {
     title: "Add two-step sign-in",
     summary: "Ask for a code from an authenticator app after the password.",
+    acceptanceCriteria: ["A person can turn on two-step sign-in", "Sign-in asks for the code"],
     estimate: { size: "1 week", reason: "An app to set up, a code at sign-in, recovery codes, and tests for each." },
     split: ["Set up an authenticator app", "Ask for the code at sign-in", "Recovery codes"],
   };
