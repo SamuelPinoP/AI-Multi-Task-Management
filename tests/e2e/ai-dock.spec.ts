@@ -112,6 +112,7 @@ test.describe("on a computer", () => {
     await page.goto("/chats");
     await expect(page.getByRole("heading", { name: "Chats" }).first()).toBeVisible();
     await expect(bubble(page)).toHaveCount(0);
+    await expect(bar(page)).toHaveCount(0);
     await page.goto("/notes");
     await expect(page.getByRole("heading", { level: 1, name: "Notes" })).toBeVisible();
     await expect(async () => {
@@ -120,12 +121,12 @@ test.describe("on a computer", () => {
     }).toPass({ timeout: 15_000 });
 
     // The AI page says where the bar is, and shows it on every page again.
-    const pill = page.getByRole("button", { name: "AI bar hidden" });
+    const pill = page.getByRole("button", { name: "AI bar: hidden" });
     await expect(pill).toBeVisible();
     await pill.click();
     await expect(page.getByText("The AI bar is hidden from your pages.")).toBeVisible();
     await page.getByRole("menuitem", { name: "Show on every page" }).click();
-    await expect(page.getByRole("button", { name: "AI bar: on every page" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "AI bar: visible" })).toBeVisible();
     await expectSaved(email, "OPEN");
     await page.goto("/tasks");
     await expect(bar(page)).toBeVisible();
@@ -166,7 +167,7 @@ test.describe("on a phone", () => {
 
     // On the AI page, its ✦ in the header says so and brings it back.
     await page.goto("/ai");
-    await page.getByRole("button", { name: "AI bar hidden" }).click();
+    await page.getByRole("button", { name: "AI bar: hidden" }).click();
     await page.getByRole("menuitem", { name: "Show on every page" }).click();
     await expectSaved(email, "OPEN");
     await page.goto("/tasks");
