@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { z } from "zod";
 import { parseDescription } from "@/lib/description-sections";
+import { descriptionEstimate } from "@/lib/estimates";
 import { ticketDescription, ticketFields, ticketProblem, TICKET_SECTIONS } from "./ticket";
 import { ticketOverview } from "./ticket-sections";
 
@@ -13,6 +14,7 @@ const EXPORT_TICKET = {
   acceptanceCriteria: ["The Tasks page has an Export button that downloads a CSV file", "A unit test checks the file's columns"],
   outOfScope: ["Importing tasks"],
   openQuestions: ["Should done tasks be in the file too?"],
+  estimate: { size: "1 day" as const, reason: "A button, the file's columns, and a unit and an e2e test." },
 };
 
 test("a ticket's description has its sections in order, criteria as a checklist, and the person's words last", () => {
@@ -41,12 +43,43 @@ test("a ticket's description has its sections in order, criteria as a checklist,
       "",
       "- Should done tasks be in the file too?",
       "",
+      "## Estimate",
+      "",
+      "**1 day** · AI estimate",
+      "A button, the file's columns, and a unit and an e2e test.",
+      "",
       "## Original request",
       "",
       "> Make a ticket: export my tasks as CSV",
       "> from the Tasks page",
     ].join("\n"),
   );
+});
+
+test("the estimate reads back as the AI's; over 2 days it says the work is worth splitting", () => {
+  const short = ticketDescription(EXPORT_TICKET, "Export my tasks");
+  assert.deepEqual(descriptionEstimate(short), { minutes: 480, ai: true });
+
+  const long = ticketDescription({ ...EXPORT_TICKET, estimate: { size: "1 week", reason: "- Four areas\n to check" }, split: ["Audit sign-in", "Audit uploads"] }, "Audit the app");
+  const sections = parseDescription(long).sections;
+  assert.deepEqual(
+    sections.map((section) => section.title),
+    ["Summary", "Background", "Acceptance criteria", "Out of scope", "Open questions", "Estimate", "Original request"],
+  );
+  // The reason stays one line of text, and the subtasks are left to the proposal.
+  assert.equal(sections[5].body, "**1 week** · AI estimate\nFour areas to check\n\nMore than 2 days of work: worth splitting into subtasks.");
+  assert.doesNotMatch(long, /Audit sign-in/);
+  assert.deepEqual(descriptionEstimate(long), { minutes: 2400, ai: true });
+});
+
+test("work over 2 days comes with 2 to 5 subtasks that split it, and only that work does", () => {
+  const reason = "An app, a code at sign-in and recovery codes.";
+  assert.match(ticketProblem({ ...EXPORT_TICKET, estimate: { size: "3 days", reason } }) ?? "", /over 2 days: give split/);
+  assert.match(ticketProblem({ ...EXPORT_TICKET, estimate: { size: "1 week", reason }, split: [] }) ?? "", /over 2 days: give split/);
+  assert.equal(ticketProblem({ ...EXPORT_TICKET, estimate: { size: "3 days", reason }, split: ["Set up an authenticator app", "Recovery codes"] }), null);
+  // 2 days isn't over 2 days.
+  assert.match(ticketProblem({ ...EXPORT_TICKET, estimate: { size: "2 days", reason }, split: ["One", "Two"] }) ?? "", /only for an estimate over 2 days/);
+  assert.match(ticketProblem({ ...EXPORT_TICKET, split: ["One", "Two"] }) ?? "", /create_task with this ticket's ref/);
 });
 
 test("empty sections are left out, and the person's extra sections go after Background", () => {
@@ -102,10 +135,25 @@ test("the schema checks each part's type and length", () => {
   assert.equal(schema.safeParse({ ...EXPORT_TICKET, acceptanceCriteria: [] }).success, false);
   assert.equal(schema.safeParse({ ...EXPORT_TICKET, acceptanceCriteria: Array.from({ length: 11 }, (_, index) => `Criterion ${index}`) }).success, false);
   assert.equal(schema.safeParse({ ...EXPORT_TICKET, background: ["x".repeat(301)] }).success, false);
-  assert.equal(schema.safeParse({ ...EXPORT_TICKET, estimate: "2h" }).success, false);
   assert.equal(schema.safeParse({ ...EXPORT_TICKET, sections: [{ title: "Cost", text: "Low", extra: true }] }).success, false);
   // Spaces around the text go.
   assert.equal(schema.parse({ ...EXPORT_TICKET, summary: "  Short  " }).summary, "Short");
+});
+
+test("every ticket has an estimate: one of the fixed steps, with a one-line reason", () => {
+  const { estimate, ...withoutEstimate } = EXPORT_TICKET;
+  assert.equal(schema.safeParse(withoutEstimate).success, false);
+  assert.equal(schema.safeParse({ ...EXPORT_TICKET, estimate: "2h" }).success, false);
+  assert.equal(schema.safeParse({ ...EXPORT_TICKET, estimate: { ...estimate, size: "5 h" } }).success, false);
+  assert.equal(schema.safeParse({ ...EXPORT_TICKET, estimate: { ...estimate, reason: " " } }).success, false);
+  assert.equal(schema.safeParse({ ...EXPORT_TICKET, estimate: { ...estimate, reason: "x".repeat(201) } }).success, false);
+  assert.equal(schema.safeParse({ ...EXPORT_TICKET, estimate: { ...estimate, minutes: 480 } }).success, false);
+  // The split: 2 to 5 subtask titles, each as long as a task title the model writes.
+  const big = { ...EXPORT_TICKET, estimate: { ...estimate, size: "1 week" } };
+  assert.equal(schema.safeParse({ ...big, split: ["One", "Two"] }).success, true);
+  assert.equal(schema.safeParse({ ...big, split: ["One"] }).success, false);
+  assert.equal(schema.safeParse({ ...big, split: ["1", "2", "3", "4", "5", "6"] }).success, false);
+  assert.equal(schema.safeParse({ ...big, split: ["One", "x".repeat(201)] }).success, false);
 });
 
 test("a ticket needs testable criteria, unless the person asked for other sections, and its own section titles", () => {
@@ -114,6 +162,7 @@ test("a ticket needs testable criteria, unless the person asked for other sectio
   assert.match(ticketProblem({ summary: "Empty extra", sections: [{ title: "Cost" }] }) ?? "", /acceptanceCriteria/);
   assert.equal(ticketProblem({ summary: "Bug", sections: [{ title: "Steps to reproduce", items: ["Open the page"] }] }), null);
   assert.match(ticketProblem({ ...EXPORT_TICKET, sections: [{ title: "summary", text: "Again" }] }) ?? "", /own title/);
+  assert.match(ticketProblem({ ...EXPORT_TICKET, sections: [{ title: "Estimate", text: "Soon" }] }) ?? "", /own title/);
   assert.match(ticketProblem({ ...EXPORT_TICKET, sections: [{ title: "Cost", text: "A" }, { title: "## Cost", text: "B" }] }) ?? "", /own title/);
 });
 

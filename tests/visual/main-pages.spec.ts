@@ -210,7 +210,8 @@ test("AI changes to apply", async ({ page }) => {
 });
 
 // #433: a ticket the AI wrote, as its card sums it up and as its draft opens beside the chat (full
-// screen on a phone), where each section folds and edits on its own.
+// screen on a phone), where each section folds and edits on its own, ending with the AI's estimate
+// (#434).
 test("AI ticket and its draft", async ({ page }) => {
   await signUp(page);
   expect((await page.request.post("/api/agent/notice", { data: { version: AI_NOTICE_VERSION } })).ok()).toBe(true);
@@ -220,6 +221,7 @@ test("AI ticket and its draft", async ({ page }) => {
     acceptanceCriteria: ["The Tasks page has an Export button", "The file has a column for each field", "A test downloads the file"],
     outOfScope: ["Importing tasks from a CSV file"],
     openQuestions: ["Should done tasks be in the file?"],
+    estimate: { size: "1 day", reason: "A button, the file's columns and a test." },
   };
   await page.goto("/ai");
   await page.getByRole("textbox", { name: "Message the AI" }).fill(`create_ticket ${JSON.stringify(ticket)}`);
@@ -235,7 +237,7 @@ test("AI ticket and its draft", async ({ page }) => {
 });
 
 // #433: a task's page with its description in sections: a Cost section the person added, a
-// checklist with one box ticked, and the request folded at the end.
+// checklist with one box ticked, the AI's estimate (#434), and the request folded at the end.
 test("Task page with sections", async ({ page }) => {
   await signUp(page);
   const { id } = await post(page, "/api/tasks", {
@@ -257,6 +259,11 @@ test("Task page with sections", async ({ page }) => {
       "- [x] Test-drive three cars",
       "- [ ] Agree on the price",
       "- [ ] Sign the papers",
+      "",
+      "## Estimate",
+      "",
+      "**2 days** · AI estimate",
+      "Comparing cars, test drives at two dealers, and the paperwork.",
       "",
       "## Original request",
       "",

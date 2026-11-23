@@ -133,25 +133,78 @@ test("the scorer checks a ticket's sections, criteria, open questions and invent
     summary: "Let people export their tasks.",
     acceptanceCriteria: ["An Export button downloads a CSV file", "A test checks the columns"],
     openQuestions: ["Should done tasks be in it?"],
+    estimate: { size: "1 day", reason: "A button, the columns and two tests." },
   };
   assert.deepEqual(failedChecks(feature, run(good)), []);
   assert.deepEqual(failedChecks(feature, run({ ...good, openQuestions: undefined })), [
-    "Writes a ticket with Summary, Acceptance criteria, Open questions, Original request",
+    "Writes a ticket with Summary, Acceptance criteria, Open questions, Estimate, Original request",
     "Asks at least 1 open question",
   ]);
   assert.deepEqual(failedChecks(feature, run({ ...good, acceptanceCriteria: ["It works"] })), ["Gives at least 2 acceptance criteria"]);
   for (const invented of ["It ships on 2026-12-01", "It ships by December 1st", "It costs $500", "It cuts the work by 30%", "Exports finish within 2 seconds"]) {
     assert.deepEqual(failedChecks(feature, run({ ...good, background: [invented] })), ["States nothing the request didn't give (@inventedFacts)"], invented);
   }
-  // What the request leaves open may name a date, and so may the person's own words.
+  // What the request leaves open may name a date, and so may the person's own words and the estimate's reason.
   assert.deepEqual(failedChecks(feature, run({ ...good, openQuestions: ["Should it ship by 2026-12-01?"] })), []);
+  assert.deepEqual(failedChecks(feature, run({ ...good, estimate: { size: "1 day", reason: "Each part takes under 4 hours." } })), []);
   // No ticket at all fails every ticket check.
   const plain = observed({ ...run(good), proposal: [{ ...run(good).proposal[0], description: "Export tasks" } as ProposalStep] });
   assert.deepEqual(failedChecks(feature, plain), [
-    "Writes a ticket with Summary, Acceptance criteria, Open questions, Original request",
+    "Writes a ticket with Summary, Acceptance criteria, Open questions, Estimate, Original request",
     "Gives at least 2 acceptance criteria",
     "Asks at least 1 open question",
+    "Estimates it at 2 h to 2 days, as the AI's",
   ]);
+});
+
+test("the scorer checks a ticket's estimate against its range, and its split goes with it (#434)", () => {
+  const split = caseNamed("tickets-estimate-split");
+  const call = { name: "create_ticket", args: { title: "Add two-step sign-in" } };
+  const ticket: ProposalStep = {
+    kind: "create_task",
+    ref: "new-1",
+    title: "Add two-step sign-in",
+    description: ticketDescription(
+      {
+        summary: "Ask for a code at sign-in.",
+        acceptanceCriteria: ["Sign-in asks for the code", "Tests cover it"],
+        estimate: { size: "1 week", reason: "An app, a code at sign-in and recovery codes." },
+      },
+      split.request,
+    ),
+    dueDate: null,
+    priority: "NONE",
+    project: null,
+    parent: null,
+  };
+  const subtask = (ref: string, title: string): ProposalStep => ({
+    kind: "create_task",
+    ref,
+    title,
+    description: null,
+    dueDate: null,
+    priority: "NONE",
+    project: null,
+    parent: { ref: "new-1", name: "Add two-step sign-in" },
+    suggested: true,
+  });
+  const run = (proposal: ProposalStep[]) =>
+    observed({ answer: "It's about a week, so I suggested subtasks that split it. Review it below and apply it.", attemptedCalls: [call], executedCalls: [call], proposal });
+  const offered = [subtask("new-2", "Set up an authenticator app"), subtask("new-3", "Recovery codes")];
+
+  // The subtasks it offers aren't "something else": they're the ticket's split.
+  assert.deepEqual(failedChecks(split, run([ticket, ...offered])), []);
+  assert.deepEqual(failedChecks(split, run([ticket])), ["Offers 2 to 5 subtasks that split it"]);
+  // Subtasks it makes outright, ticked, are changes nobody asked for.
+  const made = offered.map((step) => ({ ...step, suggested: undefined }));
+  assert.deepEqual(failedChecks(split, run([ticket, ...made])), ["Proposes create_task \"two-step\", and nothing else", "Offers 2 to 5 subtasks that split it"]);
+
+  // Outside the range, or not marked as the AI's, the estimate fails.
+  const withEstimate = (estimate: string) => ({ ...ticket, description: (ticket.description ?? "").replace("**1 week** · AI estimate", estimate) });
+  const failed = (estimate: string) => scoreCase(split, run([withEstimate(estimate), ...offered]), workspace).filter((check) => !check.passed);
+  assert.deepEqual(failed("**2 days** · AI estimate"), [{ name: "Estimates it at 3 days to 1 week, as the AI's", passed: false, detail: "It estimated 2 days." }]);
+  assert.deepEqual(failed("**1 week**"), [{ name: "Estimates it at 3 days to 1 week, as the AI's", passed: false, detail: "It estimated 1 week, not marked as the AI's." }]);
+  assert.deepEqual(failed("Hard to say"), [{ name: "Estimates it at 3 days to 1 week, as the AI's", passed: false, detail: "It gave no estimate." }]);
 });
 
 test("the scorer checks the expected tool call, the facts and what mustn't be said", () => {

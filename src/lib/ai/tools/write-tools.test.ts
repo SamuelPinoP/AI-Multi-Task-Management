@@ -113,6 +113,7 @@ test("a ticket is a new task whose description the server writes from its parts,
       background: ["Asked for in Mobile app launch."],
       acceptanceCriteria: ["A person can add a passkey in Settings", "A person can sign in with it", "An e2e test signs in with a passkey"],
       openQuestions: ["Which platforms come first?"],
+      estimate: { size: "2 days", reason: "A Settings screen, a change to sign-in and an e2e test." },
       project: "Mobile",
       priority: "HIGH",
     }),
@@ -133,25 +134,81 @@ test("a ticket is a new task whose description the server writes from its parts,
   const sections = parseDescription(step.description ?? "").sections;
   assert.deepEqual(
     sections.map((section) => section.title),
-    ["Summary", "Background", "Acceptance criteria", "Open questions", "Original request"],
+    ["Summary", "Background", "Acceptance criteria", "Open questions", "Estimate", "Original request"],
   );
   assert.deepEqual(sections[2].body.split("\n"), ["- [ ] A person can add a passkey in Settings", "- [ ] A person can sign in with it", "- [ ] An e2e test signs in with a passkey"]);
-  assert.equal(sections[4].body, `> ${request}`);
+  // The estimate is the AI's, with its reason (#434).
+  assert.equal(sections[4].body, "**2 days** · AI estimate\nA Settings screen, a change to sign-in and an e2e test.");
+  assert.equal(sections[5].body, `> ${request}`);
   assert.ok(unchanged());
 });
 
+const SOON = { size: "1 h", reason: "One screen to check." } as const;
+
 test("a ticket can be a subtask, and without criteria or the person's own sections it isn't valid (#433)", async () => {
   const { draft, call } = setup();
-  await call(createTicket, { title: "Fix the crash", summary: "The app crashes on launch.", sections: [{ title: "Steps to reproduce", items: ["Open the app"] }], parent: "Buy plants" });
+  await call(createTicket, { title: "Fix the crash", summary: "The app crashes on launch.", sections: [{ title: "Steps to reproduce", items: ["Open the app"] }], estimate: SOON, parent: "Buy plants" });
   const [step] = draft.steps;
   assert.ok(step.kind === "create_task");
   assert.equal(step.parent?.name, "Buy plants for the garden");
   // Outside a chat there are no words to quote.
-  assert.deepEqual(parseDescription(step.description ?? "").sections.map((section) => section.title), ["Summary", "Steps to reproduce"]);
-  const invalid = createTicket.input.safeParse({ title: "No criteria", summary: "Something" });
+  assert.deepEqual(parseDescription(step.description ?? "").sections.map((section) => section.title), ["Summary", "Steps to reproduce", "Estimate"]);
+  const invalid = createTicket.input.safeParse({ title: "No criteria", summary: "Something", estimate: SOON });
   assert.equal(invalid.success, false);
   assert.match(JSON.stringify(invalid.error?.issues), /acceptanceCriteria/);
-  assert.equal(createTicket.input.safeParse({ title: "Extra field", summary: "S", acceptanceCriteria: ["Done"], description: "free text" }).success, false);
+  assert.equal(createTicket.input.safeParse({ title: "Extra field", summary: "S", acceptanceCriteria: ["Done"], estimate: SOON, description: "free text" }).success, false);
+  assert.equal(createTicket.input.safeParse({ title: "No estimate", summary: "S", acceptanceCriteria: ["Done"] }).success, false, "every ticket has an estimate (#434)");
+});
+
+test("work over 2 days comes with subtasks that split it, offered unticked after the ticket (#434)", async () => {
+  const { draft, call, unchanged } = setup();
+  const twoStep = {
+    title: "Add two-step sign-in",
+    summary: "Ask for a code from an authenticator app at sign-in.",
+    acceptanceCriteria: ["A person can turn on two-step sign-in", "Sign-in asks for the code"],
+    estimate: { size: "1 week", reason: "An app to set up, a code at sign-in, recovery codes, and tests for each." },
+    project: "Mobile",
+  };
+  const split = ["Set up an authenticator app", "Ask for the code at sign-in", "Recovery codes"];
+  assert.deepEqual(await call(createTicket, { ...twoStep, split }), {
+    proposed: 'New task written as a ticket "Add two-step sign-in" in "Mobile app launch", and 3 subtasks that split it, offered unticked for the person to choose',
+    ref: "new-1",
+    proposedSoFar: 4,
+  });
+  const mobile = { id: "proj-mobile", name: "Mobile app launch" };
+  assert.deepEqual(
+    draft.steps.slice(1),
+    split.map((title, index) => ({
+      kind: "create_task",
+      ref: `new-${index + 2}`,
+      title,
+      description: null,
+      dueDate: null,
+      priority: "NONE",
+      project: mobile,
+      parent: { ref: "new-1", name: "Add two-step sign-in" },
+      suggested: true,
+    })),
+  );
+  assert.equal("suggested" in draft.steps[0], false, "the ticket itself is proposed as usual");
+  assert.ok(unchanged());
+
+  // Without its split it isn't valid; a ticket that's a subtask can't be split, so it comes alone.
+  const unsplit = createTicket.input.safeParse(twoStep);
+  assert.equal(unsplit.success, false);
+  assert.match(JSON.stringify(unsplit.error?.issues), /over 2 days: give split/);
+  const under = setup();
+  assert.deepEqual(await under.call(createTicket, { ...twoStep, split, parent: "Buy plants" }), {
+    proposed: 'New subtask written as a ticket "Add two-step sign-in" under "Buy plants for the garden". Its split wasn\'t offered: a subtask can\'t have subtasks of its own.',
+    ref: "new-1",
+    proposedSoFar: 1,
+  });
+
+  // As many as the answer has room for.
+  const full = setup();
+  for (let index = 1; index < MAX_PROPOSAL_STEPS - 1; index += 1) await full.call(createTask, { title: `Task ${index}` });
+  assert.match(String((await full.call(createTicket, { ...twoStep, split })).proposed), /, and 1 subtask that split it,/);
+  assert.equal(full.draft.steps.length, MAX_PROPOSAL_STEPS);
 });
 
 test("a change to a task lists each field, before and after, and nothing to change proposes nothing (#310)", async () => {

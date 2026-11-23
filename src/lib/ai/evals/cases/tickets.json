@@ -12,10 +12,11 @@
           "kind": "create_task",
           "title": "CSV",
           "ticket": {
-            "sections": ["Summary", "Acceptance criteria", "Open questions", "Original request"],
+            "sections": ["Summary", "Acceptance criteria", "Open questions", "Estimate", "Original request"],
             "minCriteria": 2,
             "minQuestions": 1,
-            "notInvented": ["@inventedFacts"]
+            "notInvented": ["@inventedFacts"],
+            "estimate": { "min": "2 h", "max": "2 days" }
           }
         }
       ],
@@ -37,7 +38,8 @@
                 "A unit test checks the file's columns, and an e2e test downloads it"
               ],
               "outOfScope": ["Importing tasks from a CSV file"],
-              "openQuestions": ["Should done tasks and subtasks be in the file too?", "Should the export follow the page's filters?"]
+              "openQuestions": ["Should done tasks and subtasks be in the file too?", "Should the export follow the page's filters?"],
+              "estimate": { "size": "1 day", "reason": "A button, the file's columns, and a unit test and an e2e test." }
             }
           }
         ]
@@ -58,9 +60,10 @@
           "title": "dark",
           "project": "Mobile app launch",
           "ticket": {
-            "sections": ["Summary", "Acceptance criteria", "Original request"],
+            "sections": ["Summary", "Acceptance criteria", "Estimate", "Original request"],
             "minCriteria": 2,
-            "notInvented": ["@inventedFacts"]
+            "notInvented": ["@inventedFacts"],
+            "estimate": { "min": "1 day", "max": "1 week" }
           }
         }
       ],
@@ -81,6 +84,7 @@
                 "A test checks that the setting is kept after the app restarts"
               ],
               "openQuestions": ["Should the app follow the phone's own setting at first?"],
+              "estimate": { "size": "2 days", "reason": "Dark colors for every screen, the setting, and a test." },
               "project": "Mobile app launch"
             }
           }
@@ -101,8 +105,9 @@
           "kind": "create_task",
           "title": "calendar",
           "ticket": {
-            "sections": ["Summary", "Steps to reproduce", "Expected result", "Actual result", "Original request"],
-            "notInvented": ["@inventedFacts"]
+            "sections": ["Summary", "Steps to reproduce", "Expected result", "Actual result", "Estimate", "Original request"],
+            "notInvented": ["@inventedFacts"],
+            "estimate": { "min": "1 h", "max": "2 days" }
           }
         }
       ],
@@ -123,7 +128,8 @@
                 { "title": "Actual result", "text": "The event shows on the next day." }
               ],
               "acceptanceCriteria": ["Events show on their own day in every calendar view", "An automated test shows an event on its own day"],
-              "openQuestions": ["Does it happen to all-day events, timed events or both?", "Which time zone was the calendar in?"]
+              "openQuestions": ["Does it happen to all-day events, timed events or both?", "Which time zone was the calendar in?"],
+              "estimate": { "size": "4 h", "reason": "Finding where the date shifts, the fix, and a test for it." }
             }
           }
         ]
@@ -162,12 +168,104 @@
               "summary": "Choose and buy a car for the family.",
               "sections": [{ "title": "Cost", "items": ["Down payment: to be decided", "Monthly payment: to be decided"] }],
               "acceptanceCriteria": ["A car is chosen that fits the family", "The down payment and the monthly payment are agreed"],
-              "openQuestions": ["What budget should the down payment and the monthly payment stay within?", "How many seats does the family need?"]
+              "openQuestions": ["What budget should the down payment and the monthly payment stay within?", "How many seats does the family need?"],
+              "estimate": { "size": "2 days", "reason": "Comparing cars, test drives and the paperwork." }
             }
           }
         ]
       },
       { "text": "Here's the ticket I'd add: Buy a family car, with a Cost section for the down payment and the monthly payment. Review it below and apply it when you're ready." }
+    ]
+  },
+  {
+    "id": "tickets-estimate-small",
+    "ability": "tickets",
+    "summary": "Estimates a small fix as small: a typo on one page lands between 15 minutes and an hour, with no split (#434).",
+    "request": "Write a ticket to fix the typo in the pricing page's heading: it says \"Pricng\" instead of \"Pricing\".",
+    "expect": {
+      "tools": [{ "name": "create_ticket" }],
+      "notTools": ["create_task"],
+      "proposal": [
+        {
+          "kind": "create_task",
+          "title": "typo",
+          "ticket": {
+            "sections": ["Summary", "Acceptance criteria", "Estimate", "Original request"],
+            "minCriteria": 1,
+            "notInvented": ["@inventedFacts"],
+            "estimate": { "min": "15 min", "max": "1 h" },
+            "split": false
+          }
+        }
+      ],
+      "facts": ["@awaitsApply"],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [
+      {
+        "toolCalls": [
+          {
+            "name": "create_ticket",
+            "args": {
+              "title": "Fix the typo in the pricing page's heading",
+              "summary": "The pricing page's heading says \"Pricng\"; it should say \"Pricing\".",
+              "acceptanceCriteria": ["The pricing page's heading reads \"Pricing\"", "A test checks the heading's text"],
+              "estimate": { "size": "30 min", "reason": "One word on one page, and a test for it." }
+            }
+          }
+        ]
+      },
+      { "text": "Here's the ticket I'd add: Fix the typo in the pricing page's heading. Review it below and apply it when it looks right." }
+    ]
+  },
+  {
+    "id": "tickets-estimate-split",
+    "ability": "tickets",
+    "summary": "Estimates big work as big, and offers subtasks that split it, unticked, instead of making them (#434).",
+    "request": "Write a ticket to add two-step sign-in to the mobile app: an authenticator app, a code at sign-in, and recovery codes.",
+    "expect": {
+      "tools": [{ "name": "create_ticket" }],
+      "notTools": ["create_task"],
+      "proposal": [
+        {
+          "kind": "create_task",
+          "title": "two-step",
+          "ticket": {
+            "sections": ["Summary", "Acceptance criteria", "Estimate", "Original request"],
+            "minCriteria": 2,
+            "notInvented": ["@inventedFacts"],
+            "estimate": { "min": "3 days", "max": "1 week" },
+            "split": true
+          }
+        }
+      ],
+      "facts": ["@awaitsApply", ["subtask", "subtasks", "sub-task", "sub-tasks", "split"]],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [
+      {
+        "toolCalls": [
+          {
+            "name": "create_ticket",
+            "args": {
+              "title": "Add two-step sign-in to the mobile app",
+              "summary": "Ask for a code from an authenticator app when people sign in to the mobile app, with recovery codes for when they can't use it.",
+              "acceptanceCriteria": [
+                "A person can set up an authenticator app in the app's settings",
+                "Once it's set up, signing in asks for the app's code",
+                "A person can sign in with a recovery code instead",
+                "Automated tests cover each of these"
+              ],
+              "openQuestions": ["Should two-step sign-in be a choice, or required for everyone?"],
+              "estimate": { "size": "1 week", "reason": "An authenticator app to set up, a code at sign-in, recovery codes, and tests for each." },
+              "split": ["Set up an authenticator app", "Ask for the code at sign-in", "Recovery codes"]
+            }
+          }
+        ]
+      },
+      {
+        "text": "Here's the ticket I'd add: Add two-step sign-in to the mobile app. It's about a week of work, so I've suggested three subtasks that split it. Tick the ones you want, then apply it."
+      }
     ]
   },
   {

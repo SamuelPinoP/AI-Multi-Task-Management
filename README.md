@@ -32,10 +32,13 @@ tickets and events, changes to a task, marking tasks done and moving them to
 the Trash. Proposing changes nothing: the chat shows every change as one card,
 and only the person applies the ones they tick. Asked for a ticket, it writes a
 complete one (#433), the way this repository's issues are written: a summary,
-background, testable acceptance criteria, what's out of scope, open questions
-and the person's own words. The person can change any section in a draft before
-applying it, and on the task's page afterwards, where anyone can add sections
-of their own.
+background, testable acceptance criteria, what's out of scope, open questions,
+its estimate of the work and the person's own words. The estimate (#434) is one
+of fixed steps from 15 minutes to a week, with a one-line reason, marked as the
+AI's until someone changes it; for work over 2 days the card also offers
+subtasks that split it, unticked. The person can change any section in a draft
+before applying it, and on the task's page afterwards, where anyone can add
+sections of their own.
 When no model can answer, because a daily cap is used up, the provider fails or
 the person is somewhere Gemini's free tier may not serve, the rule-based planner
 answers instead and says why.
@@ -88,7 +91,7 @@ flowchart LR
 
 ### Evaluations
 
-`src/lib/ai/evals/` scores the agent on 67 cases (#311, #502). Each case is data: a
+`src/lib/ai/evals/` scores the agent on 69 cases (#311, #502). Each case is data: a
 sample workspace, a fixed clock and time zone, the question, and what a good
 answer does, meaning the tools it calls and with which arguments, the facts it
 states, what it must not call or say, and whether it asks a question back.
@@ -104,6 +107,8 @@ fallback, clarifying questions, requests to change things, tickets, prompt
 injection, off-topic requests, follow-ups and time zones. A ticket's case also
 checks its sections, in order, how many acceptance criteria and open questions
 it has, and that it invents no dates, amounts or limits the request didn't give.
+Its estimate must land in a range, never on one step: fixing a typo on one page
+is 15 minutes to an hour, and two-step sign-in is 3 days to a week, split.
 
 ```powershell
 npm run agent:eval -- --provider reference
@@ -141,7 +146,7 @@ own, so a run never uses the app's daily allowance, and clear it with
 
 | Run | Cases passed | Cost per 1,000 messages | Model time per message, median / 95th percentile | Messages a day on the free plan |
 | --- | --- | --- | --- | --- |
-| Reference answers, no model | 67 of 67 | – | – | – |
+| Reference answers, no model | 69 of 69 | – | – | – |
 | Gemini 3.1 Flash-Lite | 38 of 42 (90%) | $0.80 | 6.8 s / 59.6 s | About 240 |
 | gpt-oss-120b on Groq | 37 of 42 (88%) | $0.41 | 2.4 s / 14.9 s | About 88 |
 | Claude Haiku 5.5 | Not run: its API needs paid credits | | | |

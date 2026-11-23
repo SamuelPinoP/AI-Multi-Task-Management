@@ -1,6 +1,7 @@
 // The sections of a ticket the AI assistant writes (#433), and how the chat's card sums one up.
 // Kept apart from ./ticket.ts, which checks what the model wrote, so the browser needs no schemas.
 import { descriptionPreview, listItems, parseDescription } from "@/lib/description-sections";
+import { ESTIMATE_SECTION } from "@/lib/estimates";
 
 /** The sections every ticket has, in order, as they're titled in its description. */
 export const TICKET_SECTIONS = {
@@ -9,6 +10,8 @@ export const TICKET_SECTIONS = {
   acceptanceCriteria: "Acceptance criteria",
   outOfScope: "Out of scope",
   openQuestions: "Open questions",
+  /** The AI's estimate of the work and why (#434). */
+  estimate: ESTIMATE_SECTION,
   originalRequest: "Original request",
 } as const;
 

@@ -8,7 +8,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useAiChat } from "@/components/ai/ai-chat-provider";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { OFFLINE_MESSAGE } from "@/lib/ai/chat-client";
-import { NOT_PENDING_MESSAGES, needsNote, proposalRows, stepChoices, toggleStep, type ProposalRow, type ProposalRowKind, type ProposalView } from "@/lib/ai/proposals";
+import { NOT_PENDING_MESSAGES, initiallyLeftOut, needsNote, proposalRows, stepChoices, toggleStep, type ProposalRow, type ProposalRowKind, type ProposalView } from "@/lib/ai/proposals";
 import { cn } from "@/lib/cn";
 import { formatTaskDayKey } from "@/lib/task-date-buckets";
 import { notifyWorkspaceChanged, TASK_CREATED_EVENT } from "@/lib/workspace-events";
@@ -169,7 +169,8 @@ function ChangeRow({
 export function AiProposalCard({ proposal, onNavigate }: { proposal: ProposalView; onNavigate?: () => void }) {
   const { replaceProposal } = useAiChat();
   const router = useRouter();
-  const [leftOut, setLeftOut] = useState<Set<number>>(() => new Set());
+  // Subtasks the AI only suggests start unticked (#434).
+  const [leftOut, setLeftOut] = useState<Set<number>>(() => initiallyLeftOut(proposal.steps));
   const [open, setOpen] = useState<Set<number>>(() => new Set());
   // The ticket whose draft is open beside the chat, by its step's index (#433).
   const [draft, setDraft] = useState<number | null>(null);
