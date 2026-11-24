@@ -93,7 +93,7 @@ flowchart LR
 
 ### Evaluations
 
-`src/lib/ai/evals/` scores the agent on 69 cases (#311, #502). Each case is data: a
+`src/lib/ai/evals/` scores the agent on 71 cases (#311, #502). Each case is data: a
 sample workspace, a fixed clock and time zone, the question, and what a good
 answer does, meaning the tools it calls and with which arguments, the facts it
 states, what it must not call or say, and whether it asks a question back.
