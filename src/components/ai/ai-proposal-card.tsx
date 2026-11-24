@@ -13,8 +13,8 @@ import { cn } from "@/lib/cn";
 import { formatTaskDayKey } from "@/lib/task-date-buckets";
 import { notifyWorkspaceChanged, TASK_CREATED_EVENT } from "@/lib/workspace-events";
 
-// A ticket's draft (#433), with its Markdown renderer, loads once a card holds a ticket, not with
-// every page the AI bar is on.
+// A new task's draft (#433), with its Markdown renderer, loads once a card holds a ticket or a task
+// with the AI's estimate (#434), not with every page the AI bar is on.
 const AiTicketDraft = dynamic(() => import("@/components/ai/ai-ticket-draft").then((module) => module.AiTicketDraft), { ssr: false });
 
 const ICONS: Record<ProposalRowKind, LucideIcon> = {
@@ -91,7 +91,7 @@ function ChangeRow({
   open: boolean;
   onToggle: () => void;
   onOpen: () => void;
-  /** Opens a ticket's draft beside the chat (#433). */
+  /** Opens the task's draft beside the chat: a ticket (#433), or a task with the AI's estimate (#434). */
   onOpenDraft: () => void;
 }) {
   const Icon = ICONS[row.kind];
@@ -117,12 +117,12 @@ function ChangeRow({
                 {change.label} <s>{change.from}</s> → <span className="font-medium text-ink">{change.to}</span>{" "}
               </span>
             ))}
-            {row.ticket?.summary ? <span className="mt-0.5 line-clamp-2 text-[0.78125rem] leading-[1.1875rem] text-ink [overflow-wrap:anywhere]">{row.ticket.summary}</span> : null}{" "}
-            {row.ticket?.facts ? <span className="text-xs leading-[1.125rem] text-muted">{row.ticket.facts}</span> : null}
+            {row.draft?.summary ? <span className="mt-0.5 line-clamp-2 text-[0.78125rem] leading-[1.1875rem] text-ink [overflow-wrap:anywhere]">{row.draft.summary}</span> : null}{" "}
+            {row.draft?.facts ? <span className="text-xs leading-[1.125rem] text-muted">{row.draft.facts}</span> : null}
             {blockedNote ? <span className="text-xs leading-[1.125rem] text-warning">{blockedNote}</span> : null}
           </span>
         </label>
-        {row.description && !row.ticket ? (
+        {row.description && !row.draft ? (
           <button
             type="button"
             aria-label={`${open ? "Hide" : "Show"} details of ${row.title}`}
@@ -135,7 +135,7 @@ function ChangeRow({
           </button>
         ) : null}
       </div>
-      {row.ticket ? (
+      {row.draft ? (
         // Under the title: past the checkbox, its gap, the icon and its gap.
         <div className="mt-1.5 pl-16">
           <button
@@ -150,7 +150,7 @@ function ChangeRow({
           </button>
         </div>
       ) : null}
-      {row.description && !row.ticket && open ? (
+      {row.description && !row.draft && open ? (
         // Under the title: past the checkbox, its gap, the icon and its gap.
         <p id={descriptionId} className="mt-1 whitespace-pre-wrap pl-16 text-[0.78125rem] leading-[1.1875rem] text-ink [overflow-wrap:anywhere]">
           {row.description}
@@ -172,7 +172,7 @@ export function AiProposalCard({ proposal, onNavigate }: { proposal: ProposalVie
   // Subtasks the AI only suggests start unticked (#434).
   const [leftOut, setLeftOut] = useState<Set<number>>(() => initiallyLeftOut(proposal.steps));
   const [open, setOpen] = useState<Set<number>>(() => new Set());
-  // The ticket whose draft is open beside the chat, by its step's index (#433).
+  // The new task whose draft is open beside the chat, by its step's index (#433).
   const [draft, setDraft] = useState<number | null>(null);
   const [busy, setBusy] = useState<"apply" | "cancel" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -321,8 +321,8 @@ export function AiProposalCard({ proposal, onNavigate }: { proposal: ProposalVie
         </p>
       ) : null}
       {rows.map((row) =>
-        // An open draft stays open even once its last section is removed and it's no longer a ticket.
-        row.ticket || draft === row.index ? (
+        // An open draft stays open even once its last section is removed and it has no sections.
+        row.draft || draft === row.index ? (
           <AiTicketDraft key={row.index} proposal={proposal} row={row} open={draft === row.index} onOpenChange={(now) => setDraft(now ? row.index : null)} />
         ) : null,
       )}

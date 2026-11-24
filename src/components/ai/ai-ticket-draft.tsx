@@ -15,10 +15,11 @@ const closeButtonClass =
   "grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted outline-none transition-colors hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent max-sm:h-11 max-sm:w-11";
 
 /**
- * A ticket the AI wrote, as a draft beside the chat (#433, design 2C): every section, formatted,
- * which the person can change, fold and add to before they apply the card. Full screen on a phone.
- * Each change is saved with the proposal, so it's still there after a reload; nothing in the
- * workspace changes until Apply, which creates the task with the description as it is then.
+ * A new task the AI proposed, as a draft beside the chat (#433, design 2C): a ticket, or a task with
+ * the AI's estimate (#434). Every section, formatted, which the person can change, fold and add to
+ * before they apply the card. Full screen on a phone. Each change is saved with the proposal, so
+ * it's still there after a reload; nothing in the workspace changes until Apply, which creates the
+ * task with the description as it is then.
  */
 export function AiTicketDraft({
   proposal,
@@ -72,7 +73,7 @@ export function AiTicketDraft({
           <SheetClose className={cn(closeButtonClass, "sm:hidden")} aria-label="Back to the chat">
             <ArrowLeft aria-hidden="true" className="h-5 w-5" />
           </SheetClose>
-          <p className="min-w-0 flex-1 truncate text-xs font-medium text-muted">Draft ticket · not created until you apply</p>
+          <p className="min-w-0 flex-1 truncate text-xs font-medium text-muted">{row.draft?.ticket ? "Draft ticket" : "Draft task"} · not created until you apply</p>
           <SheetClose className={cn(closeButtonClass, "max-sm:hidden")} aria-label="Close the draft">
             <X aria-hidden="true" className="h-4 w-4" />
           </SheetClose>

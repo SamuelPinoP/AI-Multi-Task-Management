@@ -203,7 +203,7 @@ test("AI page with the sidebar and the chats folded", async ({ page, isMobile })
 
 // #310: the changes an answer proposes, each with a checkbox, before the person applies them. The
 // e2e server's fake model calls the tools the message names. A fixed clock keeps "Due today" and
-// this year's dates as they are.
+// this year's dates as they are. Each new task has the AI's estimate, so it opens as a draft (#434).
 test("AI changes to apply", async ({ page }) => {
   await signUp(page);
   await page.clock.setFixedTime(new Date("2026-11-19T17:20:00Z"));
@@ -213,8 +213,21 @@ test("AI changes to apply", async ({ page }) => {
   const security = "Check sign-in, sessions, permissions and dependencies against the OWASP Top 10.";
   const calls: Array<[string, Record<string, unknown>]> = [
     ["create_project", { name: "Whitewall", description: "Security work so Multi is safe to launch." }],
-    ["create_task", { title: "Harden sign-in", project: "Whitewall", dueDate: "2026-12-17", priority: "HIGH", description: "Limit sign-in attempts." }],
-    ["create_task", { title: "Security review before launch", project: "Whitewall", dueDate: "2026-12-17", priority: "HIGH", description: security }],
+    [
+      "create_task",
+      { title: "Harden sign-in", project: "Whitewall", dueDate: "2026-12-17", priority: "HIGH", description: "Limit sign-in attempts.", estimate: { size: "4 h", reason: "A counter per account, and its tests." } },
+    ],
+    [
+      "create_task",
+      {
+        title: "Security review before launch",
+        project: "Whitewall",
+        dueDate: "2026-12-17",
+        priority: "HIGH",
+        description: security,
+        estimate: { size: "2 days", reason: "Each of the ten risks, checked and written up." },
+      },
+    ],
     ["create_event", { title: "Whitewall deadline", date: "2026-12-17", project: "Whitewall" }],
     ["complete_task", { task: "Call the dentist" }],
   ];
@@ -253,7 +266,29 @@ test("AI ticket and its draft", async ({ page }) => {
   await expect(page).toHaveScreenshot("ai-ticket-draft.png", { mask: changing(page) });
 });
 
-// #434: a ticket for work over 2 days, with the subtasks that split it offered unticked under it.
+// #434: a plain task the AI created: its details, then the AI's estimate, in the draft beside the
+// chat (full screen on a phone).
+test("AI task and its draft", async ({ page }) => {
+  await signUp(page);
+  expect((await page.request.post("/api/agent/notice", { data: { version: AI_NOTICE_VERSION } })).ok()).toBe(true);
+  const task = {
+    title: "Call the plumber",
+    description: "The kitchen sink leaks under the counter.",
+    estimate: { size: "15 min", reason: "A short call to describe the problem and book a visit." },
+  };
+  await page.goto("/ai");
+  await page.getByRole("textbox", { name: "Message the AI" }).fill(`create_task ${JSON.stringify(task)}`);
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  const open = page.getByRole("button", { name: `Open draft of ${task.title}` });
+  await expect(open).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await open.click();
+  await expect(page.getByRole("dialog", { name: task.title })).toBeVisible();
+  await expect(page).toHaveScreenshot("ai-task-draft.png", { mask: changing(page) });
+});
+
+// #434: a ticket for work over 2 days, with the subtasks that split it offered unticked under it,
+// each with its own estimate.
 test("AI ticket with the subtasks that split it", async ({ page }) => {
   await signUp(page);
   expect((await page.request.post("/api/agent/notice", { data: { version: AI_NOTICE_VERSION } })).ok()).toBe(true);
@@ -262,7 +297,11 @@ test("AI ticket with the subtasks that split it", async ({ page }) => {
     summary: "Ask for a code from an authenticator app after the password.",
     acceptanceCriteria: ["A person can turn on two-step sign-in", "Sign-in asks for the code"],
     estimate: { size: "1 week", reason: "An app to set up, a code at sign-in, recovery codes, and tests for each." },
-    split: ["Set up an authenticator app", "Ask for the code at sign-in", "Recovery codes"],
+    split: [
+      { title: "Set up an authenticator app", size: "2 days", reason: "Pairing an app with the account, and its tests." },
+      { title: "Ask for the code at sign-in", size: "1 day", reason: "One more step at sign-in, and its tests." },
+      { title: "Recovery codes", size: "1 day", reason: "Codes to keep, and signing in with one." },
+    ],
   };
   await page.goto("/ai");
   await page.getByRole("textbox", { name: "Message the AI" }).fill(`create_ticket ${JSON.stringify(ticket)}`);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AI_ESTIMATE, ESTIMATE_STEPS, SPLIT_OVER, aiEstimateLine, descriptionEstimate, isEstimateSection, ownEstimate, parseDuration, stepMinutes } from "./estimates";
+import { AI_ESTIMATE, ESTIMATE_STEPS, SPLIT_OVER, aiEstimateLine, descriptionEstimate, hasEstimate, isEstimateSection, ownEstimate, parseDuration, stepMinutes } from "./estimates";
 
 test("the steps run from 15 minutes to a week, a day being 8 hours of work and a week 5 days", () => {
   assert.deepEqual(
@@ -63,4 +63,13 @@ test("a person who changes the estimate makes it theirs; saved unchanged, it sta
   assert.equal(ownEstimate(ai, `${ai}\n`), `${ai}\n`);
   // One that was already theirs is left as they wrote it.
   assert.equal(ownEstimate("6 h", "1 day"), "1 day");
+});
+
+test("a task has an estimate when its Estimate section says something, in the AI's words or a person's", () => {
+  assert.equal(hasEstimate(`## Estimate\n\n${aiEstimateLine("2 h")}\nTwo screens.`), true);
+  assert.equal(hasEstimate("Before the club meets.\n\n## estimate\n\nAbout a week of evenings"), true);
+  assert.equal(hasEstimate("## Estimate\n\n## Notes\n\nNone yet."), false, "an empty section");
+  assert.equal(hasEstimate("It takes 2 h"), false, "a plain description");
+  assert.equal(hasEstimate(""), false);
+  assert.equal(hasEstimate(null), false);
 });

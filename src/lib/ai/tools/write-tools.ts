@@ -15,9 +15,11 @@ import {
   type TaskChange,
   type TaskStatus,
 } from "@/lib/ai/proposals";
+import { estimateFields, estimateProblem, withEstimate, type SplitTask, type TaskEstimate } from "@/lib/ai/task-estimate";
 import { ticketDescription, ticketFields, ticketProblem } from "@/lib/ai/ticket";
 import { defineTool, type ToolContext, type ToolOutput } from "@/lib/ai/tools/define";
 import { dayKey } from "@/lib/ai/tools/read-tools";
+import { hasEstimate } from "@/lib/estimates";
 import { parseEventTimes } from "@/lib/event-time";
 import { PRIORITIES, type Priority } from "@/lib/priority";
 import { projectAccessWhere } from "@/lib/project-access-core";
@@ -149,24 +151,31 @@ async function findProject(wanted: string, context: ToolContext, draft: Proposal
   return found.item ? { item: { id: found.item.id, name: found.item.name } } : found;
 }
 
-/** A parent for a new subtask: a task this answer creates, or one of the person's that isn't a subtask itself. */
+/**
+ * A parent for a new subtask: a task this answer creates, or one of the person's that isn't a
+ * subtask itself. `estimated` says whether it has an estimate, which its subtasks follow (#434).
+ */
 async function findParent(
   wanted: string,
   context: ToolContext,
   draft: ProposalDraft,
-): Promise<{ parent: ItemRef; project: ItemRef | null; problem?: undefined } | { problem: ToolOutput }> {
+): Promise<{ parent: ItemRef; project: ItemRef | null; estimated: boolean; problem?: undefined } | { problem: ToolOutput }> {
   const key = wanted.toLowerCase();
   const created = draft.steps.flatMap((step) => (step.kind === "create_task" ? [step] : []));
   const fresh = created.find((step) => step.ref === wanted) ?? created.find((step) => step.title.trim().toLowerCase() === key);
   if (fresh) {
     if (fresh.parent) return { problem: notProposed(`"${fresh.title}" is a subtask, and subtasks can't have their own subtasks.`) };
-    return { parent: { ref: fresh.ref, name: fresh.title }, project: fresh.project };
+    return { parent: { ref: fresh.ref, name: fresh.title }, project: fresh.project, estimated: hasEstimate(fresh.description) };
   }
   const found = await findTask(wanted, context);
   if (found.problem) return { problem: found.problem };
   const task = found.item;
   if (task.parentId) return { problem: notProposed(`"${task.title}" is a subtask, and subtasks can't have their own subtasks.`) };
-  return { parent: { id: task.id, name: task.title }, project: task.project ? { id: task.project.id, name: task.project.name } : null };
+  return {
+    parent: { id: task.id, name: task.title },
+    project: task.project ? { id: task.project.id, name: task.project.name } : null,
+    estimated: hasEstimate(task.description),
+  };
 }
 
 /** The task as the card shows it: where it is and when it's due, as when the change was proposed. */
@@ -227,36 +236,54 @@ const newTaskFields = {
   parent: reference("To make it a subtask: the parent task's title or id, or the ref create_task or create_ticket returned for a new one.").optional(),
 };
 
-type NewTask = { title: string; dueDate?: string; priority?: Exclude<Priority, "NONE">; project?: string; parent?: string };
+type NewTask = {
+  title: string;
+  dueDate?: string;
+  priority?: Exclude<Priority, "NONE">;
+  project?: string;
+  parent?: string;
+  estimate?: TaskEstimate;
+  split?: SplitTask[];
+};
+
+/**
+ * The new task's description, given the estimate it keeps (none when it's a subtask whose parent has
+ * none) and whether it's a subtask.
+ */
+type Describe = (estimate: TaskEstimate | undefined, subtask: boolean) => string | null;
 
 /**
  * Adds a new task to the answer's proposal, with its project or parent looked up. `noun` says what
- * the model reads back. `split` names the subtasks that split work over 2 days (#434): they're
- * offered after it, unticked, for the person to choose.
+ * the model reads back. Its estimate goes in its description (#434), unless it's a subtask of a
+ * task without one: subtasks follow their parent. `split` lists the subtasks that split work over 2
+ * days, each with its own estimate: they're offered after it, unticked, for the person to choose.
  */
-async function proposeTask({ title, dueDate, priority, project, parent }: NewTask, description: string | null, context: ToolContext, noun: "task" | "ticket", split: string[] = []) {
+async function proposeTask({ title, dueDate, priority, project, parent, estimate, split = [] }: NewTask, describe: Describe, context: ToolContext, noun: "task" | "ticket") {
   const { draft, problem } = draftFor(context);
   if (problem) return problem;
 
   let projectRef: ItemRef | null = null;
   let parentRef: ItemRef | null = null;
+  let parentEstimated = false;
   if (parent) {
     // A subtask goes in its parent's project, as in the app (SMART-02).
     const found = await findParent(parent, context, draft);
     if (found.problem) return found.problem;
     parentRef = found.parent;
     projectRef = found.project;
+    parentEstimated = found.estimated;
   } else if (project) {
     const found = await findProject(project, context, draft);
     if (found.problem) return found.problem;
     projectRef = found.item;
   }
 
+  const leftOut = Boolean(estimate && parentRef && !parentEstimated);
   const step: Extract<ProposalStep, { kind: "create_task" }> = {
     kind: "create_task",
     ref: takeRef(draft),
     title,
-    description,
+    description: describe(leftOut ? undefined : estimate, parentRef !== null),
     dueDate: dueDate ?? null,
     priority: priority ?? "NONE",
     project: projectRef,
@@ -265,16 +292,20 @@ async function proposeTask({ title, dueDate, priority, project, parent }: NewTas
   const where = parentRef ? ` under "${parentRef.name}"` : projectRef ? ` in "${projectRef.name}"` : "";
   const what = noun === "ticket" ? `${parentRef ? "subtask" : "task"} written as a ticket` : parentRef ? "subtask" : "task";
   const summary = `New ${what} "${title}"${where}`;
-  if (!split.length) return proposed(draft, step, summary);
-  if (parentRef) return proposed(draft, step, `${summary}. Its split wasn't offered: a subtask can't have subtasks of its own.`);
+  const notes = [
+    leftOut ? "Its estimate was left out: a subtask gets one only when its parent has one" : null,
+    split.length && parentRef ? "Its split wasn't offered: a subtask can't have subtasks of its own" : null,
+  ].filter(Boolean);
+  if (!split.length || parentRef) return proposed(draft, step, notes.length ? `${summary}. ${notes.join(". ")}.` : summary);
 
   draft.steps.push(step);
   const offered = split.slice(0, MAX_PROPOSAL_STEPS - draft.steps.length).map(
     (subtask): ProposalStep => ({
       kind: "create_task",
       ref: takeRef(draft),
-      title: subtask,
-      description: null,
+      title: subtask.title,
+      // Its own estimate, as the subtask of a task that has one.
+      description: withEstimate(null, { size: subtask.size, reason: subtask.reason }, { subtask: true }),
       dueDate: null,
       priority: "NONE",
       project: projectRef,
@@ -293,15 +324,22 @@ export const createTask = defineTool({
   name: "create_task",
   label: "Preparing a new task",
   description:
-    "Proposes a new task, or a subtask under a parent task. Nothing changes until the person applies the proposal in the app. Returns a ref that later calls can use as a parent.",
-  input: z.strictObject({
-    title: z.string().trim().min(1).max(TITLE_MAX).describe("The task's title."),
-    description: z.string().trim().max(TEXT_MAX).optional().describe("Details, when the person gave some."),
-    ...newTaskFields,
-  }),
+    "Proposes a new task, or a subtask under a parent task, with your estimate of the work. Nothing changes until the person applies the proposal in the app. Returns a ref that later calls can use as a parent.",
+  input: z
+    .strictObject({
+      title: z.string().trim().min(1).max(TITLE_MAX).describe("The task's title."),
+      description: z.string().trim().max(TEXT_MAX).optional().describe("Details, when the person gave some."),
+      ...newTaskFields,
+      ...estimateFields("task"),
+    })
+    .superRefine((task, issues) => {
+      const problem = estimateProblem(task, "task");
+      if (problem) issues.addIssue({ code: "custom", message: problem });
+    }),
   access: "propose",
   async run({ description, ...task }, context) {
-    return proposeTask(task, description || null, context, "task");
+    // The details the person gave come first, then the estimate (#434).
+    return proposeTask(task, (estimate, subtask) => withEstimate(description || null, estimate, { subtask }), context, "task");
   },
 });
 
@@ -321,8 +359,13 @@ export const createTicket = defineTool({
       if (problem) issues.addIssue({ code: "custom", message: problem });
     }),
   access: "propose",
-  async run({ title, dueDate, priority, project, parent, split, ...ticket }, context) {
-    return proposeTask({ title, dueDate, priority, project, parent }, ticketDescription(ticket, context.request), context, "ticket", split);
+  async run({ title, dueDate, priority, project, parent, estimate, split, ...ticket }, context) {
+    return proposeTask(
+      { title, dueDate, priority, project, parent, estimate, split },
+      (kept, subtask) => ticketDescription({ ...ticket, estimate: kept }, context.request, { subtask }),
+      context,
+      "ticket",
+    );
   },
 });
 

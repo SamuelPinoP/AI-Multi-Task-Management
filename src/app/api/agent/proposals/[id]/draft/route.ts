@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ id: string }> };
 
 /**
- * Saves the person's edits to a draft ticket in a pending proposal (#433), before they apply it:
+ * Saves the person's edits to a new task's draft in a pending proposal, before they apply it: a
+ * ticket (#433), or a task with the AI's estimate (#434).
  * `{ "step": 1, "description": "## Summary…" }` replaces the description of the new task at that
  * index. Nothing in the workspace changes; Apply creates the task with this description. Answers
  * `{ proposal }`, or `{ error, proposal }`: a step that isn't a new task (400), someone else's or a

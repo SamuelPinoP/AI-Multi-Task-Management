@@ -15,6 +15,17 @@ export type Description = {
 /** Section titles are short, like headings. */
 export const SECTION_TITLE_MAX = 80;
 
+/**
+ * The section a task's estimate goes in (#434). It shows on the task's page and in the AI's draft,
+ * never in a list's preview of the description. Read and written in ../lib/estimates.ts.
+ */
+export const ESTIMATE_SECTION = "Estimate";
+
+/** Whether a section's title makes it the estimate: "Estimate", in any case. */
+export function isEstimateSection(title: string) {
+  return title.trim().toLowerCase() === ESTIMATE_SECTION.toLowerCase();
+}
+
 /** "## Summary": a heading that starts a section, with up to three spaces before it, as in Markdown. */
 const HEADING = /^ {0,3}##[ \t]+(\S.*?)(?:[ \t]+#+)?[ \t]*$/;
 /** A fenced code block's fence: a "## " line inside one is code, not a heading. */
@@ -146,12 +157,29 @@ export function plainText(markdown: string) {
 
 /**
  * The description as a list shows it on one line. A plain one comes back as it is, so it looks the
- * same as before; one in sections shows its first text, such as the ticket's summary.
+ * same as before; one in sections shows its first text, such as the ticket's summary, but never the
+ * estimate (#434), which stays off task rows and lists. A task with nothing but its estimate shows none.
  */
 export function descriptionPreview(text: string | null | undefined) {
   if (!text) return "";
   const parsed = parseDescription(text);
   if (!parsed.sections.length) return text;
-  const first = [parsed.intro, ...parsed.sections.map((section) => section.body)].find((block) => plainText(block));
+  const blocks = [parsed.intro, ...parsed.sections.filter((section) => !isEstimateSection(section.title)).map((section) => section.body)];
+  const first = blocks.find((block) => plainText(block));
   return first ? plainText(first) : "";
+}
+
+/** A line of the model's as Markdown that can't start a heading, a quote or a code block, or end the list. */
+export function escapeLine(text: string) {
+  return text.replace(/^(\s*)(#|>|`{3}|~{3})/, "$1\\$2");
+}
+
+/** One list item, or one line of the model's: on one line, without the list marker or checkbox it may have added. */
+export function listLine(text: string) {
+  return escapeLine(
+    text
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^(?:(?:[-*+]|\d{1,9}[.)])\s+|\[[ xX]\]\s*)+/, ""),
+  );
 }

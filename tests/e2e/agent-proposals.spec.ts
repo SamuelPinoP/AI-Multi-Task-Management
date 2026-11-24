@@ -96,11 +96,13 @@ test("a project, its task and its deadline: nothing changes until Apply, then al
   const project = uniqueName("E2E Whitewall");
   const task = uniqueName("E2E Harden sign-in");
   const deadline = uniqueName("E2E Whitewall deadline");
+  // Every task the AI creates comes with its estimate (#434), written in the task's description.
+  const estimate = "## Estimate\n\n**1 day** · AI estimate\nAttempt limits and their tests.";
   const events = await ask(
     me,
     calls(
       ["create_project", { name: project, description: "Security work" }],
-      ["create_task", { title: task, project, dueDate: "2026-12-17", priority: "HIGH" }],
+      ["create_task", { title: task, project, dueDate: "2026-12-17", priority: "HIGH", estimate: { size: "1 day", reason: "Attempt limits and their tests." } }],
       ["create_event", { title: deadline, date: "2026-12-17", project }],
     ),
   );
@@ -109,7 +111,7 @@ test("a project, its task and its deadline: nothing changes until Apply, then al
   expect(proposal).toMatchObject({ state: "pending", applied: [], links: [], error: null });
   expect(proposal.steps).toEqual([
     { kind: "create_project", ref: "new-1", name: project, description: "Security work" },
-    { kind: "create_task", ref: "new-2", title: task, description: null, dueDate: "2026-12-17", priority: "HIGH", project: newProject, parent: null },
+    { kind: "create_task", ref: "new-2", title: task, description: estimate, dueDate: "2026-12-17", priority: "HIGH", project: newProject, parent: null },
     { kind: "create_event", ref: "new-3", title: deadline, date: "2026-12-17", startTime: null, endTime: null, description: null, project: newProject },
   ]);
   expect(answerText(events)).toContain(`Proposed: New project "${project}"`);
@@ -144,11 +146,11 @@ test("a project, its task and its deadline: nothing changes until Apply, then al
     { step: 2, title: deadline, href: `/events?event=${createdEvent.id}` },
   ];
   expect(applied.body.proposal?.links).toEqual(links);
-  const { rows: tasks } = await queryDatabase<{ projectId: string; priority: string; due: string }>(
-    `SELECT "projectId", priority, to_char("dueDate", 'YYYY-MM-DD') AS due FROM "Task" WHERE title = $1`,
+  const { rows: tasks } = await queryDatabase<{ projectId: string; priority: string; due: string; description: string }>(
+    `SELECT "projectId", priority, to_char("dueDate", 'YYYY-MM-DD') AS due, description FROM "Task" WHERE title = $1`,
     [task],
   );
-  expect(tasks).toEqual([{ projectId: created.id, priority: "HIGH", due: "2026-12-17" }]);
+  expect(tasks).toEqual([{ projectId: created.id, priority: "HIGH", due: "2026-12-17", description: estimate }]);
   const { rows: calendar } = await queryDatabase<{ projectId: string; hasStartTime: boolean; day: string }>(
     `SELECT "projectId", "hasStartTime", to_char("startTime", 'YYYY-MM-DD') AS day FROM "Event" WHERE title = $1`,
     [deadline],
@@ -184,7 +186,7 @@ test("the person applies only the changes they ticked; one that needs a change l
   const finished = uniqueName("E2E pick done");
   const finishedId = await newTask(finished);
   const proposal = proposalIn(
-    await ask(me, calls(["create_project", { name: project }], ["create_task", { title: task, project }], ["complete_task", { task: finished }])),
+    await ask(me, calls(["create_project", { name: project }], ["create_task", { title: task, project, estimate: { size: "2 h", reason: "A short piece of work." } }], ["complete_task", { task: finished }])),
   );
   const pending = { state: "pending", applied: [] };
 

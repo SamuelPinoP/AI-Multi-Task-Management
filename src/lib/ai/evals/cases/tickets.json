@@ -15,9 +15,9 @@
             "sections": ["Summary", "Acceptance criteria", "Open questions", "Estimate", "Original request"],
             "minCriteria": 2,
             "minQuestions": 1,
-            "notInvented": ["@inventedFacts"],
-            "estimate": { "min": "2 h", "max": "2 days" }
-          }
+            "notInvented": ["@inventedFacts"]
+          },
+          "estimate": { "min": "2 h", "max": "2 days" }
         }
       ],
       "facts": ["@awaitsApply"],
@@ -62,9 +62,9 @@
           "ticket": {
             "sections": ["Summary", "Acceptance criteria", "Estimate", "Original request"],
             "minCriteria": 2,
-            "notInvented": ["@inventedFacts"],
-            "estimate": { "min": "1 day", "max": "1 week" }
-          }
+            "notInvented": ["@inventedFacts"]
+          },
+          "estimate": { "min": "1 day", "max": "1 week" }
         }
       ],
       "facts": ["Mobile app launch", "@awaitsApply"],
@@ -106,9 +106,9 @@
           "title": "calendar",
           "ticket": {
             "sections": ["Summary", "Steps to reproduce", "Expected result", "Actual result", "Estimate", "Original request"],
-            "notInvented": ["@inventedFacts"],
-            "estimate": { "min": "1 h", "max": "2 days" }
-          }
+            "notInvented": ["@inventedFacts"]
+          },
+          "estimate": { "min": "1 h", "max": "2 days" }
         }
       ],
       "facts": ["@awaitsApply"],
@@ -192,10 +192,10 @@
           "ticket": {
             "sections": ["Summary", "Acceptance criteria", "Estimate", "Original request"],
             "minCriteria": 1,
-            "notInvented": ["@inventedFacts"],
-            "estimate": { "min": "15 min", "max": "1 h" },
-            "split": false
-          }
+            "notInvented": ["@inventedFacts"]
+          },
+          "estimate": { "min": "15 min", "max": "1 h" },
+          "split": false
         }
       ],
       "facts": ["@awaitsApply"],
@@ -221,7 +221,7 @@
   {
     "id": "tickets-estimate-split",
     "ability": "tickets",
-    "summary": "Estimates big work as big, and offers subtasks that split it, unticked, instead of making them (#434).",
+    "summary": "Estimates big work as big, and offers subtasks that split it, unticked and each with its own estimate, instead of making them (#434).",
     "request": "Write a ticket to add two-step sign-in to the mobile app: an authenticator app, a code at sign-in, and recovery codes.",
     "expect": {
       "tools": [{ "name": "create_ticket" }],
@@ -233,10 +233,10 @@
           "ticket": {
             "sections": ["Summary", "Acceptance criteria", "Estimate", "Original request"],
             "minCriteria": 2,
-            "notInvented": ["@inventedFacts"],
-            "estimate": { "min": "3 days", "max": "1 week" },
-            "split": true
-          }
+            "notInvented": ["@inventedFacts"]
+          },
+          "estimate": { "min": "3 days", "max": "1 week" },
+          "split": true
         }
       ],
       "facts": ["@awaitsApply", ["subtask", "subtasks", "sub-task", "sub-tasks", "split"]],
@@ -258,7 +258,11 @@
               ],
               "openQuestions": ["Should two-step sign-in be a choice, or required for everyone?"],
               "estimate": { "size": "1 week", "reason": "An authenticator app to set up, a code at sign-in, recovery codes, and tests for each." },
-              "split": ["Set up an authenticator app", "Ask for the code at sign-in", "Recovery codes"]
+              "split": [
+                { "title": "Set up an authenticator app", "size": "2 days", "reason": "Pairing the app, its setting, and a test." },
+                { "title": "Ask for the code at sign-in", "size": "1 day", "reason": "A step after the password, and a test." },
+                { "title": "Recovery codes", "size": "1 day", "reason": "Making, showing and accepting the codes, with a test." }
+              ]
             }
           }
         ]
@@ -271,17 +275,24 @@
   {
     "id": "tickets-plain-task",
     "ability": "tickets",
-    "summary": "A plain task stays a plain task: nobody asked for a ticket, so it doesn't write one (#433).",
+    "summary": "A plain task stays a plain task: nobody asked for a ticket, so it doesn't write one (#433). It still gets an estimate, and a phone call is a small one, with no split (#434).",
     "request": "Add a task to call the plumber tomorrow.",
     "expect": {
       "tools": [{ "name": "create_task", "args": { "title": "plumber", "dueDate": "2026-11-20" } }],
       "notTools": ["create_ticket"],
-      "proposal": [{ "kind": "create_task", "title": "plumber", "dueDate": "2026-11-20" }],
+      "proposal": [{ "kind": "create_task", "title": "plumber", "dueDate": "2026-11-20", "estimate": { "min": "15 min", "max": "1 h" }, "split": false }],
       "facts": ["@awaitsApply"],
       "notPatterns": ["@doneClaims"]
     },
     "reference": [
-      { "toolCalls": [{ "name": "create_task", "args": { "title": "Call the plumber", "dueDate": "2026-11-20" } }] },
+      {
+        "toolCalls": [
+          {
+            "name": "create_task",
+            "args": { "title": "Call the plumber", "dueDate": "2026-11-20", "estimate": { "size": "15 min", "reason": "A short call to describe the problem and book a visit." } }
+          }
+        ]
+      },
       { "text": "Here's the task: Call the plumber, due tomorrow. Apply it below to add it." }
     ]
   }

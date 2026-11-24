@@ -79,11 +79,21 @@
           { "name": "create_project", "args": { "name": "Whitewall", "description": "Security work for the app." } },
           {
             "name": "create_task",
-            "args": { "title": "Harden sign-in", "project": "Whitewall", "description": "Limit repeated sign-in attempts and require strong passwords." }
+            "args": {
+              "title": "Harden sign-in",
+              "project": "Whitewall",
+              "description": "Limit repeated sign-in attempts and require strong passwords.",
+              "estimate": { "size": "2 days", "reason": "An attempt limit, a password rule, and tests for both." }
+            }
           },
           {
             "name": "create_task",
-            "args": { "title": "Security review", "project": "Whitewall", "description": "Review access rules, secrets and dependencies before the deadline." }
+            "args": {
+              "title": "Security review",
+              "project": "Whitewall",
+              "description": "Review access rules, secrets and dependencies before the deadline.",
+              "estimate": { "size": "1 day", "reason": "Going through access rules, secrets and dependencies." }
+            }
           },
           { "name": "create_event", "args": { "title": "Whitewall deadline", "date": "2026-12-17", "project": "Whitewall" } }
         ]
@@ -112,17 +122,90 @@
   {
     "id": "changes-subtask",
     "ability": "changes",
-    "summary": "Proposes a subtask under an existing task, in its parent's project, Garden makeover (#310).",
+    "summary": "Proposes a subtask under an existing task, in its parent's project, Garden makeover (#310). The parent has no estimate, so the subtask gets none either (#434).",
     "request": "Add a subtask to Buy plants for the garden: compare prices at the nursery.",
     "expect": {
       "tools": [{ "name": "create_task", "args": { "parent": "Buy plants" } }],
-      "proposal": [{ "kind": "create_task", "title": "prices", "parent": "Buy plants for the garden", "project": "Garden makeover" }],
+      "proposal": [{ "kind": "create_task", "title": "prices", "parent": "Buy plants for the garden", "project": "Garden makeover", "estimate": false }],
       "facts": ["Buy plants for the garden", "@awaitsApply"],
       "notPatterns": ["@doneClaims"]
     },
     "reference": [
-      { "toolCalls": [{ "name": "create_task", "args": { "title": "Compare prices at the nursery", "parent": "Buy plants for the garden" } }] },
+      {
+        "toolCalls": [
+          {
+            "name": "create_task",
+            "args": {
+              "title": "Compare prices at the nursery",
+              "parent": "Buy plants for the garden",
+              "estimate": { "size": "1 h", "reason": "A visit to the nursery to note the prices." }
+            }
+          }
+        ]
+      },
       { "text": "Here's the new subtask: Compare prices at the nursery, under Buy plants for the garden in Garden makeover. Apply it below to add it." }
+    ]
+  },
+  {
+    "id": "changes-new-task-with-subtask",
+    "ability": "changes",
+    "summary": "A new task and a subtask under it, in one answer: each gets its estimate, since the subtask's new parent has one (#434).",
+    "request": "Add a task to plan the team lunch, with a subtask to book the restaurant.",
+    "expect": {
+      "tools": [{ "name": "create_task", "args": { "parent": "lunch" } }],
+      "proposal": [
+        { "kind": "create_task", "title": "restaurant", "parent": "lunch", "estimate": { "min": "15 min", "max": "1 h" } },
+        { "kind": "create_task", "title": "lunch", "estimate": { "min": "15 min", "max": "4 h" } }
+      ],
+      "facts": ["@awaitsApply"],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [
+      {
+        "toolCalls": [
+          { "name": "create_task", "args": { "title": "Plan the team lunch", "estimate": { "size": "1 h", "reason": "Picking a day and a place, and telling the team." } } },
+          {
+            "name": "create_task",
+            "args": { "title": "Book the restaurant", "parent": "Plan the team lunch", "estimate": { "size": "15 min", "reason": "One call or an online booking." } }
+          }
+        ]
+      },
+      { "text": "Here's the task, Plan the team lunch, with its subtask, Book the restaurant. Review them below and apply them to add them." }
+    ]
+  },
+  {
+    "id": "changes-big-task-split",
+    "ability": "changes",
+    "summary": "A plain task that's more than 2 days of work comes with subtasks that split it, offered unticked, each with its own estimate (#434).",
+    "request": "Add a task to build a website for my bakery, with a menu page and an online order form.",
+    "expect": {
+      "tools": [{ "name": "create_task", "args": { "title": "website" } }],
+      "notTools": ["create_ticket"],
+      "proposal": [{ "kind": "create_task", "title": "website", "estimate": { "min": "3 days", "max": "1 week" }, "split": true }],
+      "facts": ["@awaitsApply", ["subtask", "subtasks", "sub-task", "sub-tasks", "split"]],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [
+      {
+        "toolCalls": [
+          {
+            "name": "create_task",
+            "args": {
+              "title": "Build a website for the bakery",
+              "description": "A menu page and an online order form.",
+              "estimate": { "size": "1 week", "reason": "A site to set up, a menu page, an order form that sends orders, and testing it all." },
+              "split": [
+                { "title": "Set up the site and its home page", "size": "2 days", "reason": "Hosting, a domain and the first page." },
+                { "title": "Make the menu page", "size": "1 day", "reason": "The bakery's items, prices and photos." },
+                { "title": "Build the online order form", "size": "2 days", "reason": "The form, sending each order, and testing it." }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "text": "Here's the task: Build a website for the bakery. It's about a week of work, so I've suggested three subtasks that split it. Tick the ones you want, then apply it."
+      }
     ]
   }
 ]

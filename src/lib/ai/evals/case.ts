@@ -195,6 +195,14 @@ export const STEP_KINDS = ["create_project", "create_task", "update_task", "comp
 const dayText = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Write dates YYYY-MM-DD.");
 
 /**
+ * The range an estimate must land in, both ends included (#434). An estimate is a judgment, so a
+ * case gives a range, never one step: "fix a typo on the pricing page" is 15 min to 1 h.
+ */
+const estimateRange = z
+  .strictObject({ min: z.enum(ESTIMATE_STEPS), max: z.enum(ESTIMATE_STEPS) })
+  .refine(({ min, max }) => stepMinutes(min) <= stepMinutes(max), "Give the shorter step as min.");
+
+/**
  * A change the answer must propose (#310). `title` is part of the item's title or name, `project`
  * and `parent` part of the names of where it goes, ignoring case; dates and times must be equal.
  * For a change to a task, `dueDate` and `project` are its new values.
@@ -221,19 +229,16 @@ const expectedStep = z.strictObject({
        * outside Open questions, the Estimate and the Original request: facts the request didn't give.
        */
       notInvented: z.array(regex).default([]),
-      /**
-       * The range its estimate must land in, both ends included (#434). An estimate is a judgment,
-       * so a case gives a range, never one step: "fix a typo on the pricing page" is 15 min to 1 h.
-       */
-      estimate: z
-        .strictObject({ min: z.enum(ESTIMATE_STEPS), max: z.enum(ESTIMATE_STEPS) })
-        .refine(({ min, max }) => stepMinutes(min) <= stepMinutes(max), "Give the shorter step as min.")
-        .optional(),
-      /** Whether it comes with 2 to 5 subtasks that split it, offered unticked: only work over 2 days does (#434). */
-      split: z.boolean().optional(),
     })
     .optional(),
-});
+  /**
+   * For a new task, a ticket or not (#434): the range its estimate must land in, marked as the AI's,
+   * or false when it must have none, as a subtask of a task without one.
+   */
+  estimate: z.union([estimateRange, z.literal(false)]).optional(),
+  /** For a new task: whether it comes with 2 to 5 subtasks that split it, offered unticked. Only work over 2 days does (#434). */
+  split: z.boolean().optional(),
+}).refine((step) => step.kind === "create_task" || (step.estimate === undefined && step.split === undefined), "Only a new task (create_task) has an estimate or a split.");
 
 export type ExpectedStep = z.infer<typeof expectedStep>;
 

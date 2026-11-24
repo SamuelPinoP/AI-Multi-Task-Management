@@ -38,22 +38,30 @@ function setup({ edit, chat = true, request }: { edit?: (tables: Tables) => void
   return { draft, call, unchanged: () => JSON.stringify(workspace.tables) === before };
 }
 
+/** An estimate the model gives a small task (#434), and the Estimate section the server writes from it. */
+const SOON = { size: "1 h", reason: "One screen to check." } as const;
+const SOON_SECTION = "## Estimate\n\n**1 h** · AI estimate\nOne screen to check.";
+
 test("a new project and its tasks, linked by the project's name or ref, change nothing (#310)", async () => {
   const { draft, call, unchanged } = setup();
   assert.deepEqual(await call(createProject, { name: "Whitewall", description: "Security work" }), { proposed: 'New project "Whitewall"', ref: "new-1", proposedSoFar: 1 });
-  assert.deepEqual(await call(createTask, { title: "Harden sign-in", project: "whitewall" }), { proposed: 'New task "Harden sign-in" in "Whitewall"', ref: "new-2", proposedSoFar: 2 });
-  await call(createTask, { title: "Security review", project: "new-1", dueDate: "2026-12-17", priority: "HIGH" });
-  await call(createTask, { title: "Rotate the keys", project: "Mobile" });
+  assert.deepEqual(await call(createTask, { title: "Harden sign-in", project: "whitewall", estimate: SOON }), {
+    proposed: 'New task "Harden sign-in" in "Whitewall"',
+    ref: "new-2",
+    proposedSoFar: 2,
+  });
+  await call(createTask, { title: "Security review", project: "new-1", dueDate: "2026-12-17", priority: "HIGH", estimate: SOON });
+  await call(createTask, { title: "Rotate the keys", project: "Mobile", estimate: SOON });
   const whitewall = { ref: "new-1", name: "Whitewall" };
   assert.deepEqual(draft.steps, [
     { kind: "create_project", ref: "new-1", name: "Whitewall", description: "Security work" },
-    { kind: "create_task", ref: "new-2", title: "Harden sign-in", description: null, dueDate: null, priority: "NONE", project: whitewall, parent: null },
-    { kind: "create_task", ref: "new-3", title: "Security review", description: null, dueDate: "2026-12-17", priority: "HIGH", project: whitewall, parent: null },
+    { kind: "create_task", ref: "new-2", title: "Harden sign-in", description: SOON_SECTION, dueDate: null, priority: "NONE", project: whitewall, parent: null },
+    { kind: "create_task", ref: "new-3", title: "Security review", description: SOON_SECTION, dueDate: "2026-12-17", priority: "HIGH", project: whitewall, parent: null },
     {
       kind: "create_task",
       ref: "new-4",
       title: "Rotate the keys",
-      description: null,
+      description: SOON_SECTION,
       dueDate: null,
       priority: "NONE",
       project: { id: "proj-mobile", name: "Mobile app launch" },
@@ -71,8 +79,9 @@ test("a subtask goes in its parent's project, and a subtask can't have subtasks 
     },
   });
   // The parent's project wins over the one named, as in the app (SMART-02).
-  assert.deepEqual(await call(createTask, { title: "Compare prices at the nursery", parent: "Buy plants for the garden", project: "Book club" }), {
-    proposed: 'New subtask "Compare prices at the nursery" under "Buy plants for the garden"',
+  assert.deepEqual(await call(createTask, { title: "Compare prices at the nursery", parent: "Buy plants for the garden", project: "Book club", estimate: SOON }), {
+    proposed:
+      'New subtask "Compare prices at the nursery" under "Buy plants for the garden". Its estimate was left out: a subtask gets one only when its parent has one.',
     ref: "new-1",
     proposedSoFar: 1,
   });
@@ -88,15 +97,15 @@ test("a subtask goes in its parent's project, and a subtask can't have subtasks 
   });
 
   // A task this answer creates can be a parent, by title or ref, but its new subtask can't.
-  await call(createTask, { title: "Plan the launch event", project: "Mobile app launch" });
-  await call(createTask, { title: "Book the venue", parent: "new-2" });
+  await call(createTask, { title: "Plan the launch event", project: "Mobile app launch", estimate: SOON });
+  await call(createTask, { title: "Book the venue", parent: "new-2", estimate: SOON });
   assert.deepEqual((draft.steps[2] as Extract<ProposalStep, { kind: "create_task" }>).parent, { ref: "new-2", name: "Plan the launch event" });
   assert.deepEqual((draft.steps[2] as Extract<ProposalStep, { kind: "create_task" }>).project, { id: "proj-mobile", name: "Mobile app launch" });
-  assert.deepEqual(await call(createTask, { title: "Pick a pot", parent: "Compare prices at the nursery" }), {
+  assert.deepEqual(await call(createTask, { title: "Pick a pot", parent: "Compare prices at the nursery", estimate: SOON }), {
     proposed: null,
     reason: '"Compare prices at the nursery" is a subtask, and subtasks can\'t have their own subtasks.',
   });
-  assert.deepEqual(await call(createTask, { title: "Find a review", parent: "Pick the next book" }), {
+  assert.deepEqual(await call(createTask, { title: "Find a review", parent: "Pick the next book", estimate: SOON }), {
     proposed: null,
     reason: '"Pick the next book" is a subtask, and subtasks can\'t have their own subtasks.',
   });
@@ -143,16 +152,14 @@ test("a ticket is a new task whose description the server writes from its parts,
   assert.ok(unchanged());
 });
 
-const SOON = { size: "1 h", reason: "One screen to check." } as const;
-
 test("a ticket can be a subtask, and without criteria or the person's own sections it isn't valid (#433)", async () => {
   const { draft, call } = setup();
   await call(createTicket, { title: "Fix the crash", summary: "The app crashes on launch.", sections: [{ title: "Steps to reproduce", items: ["Open the app"] }], estimate: SOON, parent: "Buy plants" });
   const [step] = draft.steps;
   assert.ok(step.kind === "create_task");
   assert.equal(step.parent?.name, "Buy plants for the garden");
-  // Outside a chat there are no words to quote.
-  assert.deepEqual(parseDescription(step.description ?? "").sections.map((section) => section.title), ["Summary", "Steps to reproduce", "Estimate"]);
+  // Outside a chat there are no words to quote, and its parent has no estimate, so it gets none (#434).
+  assert.deepEqual(parseDescription(step.description ?? "").sections.map((section) => section.title), ["Summary", "Steps to reproduce"]);
   const invalid = createTicket.input.safeParse({ title: "No criteria", summary: "Something", estimate: SOON });
   assert.equal(invalid.success, false);
   assert.match(JSON.stringify(invalid.error?.issues), /acceptanceCriteria/);
@@ -169,20 +176,25 @@ test("work over 2 days comes with subtasks that split it, offered unticked after
     estimate: { size: "1 week", reason: "An app to set up, a code at sign-in, recovery codes, and tests for each." },
     project: "Mobile",
   };
-  const split = ["Set up an authenticator app", "Ask for the code at sign-in", "Recovery codes"];
+  const split = [
+    { title: "Set up an authenticator app", size: "2 days", reason: "Pairing the app, and a test." },
+    { title: "Ask for the code at sign-in", size: "1 day", reason: "A step after the password." },
+    { title: "Recovery codes", size: "4 h", reason: "Making and accepting the codes." },
+  ];
   assert.deepEqual(await call(createTicket, { ...twoStep, split }), {
     proposed: 'New task written as a ticket "Add two-step sign-in" in "Mobile app launch", and 3 subtasks that split it, offered unticked for the person to choose',
     ref: "new-1",
     proposedSoFar: 4,
   });
   const mobile = { id: "proj-mobile", name: "Mobile app launch" };
+  // Each comes with its own estimate (#434).
   assert.deepEqual(
     draft.steps.slice(1),
-    split.map((title, index) => ({
+    split.map(({ title, size, reason }, index) => ({
       kind: "create_task",
       ref: `new-${index + 2}`,
       title,
-      description: null,
+      description: `## Estimate\n\n**${size}** · AI estimate\n${reason}`,
       dueDate: null,
       priority: "NONE",
       project: mobile,
@@ -193,22 +205,91 @@ test("work over 2 days comes with subtasks that split it, offered unticked after
   assert.equal("suggested" in draft.steps[0], false, "the ticket itself is proposed as usual");
   assert.ok(unchanged());
 
-  // Without its split it isn't valid; a ticket that's a subtask can't be split, so it comes alone.
+  // Without its split it isn't valid, nor with a subtask over 2 days. A ticket that's a subtask needs
+  // no split, since a subtask can't have subtasks of its own: one it's given isn't offered.
   const unsplit = createTicket.input.safeParse(twoStep);
   assert.equal(unsplit.success, false);
   assert.match(JSON.stringify(unsplit.error?.issues), /over 2 days: give split/);
+  assert.equal(createTicket.input.safeParse({ ...twoStep, split: [split[0], { ...split[1], size: "3 days" }] }).success, false);
+  assert.equal(createTicket.input.safeParse({ ...twoStep, parent: "Buy plants" }).success, true);
   const under = setup();
   assert.deepEqual(await under.call(createTicket, { ...twoStep, split, parent: "Buy plants" }), {
-    proposed: 'New subtask written as a ticket "Add two-step sign-in" under "Buy plants for the garden". Its split wasn\'t offered: a subtask can\'t have subtasks of its own.',
+    proposed:
+      'New subtask written as a ticket "Add two-step sign-in" under "Buy plants for the garden". Its estimate was left out: a subtask gets one only when its parent has one. Its split wasn\'t offered: a subtask can\'t have subtasks of its own.',
     ref: "new-1",
     proposedSoFar: 1,
   });
 
   // As many as the answer has room for.
   const full = setup();
-  for (let index = 1; index < MAX_PROPOSAL_STEPS - 1; index += 1) await full.call(createTask, { title: `Task ${index}` });
+  for (let index = 1; index < MAX_PROPOSAL_STEPS - 1; index += 1) await full.call(createTask, { title: `Task ${index}`, estimate: SOON });
   assert.match(String((await full.call(createTicket, { ...twoStep, split })).proposed), /, and 1 subtask that split it,/);
   assert.equal(full.draft.steps.length, MAX_PROPOSAL_STEPS);
+});
+
+test("every task the AI creates gets its estimate after any details, and subtasks follow their parent (#434)", async () => {
+  const { draft, call, unchanged } = setup({
+    edit: (tables) => {
+      // A person estimated this one in their own words.
+      const reading = tables.task.find((row) => row.id === "task-reading");
+      if (reading) reading.description = "Before the club meets.\n\n## Estimate\n\nAbout a week of evenings";
+    },
+  });
+  // The details the person gave come first, as they are, then the AI's estimate.
+  assert.deepEqual(await call(createTask, { title: "Call the plumber", description: "The kitchen sink leaks.", estimate: { size: "15 min", reason: "One call to book a visit." } }), {
+    proposed: 'New task "Call the plumber"',
+    ref: "new-1",
+    proposedSoFar: 1,
+  });
+  const description = (index: number) => (draft.steps[index] as Extract<ProposalStep, { kind: "create_task" }>).description;
+  assert.equal(description(0), "The kitchen sink leaks.\n\n## Estimate\n\n**15 min** · AI estimate\nOne call to book a visit.");
+  // A section the model wrote itself stays; an Estimate section of its own gives way to the AI's.
+  await call(createTask, { title: "Paint the fence", description: "## Paint\n\nWhite, two coats.\n\n## Estimate\n\n3 h", estimate: { size: "4 h", reason: "Two coats, with drying in between." } });
+  assert.deepEqual(parseDescription(description(1) ?? "").sections, [
+    { title: "Paint", body: "White, two coats." },
+    { title: "Estimate", body: "**4 h** · AI estimate\nTwo coats, with drying in between." },
+  ]);
+
+  // Under a new task with an estimate, or a person's task with one, a subtask keeps its own.
+  assert.deepEqual(await call(createTask, { title: "Buy the paint", parent: "Paint the fence", estimate: { size: "30 min", reason: "One trip to the shop." } }), {
+    proposed: 'New subtask "Buy the paint" under "Paint the fence"',
+    ref: "new-3",
+    proposedSoFar: 3,
+  });
+  assert.equal(description(2), "## Estimate\n\n**30 min** · AI estimate\nOne trip to the shop.");
+  await call(createTask, { title: "Take notes", parent: "Read Deep Work", estimate: SOON });
+  assert.equal(description(3), SOON_SECTION);
+  // Under a task without one, it gets none, and the model reads why; its details stay.
+  assert.match(String((await call(createTask, { title: "Pick a pot", parent: "Buy plants", description: "Clay, not plastic.", estimate: SOON })).proposed), /Its estimate was left out/);
+  assert.equal(description(4), "Clay, not plastic.");
+
+  // A plain task over 2 days comes with its split, unticked; a subtask over 2 days is just long.
+  const move = { title: "Move house", estimate: { size: "1 week", reason: "Packing, the move and unpacking." } };
+  assert.equal(createTask.input.safeParse(move).success, false);
+  assert.equal(createTask.input.safeParse({ ...move, parent: "Plan the launch event" }).success, true);
+  const pack = [
+    { title: "Pack the boxes", size: "2 days", reason: "Every room." },
+    { title: "Unpack", size: "2 days", reason: "Every room again." },
+  ];
+  assert.match(String((await call(createTask, { ...move, split: pack })).proposed), /^New task "Move house", and 2 subtasks that split it, offered unticked/);
+  assert.equal(description(5), "## Estimate\n\n**1 week** · AI estimate\nPacking, the move and unpacking.\n\nMore than 2 days of work: worth splitting into subtasks.");
+  assert.deepEqual(
+    draft.steps.slice(6).map((step) => (step.kind === "create_task" ? [step.title, step.parent?.name, step.suggested] : null)),
+    [
+      ["Pack the boxes", "Move house", true],
+      ["Unpack", "Move house", true],
+    ],
+  );
+  // A subtask's estimate never says to split it.
+  await call(createTask, { title: "Sort the garage", parent: "Read Deep Work", estimate: { size: "3 days", reason: "Years of boxes." } });
+  assert.equal(description(8), "## Estimate\n\n**3 days** · AI estimate\nYears of boxes.");
+
+  // Every task the AI creates gets one; short work can't be split.
+  assert.equal(createTask.input.safeParse({ title: "Call the plumber" }).success, false);
+  const short = createTask.input.safeParse({ title: "Call the plumber", estimate: SOON, split: pack });
+  assert.equal(short.success, false);
+  assert.match(JSON.stringify(short.error?.issues), /only for an estimate over 2 days\. For subtasks the person asked for, call create_task with this task's ref/);
+  assert.ok(unchanged());
 });
 
 test("a change to a task lists each field, before and after, and nothing to change proposes nothing (#310)", async () => {
@@ -340,8 +421,8 @@ test("other people's private tasks, tasks in the Trash and projects the person i
   assert.deepEqual(await call(updateTask, { task: "task-salary-bands", dueDate: "2026-12-01" }), none("task-salary-bands"));
   assert.deepEqual(await call(trashTask, { task: "Pick up the dry cleaning on Elm Street" }), none("Pick up the dry cleaning on Elm Street"));
   assert.deepEqual(await call(trashTask, { task: "Renew the gym membership" }), none("Renew the gym membership"));
-  assert.deepEqual(await call(createTask, { title: "Draft the bands", project: "Salary review" }), none("Salary review", "project"));
-  assert.deepEqual(await call(createTask, { title: "Draft the bands", parent: "Plan the surprise party for Morgan" }), none("Plan the surprise party for Morgan"));
+  assert.deepEqual(await call(createTask, { title: "Draft the bands", project: "Salary review", estimate: SOON }), none("Salary review", "project"));
+  assert.deepEqual(await call(createTask, { title: "Draft the bands", parent: "Plan the surprise party for Morgan", estimate: SOON }), none("Plan the surprise party for Morgan"));
   assert.deepEqual(await call(createEvent, { title: "Review", date: "2026-12-01", project: "proj-salary" }), none("proj-salary", "project"));
   assert.equal(draft.steps.length, 0);
 });
@@ -351,7 +432,7 @@ test("outside a chat nothing can be proposed, and one answer proposes at most 20
   assert.deepEqual(await lookup.call(createProject, { name: "Whitewall" }), { proposed: null, reason: "Changes can't be proposed here." });
 
   const { draft, call } = setup();
-  for (let index = 1; index <= MAX_PROPOSAL_STEPS; index += 1) await call(createTask, { title: `Task ${index}` });
+  for (let index = 1; index <= MAX_PROPOSAL_STEPS; index += 1) await call(createTask, { title: `Task ${index}`, estimate: SOON });
   assert.equal(draft.steps.length, MAX_PROPOSAL_STEPS);
   assert.deepEqual(await call(completeTask, { task: "Call the dentist" }), {
     proposed: null,
@@ -365,11 +446,14 @@ test("invalid arguments never reach a tool: unknown fields, empty titles, made-u
     [createProject, { name: "" }],
     [createProject, { name: "x".repeat(101) }],
     [createProject, { name: "Whitewall", userId: "someone-else" }],
-    [createTask, { title: "  " }],
-    [createTask, { title: "Pay rent", dueDate: "tomorrow" }],
-    [createTask, { title: "Pay rent", dueDate: "2026-02-30" }],
+    // Each new task here has its estimate (#434), so it's refused for the reason named.
+    [createTask, { title: "  ", estimate: SOON }],
+    [createTask, { title: "Pay rent", dueDate: "tomorrow", estimate: SOON }],
+    [createTask, { title: "Pay rent", dueDate: "2026-02-30", estimate: SOON }],
     // No priority is the default; the model never sets NONE on a new task.
-    [createTask, { title: "Pay rent", priority: "NONE" }],
+    [createTask, { title: "Pay rent", priority: "NONE", estimate: SOON }],
+    [createTask, { title: "Pay rent", estimate: { size: "5 h", reason: "Not a step" } }],
+    [createTask, { title: "Pay rent", estimate: { size: "1 h" } }],
     [updateTask, { task: "Pay rent", status: "ARCHIVED" }],
     [updateTask, { title: "Pay rent" }],
     [completeTask, { task: "Pay rent", force: true }],
@@ -380,4 +464,5 @@ test("invalid arguments never reach a tool: unknown fields, empty titles, made-u
   ];
   for (const [tool, args] of refused) assert.equal(tool.input.safeParse(args).success, false, `${tool.name} ${JSON.stringify(args)}`);
   assert.equal(updateTask.input.safeParse({ task: "Pay rent", priority: "NONE" }).success, true, "a change can remove a priority");
+  assert.equal(createTask.input.safeParse({ title: "Pay rent", estimate: SOON }).success, true, "with the estimate alone, it's valid");
 });

@@ -39,13 +39,16 @@ test("the person ticks what to apply: leaving out a new project leaves out what 
   const task = uniqueName("E2E Harden sign-in");
   const finished = uniqueName("E2E Call the dentist");
   const finishedId = await newTask(page, finished);
+  // Over 140 characters, so it goes behind the project's details button.
+  const plan = "Security work before the launch: limits on sign-in attempts, keys rotated on a schedule, and a review of every page that takes an upload from a person.";
+  expect(plan.length).toBeGreaterThan(140);
 
   await page.goto("/ai");
   await ask(
     page,
     calls(
-      ["create_project", { name: project }],
-      ["create_task", { title: task, project, dueDate: "2026-12-17", priority: "HIGH", description: "Limit sign-in attempts." }],
+      ["create_project", { name: project, description: plan }],
+      ["create_task", { title: task, project, dueDate: "2026-12-17", priority: "HIGH", description: "Limit sign-in attempts.", estimate: { size: "4 h", reason: "A counter per account and its tests." } }],
       ["complete_task", { task: finished }],
     ),
   );
@@ -60,11 +63,15 @@ test("the person ticks what to apply: leaving out a new project leaves out what 
   await expect(taskBox).toHaveAccessibleName(new RegExp(`${project} · Due Thu, Dec 17 · High`));
   await expect(finishedBox).toHaveAccessibleName(/Personal$/);
 
-  // The task's description shows on request.
-  const details = card.getByRole("button", { name: `Show details of ${task}` });
-  await details.click();
-  await expect(card.getByRole("button", { name: `Hide details of ${task}` })).toHaveAttribute("aria-expanded", "true");
+  // The task has the AI's estimate (#434), so its details show in its row and it opens as a draft.
   await expect(card.getByText("Limit sign-in attempts.")).toBeVisible();
+  await expect(card.getByRole("button", { name: `Open draft of ${task}` })).toBeVisible();
+  await expect(card.getByRole("button", { name: `Show details of ${task}` })).toHaveCount(0);
+  // A long project description shows on request.
+  await expect(card.getByText(plan)).toHaveCount(0);
+  await card.getByRole("button", { name: `Show details of ${project}` }).click();
+  await expect(card.getByRole("button", { name: `Hide details of ${project}` })).toHaveAttribute("aria-expanded", "true");
+  await expect(card.getByText(plan)).toBeVisible();
 
   // Leaving out the project leaves out the task that goes in it, and says why; ticking it again brings the task back.
   await projectBox.uncheck();

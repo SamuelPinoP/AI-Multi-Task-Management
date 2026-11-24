@@ -7,6 +7,7 @@ import test from "node:test";
 import { systemPrompt } from "../prompt";
 import type { ProposalStep } from "../proposals";
 import { createScriptedProvider } from "../providers/fake";
+import { withEstimate } from "../task-estimate";
 import { ticketDescription, type TicketParts } from "../ticket";
 import { AGENT_TOOLS } from "../tools";
 import { ProviderError, type ProviderEvent, type ProviderRequest } from "../types";
@@ -211,6 +212,52 @@ test("the scorer checks a ticket's estimate against its range, and its split goe
   assert.deepEqual(failed("**2 days** · AI estimate"), [{ name: "Estimates it at 3 days to 1 week, as the AI's", passed: false, detail: "It estimated 2 days." }]);
   assert.deepEqual(failed("**1 week**"), [{ name: "Estimates it at 3 days to 1 week, as the AI's", passed: false, detail: "It estimated 1 week, not marked as the AI's." }]);
   assert.deepEqual(failed("Hard to say"), [{ name: "Estimates it at 3 days to 1 week, as the AI's", passed: false, detail: "It gave no estimate." }]);
+});
+
+test("the scorer checks a plain task's estimate too, and that a subtask under a task without one gets none (#434)", () => {
+  const plumber = caseNamed("tickets-plain-task");
+  const call = { name: "create_task", args: { title: "Call the plumber", dueDate: "2026-11-20" } };
+  const task = (description: string | null): Extract<ProposalStep, { kind: "create_task" }> => ({ kind: "create_task", ref: "new-1", title: "Call the plumber", description, dueDate: "2026-11-20", priority: "NONE", project: null, parent: null });
+  const run = (proposal: ProposalStep[]) => observed({ answer: "Here's the task. Apply it below to add it.", attemptedCalls: [call], executedCalls: [call], proposal });
+  const quick = task(withEstimate(null, { size: "15 min", reason: "One call." }));
+  assert.deepEqual(failedChecks(plumber, run([quick])), []);
+  assert.deepEqual(failedChecks(plumber, run([task(null)])), ["Estimates it at 15 min to 1 h, as the AI's"]);
+  assert.deepEqual(failedChecks(plumber, run([task(withEstimate(null, { size: "1 day", reason: "A long call." }))])), ["Estimates it at 15 min to 1 h, as the AI's"]);
+  // Subtasks offered to split a plain task go with it, as its split: this one mustn't have any.
+  const offered = { ...task(null), ref: "new-2", title: "Find the number", dueDate: null, parent: { ref: "new-1", name: "Call the plumber" }, suggested: true };
+  assert.deepEqual(failedChecks(plumber, run([quick, offered, { ...offered, ref: "new-3" }])), ["Offers no subtasks to split it"]);
+
+  const subtask = caseNamed("changes-subtask");
+  const subtaskCall = { name: "create_task", args: { title: "Compare prices at the nursery", parent: "Buy plants for the garden" } };
+  const compare = (description: string | null) =>
+    observed({
+      answer: "Here's the new subtask under Buy plants for the garden. Apply it below to add it.",
+      attemptedCalls: [subtaskCall],
+      executedCalls: [subtaskCall],
+      proposal: [
+        {
+          kind: "create_task",
+          ref: "new-1",
+          title: "Compare prices at the nursery",
+          description,
+          dueDate: null,
+          priority: "NONE",
+          project: { id: "proj-garden", name: "Garden makeover" },
+          parent: { id: "task-plants", name: "Buy plants for the garden" },
+        },
+      ],
+    });
+  assert.deepEqual(failedChecks(subtask, compare(null)), []);
+  assert.deepEqual(failedChecks(subtask, compare("At the nursery on Main Street.")), [], "details aren't an estimate");
+  assert.deepEqual(
+    scoreCase(subtask, compare(withEstimate(null, { size: "1 h", reason: "A visit." })), workspace).filter((check) => !check.passed),
+    [{ name: "Gives it no estimate", passed: false, detail: "It estimated 1 h." }],
+  );
+  // Only a new task has an estimate or a split to check.
+  const minimal = { id: "tasks-x", ability: "tasks", summary: "A case for this test.", request: "Hi?" };
+  assert.equal(caseSchema.safeParse({ ...minimal, expect: { proposal: [{ kind: "create_event", estimate: false }] } }).success, false);
+  assert.equal(caseSchema.safeParse({ ...minimal, expect: { proposal: [{ kind: "create_task", estimate: { min: "1 day", max: "1 h" } }] } }).success, false);
+  assert.equal(caseSchema.safeParse({ ...minimal, expect: { proposal: [{ kind: "create_task", estimate: { min: "1 h", max: "1 day" }, split: false }] } }).success, true);
 });
 
 test("the scorer checks the expected tool call, the facts and what mustn't be said", () => {

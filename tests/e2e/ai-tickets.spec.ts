@@ -6,10 +6,11 @@ import { queryDatabase, signUpAndLogIn, uniqueName } from "./helpers";
 // a draft with every section, where the person changes, renames, removes and adds sections before
 // they apply it; Apply creates the task with the description as it is then. A task's page shows the
 // sections formatted: each folds, edits with its own title, ticks its checklist, and goes with the
-// bin, with Undo. Every ticket ends with the AI's estimate, which becomes the person's once they
-// change it, and work over 2 days comes with subtasks that split it, unticked (#434). The server's
-// fake model (src/lib/ai/providers/fake.ts) calls every tool a message names, with the JSON after
-// each name.
+// bin, with Undo. Every task the AI creates ends with its estimate, which becomes the person's once
+// they change it, so a plain task opens as a draft too; a subtask of a task without one gets none.
+// Work over 2 days comes with subtasks that split it, unticked, each with its own estimate (#434).
+// The server's fake model (src/lib/ai/providers/fake.ts) calls every tool a message names, with the
+// JSON after each name.
 
 const messageBox = (page: Page) => page.getByRole("textbox", { name: "Message the AI" });
 
@@ -172,7 +173,12 @@ test("work over 2 days: the subtasks that split it start unticked, and only the 
   test.setTimeout(60_000);
   await signedInWithTheNotice(page, "E2E ticket split");
   const title = uniqueName("E2E Add two-step sign-in");
-  const split = ["Set up an authenticator app", "Ask for the code at sign-in", "Recovery codes"];
+  const split = [
+    { title: "Set up an authenticator app", size: "2 days", reason: "Pairing an app with the account, and its tests." },
+    { title: "Ask for the code at sign-in", size: "1 day", reason: "One more step at sign-in, and its tests." },
+    { title: "Recovery codes", size: "1 day", reason: "Codes to keep, and signing in with one." },
+  ];
+  const titles = split.map((subtask) => subtask.title);
   const big = {
     title,
     summary: "Ask for a code from an authenticator app at sign-in.",
@@ -187,7 +193,7 @@ test("work over 2 days: the subtasks that split it start unticked, and only the 
   // The ticket is ticked; the subtasks it suggests aren't, under it.
   const card = page.getByRole("region", { name: "Changes to apply" });
   await expect(card.getByRole("checkbox", { name: `New task ${title}` })).toBeChecked();
-  for (const subtask of split) await expect(card.getByRole("checkbox", { name: `Suggested subtask ${subtask} Personal · Under ${title}` })).not.toBeChecked();
+  for (const subtask of titles) await expect(card.getByRole("checkbox", { name: `Suggested subtask ${subtask} Personal · Under ${title}` })).not.toBeChecked();
   await expect(card).toContainText("1 of 4 selected");
   await page.screenshot({ path: testInfo.outputPath(`ticket-split-${isMobile ? "phone" : "desktop"}.png`) });
 
@@ -199,21 +205,88 @@ test("work over 2 days: the subtasks that split it start unticked, and only the 
   await draft.getByRole("button", { name: isMobile ? "Back to the chat" : "Back to the card" }).last().click();
   await expect(draft).toBeHidden();
 
+  // Each subtask has an estimate of its own, of 2 days or less, so it opens as a draft too, with no advice to split it.
+  await card.getByRole("button", { name: `Open draft of ${titles[2]}` }).click();
+  const subtaskDraft = page.getByRole("dialog", { name: titles[2] });
+  await expect(subtaskDraft).toContainText("Draft task · not created until you apply");
+  await expect(subtaskDraft.locator("p", { hasText: "AI estimate" })).toHaveText(`1 day · AI estimate ${split[2].reason}`);
+  await expect(subtaskDraft.getByText("worth splitting")).toHaveCount(0);
+  await subtaskDraft.getByRole("button", { name: isMobile ? "Back to the chat" : "Back to the card" }).last().click();
+  await expect(subtaskDraft).toBeHidden();
+
   // Tick one, and only it is created, under the ticket's task.
-  await card.getByRole("checkbox", { name: `Suggested subtask ${split[2]}` }).check();
+  await card.getByRole("checkbox", { name: `Suggested subtask ${titles[2]}` }).check();
   await card.getByRole("button", { name: "Apply 2 of 4" }).click();
   const applied = page.getByRole("region", { name: "Applied changes" });
   await expect(applied).toContainText("Applied 2 of 4 changes");
-  await expect(applied).toContainText(`Left out: ${split[0]}, ${split[1]}`);
-  const created = await queryDatabase<{ title: string; parent: string | null }>(
+  await expect(applied).toContainText(`Left out: ${titles[0]}, ${titles[1]}`);
+  const created = await queryDatabase<{ title: string; parent: string | null; description: string }>(
     // Both are created in one transaction, so the parent comes first by having none, not by time.
-    `SELECT t.title, p.title AS parent FROM "Task" t LEFT JOIN "Task" p ON p.id = t."parentId" WHERE t.title = $1 OR p.title = $1 ORDER BY t."parentId" NULLS FIRST`,
+    `SELECT t.title, p.title AS parent, t.description FROM "Task" t LEFT JOIN "Task" p ON p.id = t."parentId" WHERE t.title = $1 OR p.title = $1 ORDER BY t."parentId" NULLS FIRST`,
     [title],
   );
   expect(created.rows).toEqual([
-    { title, parent: null },
-    { title: split[2], parent: title },
+    { title, parent: null, description: expect.stringContaining("More than 2 days of work: worth splitting into subtasks.") },
+    { title: titles[2], parent: title, description: `## Estimate\n\n**1 day** · AI estimate\n${split[2].reason}` },
   ]);
+});
+
+test("a plain task: the AI's estimate follows its details and opens it as a draft; a subtask of a task without an estimate gets none (#434)", async ({ page, isMobile }, testInfo) => {
+  test.setTimeout(60_000);
+  await signedInWithTheNotice(page, "E2E task estimate");
+  const title = uniqueName("E2E Call the plumber");
+  const parent = uniqueName("E2E Buy plants");
+  const subtask = uniqueName("E2E Compare prices");
+  expect((await page.request.post("/api/tasks", { data: { title: parent } })).status()).toBe(201);
+  const estimate = "## Estimate\n\n**15 min** · AI estimate\nOne call to book a visit.";
+
+  await page.goto("/ai");
+  await ask(
+    page,
+    calls(
+      ["create_task", { title, description: "The kitchen sink leaks.", estimate: { size: "15 min", reason: "One call to book a visit." } }],
+      ["create_task", { title: subtask, parent, estimate: { size: "1 h", reason: "A visit to the nursery." } }],
+    ),
+  );
+  // The model hears why the subtask's estimate was left out.
+  await expect(page.getByRole("region", { name: "Conversation" })).toContainText("Its estimate was left out: a subtask gets one only when its parent has one.");
+
+  // The card shows the task's details, never its estimate, and the draft to open; the subtask has neither.
+  const card = page.getByRole("region", { name: "Changes to apply" });
+  await expect(card.getByRole("checkbox", { name: `New task ${title}` })).toHaveAccessibleName(/The kitchen sink leaks\./);
+  await expect(card).not.toContainText("AI estimate");
+  await expect(card).not.toContainText("##");
+  await expect(card.getByRole("checkbox", { name: `New subtask ${subtask} Personal · Under ${parent}` })).toBeChecked();
+  await expect(card.getByRole("button", { name: `Open draft of ${subtask}` })).toHaveCount(0);
+  await expect(card.getByRole("button", { name: `Show details of ${subtask}` })).toHaveCount(0);
+
+  // The draft: the details first, then the AI's estimate.
+  await card.getByRole("button", { name: `Open draft of ${title}` }).click();
+  const draft = page.getByRole("dialog", { name: title });
+  await expect(draft).toContainText("Draft task · not created until you apply");
+  await expect(draft.getByRole("textbox", { name: "Description" })).toHaveValue("The kitchen sink leaks.");
+  await expect(headings(draft, 3)).toHaveText(["Estimate"]);
+  await expect(draft.locator("p", { hasText: "AI estimate" })).toHaveText("15 min · AI estimate One call to book a visit.");
+  await page.screenshot({ path: testInfo.outputPath(`task-draft-${isMobile ? "phone" : "desktop"}.png`) });
+  await draft.getByRole("button", { name: isMobile ? "Back to the chat" : "Back to the card" }).last().click();
+  await expect(draft).toBeHidden();
+
+  // Apply creates both: the task with its estimate, the subtask without one.
+  await card.getByRole("button", { name: "Apply all 2" }).click();
+  await expect(page.getByRole("region", { name: "Applied changes" })).toContainText("Applied 2 changes");
+  const stored = async (name: string) =>
+    (
+      await queryDatabase<{ parent: string | null; description: string | null }>(
+        `SELECT p.title AS parent, t.description FROM "Task" t LEFT JOIN "Task" p ON p.id = t."parentId" WHERE t.title = $1`,
+        [name],
+      )
+    ).rows;
+  expect(await stored(title)).toEqual([{ parent: null, description: `The kitchen sink leaks.\n\n${estimate}` }]);
+  expect(await stored(subtask)).toEqual([{ parent, description: null }]);
+
+  // The list shows the task's details, not its estimate.
+  await page.goto("/tasks");
+  await expect(page.getByRole("button", { name: title, exact: true })).toHaveAccessibleDescription("The kitchen sink leaks.");
 });
 
 test("a task's page: sections fold, edit with their titles, tick, go with the bin and come back with Undo", async ({ page, isMobile }, testInfo) => {
