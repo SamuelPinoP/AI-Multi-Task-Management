@@ -110,4 +110,9 @@ test("a list previews a plain description as it is, and a ticket by its first te
   assert.equal(descriptionPreview("## Empty\n\n## Cost\n\n- Down payment: 5,000"), "Down payment: 5,000");
   assert.equal(descriptionPreview("## Empty"), "");
   assert.equal(descriptionPreview(null), "");
+  // The estimate never shows in a list (#434), so a task with nothing else has no preview.
+  const estimate = "## Estimate\n\n**15 min** · AI estimate\nOne call.";
+  assert.equal(descriptionPreview(`The sink leaks.\n\n${estimate}`), "The sink leaks.");
+  assert.equal(descriptionPreview(estimate), "");
+  assert.equal(descriptionPreview(`${estimate}\n\n## Notes\n\nBring the key.`), "Bring the key.");
 });

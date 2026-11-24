@@ -8,7 +8,7 @@ import type { Workspace } from "@/lib/ai/evals/workspace";
 import { isExisting, type ProposalStep } from "@/lib/ai/proposals";
 import { TICKET_SECTIONS } from "@/lib/ai/ticket-sections";
 import { listItems, parseDescription } from "@/lib/description-sections";
-import { ESTIMATE_STEPS, descriptionEstimate, stepMinutes } from "@/lib/estimates";
+import { ESTIMATE_STEPS, descriptionEstimate, hasEstimate, stepMinutes } from "@/lib/estimates";
 
 export type Check = { name: string; passed: boolean; detail?: string };
 
@@ -114,11 +114,11 @@ function stepFacts(step: ProposalStep) {
 export function stepMatches(step: ProposalStep, expected: ExpectedStep) {
   if (step.kind !== expected.kind) return false;
   const facts: Record<string, string | undefined> = stepFacts(step);
-  // A ticket's description has checks of its own (ticketChecks).
-  const { ticket, ...fields } = expected;
-  void ticket;
+  // A ticket's description, the estimate and the split have checks of their own (ticketChecks, estimateChecks).
+  const { kind, ticket, estimate, split, ...fields } = expected;
+  void [kind, ticket, estimate, split];
   return Object.entries(fields).every(([key, value]) => {
-    if (key === "kind" || value === undefined) return true;
+    if (value === undefined) return true;
     const actual = facts[key];
     if (actual === undefined) return false;
     return key === "title" || key === "project" || key === "parent" ? normalize(actual).includes(normalize(value)) : actual === value;
@@ -172,17 +172,14 @@ function stepName(minutes: number) {
   return ESTIMATE_STEPS.find((step) => stepMinutes(step) === minutes) ?? `${minutes} min`;
 }
 
+type CheckFn = (name: string, passed: boolean, detail?: () => string) => void;
+
 /**
  * A ticket's checks (#433): its sections in order, enough testable criteria, the open questions
  * the request leaves, and no facts the request didn't give, outside its open questions, its
- * estimate and the person's own words. Then its estimate's range and its split (#434).
+ * estimate and the person's own words.
  */
-function ticketChecks(
-  expected: NonNullable<ExpectedStep["ticket"]>,
-  step: ProposalStep | undefined,
-  split: ProposalStep[],
-  check: (name: string, passed: boolean, detail?: () => string) => void,
-) {
+function ticketChecks(expected: NonNullable<ExpectedStep["ticket"]>, step: ProposalStep | undefined, check: CheckFn) {
   const sections = step?.kind === "create_task" ? parseDescription(step.description ?? "").sections : [];
   const titles = sections.map((section) => section.title.toLowerCase());
   let at = -1;
@@ -210,9 +207,19 @@ function ticketChecks(
       .find((match) => match !== undefined);
     check(`States nothing the request didn't give (${entry})`, hit === undefined, () => `It stated "${hit}".`);
   }
-  if (expected.estimate) {
+}
+
+/**
+ * A new task's estimate (#434), a ticket or not: in the expected range and marked as the AI's, or
+ * none at all, as a subtask of a task without one. Then whether it offers the subtasks that split it.
+ */
+function estimateChecks(expected: ExpectedStep, step: ProposalStep | undefined, split: ProposalStep[], check: CheckFn) {
+  const description = step?.kind === "create_task" ? step.description : null;
+  const estimate = descriptionEstimate(description);
+  if (expected.estimate === false) {
+    check("Gives it no estimate", !hasEstimate(description), () => `It estimated ${estimate ? stepName(estimate.minutes) : "it in words"}.`);
+  } else if (expected.estimate) {
     const { min, max } = expected.estimate;
-    const estimate = descriptionEstimate(step?.kind === "create_task" ? step.description : null);
     check(
       `Estimates it at ${min} to ${max}, as the AI's`,
       estimate !== null && estimate.ai && estimate.minutes >= stepMinutes(min) && estimate.minutes <= stepMinutes(max),
@@ -257,13 +264,13 @@ export function scoreCase(evalCase: EvalCase, observed: Observed, workspace: Pic
   if (expect.asks) check("Asks the person a question", answer.includes("?"));
 
   // The changes it proposed (#310): exactly the expected ones, and none when nobody asked. The
-  // subtasks a ticket suggests to split its work go with the ticket, whose checks count them (#434).
+  // subtasks a new task suggests to split its work go with the task, whose checks count them (#434).
   const unmatched = [...observed.proposal];
   const pairs = expect.proposal.map((wanted) => {
     const index = unmatched.findIndex((step) => stepMatches(step, wanted));
     const step = index >= 0 ? unmatched.splice(index, 1)[0] : undefined;
-    const split = wanted.ticket ? suggestedUnder(step, observed.proposal) : [];
-    // An expected step listed before the ticket may have matched one of them already.
+    const split = wanted.kind === "create_task" ? suggestedUnder(step, observed.proposal) : [];
+    // An expected step listed before the task may have matched one of them already.
     for (const subtask of split) {
       const at = unmatched.indexOf(subtask);
       if (at >= 0) unmatched.splice(at, 1);
@@ -276,7 +283,8 @@ export function scoreCase(evalCase: EvalCase, observed: Observed, workspace: Pic
     () => `It proposed ${describeSteps(observed.proposal)}.`,
   );
   for (const { wanted, step, split } of pairs) {
-    if (wanted.ticket) ticketChecks(wanted.ticket, step, split, check);
+    if (wanted.ticket) ticketChecks(wanted.ticket, step, check);
+    if (wanted.kind === "create_task") estimateChecks(wanted, step, split, check);
   }
   check("Changes nothing until the person applies it", !observed.workspaceChanged);
 

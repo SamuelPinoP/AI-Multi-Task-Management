@@ -84,7 +84,14 @@
       "facts": ["@awaitsApply"]
     },
     "reference": [
-      { "toolCalls": [{ "name": "create_task", "args": { "title": "Renew my passport", "dueDate": "2026-12-17" } }] },
+      {
+        "toolCalls": [
+          {
+            "name": "create_task",
+            "args": { "title": "Renew my passport", "dueDate": "2026-12-17", "estimate": { "size": "1 h", "reason": "The form, a photo, and sending it off." } }
+          }
+        ]
+      },
       { "text": "Here's the new task: Renew my passport, due Thursday, December 17. Apply it below to add it." }
     ]
   },
@@ -99,7 +106,14 @@
       "proposal": [{ "kind": "create_task", "title": "laptop", "dueDate": "2026-11-21" }]
     },
     "reference": [
-      { "toolCalls": [{ "name": "create_task", "args": { "title": "Back up my laptop", "dueDate": "2026-11-21" } }] },
+      {
+        "toolCalls": [
+          {
+            "name": "create_task",
+            "args": { "title": "Back up my laptop", "dueDate": "2026-11-21", "estimate": { "size": "1 h", "reason": "Connecting a drive and checking the backup finished." } }
+          }
+        ]
+      },
       { "text": "Here's the new task: Back up my laptop, due tomorrow, Saturday, November 21. Apply it below to add it." }
     ]
   }

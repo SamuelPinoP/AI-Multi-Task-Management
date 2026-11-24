@@ -3,7 +3,7 @@
 // the person applies it, the changes they ticked, in one transaction (./proposals-server.ts), or
 // cancels it; the model can do neither. Plain types and functions, so the tools, the server, the
 // browser and the tests share them.
-import { ticketOverview, type TicketOverview } from "@/lib/ai/ticket-sections";
+import { draftOverview, type DraftOverview } from "@/lib/ai/ticket-sections";
 import { descriptionPreview } from "@/lib/description-sections";
 import { priorityLabels, type Priority } from "@/lib/priority";
 
@@ -55,7 +55,7 @@ export type ProposalStep =
       parent: ItemRef | null;
       /**
        * Offered for the person to choose, so it starts unticked: a subtask the AI suggests to split
-       * a ticket's work over 2 days (#434). Absent on everything else.
+       * a task's work over 2 days (#434). Absent on everything else.
        */
       suggested?: boolean;
     }
@@ -312,8 +312,11 @@ export type ProposalRow = {
   details: string;
   /** A longer description, shown on request; null for none. */
   description: string | null;
-  /** A new task written as a ticket (#433): its summary and counts. The card opens it as a draft. */
-  ticket: TicketOverview | null;
+  /**
+   * A new task whose description has sections, which the card opens as a draft: a ticket (#433),
+   * or a task with the AI's estimate (#434). Its summary and counts; null for any other row.
+   */
+  draft: DraftOverview | null;
   /** For a change: each field, before and after. */
   changes: Array<{ label: string; from: string; to: string }>;
   /** How far it's indented under the new project or task it goes in: 0, 1 or 2. */
@@ -365,7 +368,7 @@ function taskPlace(task: ExistingTask, today: string) {
 }
 
 function row(step: ProposalStep, index: number, depth: number, today: string): ProposalRow {
-  const base = { index, depth, details: "", description: null, ticket: null, changes: [] };
+  const base = { index, depth, details: "", description: null, draft: null, changes: [] };
   switch (step.kind) {
     case "create_project": {
       const long = (step.description?.length ?? 0) > SHORT_DESCRIPTION;
@@ -384,7 +387,7 @@ function row(step: ProposalStep, index: number, depth: number, today: string): P
           step.priority !== "NONE" ? priorityLabels[step.priority] : null,
         ),
         description: step.description,
-        ticket: ticketOverview(step.description),
+        draft: draftOverview(step.description),
       };
     case "create_event":
       return { ...base, kind: "event", verb: "New event", title: step.title, details: eventFacts(step, today), description: step.description };

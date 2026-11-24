@@ -135,6 +135,40 @@ test("subtasks the AI only suggests start unticked, stay so when their ticket is
   );
 });
 
+test("a new task with the AI's estimate opens as a draft, like a ticket, and its row shows the details, never the estimate (#434)", () => {
+  const estimate = (size: string) => `## Estimate\n\n**${size}** · AI estimate\nWhy it takes that long.`;
+  const task = (ref: string, title: string, description: string | null, extra: Partial<Extract<ProposalStep, { kind: "create_task" }>> = {}): ProposalStep => ({
+    kind: "create_task",
+    ref,
+    title,
+    description,
+    dueDate: null,
+    priority: "NONE",
+    project: null,
+    parent: null,
+    ...extra,
+  });
+  const steps: ProposalStep[] = [
+    task("new-1", "Call the plumber", `The sink leaks.\n\n${estimate("15 min")}`),
+    task("new-2", "Move house", estimate("1 week")),
+    task("new-3", "Pack the boxes", estimate("2 days"), { parent: { ref: "new-2", name: "Move house" }, suggested: true }),
+    // A subtask of a task without an estimate has none: its plain details show on request, as before.
+    task("new-4", "Compare prices", "At the nursery.", { parent: { id: "t9", name: "Buy plants" } }),
+    task("new-5", "Export tasks", `## Summary\n\nA CSV file.\n\n## Acceptance criteria\n\n- [ ] It downloads\n\n${estimate("1 day")}`),
+  ];
+  assert.deepEqual(
+    proposalRows(steps, TODAY).map((row) => [row.verb, row.title, row.draft]),
+    [
+      ["New task", "Call the plumber", { ticket: false, summary: "The sink leaks.", facts: "" }],
+      ["New task", "Move house", { ticket: false, summary: "", facts: "" }],
+      ["Suggested subtask", "Pack the boxes", { ticket: false, summary: "", facts: "" }],
+      ["New subtask", "Compare prices", null],
+      ["New task", "Export tasks", { ticket: true, summary: "A CSV file.", facts: "1 acceptance criterion" }],
+    ],
+  );
+  assert.equal(proposalRows(STEPS, TODAY).filter((row) => row.draft).length, 0, "a plain description has no draft");
+});
+
 test("Apply refuses a choice the card can't make (#310)", () => {
   const steps = STEPS.slice(0, 5);
   assert.equal(choiceProblem(steps, [0, 1, 2, 3, 4]), null);

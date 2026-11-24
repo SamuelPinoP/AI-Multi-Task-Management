@@ -33,12 +33,14 @@ the Trash. Proposing changes nothing: the chat shows every change as one card,
 and only the person applies the ones they tick. Asked for a ticket, it writes a
 complete one (#433), the way this repository's issues are written: a summary,
 background, testable acceptance criteria, what's out of scope, open questions,
-its estimate of the work and the person's own words. The estimate (#434) is one
-of fixed steps from 15 minutes to a week, with a one-line reason, marked as the
-AI's until someone changes it; for work over 2 days the card also offers
-subtasks that split it, unticked. The person can change any section in a draft
-before applying it, and on the task's page afterwards, where anyone can add
-sections of their own.
+its estimate of the work and the person's own words. Every other task it
+creates gets an estimate too (#434), after any details: one of fixed steps from
+15 minutes to a week, with a one-line reason, marked as the AI's until someone
+changes it. A subtask gets one only when its parent has one. For work over 2
+days the card also offers subtasks that split it, unticked, each with its own
+estimate. Any new task with an estimate opens as a draft, where the person can
+change any section before applying it, and on the task's page afterwards,
+where anyone can add sections of their own.
 When no model can answer, because a daily cap is used up, the provider fails or
 the person is somewhere Gemini's free tier may not serve, the rule-based planner
 answers instead and says why.
@@ -91,7 +93,7 @@ flowchart LR
 
 ### Evaluations
 
-`src/lib/ai/evals/` scores the agent on 69 cases (#311, #502). Each case is data: a
+`src/lib/ai/evals/` scores the agent on 71 cases (#311, #502). Each case is data: a
 sample workspace, a fixed clock and time zone, the question, and what a good
 answer does, meaning the tools it calls and with which arguments, the facts it
 states, what it must not call or say, and whether it asks a question back.
@@ -107,8 +109,9 @@ fallback, clarifying questions, requests to change things, tickets, prompt
 injection, off-topic requests, follow-ups and time zones. A ticket's case also
 checks its sections, in order, how many acceptance criteria and open questions
 it has, and that it invents no dates, amounts or limits the request didn't give.
-Its estimate must land in a range, never on one step: fixing a typo on one page
-is 15 minutes to an hour, and two-step sign-in is 3 days to a week, split.
+A new task's estimate must land in a range, never on one step: fixing a typo on
+one page is 15 minutes to an hour, two-step sign-in is 3 days to a week, split,
+and a subtask under a task without an estimate has none.
 
 ```powershell
 npm run agent:eval -- --provider reference

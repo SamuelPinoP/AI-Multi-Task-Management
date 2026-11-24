@@ -1,19 +1,19 @@
-// Time estimates (#434): how long a ticket's work will take, as the AI judges it from the request.
-// The AI picks one of fixed steps and says why in one line, and the app writes both into the
-// ticket's "Estimate" section, marked as the AI's. So the estimate is read and changed like the
-// rest of the ticket, in the draft and on the task's page, and never shows on the task's row. Once
-// a person changes it, it's theirs and the mark goes. A day is 8 hours of work and a week 5 days,
-// as people plan them. Plain functions, so the server, the task page, the evaluations and the unit
-// tests share them.
-import { parseDescription } from "@/lib/description-sections";
+// Time estimates (#434): how long a task's work will take, as the AI judges it from the request.
+// Every task the AI creates gets one: the AI picks one of fixed steps and says why in one line, and
+// the app writes both into the task's "Estimate" section, marked as the AI's. So the estimate is
+// read and changed like the rest of the description, in the draft and on the task's page, and never
+// shows on the task's row. Once a person changes it, it's theirs and the mark goes. Subtasks follow
+// their parent: one under a task without an estimate gets none. A day is 8 hours of work and a week
+// 5 days, as people plan them. Plain functions, so the server, the task page, the evaluations and
+// the unit tests share them.
+import { ESTIMATE_SECTION, isEstimateSection, parseDescription } from "@/lib/description-sections";
+
+export { ESTIMATE_SECTION, isEstimateSection };
 
 /** The steps the AI picks from, shortest first. */
 export const ESTIMATE_STEPS = ["15 min", "30 min", "1 h", "2 h", "4 h", "1 day", "2 days", "3 days", "1 week"] as const;
 
 export type EstimateStep = (typeof ESTIMATE_STEPS)[number];
-
-/** The section of a description an estimate goes in. */
-export const ESTIMATE_SECTION = "Estimate";
 
 /** What follows an estimate the AI made until a person changes it: "4 h · AI estimate". */
 export const AI_ESTIMATE = "AI estimate";
@@ -77,9 +77,13 @@ export type Estimate = {
   ai: boolean;
 };
 
-/** Whether a section's title makes it the estimate: "Estimate", in any case. */
-export function isEstimateSection(title: string) {
-  return title.trim().toLowerCase() === ESTIMATE_SECTION.toLowerCase();
+/**
+ * Whether a description has an estimate: an Estimate section with something in it, in a person's
+ * words or the AI's. A subtask the AI adds gets an estimate only when its parent has one.
+ */
+export function hasEstimate(description: string | null | undefined) {
+  if (!description) return false;
+  return parseDescription(description).sections.some((section) => isEstimateSection(section.title) && section.body.trim() !== "");
 }
 
 /**

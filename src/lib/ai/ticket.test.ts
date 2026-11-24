@@ -4,7 +4,7 @@ import { z } from "zod";
 import { parseDescription } from "@/lib/description-sections";
 import { descriptionEstimate } from "@/lib/estimates";
 import { ticketDescription, ticketFields, ticketProblem, TICKET_SECTIONS } from "./ticket";
-import { ticketOverview } from "./ticket-sections";
+import { draftOverview } from "./ticket-sections";
 
 const schema = z.strictObject(ticketFields);
 
@@ -16,6 +16,10 @@ const EXPORT_TICKET = {
   openQuestions: ["Should done tasks be in the file too?"],
   estimate: { size: "1 day" as const, reason: "A button, the file's columns, and a unit and an e2e test." },
 };
+
+/** Subtasks that split big work, each with its own estimate (#434). */
+const AUDIT_SIGN_IN = { title: "Audit sign-in", size: "2 days" as const, reason: "Every way in." };
+const AUDIT_UPLOADS = { title: "Audit uploads", size: "1 day" as const, reason: "Every file type." };
 
 test("a ticket's description has its sections in order, criteria as a checklist, and the person's words last", () => {
   const description = ticketDescription(EXPORT_TICKET, "Make a ticket: export my tasks as CSV\nfrom the Tasks page");
@@ -60,7 +64,7 @@ test("the estimate reads back as the AI's; over 2 days it says the work is worth
   const short = ticketDescription(EXPORT_TICKET, "Export my tasks");
   assert.deepEqual(descriptionEstimate(short), { minutes: 480, ai: true });
 
-  const long = ticketDescription({ ...EXPORT_TICKET, estimate: { size: "1 week", reason: "- Four areas\n to check" }, split: ["Audit sign-in", "Audit uploads"] }, "Audit the app");
+  const long = ticketDescription({ ...EXPORT_TICKET, estimate: { size: "1 week", reason: "- Four areas\n to check" }, split: [AUDIT_SIGN_IN, AUDIT_UPLOADS] }, "Audit the app");
   const sections = parseDescription(long).sections;
   assert.deepEqual(
     sections.map((section) => section.title),
@@ -70,16 +74,22 @@ test("the estimate reads back as the AI's; over 2 days it says the work is worth
   assert.equal(sections[5].body, "**1 week** · AI estimate\nFour areas to check\n\nMore than 2 days of work: worth splitting into subtasks.");
   assert.doesNotMatch(long, /Audit sign-in/);
   assert.deepEqual(descriptionEstimate(long), { minutes: 2400, ai: true });
+
+  // A ticket that's a subtask can't be split, so its estimate doesn't say to (#434).
+  const subtask = ticketDescription({ ...EXPORT_TICKET, estimate: { size: "1 week", reason: "Four areas to check" } }, "Audit the app", { subtask: true });
+  assert.equal(parseDescription(subtask).sections[5].body, "**1 week** · AI estimate\nFour areas to check");
 });
 
 test("work over 2 days comes with 2 to 5 subtasks that split it, and only that work does", () => {
   const reason = "An app, a code at sign-in and recovery codes.";
   assert.match(ticketProblem({ ...EXPORT_TICKET, estimate: { size: "3 days", reason } }) ?? "", /over 2 days: give split/);
   assert.match(ticketProblem({ ...EXPORT_TICKET, estimate: { size: "1 week", reason }, split: [] }) ?? "", /over 2 days: give split/);
-  assert.equal(ticketProblem({ ...EXPORT_TICKET, estimate: { size: "3 days", reason }, split: ["Set up an authenticator app", "Recovery codes"] }), null);
+  assert.equal(ticketProblem({ ...EXPORT_TICKET, estimate: { size: "3 days", reason }, split: [AUDIT_SIGN_IN, AUDIT_UPLOADS] }), null);
+  // A subtask can't be split, so it needs no split (#434).
+  assert.equal(ticketProblem({ ...EXPORT_TICKET, estimate: { size: "3 days", reason }, parent: "Harden the app" }), null);
   // 2 days isn't over 2 days.
-  assert.match(ticketProblem({ ...EXPORT_TICKET, estimate: { size: "2 days", reason }, split: ["One", "Two"] }) ?? "", /only for an estimate over 2 days/);
-  assert.match(ticketProblem({ ...EXPORT_TICKET, split: ["One", "Two"] }) ?? "", /create_task with this ticket's ref/);
+  assert.match(ticketProblem({ ...EXPORT_TICKET, estimate: { size: "2 days", reason }, split: [AUDIT_SIGN_IN, AUDIT_UPLOADS] }) ?? "", /only for an estimate over 2 days/);
+  assert.match(ticketProblem({ ...EXPORT_TICKET, split: [AUDIT_SIGN_IN, AUDIT_UPLOADS] }) ?? "", /create_task with this ticket's ref/);
 });
 
 test("empty sections are left out, and the person's extra sections go after Background", () => {
@@ -148,12 +158,17 @@ test("every ticket has an estimate: one of the fixed steps, with a one-line reas
   assert.equal(schema.safeParse({ ...EXPORT_TICKET, estimate: { ...estimate, reason: " " } }).success, false);
   assert.equal(schema.safeParse({ ...EXPORT_TICKET, estimate: { ...estimate, reason: "x".repeat(201) } }).success, false);
   assert.equal(schema.safeParse({ ...EXPORT_TICKET, estimate: { ...estimate, minutes: 480 } }).success, false);
-  // The split: 2 to 5 subtask titles, each as long as a task title the model writes.
+  // The split: 2 to 5 subtasks, each with a title as long as a task title the model writes, and its
+  // own estimate of 2 days or less, with a reason (#434).
   const big = { ...EXPORT_TICKET, estimate: { ...estimate, size: "1 week" } };
-  assert.equal(schema.safeParse({ ...big, split: ["One", "Two"] }).success, true);
-  assert.equal(schema.safeParse({ ...big, split: ["One"] }).success, false);
-  assert.equal(schema.safeParse({ ...big, split: ["1", "2", "3", "4", "5", "6"] }).success, false);
-  assert.equal(schema.safeParse({ ...big, split: ["One", "x".repeat(201)] }).success, false);
+  const part = (title: string) => ({ title, size: "1 day", reason: "One part." });
+  assert.equal(schema.safeParse({ ...big, split: [part("One"), part("Two")] }).success, true);
+  assert.equal(schema.safeParse({ ...big, split: [part("One")] }).success, false);
+  assert.equal(schema.safeParse({ ...big, split: ["1", "2", "3", "4", "5", "6"].map(part) }).success, false);
+  assert.equal(schema.safeParse({ ...big, split: [part("One"), part("x".repeat(201))] }).success, false);
+  assert.equal(schema.safeParse({ ...big, split: ["One", "Two"] }).success, false, "titles alone have no estimates");
+  assert.equal(schema.safeParse({ ...big, split: [part("One"), { ...part("Two"), size: "3 days" }] }).success, false);
+  assert.equal(schema.safeParse({ ...big, split: [part("One"), { ...part("Two"), reason: "" }] }).success, false);
 });
 
 test("a ticket needs testable criteria, unless the person asked for other sections, and its own section titles", () => {
@@ -166,10 +181,14 @@ test("a ticket needs testable criteria, unless the person asked for other sectio
   assert.match(ticketProblem({ ...EXPORT_TICKET, sections: [{ title: "Cost", text: "A" }, { title: "## Cost", text: "B" }] }) ?? "", /own title/);
 });
 
-test("the card sums a ticket up by its summary and counts; a plain description isn't a ticket", () => {
+test("the card sums a ticket up by its summary and counts, and a task with sections by its details; a plain description has no draft", () => {
   const description = ticketDescription(EXPORT_TICKET, "Export my tasks");
-  assert.deepEqual(ticketOverview(description), { summary: EXPORT_TICKET.summary, facts: "2 acceptance criteria · 1 open question" });
-  assert.deepEqual(ticketOverview("## Cost\n\n- Down payment"), { summary: "Down payment", facts: "" });
-  assert.equal(ticketOverview("Call the dentist"), null);
-  assert.equal(ticketOverview(null), null);
+  assert.deepEqual(draftOverview(description), { ticket: true, summary: EXPORT_TICKET.summary, facts: "2 acceptance criteria · 1 open question" });
+  assert.deepEqual(draftOverview("## Cost\n\n- Down payment"), { ticket: false, summary: "Down payment", facts: "" });
+  // A task with the AI's estimate (#434) shows its details, never the estimate, and may have none.
+  const estimate = "## Estimate\n\n**15 min** · AI estimate\nOne call.";
+  assert.deepEqual(draftOverview(`The sink leaks.\n\n${estimate}`), { ticket: false, summary: "The sink leaks.", facts: "" });
+  assert.deepEqual(draftOverview(estimate), { ticket: false, summary: "", facts: "" });
+  assert.equal(draftOverview("Call the dentist"), null);
+  assert.equal(draftOverview(null), null);
 });
