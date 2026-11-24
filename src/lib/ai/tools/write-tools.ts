@@ -229,8 +229,12 @@ const newTaskFields = {
 
 type NewTask = { title: string; dueDate?: string; priority?: Exclude<Priority, "NONE">; project?: string; parent?: string };
 
-/** Adds a new task to the answer's proposal, with its project or parent looked up. `noun` says what the model reads back. */
-async function proposeTask({ title, dueDate, priority, project, parent }: NewTask, description: string | null, context: ToolContext, noun: "task" | "ticket") {
+/**
+ * Adds a new task to the answer's proposal, with its project or parent looked up. `noun` says what
+ * the model reads back. `split` names the subtasks that split work over 2 days (#434): they're
+ * offered after it, unticked, for the person to choose.
+ */
+async function proposeTask({ title, dueDate, priority, project, parent }: NewTask, description: string | null, context: ToolContext, noun: "task" | "ticket", split: string[] = []) {
   const { draft, problem } = draftFor(context);
   if (problem) return problem;
 
@@ -248,7 +252,7 @@ async function proposeTask({ title, dueDate, priority, project, parent }: NewTas
     projectRef = found.item;
   }
 
-  const step: ProposalStep = {
+  const step: Extract<ProposalStep, { kind: "create_task" }> = {
     kind: "create_task",
     ref: takeRef(draft),
     title,
@@ -260,7 +264,29 @@ async function proposeTask({ title, dueDate, priority, project, parent }: NewTas
   };
   const where = parentRef ? ` under "${parentRef.name}"` : projectRef ? ` in "${projectRef.name}"` : "";
   const what = noun === "ticket" ? `${parentRef ? "subtask" : "task"} written as a ticket` : parentRef ? "subtask" : "task";
-  return proposed(draft, step, `New ${what} "${title}"${where}`);
+  const summary = `New ${what} "${title}"${where}`;
+  if (!split.length) return proposed(draft, step, summary);
+  if (parentRef) return proposed(draft, step, `${summary}. Its split wasn't offered: a subtask can't have subtasks of its own.`);
+
+  draft.steps.push(step);
+  const offered = split.slice(0, MAX_PROPOSAL_STEPS - draft.steps.length).map(
+    (subtask): ProposalStep => ({
+      kind: "create_task",
+      ref: takeRef(draft),
+      title: subtask,
+      description: null,
+      dueDate: null,
+      priority: "NONE",
+      project: projectRef,
+      parent: { ref: step.ref, name: title },
+      suggested: true,
+    }),
+  );
+  draft.steps.push(...offered);
+  const offer = offered.length
+    ? `, and ${offered.length === 1 ? "1 subtask" : `${offered.length} subtasks`} that split it, offered unticked for the person to choose`
+    : `. Its split wasn't offered: one answer can propose at most ${MAX_PROPOSAL_STEPS} changes`;
+  return { data: { proposed: `${summary}${offer}`, ref: step.ref, proposedSoFar: draft.steps.length }, sources: [] };
 }
 
 export const createTask = defineTool({
@@ -295,8 +321,8 @@ export const createTicket = defineTool({
       if (problem) issues.addIssue({ code: "custom", message: problem });
     }),
   access: "propose",
-  async run({ title, dueDate, priority, project, parent, ...ticket }, context) {
-    return proposeTask({ title, dueDate, priority, project, parent }, ticketDescription(ticket, context.request), context, "ticket");
+  async run({ title, dueDate, priority, project, parent, split, ...ticket }, context) {
+    return proposeTask({ title, dueDate, priority, project, parent }, ticketDescription(ticket, context.request), context, "ticket", split);
   },
 });
 

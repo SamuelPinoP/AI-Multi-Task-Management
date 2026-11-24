@@ -15,6 +15,7 @@ import {
   setChecklistItem,
   type DescriptionSection,
 } from "@/lib/description-sections";
+import { isEstimateSection, ownEstimate } from "@/lib/estimates";
 
 /** Sections that start folded: the person's own words at the end of a ticket (#433). */
 const FOLDED_AT_FIRST = new Set(["original request"]);
@@ -195,7 +196,10 @@ export function TaskDescription({
       return;
     }
     const { intro: savedIntro, sections } = parseDescription(base());
-    const section = { title, body: editing.body };
+    const saved = editing.index === "new" ? null : sections[editing.index];
+    // A person who changes the AI's estimate makes it theirs, without the AI's mark (#434).
+    const body = saved && isEstimateSection(saved.title) ? ownEstimate(saved.body, editing.body) : editing.body;
+    const section = { title, body };
     const next =
       editing.index === "new" ? [...sections, section] : sections.map((existing, index) => (index === editing.index ? section : existing));
     setSaving(true);

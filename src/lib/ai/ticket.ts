@@ -3,10 +3,12 @@
 // by these schemas, and the server writes the description from them, so every ticket has the same
 // sections, in the same order, whichever model wrote it. The person's own words go last, under
 // "Original request". The person can ask for other sections, such as "Steps to reproduce", and
-// change any of them before they apply it, or later on the task's page.
+// change any of them before they apply it, or later on the task's page. Every ticket ends with the
+// AI's estimate of the work and why (#434), and one over 2 days comes with subtasks that split it.
 import { z } from "zod";
 import { TICKET_SECTIONS } from "@/lib/ai/ticket-sections";
 import { cleanSectionTitle, serializeDescription, type DescriptionSection } from "@/lib/description-sections";
+import { ESTIMATE_STEPS, SPLIT_OVER, aiEstimateLine, stepMinutes, type EstimateStep } from "@/lib/estimates";
 
 export { TICKET_SECTIONS };
 
@@ -17,6 +19,11 @@ const MAX_ITEMS = 8;
 const MAX_CRITERIA = 10;
 const MAX_EXTRA_SECTIONS = 4;
 const EXTRA_TITLE_MAX = 60;
+const REASON_MAX = 200;
+const MIN_SPLIT = 2;
+const MAX_SPLIT = 5;
+/** As long as any task title the model writes (./tools/write-tools.ts). */
+const SUBTASK_TITLE_MAX = 200;
 
 const item = z.string().trim().min(1).max(ITEM_MAX);
 const items = (max: number) => z.array(item).max(max);
@@ -48,7 +55,30 @@ export const ticketFields = {
     .max(MAX_EXTRA_SECTIONS)
     .optional()
     .describe("More sections, only when the person asked for them or for a different structure, such as Steps to reproduce, Expected result or Cost."),
+  estimate: z
+    .strictObject({
+      size: z.enum(ESTIMATE_STEPS).describe("The nearest step. A day is 8 hours of work, and a week 5 days."),
+      reason: z
+        .string()
+        .trim()
+        .min(1)
+        .max(REASON_MAX)
+        .describe('One line on what the time goes to, such as "A counter, a pause and two tests in one part of sign-in."'),
+    })
+    .describe(
+      "How long the work will take one person, tests and review included: your best guess from what the ticket describes, never a promise. The ticket shows it as the AI's estimate, and the person can change it.",
+    ),
+  split: z
+    .array(z.string().trim().min(1).max(SUBTASK_TITLE_MAX))
+    .min(MIN_SPLIT)
+    .max(MAX_SPLIT)
+    .optional()
+    .describe(
+      "Only for an estimate over 2 days, and then always: 2 to 5 subtasks that split the work, each 2 days or less, in the order they'd be done. They're offered unticked, for the person to choose.",
+    ),
 };
+
+export type TicketEstimate = { size: EstimateStep; reason: string };
 
 export type TicketParts = {
   summary: string;
@@ -57,6 +87,10 @@ export type TicketParts = {
   outOfScope?: string[];
   openQuestions?: string[];
   sections?: Array<{ title: string; text?: string; items?: string[] }>;
+  /** The schema always asks the model for one; without it, the ticket has no Estimate section. */
+  estimate?: TicketEstimate;
+  /** The subtasks that split work over 2 days, which the description leaves to the proposal. */
+  split?: string[];
 };
 
 /** Why a ticket can't be written as it is, for the model to correct it; null when it can. */
@@ -67,6 +101,11 @@ export function ticketProblem(ticket: TicketParts): string | null {
   }
   const titles = [...Object.values(TICKET_SECTIONS), ...(ticket.sections ?? []).map((section) => section.title)].map((title) => cleanSectionTitle(title).toLowerCase());
   if (new Set(titles).size !== titles.length) return "Give each section its own title, different from the ticket's own sections.";
+  const long = ticket.estimate ? stepMinutes(ticket.estimate.size) > SPLIT_OVER : false;
+  if (long && (ticket.split?.length ?? 0) < MIN_SPLIT) return `The estimate is over 2 days: give split, ${MIN_SPLIT} to ${MAX_SPLIT} subtasks of 2 days or less.`;
+  if (!long && ticket.split?.length) {
+    return "Give split only for an estimate over 2 days. For subtasks the person asked for, call create_task with this ticket's ref as the parent.";
+  }
   return null;
 }
 
@@ -114,6 +153,16 @@ function quote(text: string) {
 }
 
 /**
+ * The Estimate section (#434): the step, marked as the AI's, and the reason on the next line. Over 2
+ * days, a word on splitting it, since the subtasks that would are only offered.
+ */
+function estimateBody({ size, reason }: TicketEstimate) {
+  const lines = [aiEstimateLine(size), listLine(reason)];
+  if (stepMinutes(size) > SPLIT_OVER) lines.push("", "More than 2 days of work: worth splitting into subtasks.");
+  return lines.join("\n");
+}
+
+/**
  * The ticket's description: its sections in a fixed order, the empty ones left out, and the
  * person's words (`request`, the message that asked for it) quoted at the end.
  */
@@ -128,6 +177,7 @@ export function ticketDescription(ticket: TicketParts, request?: string) {
     { title: TICKET_SECTIONS.acceptanceCriteria, body: list(ticket.acceptanceCriteria, true) },
     { title: TICKET_SECTIONS.outOfScope, body: list(ticket.outOfScope) },
     { title: TICKET_SECTIONS.openQuestions, body: list(ticket.openQuestions) },
+    { title: TICKET_SECTIONS.estimate, body: ticket.estimate ? estimateBody(ticket.estimate) : "" },
     { title: TICKET_SECTIONS.originalRequest, body: request?.trim() ? quote(request) : "" },
   ];
   return serializeDescription({ intro: "", sections: sections.filter((section) => section.body) });

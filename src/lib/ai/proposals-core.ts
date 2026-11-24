@@ -50,6 +50,7 @@ const stepSchema = z.discriminatedUnion("kind", [
     priority,
     project: itemRef.nullable(),
     parent: itemRef.nullable(),
+    suggested: z.boolean().optional(),
   }),
   z.object({ kind: z.literal("update_task"), task: existingTask, changes: z.array(taskChange).min(1) }),
   z.object({ kind: z.literal("complete_task"), task: existingTask }),

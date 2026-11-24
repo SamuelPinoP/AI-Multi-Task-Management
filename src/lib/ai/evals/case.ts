@@ -5,6 +5,7 @@
 import { z } from "zod";
 import { clockSchema, workspaceNames } from "@/lib/ai/evals/workspace";
 import { AGENT_TOOLS } from "@/lib/ai/tools";
+import { ESTIMATE_STEPS, stepMinutes } from "@/lib/estimates";
 import calendar from "@/lib/ai/evals/cases/calendar.json";
 import changes from "@/lib/ai/evals/cases/changes.json";
 import clarify from "@/lib/ai/evals/cases/clarify.json";
@@ -217,9 +218,19 @@ const expectedStep = z.strictObject({
       minQuestions: z.number().int().min(1).optional(),
       /**
        * Regular expressions, or "@name" for a PATTERN_SETS entry, that its text must never match
-       * outside Open questions and the Original request: facts the request didn't give.
+       * outside Open questions, the Estimate and the Original request: facts the request didn't give.
        */
       notInvented: z.array(regex).default([]),
+      /**
+       * The range its estimate must land in, both ends included (#434). An estimate is a judgment,
+       * so a case gives a range, never one step: "fix a typo on the pricing page" is 15 min to 1 h.
+       */
+      estimate: z
+        .strictObject({ min: z.enum(ESTIMATE_STEPS), max: z.enum(ESTIMATE_STEPS) })
+        .refine(({ min, max }) => stepMinutes(min) <= stepMinutes(max), "Give the shorter step as min.")
+        .optional(),
+      /** Whether it comes with 2 to 5 subtasks that split it, offered unticked: only work over 2 days does (#434). */
+      split: z.boolean().optional(),
     })
     .optional(),
 });

@@ -53,6 +53,11 @@ export type ProposalStep =
       project: ItemRef | null;
       /** The task it's a subtask of; a subtask goes in its parent's project. */
       parent: ItemRef | null;
+      /**
+       * Offered for the person to choose, so it starts unticked: a subtask the AI suggests to split
+       * a ticket's work over 2 days (#434). Absent on everything else.
+       */
+      suggested?: boolean;
     }
   | { kind: "update_task"; task: ExistingTask; changes: TaskChange[] }
   | { kind: "complete_task"; task: ExistingTask }
@@ -196,13 +201,26 @@ export function stepChoices(steps: ProposalStep[], leftOut: ReadonlySet<number>)
   return blockers.map((blockedBy, index) => ({ chosen: blockedBy === null && !leftOut.has(index), blockedBy }));
 }
 
-/** The steps left out once the person ticks or unticks one. Ticking one again brings back the steps that need it. */
+/** Whether a step is only offered, for the person to tick (#434). */
+function isSuggested(step: ProposalStep) {
+  return step.kind === "create_task" && step.suggested === true;
+}
+
+/** The steps left out before the person ticks anything: the ones only offered, such as the subtasks that split a ticket (#434). */
+export function initiallyLeftOut(steps: ProposalStep[]): Set<number> {
+  return new Set(steps.flatMap((step, index) => (isSuggested(step) ? [index] : [])));
+}
+
+/**
+ * The steps left out once the person ticks or unticks one. Ticking one again brings back the steps
+ * that need it, except the ones only offered, which stay unticked until the person ticks them.
+ */
 export function toggleStep(steps: ProposalStep[], leftOut: ReadonlySet<number>, index: number): Set<number> {
   const next = new Set(leftOut);
   if (!next.has(index)) return next.add(index);
   const back = new Set([index]);
   stepNeeds(steps).forEach((needs, step) => {
-    if (step === index || !needs.some((need) => back.has(need))) return;
+    if (step === index || isSuggested(steps[step]) || !needs.some((need) => back.has(need))) return;
     back.add(step);
     next.delete(step);
   });
@@ -357,7 +375,7 @@ function row(step: ProposalStep, index: number, depth: number, today: string): P
       return {
         ...base,
         kind: "task",
-        verb: step.parent ? "New subtask" : "New task",
+        verb: step.suggested ? "Suggested subtask" : step.parent ? "New subtask" : "New task",
         title: step.title,
         details: facts(
           step.project?.name ?? PERSONAL,

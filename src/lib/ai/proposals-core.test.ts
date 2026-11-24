@@ -19,6 +19,8 @@ test("stored steps are read back only when they're the kind the tools write (#31
   assert.deepEqual(storedSteps(JSON.parse(JSON.stringify(STEPS))), STEPS);
   const subtask = { ...STEPS[1], ref: "new-4", title: "Add rate limits", parent: { ref: "new-2", name: "Harden sign-in" } };
   assert.deepEqual(storedSteps([...STEPS, subtask]), [...STEPS, subtask], "a subtask of a new task");
+  const suggested = { ...subtask, suggested: true };
+  assert.deepEqual(storedSteps([...STEPS, suggested]), [...STEPS, suggested], "a subtask the AI only suggests keeps saying so (#434)");
   const broken = [
     null,
     {},
@@ -26,6 +28,7 @@ test("stored steps are read back only when they're the kind the tools write (#31
     [{ kind: "delete_everything" }],
     [{ ...STEPS[0], name: "" }],
     [{ ...STEPS[1], dueDate: "next Friday" }],
+    [{ ...STEPS[1], suggested: "yes" }],
     [{ kind: "update_task", task: releaseNotes, changes: [] }],
     [{ kind: "update_task", task: releaseNotes, changes: [{ field: "userId", from: "a", to: "b" }] }],
     [{ kind: "trash_task", task: { name: "No id", project: null, dueDate: null } }],

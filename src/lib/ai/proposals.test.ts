@@ -6,6 +6,7 @@ import {
   chosenSteps,
   formatClock,
   formatDayKey,
+  initiallyLeftOut,
   needsNote,
   proposalRows,
   proposalState,
@@ -100,6 +101,38 @@ test("a step needs the new project or task it goes in, and leaving one out leave
   assert.deepEqual(chosenSteps(steps, leftOut), []);
   leftOut = toggleStep(steps, leftOut, 0);
   assert.deepEqual(chosenSteps(steps, leftOut), [0, 1, 3, 4], "the dentist stays left out: it isn't in the project");
+});
+
+test("subtasks the AI only suggests start unticked, stay so when their ticket is ticked again, and say they're suggestions (#434)", () => {
+  const ticket = { ref: "new-1", name: "Add two-step sign-in" };
+  const steps: ProposalStep[] = [
+    { kind: "create_task", ref: "new-1", title: "Add two-step sign-in", description: "## Summary\n\nCodes at sign-in.", dueDate: null, priority: "NONE", project: null, parent: null },
+    { kind: "create_task", ref: "new-2", title: "Set up an authenticator app", description: null, dueDate: null, priority: "NONE", project: null, parent: ticket, suggested: true },
+    { kind: "create_task", ref: "new-3", title: "Recovery codes", description: null, dueDate: null, priority: "NONE", project: null, parent: ticket, suggested: true },
+    { kind: "complete_task", task: { id: "t2", name: "Call the dentist", project: null, dueDate: "2026-11-19" } },
+  ];
+  let leftOut = initiallyLeftOut(steps);
+  assert.deepEqual([...leftOut], [1, 2]);
+  assert.deepEqual(chosenSteps(steps, leftOut), [0, 3]);
+  assert.deepEqual(initiallyLeftOut(STEPS), new Set(), "nothing else starts unticked");
+
+  // The person ticks one; unticking the ticket and ticking it again brings back only that one.
+  leftOut = toggleStep(steps, leftOut, 1);
+  assert.deepEqual(chosenSteps(steps, leftOut), [0, 1, 3]);
+  leftOut = toggleStep(steps, leftOut, 0);
+  assert.deepEqual(chosenSteps(steps, leftOut), [3]);
+  leftOut = toggleStep(steps, leftOut, 0);
+  assert.deepEqual(chosenSteps(steps, leftOut), [0, 1, 3]);
+
+  assert.deepEqual(
+    proposalRows(steps, TODAY).map((row) => `${row.verb}: ${row.title} (${row.details})`),
+    [
+      "New task: Add two-step sign-in (Personal)",
+      "Suggested subtask: Set up an authenticator app (Personal · Under Add two-step sign-in)",
+      "Suggested subtask: Recovery codes (Personal · Under Add two-step sign-in)",
+      "Mark as done: Call the dentist (Personal · Due today)",
+    ],
+  );
 });
 
 test("Apply refuses a choice the card can't make (#310)", () => {

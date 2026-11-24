@@ -203,7 +203,13 @@ for (const theme of ["light", "dark"] as const) {
     }
 
     // A ticket (#433): its card, its draft with a section being edited, and the task's page.
-    const ticket = { title: "Export tasks as CSV", summary: "Download the tasks as a CSV file.", acceptanceCriteria: ["An Export button downloads the file"], openQuestions: ["Should done tasks be in it?"] };
+    const ticket = {
+      title: "Export tasks as CSV",
+      summary: "Download the tasks as a CSV file.",
+      acceptanceCriteria: ["An Export button downloads the file"],
+      openQuestions: ["Should done tasks be in it?"],
+      estimate: { size: "4 h", reason: "One button and a test." },
+    };
     await page.goto("/ai");
     await page.getByRole("textbox", { name: "Message the AI" }).fill(`Write a ticket. create_ticket ${JSON.stringify(ticket)}`);
     await page.getByRole("button", { name: "Send", exact: true }).click();
