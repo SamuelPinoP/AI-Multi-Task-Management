@@ -198,6 +198,12 @@ test("the scorer checks a ticket's estimate against its range, and its split goe
   // Subtasks it makes outright, ticked, are changes nobody asked for.
   const made = offered.map((step) => ({ ...step, suggested: undefined }));
   assert.deepEqual(failedChecks(split, run([ticket, ...made])), ["Proposes create_task \"two-step\", and nothing else", "Offers 2 to 5 subtasks that split it"]);
+  // A subtask that an expected step before the ticket matched still counts in the split, and hides
+  // no other change.
+  const subtaskFirst: EvalCase = { ...split, expect: { ...split.expect, proposal: [{ kind: "create_task", title: "Recovery codes" }, ...split.expect.proposal] } };
+  const extra: ProposalStep = { kind: "create_task", ref: "new-4", title: "Buy milk", description: null, dueDate: null, priority: "NONE", project: null, parent: null };
+  assert.deepEqual(failedChecks(subtaskFirst, run([ticket, ...offered])), []);
+  assert.deepEqual(failedChecks(subtaskFirst, run([ticket, ...offered, extra])), ["Proposes create_task \"Recovery codes\", create_task \"two-step\", and nothing else"]);
 
   // Outside the range, or not marked as the AI's, the estimate fails.
   const withEstimate = (estimate: string) => ({ ...ticket, description: (ticket.description ?? "").replace("**1 week** · AI estimate", estimate) });

@@ -263,7 +263,11 @@ export function scoreCase(evalCase: EvalCase, observed: Observed, workspace: Pic
     const index = unmatched.findIndex((step) => stepMatches(step, wanted));
     const step = index >= 0 ? unmatched.splice(index, 1)[0] : undefined;
     const split = wanted.ticket ? suggestedUnder(step, observed.proposal) : [];
-    for (const subtask of split) unmatched.splice(unmatched.indexOf(subtask), 1);
+    // An expected step listed before the ticket may have matched one of them already.
+    for (const subtask of split) {
+      const at = unmatched.indexOf(subtask);
+      if (at >= 0) unmatched.splice(at, 1);
+    }
     return { wanted, step, split };
   });
   check(
