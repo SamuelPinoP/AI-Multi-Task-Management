@@ -18,7 +18,7 @@ import { createMemoryDb } from "@/lib/ai/evals/memory-db";
 import { scoreCase, type Check, type ObservedCall } from "@/lib/ai/evals/score";
 import { loadWorkspace, type Workspace } from "@/lib/ai/evals/workspace";
 import { plannerAnswer } from "@/lib/ai/fallback";
-import { PROPOSAL_TTL_MS, type ProposalStep } from "@/lib/ai/proposals";
+import { PROPOSAL_TTL_MS, type ProposalDraft, type ProposalStep } from "@/lib/ai/proposals";
 import { createScriptedProvider } from "@/lib/ai/providers/fake";
 import { AGENT_TOOLS } from "@/lib/ai/tools";
 import type { AgentTool, ToolContext } from "@/lib/ai/tools/define";
@@ -297,13 +297,17 @@ async function runCaseAndRecords(evalCase: EvalCase, options: RunOptions): Promi
     db: createMemoryDb(workspace.tables),
   };
 
-  // The real tools, recording what ran with the arguments as validated.
+  // The real tools, recording what ran with the arguments as validated. They also hand over the
+  // answer's draft of changes (#310), kept here even when the answer ends without a proposal, so
+  // the scorer can read a call's ref to a new item ("new-1") as that item's name (#548).
   const executedCalls: ObservedCall[] = [];
+  const answerDraft: { current?: ProposalDraft } = {};
   const tools = AGENT_TOOLS.map(
     (tool): AgentTool => ({
       ...tool,
       async run(args, toolContext) {
         executedCalls.push({ name: tool.name, args });
+        answerDraft.current ??= toolContext.draft;
         return tool.run(args, toolContext);
       },
     }),
@@ -356,6 +360,7 @@ async function runCaseAndRecords(evalCase: EvalCase, options: RunOptions): Promi
     modelRequests: result.record.modelRequests,
     modelTimeMs: records.filter((record) => !record.injected).reduce((sum, record) => sum + record.latencyMs, 0),
     proposal: answer.proposal?.steps ?? [],
+    drafted: answerDraft.current?.steps ?? [],
     workspaceChanged: JSON.stringify(workspace.tables) !== before,
   };
   const checks = scoreCase(evalCase, observed, workspace);
