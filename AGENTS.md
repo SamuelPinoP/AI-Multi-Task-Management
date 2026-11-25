@@ -2,6 +2,30 @@
 
 Rules for everyone who works in this repository, people and AI coding agents alike. `CLAUDE.md` loads this file for Claude Code; other agents read it directly.
 
+## Start here
+
+The work order is the [roadmap project](https://github.com/users/SamuelPinoP/projects/5). Take its top "Now" item whose blockers are closed, or the issue the owner names. New issues go on it. Claude Code loads the guide for a folder (`tests/`, `prisma/`, `src/`, `src/lib/ai/`) when it reads a file there; other agents follow the "before" lines:
+
+- Before you set up, make a worktree or run on Windows or in a cloud sandbox, read [`docs/development.md`](docs/development.md).
+- Before you write or run tests, read [`docs/testing.md`](docs/testing.md).
+- Before you touch the schema or a migration, read [`docs/database.md`](docs/database.md).
+- Before you write code, read [`docs/conventions.md`](docs/conventions.md).
+- Before you change CI, a deploy, storage or a job, read [`docs/ci-and-deploys.md`](docs/ci-and-deploys.md).
+- Before you touch the AI agent, read [`docs/ai-agent.md`](docs/ai-agent.md).
+
+## Rules
+
+- Free tiers only; only the owner runs live AI evaluations.
+- Never sign in or create data on production.
+- Ask the owner before a new dependency, a behavior change, a non-additive migration, touching production data or spending money.
+- Fix causes; never weaken a test. Don't poll CI.
+
+## Keep output small
+
+- Send long test runs to a file and read the summary and failures.
+- Read big files by section.
+- Take screenshots only to prove a visual change.
+
 ## Issues
 
 Every issue is a ticket someone else could pick up without asking questions. The repository is public, so never put secrets or personal data in one.
@@ -28,7 +52,7 @@ Every issue is a ticket someone else could pick up without asking questions. The
 - **Closing:**
   - A PR that finishes an issue says `Fixes #N`.
   - Close an issue as soon as the PR that finishes it merges and deploys green. Never keep one open for manual testing or QA: the owner tests PRs as they go. The same goes for the last `Part of #N` PR, and for an epic once its last piece merges.
-  - When closing by hand, start the body with a "Resolution" note naming the PRs and anything left undone. Leftover work gets its own issue, linked from the note. A step left for the owner outside the code, such as an environment variable to set, goes in the note and the handoff, not in an open issue.
+  - When closing by hand, start the body with a "Resolution" note naming the PRs and anything left undone. Leftover work gets its own issue, linked from the note. A step left for the owner outside the code, such as an environment variable to set, goes in the note, and the owner is told, not in an open issue.
   - Close dropped work as "not planned".
 
 ## Pull requests
