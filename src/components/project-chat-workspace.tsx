@@ -1068,7 +1068,9 @@ export function ProjectChatWorkspace({
                         </div>
                       </div>
                     ) : comment.message ? (
-                      <p className="mt-2 whitespace-pre-wrap leading-6 text-zinc-800 dark:text-zinc-200 sm:mt-3">
+                      // A link or word too long for a line breaks inside the bubble, instead of running out of
+                      // it and letting the thread scroll sideways (#552).
+                      <p className="mt-2 whitespace-pre-wrap leading-6 text-zinc-800 wrap-anywhere dark:text-zinc-200 sm:mt-3">
                         {match?.ranges.length ? <Highlighted text={comment.message} ranges={match.ranges} strong={isSearchPick} /> : comment.message}
                       </p>
                     ) : null}

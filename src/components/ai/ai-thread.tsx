@@ -32,8 +32,10 @@ function Runs({ runs }: { runs: TextRun[] }) {
 /** The answer's words: paragraphs and lists, with bold where the model asked for it, never HTML. */
 function AnswerText({ text }: { text: string }) {
   const blocks = useMemo(() => answerBlocks(text), [text]);
+  // `anywhere`, not `break-word`: the grid's column grows to its longest word before `break-word` can
+  // break it, so a long link ran out of the answer and the chat scrolled sideways (#552).
   return (
-    <div className="grid gap-2 break-words">
+    <div className="grid gap-2 wrap-anywhere">
       {blocks.map((block, index) => {
         if (block.kind === "paragraph") {
           return (
