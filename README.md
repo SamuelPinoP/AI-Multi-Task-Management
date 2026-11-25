@@ -168,6 +168,41 @@ because the runner took the refusal for an outage; it now counts them as
 failed, as this table does. The comparison and the recommended model are on
 #256.
 
+## AI apps over MCP
+
+AI apps such as Claude, ChatGPT, Codex and Cursor can read a person's workspace
+over the [Model Context Protocol](https://modelcontextprotocol.io) at `/api/mcp`
+(#478). It's off, a 404, unless `MCP_ENABLED` is `"true"`. Sign-in for apps
+(OAuth), the consent page and Connected apps on the Account page come with #477.
+
+- **Tools:** the assistant's six read tools, the same registry objects with the
+  same Zod schemas (`src/lib/ai/tools`), plus `get_task`, one task with its
+  description and links. Each is annotated `readOnlyHint: true`.
+  `src/lib/mcp/tools.ts` only adapts them to the SDK.
+- **Transport:** stateless Streamable HTTP through Vercel's `mcp-handler`:
+  MCP 2026-07-28 (`server/discover`), and the 2025 `initialize` handshake for
+  older apps. No sessions and no polling.
+- **Tokens:** signed with HMAC-SHA256 and `MCP_TOKEN_SECRET` by Node's `crypto`
+  (`src/lib/mcp/access-token.ts`), valid for an hour and only at this endpoint
+  (RFC 8707). Checking one needs no database, so connecting and listing the
+  tools never wake Neon. Without a valid token the answer is 401 with a
+  `WWW-Authenticate` challenge naming the protected resource metadata
+  (RFC 9728), never a redirect.
+- **Grants:** each tool call checks that the token's grant (`McpGrant`) still
+  stands and holds the token's scopes, so Disconnect works at the next call.
+  Guests and accounts with an unconfirmed email get nothing.
+- **Time zone:** apps send no cookie, so the browser's `tz` cookie is saved on
+  the account (`User.timeZone`) when it changes, and the tools use it for
+  "today", or UTC.
+- **Answers:** JSON with `note`, `data` and `links`. Stored content is marked as
+  data, never instructions, and every link opens the item in AI Multi.
+- **Usage log:** `McpToolCall` keeps the app, tool, outcome, duration and time,
+  never the arguments or the answer, for 30 days.
+
+The unit tests run the SDK's own client against the handler in process
+(`src/lib/mcp/*.test.ts`), and `tests/e2e/mcp.spec.ts` runs it against the
+server with a token it mints. No test calls an AI.
+
 ## Project chat attachment storage
 
 Route uploads with `PROJECT_CHAT_DEFAULT_STORAGE_PROVIDER` and
@@ -471,6 +506,7 @@ Every day at about 09:00 UTC, after the backup, Vercel Cron calls
 - chat uploads that expired without being attached, with their stored files;
 - hourly email counts older than 35 days (see "Free-tier usage" below);
 - sign-ins older than a year (see "Users" below);
+- AI apps' MCP tool calls older than 30 days (see "AI apps over MCP" above);
 - stored calendar feeds that no link points to any more (see "Calendar feeds"
   below; replacing or turning off a link normally deletes its feed at once).
 

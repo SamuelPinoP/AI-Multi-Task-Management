@@ -34,6 +34,10 @@ const e2eEnv = {
   // so no test calls a real model, whatever key a local .env holds.
   AI_PROVIDER: "fake",
   GEMINI_API_KEY: "",
+  // AI apps over MCP (#478): on, with a signing secret tests/e2e/mcp.spec.ts mints its own
+  // tokens with. A test value, not a secret.
+  MCP_ENABLED: "true",
+  MCP_TOKEN_SECRET: "e2e-mcp-token-secret-not-a-real-secret",
 };
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

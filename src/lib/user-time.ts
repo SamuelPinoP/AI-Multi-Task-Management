@@ -20,6 +20,28 @@ export function isValidTimeZone(value: unknown): value is string {
   }
 }
 
+/** The zone in a `tz` cookie's raw value, or null when it's missing or not a real zone. */
+export function timeZoneFromCookie(value: string | undefined) {
+  if (!value) return null;
+  let timeZone: string;
+  try {
+    timeZone = decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+  return isValidTimeZone(timeZone) ? timeZone : null;
+}
+
+/**
+ * The zone to save on the account (#478), or null when there's nothing new: the browser's zone from
+ * its `tz` cookie, when it's real and differs from the saved one. AI apps connected over MCP send no
+ * cookie, so their tools go by the saved zone.
+ */
+export function timeZoneToSave(saved: string | null | undefined, cookieValue: string | undefined) {
+  const timeZone = timeZoneFromCookie(cookieValue);
+  return timeZone && timeZone !== saved ? timeZone : null;
+}
+
 /** An instant (now by default) as a Date whose local fields show the wall clock in `timeZone`. */
 export function toWallClock(timeZone: string | null | undefined, instant = new Date()) {
   if (!isValidTimeZone(timeZone)) return instant;

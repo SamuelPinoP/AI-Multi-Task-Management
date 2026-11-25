@@ -84,6 +84,9 @@ export default defineConfig({
           // The AI assistant answers by the fake provider's rules (#307): no test calls a real model.
           AI_PROVIDER: "fake",
           GEMINI_API_KEY: "",
+          // AI apps over MCP (#478), with the signing secret tests/e2e/mcp.spec.ts mints tokens with.
+          MCP_ENABLED: "true",
+          MCP_TOKEN_SECRET: "e2e-mcp-token-secret-not-a-real-secret",
         },
         reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "true",
         // The production build runs inside this timeout too.

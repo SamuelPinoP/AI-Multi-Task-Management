@@ -68,6 +68,7 @@ export function excerpt(content: string | null, query: string) {
 export const listOpenTasks = defineTool({
   name: "list_open_tasks",
   label: "Checking your open tasks",
+  title: "Open tasks",
   description:
     "Lists the person's open tasks (not done), their own and those in projects they belong to, soonest due first, at most 25. Can filter by when they're due, by project and by status.",
   input: z.strictObject({
@@ -154,6 +155,7 @@ export const listOpenTasks = defineTool({
 export const listEvents = defineTool({
   name: "list_events",
   label: "Checking your calendar",
+  title: "Calendar events",
   description:
     "Lists the events on the person's calendar between two dates, repeats included, earliest first, at most 40. Times are the person's own wall-clock times.",
   input: z
@@ -248,6 +250,7 @@ export const listEvents = defineTool({
 export const listProjects = defineTool({
   name: "list_projects",
   label: "Checking your projects",
+  title: "Projects",
   description:
     "Lists the projects the person owns or belongs to, most recently updated first, at most 20, with their health as Home shows it: ON_TRACK, AT_RISK (tasks past due), STALE (no update in 7 days) or NOT_STARTED.",
   input: z.strictObject({
@@ -304,6 +307,7 @@ export const listProjects = defineTool({
 export const searchNotes = defineTool({
   name: "search_notes",
   label: "Searching your notes",
+  title: "Search notes",
   description:
     "Finds the person's notes, their own and those in their projects, whose title or text contains the words, newest first, at most 8. Returns a short excerpt of each, not the whole note.",
   input: z.strictObject({
@@ -352,6 +356,7 @@ export const searchNotes = defineTool({
 export const listGoals = defineTool({
   name: "list_goals",
   label: "Checking your goals",
+  title: "Weekly goals",
   description:
     "Lists the person's weekly goals for one week (this week unless another is given), with how many of each goal's linked tasks are done.",
   input: z.strictObject({
@@ -418,6 +423,7 @@ function statsRow(counts: StatCounts) {
 export const taskStats = defineTool({
   name: "task_stats",
   label: "Counting your tasks",
+  title: "Task counts",
   description:
     "Counts the tasks the person can see, overall and per project (most tasks first, at most 20; tasks outside any project are \"No project\"): total, done, to do (in progress included), the percent done and to do, overdue, and done in the last 7 days. Use it for progress, analytics or \"how am I doing\" questions, and repeat its numbers instead of working them out.",
   input: z.strictObject({
@@ -513,6 +519,114 @@ export const taskStats = defineTool({
       sources: shown.flatMap(({ found }): Source[] =>
         found ? [{ kind: "project", id: found.id, title: found.name, href: `/projects/${encodeURIComponent(found.id)}` }] : [],
       ),
+    };
+  },
+});
+
+/** Characters of a task's description get_task sends; the task's link has the rest. */
+export const DESCRIPTION_CHARS = 10_000;
+/** Subtasks, and tasks it waits on or blocks, listed for one task. */
+const RELATED_TASKS = 20;
+
+const taskLink = (task: { id: string; title: string }): Source => ({
+  kind: "task",
+  id: task.id,
+  title: task.title,
+  href: `/tasks/${encodeURIComponent(task.id)}`,
+});
+
+/**
+ * One task with its description and what it's linked to (#478), for AI apps connected over MCP.
+ * The in-app assistant doesn't have it yet: AGENT_TOOLS leaves it out, so its evaluations stay as
+ * they are. Related items are filtered like the task page's: only tasks and notes the person can
+ * see, and only their own goal.
+ */
+export const getTask = defineTool({
+  name: "get_task",
+  label: "Opening a task",
+  title: "Task details",
+  description:
+    "Returns one task the person can see, by its id from list_open_tasks: its title, description, status, priority, due date, project and labels, its subtasks, the tasks it waits on and blocks, and the note and weekly goal it belongs to, each with a link.",
+  input: z.strictObject({
+    id: z.string().trim().min(1).max(64).describe("The task's id, as list_open_tasks gives it."),
+  }),
+  access: "read",
+  async run({ id }, { userId, now, timeZone, db }) {
+    const visible = visibleTaskWhere(userId);
+    const related = { id: true, title: true, status: true } as const;
+    const task = await db.task.findFirst({
+      where: { AND: [{ id }, visible] },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        priority: true,
+        dueDate: true,
+        recurrence: true,
+        createdAt: true,
+        updatedAt: true,
+        completedAt: true,
+        parentId: true,
+        noteId: true,
+        project: { select: { id: true, name: true } },
+        assignee: { select: { userId: true } },
+        goal: { select: { id: true, title: true, targetWeek: true, userId: true } },
+        labels: { orderBy: { label: { name: "asc" } }, select: { label: { select: { name: true } } } },
+        subtasks: { where: visible, orderBy: { createdAt: "asc" }, take: RELATED_TASKS, select: related },
+        blockedBy: { where: { blockedBy: visible }, orderBy: { createdAt: "asc" }, take: RELATED_TASKS, select: { blockedBy: { select: related } } },
+        blocking: { where: { task: visible }, orderBy: { createdAt: "asc" }, take: RELATED_TASKS, select: { task: { select: related } } },
+      },
+    });
+    if (!task) return { data: { found: false, id }, sources: [] };
+
+    // The parent and the note are checked like any other item: a parent can be in the Trash, and a
+    // note can be another member's own.
+    const [parent, note] = await Promise.all([
+      task.parentId ? db.task.findFirst({ where: { AND: [{ id: task.parentId }, visible] }, select: related }) : null,
+      task.noteId ? db.note.findFirst({ where: { AND: [{ id: task.noteId }, visibleNoteWhere(userId)] }, select: { id: true, title: true } }) : null,
+    ]);
+    const goal = task.goal?.userId === userId ? task.goal : null;
+    const waitsOn = task.blockedBy.map((row) => row.blockedBy);
+    const blocks = task.blocking.map((row) => row.task);
+    const description = task.description?.trim() ?? "";
+    const noteTitle = note ? note.title || "Untitled note" : "";
+    const sources: Source[] = [
+      taskLink(task),
+      ...(task.project ? [{ kind: "project" as const, id: task.project.id, title: task.project.name, href: `/projects/${encodeURIComponent(task.project.id)}` }] : []),
+      ...(parent ? [taskLink(parent)] : []),
+      ...[...task.subtasks, ...waitsOn, ...blocks].map(taskLink),
+      ...(note ? [{ kind: "note" as const, id: note.id, title: noteTitle, href: `/notes?openNote=${encodeURIComponent(note.id)}` }] : []),
+      ...(goal ? [{ kind: "goal" as const, id: goal.id, title: goal.title, href: `/goals?week=${encodeURIComponent(goal.targetWeek)}` }] : []),
+    ];
+
+    return {
+      data: {
+        found: true,
+        task: {
+          id: task.id,
+          title: task.title,
+          status: task.status,
+          ...(task.priority !== "NONE" ? { priority: task.priority } : {}),
+          ...(task.dueDate ? { due: formatTaskDayKey(task.dueDate), when: dueLabel(task.dueDate, now) } : {}),
+          ...(task.recurrence !== "NONE" ? { repeats: task.recurrence.toLowerCase() } : {}),
+          ...(task.project ? { project: task.project.name } : {}),
+          ...(task.assignee?.userId === userId ? { assignedToYou: true } : {}),
+          ...(description ? { description: description.slice(0, DESCRIPTION_CHARS) } : {}),
+          ...(description.length > DESCRIPTION_CHARS ? { descriptionCut: `Only the first ${DESCRIPTION_CHARS} characters; the task's link has the rest.` } : {}),
+          ...(task.labels.length ? { labels: task.labels.map((row) => row.label.name) } : {}),
+          ...(parent ? { subtaskOf: parent } : {}),
+          ...(task.subtasks.length ? { subtasks: task.subtasks } : {}),
+          ...(waitsOn.length ? { waitsOn } : {}),
+          ...(blocks.length ? { blocks } : {}),
+          ...(note ? { madeFromNote: { id: note.id, title: noteTitle } } : {}),
+          ...(goal ? { goal: { id: goal.id, title: goal.title, week: goal.targetWeek } } : {}),
+          created: dayKeyInZone(timeZone, task.createdAt),
+          updated: dayKeyInZone(timeZone, task.updatedAt),
+          ...(task.completedAt ? { completed: dayKeyInZone(timeZone, task.completedAt) } : {}),
+        },
+      },
+      sources,
     };
   },
 });
