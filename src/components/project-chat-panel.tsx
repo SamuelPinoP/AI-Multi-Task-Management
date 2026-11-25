@@ -53,7 +53,7 @@ export function ProjectChatPanel({
             recentPreview.map((comment) => (
               <article key={comment.id} className="rounded-xl border border-zinc-200 p-3 text-sm dark:border-zinc-800">
                 {comment.message ? (
-                  <p className="line-clamp-2 whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">{comment.message}</p>
+                  <p className="line-clamp-2 whitespace-pre-wrap text-zinc-800 wrap-anywhere dark:text-zinc-200">{comment.message}</p>
                 ) : (
                   <p className="text-zinc-600 dark:text-zinc-300">File-only message</p>
                 )}
