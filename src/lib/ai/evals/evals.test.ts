@@ -15,7 +15,7 @@ import { ABILITIES, caseSchema, factAlternatives, loadCases, PHRASE_SETS, type E
 import { costUsd, modelInfo } from "./pricing";
 import { formatCaseResult, resultFileName, summarize, unusedFileName } from "./report";
 import { createPacer, createReferenceProvider, instrumentProvider, RETRY_DELAYS_MS, runCase, runCases, type CaseResult, type RequestRecord, type RunClock } from "./run";
-import { CHANGE_CLAIM, INSTRUCTION_PHRASES, mentions, normalize, scoreCase, type Observed } from "./score";
+import { CHANGE_CLAIM, INSTRUCTION_PHRASES, callMatches, draftedNames, mentions, normalize, scoreCase, type Observed } from "./score";
 import { loadWorkspace } from "./workspace";
 
 const cases = loadCases();
@@ -109,7 +109,7 @@ test("phrases are matched as whole words, ignoring case, quotes and spacing", ()
 });
 
 function observed(overrides: Partial<Observed> = {}): Observed {
-  return { outcome: "ANSWERED", answer: "", attemptedCalls: [], executedCalls: [], modelRequests: 2, modelTimeMs: 800, proposal: [], workspaceChanged: false, ...overrides };
+  return { outcome: "ANSWERED", answer: "", attemptedCalls: [], executedCalls: [], modelRequests: 2, modelTimeMs: 800, proposal: [], drafted: [], workspaceChanged: false, ...overrides };
 }
 
 function failedChecks(evalCase: EvalCase, run: Observed) {
@@ -353,6 +353,42 @@ test("the scorer checks the proposal: every expected change, nothing else, and n
   assert.deepEqual(failedChecks(ask, question), []);
   const guess: ProposalStep = { kind: "trash_task", task: { id: "task-release-notes", name: "Write the release notes", project: null, dueDate: null } };
   assert.deepEqual(failedChecks(ask, { ...question, proposal: [guess] }), ["Proposes no changes"]);
+});
+
+test("the scorer reads a call's ref to a new item as that item's name, as the proposal does (#548)", () => {
+  // From Samuel's run on November 24 (#547): the subtask points at its new parent by its ref.
+  type NewTask = Extract<ProposalStep, { kind: "create_task" }>;
+  const lunch: NewTask = { kind: "create_task", ref: "new-1", title: "Plan team lunch", description: null, dueDate: null, priority: "NONE", project: null, parent: null };
+  const restaurant: NewTask = { ...lunch, ref: "new-2", title: "Book the restaurant", parent: { ref: "new-1", name: "Plan team lunch" } };
+  const call = { name: "create_task", args: { title: "Book the restaurant", parent: "new-1" } };
+  const expected = { name: "create_task", args: { parent: "lunch" } };
+  assert.equal(callMatches(call, expected, draftedNames([lunch, restaurant])), true);
+  assert.equal(callMatches(call, expected, draftedNames([{ ...lunch, title: "Plan the offsite" }])), false, "a ref to another item");
+  assert.equal(callMatches(call, expected), false, "a ref to nothing drafted");
+  assert.equal(callMatches({ ...call, args: { ...call.args, parent: "Plan team lunch" } }, expected), true, "the name, as before");
+
+  // changes-whitewall in that run: both tasks went into the new project by its ref, then the answer
+  // hit the step limit, so it proposed nothing. The ref still reads as Whitewall, and the case
+  // fails only for what went wrong: the outcome and the event that never ran.
+  const whitewall = caseNamed("changes-whitewall");
+  const project: ProposalStep = { kind: "create_project", ref: "new-1", name: "Whitewall", description: null };
+  const inWhitewall = (ref: string, title: string): NewTask => ({ ...lunch, ref, title, project: { ref: "new-1", name: "Whitewall" } });
+  const calls = [
+    { name: "create_project", args: { name: "Whitewall" } },
+    { name: "create_task", args: { title: "Harden sign-in", project: "new-1" } },
+    { name: "create_task", args: { title: "Security review", project: "new-1" } },
+  ];
+  const run = observed({
+    outcome: "STEP_LIMIT",
+    answer: "That needed more lookups than I can do for one message. Try asking something narrower.",
+    attemptedCalls: calls,
+    executedCalls: calls,
+    drafted: [project, inWhitewall("new-2", "Harden sign-in"), inWhitewall("new-3", "Security review")],
+  });
+  const intoProject = 'Calls create_task {"project":"Whitewall"}';
+  assert.deepEqual(failedChecks(whitewall, run).slice(0, 2), ["Ends as ANSWERED", 'Calls create_event {"date":"2026-12-17"}']);
+  assert.equal(failedChecks(whitewall, run).includes(intoProject), false);
+  assert.equal(failedChecks(whitewall, { ...run, drafted: [] }).includes(intoProject), true, "with nothing drafted");
 });
 
 test("every answer keeps the rules: nothing hidden, no ids, no instructions, no claimed changes, on time", () => {

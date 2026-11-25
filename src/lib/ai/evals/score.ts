@@ -5,7 +5,7 @@
 import { AGENT_LIMITS } from "@/lib/ai/agent-loop";
 import { factAlternatives, patternSources, type EvalCase, type ExpectedCall, type ExpectedStep } from "@/lib/ai/evals/case";
 import type { Workspace } from "@/lib/ai/evals/workspace";
-import { isExisting, type ProposalStep } from "@/lib/ai/proposals";
+import { isExisting, stepTitle, type ProposalStep } from "@/lib/ai/proposals";
 import { TICKET_SECTIONS } from "@/lib/ai/ticket-sections";
 import { listItems, parseDescription } from "@/lib/description-sections";
 import { ESTIMATE_STEPS, descriptionEstimate, hasEstimate, stepMinutes } from "@/lib/estimates";
@@ -28,6 +28,12 @@ export type Observed = {
   modelTimeMs: number;
   /** The changes the answer proposed (#310), in order; [] for none. */
   proposal: ProposalStep[];
+  /**
+   * Every change the tools drafted, in order, whether or not the answer ended with them as its
+   * proposal (one that hits the step limit doesn't). A call's ref to a new item ("new-1") is read
+   * against it (#548).
+   */
+  drafted: ProposalStep[];
   /** Whether the sample workspace differs after the run: nothing may change without the person's Apply. */
   workspaceChanged: boolean;
 };
@@ -84,11 +90,23 @@ function argumentMatches(actual: unknown, expected: string | number | boolean) {
   return actual === expected;
 }
 
-/** Whether a call is the expected one: the same tool, with at least the expected arguments. */
-export function callMatches(call: ObservedCall, expected: ExpectedCall) {
+/**
+ * Whether a call is the expected one: the same tool, with at least the expected arguments. A call
+ * may point at an item the same answer creates by its ref ("new-1"), as the tools ask it to. The
+ * ref then stands for that item's name, as it does in the proposal (#548).
+ */
+export function callMatches(call: ObservedCall, expected: ExpectedCall, refs: ReadonlyMap<string, string> = new Map()) {
   if (call.name !== expected.name) return false;
   const args = call.args && typeof call.args === "object" ? (call.args as Record<string, unknown>) : {};
-  return Object.entries(expected.args).every(([key, value]) => argumentMatches(args[key], value));
+  return Object.entries(expected.args).every(([key, value]) => {
+    const actual = args[key];
+    return argumentMatches(typeof actual === "string" ? (refs.get(actual) ?? actual) : actual, value);
+  });
+}
+
+/** The names of the new items an answer's tools drafted, by their refs: "new-1" → "Plan team lunch". */
+export function draftedNames(steps: ProposalStep[]) {
+  return new Map(steps.flatMap((step) => ("ref" in step ? [[step.ref, stepTitle(step)] as const] : [])));
 }
 
 /** A proposed step's title and where it goes, with the dates and times the cases check. */
@@ -240,9 +258,10 @@ export function scoreCase(evalCase: EvalCase, observed: Observed, workspace: Pic
 
   check(`Ends as ${expect.outcome}`, observed.outcome === expect.outcome, () => `It ended as ${observed.outcome}.`);
 
+  const refs = draftedNames(observed.drafted);
   for (const tool of expect.tools) {
     const options = "anyOf" in tool ? tool.anyOf : [tool];
-    const found = observed.executedCalls.some((call) => options.some((option) => callMatches(call, option)));
+    const found = observed.executedCalls.some((call) => options.some((option) => callMatches(call, option, refs)));
     check(`Calls ${options.map(describeExpected).join(" or ")}`, found, () => `It called ${describeCalls(observed.executedCalls)}.`);
   }
   for (const name of expect.notTools) {

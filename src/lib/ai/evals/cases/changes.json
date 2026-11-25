@@ -166,7 +166,7 @@
           { "name": "create_task", "args": { "title": "Plan the team lunch", "estimate": { "size": "1 h", "reason": "Picking a day and a place, and telling the team." } } },
           {
             "name": "create_task",
-            "args": { "title": "Book the restaurant", "parent": "Plan the team lunch", "estimate": { "size": "15 min", "reason": "One call or an online booking." } }
+            "args": { "title": "Book the restaurant", "parent": "new-1", "estimate": { "size": "15 min", "reason": "One call or an online booking." } }
           }
         ]
       },
