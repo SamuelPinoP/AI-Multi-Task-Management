@@ -114,7 +114,7 @@ Nothing is sent for a person until they agree to the assistant's data notice. Ea
 
 ### AI apps over MCP (optional, free)
 
-`/api/mcp` lets AI apps such as Claude and ChatGPT read a person's workspace (#478), and the Integrations page (`/integrations`, #480) shows people how to connect them. Both answer 404, and nothing links to the page, until `MCP_ENABLED` is `"true"`. Leave it off until sign-in for apps (#477) ships: until then no app can get a token.
+`/api/mcp` lets AI apps such as Claude and ChatGPT read a person's workspace (#478), and the Integrations page (`/integrations`, #480) shows people how to connect them. Until `MCP_ENABLED` is `"true"`, the endpoint answers 404, the page shows the not-found page (with a 200, like `/usage`, since pages stream), and nothing links to it. Leave it off until sign-in for apps (#477) ships: until then no app can get a token.
 
 1. In the checkout linked to Vercel, run `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))" | npx -y vercel@latest env add MCP_TOKEN_SECRET production --sensitive`. It generates the token signing secret and stores it without showing it.
 2. Run `npx -y vercel@latest env add MCP_ENABLED production` and enter `true`. Both take effect with the next deploy, and the deploy check refuses `MCP_ENABLED="true"` without a secret of at least 32 characters.

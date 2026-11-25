@@ -180,9 +180,9 @@ over the [Model Context Protocol](https://modelcontextprotocol.io) at `/api/mcp`
   Claude and ChatGPT, one terminal command in Claude Code and Codex, and
   one-click install links for Cursor and VS Code (`src/lib/mcp/connect.ts`).
   The address is `APP_BASE_URL`'s, the one tokens are bound to. While the switch
-  is off, the page is a 404 and nothing links to it. Guests get the sign-up
-  pop-up, since apps sign in to an account. Connected apps (#477) becomes a
-  section of this page.
+  is off, the page shows the not-found page and nothing links to it. Guests get
+  the sign-up pop-up, since apps sign in to an account. Connected apps (#477)
+  becomes a section of this page.
 
 - **Tools:** the assistant's six read tools, the same registry objects with the
   same Zod schemas (`src/lib/ai/tools`), plus `get_task`, one task with its
