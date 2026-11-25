@@ -19,6 +19,7 @@ import {
   NotebookPen,
   PanelLeftClose,
   PanelLeftOpen,
+  Plug,
   Plus,
   Search,
   Settings,
@@ -438,6 +439,7 @@ function Sidebar({
   onShowShortcuts,
   onSendFeedback,
   onNavigate,
+  integrations,
 }: {
   user: NonNullable<ShellUser>;
   nav: WorkspaceNav;
@@ -451,6 +453,7 @@ function Sidebar({
   onShowShortcuts: () => void;
   onSendFeedback: () => void;
   onNavigate?: () => void;
+  integrations: boolean;
 }) {
   // Tasks sits with Home and Chats, and My day under Notes (#519).
   const mainItems: NavItem[] = [
@@ -476,6 +479,8 @@ function Sidebar({
     { href: "/planner", label: "Planner", icon: Compass },
     { href: "/goals", label: "Goals", icon: Target },
     { href: "/roadmap", label: "Roadmap", icon: MapIcon },
+    // Connecting AI apps (#480, design 1A), only while the MCP server is on.
+    ...(integrations ? [{ href: "/integrations", label: "Integrations", icon: Plug }] : []),
   ];
   const linkProps = { pathname, collapsed, onNavigate };
   const aiActive = pathname === "/ai";
@@ -925,14 +930,16 @@ function TopBar({
   pathname,
   onShowShortcuts,
   onSendFeedback,
+  integrations,
 }: {
   user: NonNullable<ShellUser>;
   nav: WorkspaceNav;
   pathname: string;
   onShowShortcuts: () => void;
   onSendFeedback: () => void;
+  integrations: boolean;
 }) {
-  const { parent, title } = pageTitleFor(pathname, nav.projects, { appAdmin: user.isAppAdmin });
+  const { parent, title } = pageTitleFor(pathname, nav.projects, { appAdmin: user.isAppAdmin, integrations });
   const titleInView = usePageTitleInView(pathname);
   const folded = !titleInView;
   const settings = (
@@ -1066,6 +1073,7 @@ export function AppShell({
   initialSidebarWidth,
   initialProjectsOpen,
   googleSignIn,
+  integrations,
 }: {
   children: React.ReactNode;
   currentUser: ShellUser;
@@ -1078,6 +1086,8 @@ export function AppShell({
   initialProjectsOpen: SidebarProjectsOpen;
   /** Whether Sign in with Google is set up, for the guest's sign-up pop-up (#458). */
   googleSignIn: boolean;
+  /** Whether the MCP server is on (MCP_ENABLED), so the Integrations page exists and is linked (#480). */
+  integrations: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -1338,6 +1348,7 @@ export function AppShell({
           onNewProject={openNewProject}
           onShowShortcuts={() => setShortcutsOpen(true)}
           onSendFeedback={() => setFeedbackOpen(true)}
+          integrations={integrations}
         />
         <ResizeHandle
           label="Resize sidebar"
@@ -1371,6 +1382,7 @@ export function AppShell({
               setFeedbackOpen(true);
             }}
             onNavigate={() => setMenuOpen(false)}
+            integrations={integrations}
           />
         </SheetContent>
       </Sheet>
@@ -1388,6 +1400,7 @@ export function AppShell({
               pathname={pathname}
               onShowShortcuts={() => setShortcutsOpen(true)}
               onSendFeedback={() => setFeedbackOpen(true)}
+              integrations={integrations}
             />
           )}
           <OfflineBanner />
@@ -1422,6 +1435,7 @@ export function AppShell({
         onOpenChange={setSearchOpen}
         onNewTask={openNewTask}
         onShowShortcuts={() => setShortcutsOpen(true)}
+        integrations={integrations}
       />
       <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} draft={newTaskDraft} />
       <ProjectSheet open={newProjectOpen} onOpenChange={setNewProjectOpen} onSubmit={createProject} />

@@ -73,6 +73,17 @@ test("the Users page and each person's page are named only for app admins", () =
   assert.deepEqual(pageTitleFor("/usersx", [], { appAdmin: true }), { title: "" });
 });
 
+test("the Integrations page is named only while MCP is on (#480)", () => {
+  assert.deepEqual(pageTitleFor("/integrations", [], { integrations: true }), { title: "Integrations" });
+  // Off, its address is a 404 like any other.
+  assert.deepEqual(pageTitleFor("/integrations", []), { title: "" });
+  assert.deepEqual(pageTitleFor("/integrations", [], { appAdmin: true, integrations: false }), { title: "" });
+  assert.deepEqual(pageTitleFor("/integrationsx", [], { integrations: true }), { title: "" });
+  // Both switches together keep every title.
+  assert.deepEqual(pageTitleFor("/usage", [], { appAdmin: true, integrations: true }), { title: "Free-tier usage" });
+  assert.deepEqual(pageTitleFor("/goals", [], { integrations: true }), { title: "Goals" });
+});
+
 test("project pages show the project's name under Projects", () => {
   const projects = [{ id: "p1", name: "Capstone demo" }];
   assert.deepEqual(pageTitleFor("/projects/p1", projects), { parent: "Projects", title: "Capstone demo" });

@@ -20,6 +20,7 @@ How the code does things, and the traps that cost time. Read what your change to
 - **Accessibility:** a control's visible text must be part of its accessible name (axe's `label-content-name-mismatch`), even text marked `aria-hidden`.
 - **Legal pages:** change `LEGAL_LAST_UPDATED` in `src/lib/legal.ts` with every edit to the Privacy Policy or Terms.
 - **Owner-only pages:** `/usage` shows only to `ADMIN_EMAILS` (`src/lib/app-admin-core.ts`); everyone else gets the normal 404. Feedback goes to the same addresses.
+- **AI apps (MCP):** `MCP_ENABLED` turns on `/api/mcp` and the Integrations page together. The switch and the address live in `src/lib/mcp/connect.ts`, which loads no MCP SDK, so the app shell can read it; while it's off, both are 404s and nothing links to the page.
 - **Env vars:** every new one goes in `.env.example` and `scripts/validate-deployment-env.mjs`.
 - `next dev` keeps a Next.js block in `AGENTS.md` current; if an upgrade changes it, commit the new version.
 

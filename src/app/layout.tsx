@@ -14,6 +14,7 @@ import { aiDockFromStored } from "@/lib/ai/dock";
 import { isAppAdmin } from "@/lib/app-admin";
 import { getSessionUser, mustConfirmEmail } from "@/lib/auth";
 import { siteVerification } from "@/lib/legal";
+import { isMcpEnabled } from "@/lib/mcp/connect";
 import { parseWidth, SIDEBAR_LIMITS } from "@/lib/panel-resize";
 import { parseSidebarProjects, SIDEBAR_COLLAPSED_COOKIE, SIDEBAR_PROJECTS_COOKIE, SIDEBAR_WIDTH_COOKIE } from "@/lib/sidebar-state";
 import { getUserTimeZone } from "@/lib/user-time-server";
@@ -83,6 +84,7 @@ export default async function RootLayout({
                 initialSidebarWidth={sidebarWidth}
                 initialProjectsOpen={sidebarProjectsOpen}
                 googleSignIn={Boolean(currentUser?.isGuest) && isGoogleSignInEnabled()}
+                integrations={isMcpEnabled(process.env)}
               >
                 {children}
               </AppShell>

@@ -15,6 +15,7 @@ import {
   Moon,
   Target,
   NotebookPen,
+  Plug,
   Plus,
   SquareKanban,
   Sun,
@@ -49,7 +50,14 @@ type SearchData = {
 
 const emptyResults: SearchData = { projects: [], notes: [], tasks: [], events: [] };
 
-const pages: Array<{ href: string; label: string; icon: LucideIcon | ComponentType<{ className?: string }>; keywords?: string }> = [
+const pages: Array<{
+  href: string;
+  label: string;
+  icon: LucideIcon | ComponentType<{ className?: string }>;
+  keywords?: string;
+  /** Listed only while the MCP server is on, like the sidebar's link (#480). */
+  needsMcp?: true;
+}> = [
   { href: "/", label: "Home", icon: House, keywords: "dashboard" },
   { href: "/ai", label: "AI", icon: AiSpark, keywords: "ask ai multi assistant chat question work agent" },
   { href: "/chats", label: "Chats", icon: MessagesSquare, keywords: "messages discussion unread" },
@@ -64,6 +72,7 @@ const pages: Array<{ href: string; label: string; icon: LucideIcon | ComponentTy
   { href: "/planner", label: "Planner", icon: Compass, keywords: "smart plan" },
   { href: "/goals", label: "Goals", icon: Target, keywords: "weekly review week" },
   { href: "/roadmap", label: "Roadmap", icon: MapIcon },
+  { href: "/integrations", label: "Integrations", icon: Plug, keywords: "connect ai apps assistants mcp claude chatgpt codex cursor vs code", needsMcp: true },
   { href: "/trash", label: "Trash", icon: Trash2, keywords: "deleted restore" },
   { href: "/account", label: "Account settings", icon: CircleUserRound, keywords: "username email log in sign in profile" },
 ];
@@ -89,11 +98,14 @@ export function CommandPalette({
   onOpenChange,
   onNewTask,
   onShowShortcuts,
+  integrations,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNewTask: () => void;
   onShowShortcuts: () => void;
+  /** Whether the MCP server is on, so the Integrations page exists (#480). */
+  integrations: boolean;
 }) {
   const router = useRouter();
   const { theme, setTheme, accent, setAccent } = useTheme();
@@ -121,7 +133,7 @@ export function CommandPalette({
   }, [query, open]);
 
   const searched = query.trim() ? results : emptyResults;
-  const visiblePages = pages.filter((page) => matches(query, page.label, page.keywords));
+  const visiblePages = pages.filter((page) => (integrations || !page.needsMcp) && matches(query, page.label, page.keywords));
   const showNewTask = matches(query, "new task", "add task", "create task");
   const showTheme = matches(query, "theme", "dark", "light", "appearance");
   // Only when searched for, so five colors don't crowd the empty palette.
