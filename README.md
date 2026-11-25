@@ -641,4 +641,4 @@ Trash sits at the bottom of the sidebar, next to Collapse.
 - **Kanban View** (`/board`) for organizing personal and project tasks by status across the workspace.
 - **Tree View** (`/tree`, each page at `/tree/<id>`) for private hierarchy pages, such as Study Plan or Career Plan: root, child and sibling nodes, renaming, colors and sizes, dragging a node with everything under it, "Move to…", and undo (Ctrl+Z).
 
-Plans for the Tree View's keyboard support and a Mind View are in [docs/views-roadmap.md](docs/views-roadmap.md).
+The Tree View's keyboard support and a Mind View are tracked in the issues (#257 to #267).

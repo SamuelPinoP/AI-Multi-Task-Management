@@ -2,6 +2,29 @@
 
 Rules for everyone who works in this repository, people and AI coding agents alike. `CLAUDE.md` loads this file for Claude Code; other agents read it directly.
 
+## Start here
+
+The work order is the [roadmap project](https://github.com/users/SamuelPinoP/projects/5). Take its top "Now" item whose blockers are closed, or the issue the owner names. New issues go on it. Read only the docs your task needs:
+
+- [`docs/development.md`](docs/development.md): setup, worktrees, migrations, Windows, cloud sandboxes.
+- [`docs/testing.md`](docs/testing.md): commands, e2e and visual traps.
+- [`docs/conventions.md`](docs/conventions.md): code rules and traps.
+- [`docs/ci-and-deploys.md`](docs/ci-and-deploys.md): checks, deploys, storage, jobs.
+- [`docs/ai-agent.md`](docs/ai-agent.md): the in-app agent.
+
+## Rules
+
+- Free tiers only; only the owner runs live AI evaluations.
+- Never sign in or create data on production.
+- Ask the owner before a new dependency, a behavior change, a non-additive migration, touching production data or spending money.
+- Fix causes; never weaken a test. Don't poll CI.
+
+## Keep output small
+
+- Send long test runs to a file and read the summary and failures.
+- Read big files by section.
+- Take screenshots only to prove a visual change.
+
 ## Issues
 
 Every issue is a ticket someone else could pick up without asking questions. The repository is public, so never put secrets or personal data in one.
@@ -28,7 +51,7 @@ Every issue is a ticket someone else could pick up without asking questions. The
 - **Closing:**
   - A PR that finishes an issue says `Fixes #N`.
   - Close an issue as soon as the PR that finishes it merges and deploys green. Never keep one open for manual testing or QA: the owner tests PRs as they go. The same goes for the last `Part of #N` PR, and for an epic once its last piece merges.
-  - When closing by hand, start the body with a "Resolution" note naming the PRs and anything left undone. Leftover work gets its own issue, linked from the note. A step left for the owner outside the code, such as an environment variable to set, goes in the note and the handoff, not in an open issue.
+  - When closing by hand, start the body with a "Resolution" note naming the PRs and anything left undone. Leftover work gets its own issue, linked from the note. A step left for the owner outside the code, such as an environment variable to set, goes in the note, and the owner is told, not in an open issue.
   - Close dropped work as "not planned".
 
 ## Pull requests
