@@ -4,13 +4,14 @@ Rules for everyone who works in this repository, people and AI coding agents ali
 
 ## Start here
 
-The work order is the [roadmap project](https://github.com/users/SamuelPinoP/projects/5). Take its top "Now" item whose blockers are closed, or the issue the owner names. New issues go on it. Read only the docs your task needs:
+The work order is the [roadmap project](https://github.com/users/SamuelPinoP/projects/5). Take its top "Now" item whose blockers are closed, or the issue the owner names. New issues go on it. Claude Code loads the guide for a folder (`tests/`, `prisma/`, `src/`, `src/lib/ai/`) when it reads a file there; other agents follow the "before" lines:
 
-- [`docs/development.md`](docs/development.md): setup, worktrees, migrations, Windows, cloud sandboxes.
-- [`docs/testing.md`](docs/testing.md): commands, e2e and visual traps.
-- [`docs/conventions.md`](docs/conventions.md): code rules and traps.
-- [`docs/ci-and-deploys.md`](docs/ci-and-deploys.md): checks, deploys, storage, jobs.
-- [`docs/ai-agent.md`](docs/ai-agent.md): the in-app agent.
+- Before you set up, make a worktree or run on Windows or in a cloud sandbox, read [`docs/development.md`](docs/development.md).
+- Before you write or run tests, read [`docs/testing.md`](docs/testing.md).
+- Before you touch the schema or a migration, read [`docs/database.md`](docs/database.md).
+- Before you write code, read [`docs/conventions.md`](docs/conventions.md).
+- Before you change CI, a deploy, storage or a job, read [`docs/ci-and-deploys.md`](docs/ci-and-deploys.md).
+- Before you touch the AI agent, read [`docs/ai-agent.md`](docs/ai-agent.md).
 
 ## Rules
 

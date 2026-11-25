@@ -1,23 +1,12 @@
 # Development
 
-How to set up, work and ship a change. The rules for issues and PRs are in [`AGENTS.md`](../AGENTS.md); tests are in [testing.md](testing.md), code conventions in [conventions.md](conventions.md), CI and deploys in [ci-and-deploys.md](ci-and-deploys.md).
+How to set up, work and ship a change. The rules for issues and PRs are in [`AGENTS.md`](../AGENTS.md); tests are in [testing.md](testing.md), databases and migrations in [database.md](database.md), code conventions in [conventions.md](conventions.md), CI and deploys in [ci-and-deploys.md](ci-and-deploys.md).
 
 ## Setup
 
-- Node 24 (`engines`), PostgreSQL, and a checkout. Copy `.env.example` to `.env` for a local database, or export CI's public placeholders from the `env:` block at the top of `.github/workflows/ci.yml` (enough with a throwaway database).
-- `npm ci`, `npx prisma generate` (`DATABASE_URL` must be set, since `prisma.config.ts` requires it), `npx prisma migrate deploy`, then `npm run dev`. Run `npx playwright install chromium` before the first e2e run and after a Playwright upgrade (tests fail in about 1 ms with "Executable doesn't exist" otherwise).
+- Node 24 (`engines`), PostgreSQL, and a checkout. Copy `.env.example` to `.env` for a local database, or export CI's public placeholders from the `env:` block at the top of `.github/workflows/ci.yml` (enough with [a throwaway database](database.md#a-throwaway-database)).
+- `npm ci`, `npx prisma generate` (`DATABASE_URL` must be set, since `prisma.config.ts` requires it), `npx prisma migrate deploy` ([database.md](database.md)), then `npm run dev`. Run `npx playwright install chromium` before the first e2e run and after a Playwright upgrade (tests fail in about 1 ms with "Executable doesn't exist" otherwise).
 - After `npm ci`, or a checkout that changes `prisma/schema.prisma`, run `npx prisma generate` again and delete `.next`: a stale `.next/types/validator.ts` makes `tsc` fail with TS2307.
-
-### A throwaway database
-
-For tests, or when the shared local database must stay untouched, use your own cluster on a free port:
-
-1. `initdb -U app --pwfile=<file holding "app"> -A scram-sha-256 <pgdata>` in a scratch folder.
-2. `pg_ctl -D <pgdata> -o "-p <port> -c listen_addresses=localhost" start` (in the background: it keeps the shell attached), then `createdb -h localhost -p <port> -U app app_test`.
-3. Point `DATABASE_URL` at it with CI's user and password, run `npx prisma migrate deploy`.
-4. Stop it with `pg_ctl -D <pgdata> -m fast stop`. If every e2e test times out at the first heading, the cluster stopped (Prisma "P1001"): check `pg_isready -h localhost -p <port>`.
-
-Never run `prisma migrate deploy` against a database you don't own: the shared local one is migrated by the owner.
 
 ## Worktrees
 
@@ -41,19 +30,7 @@ git worktree add ../worktrees/<name> -b claude/<slug> origin/main
 4. **Test it** ([testing.md](testing.md)): logic in a `node:test` file, flows in a Playwright spec, then `npm run evidence` on the final commit.
 5. **Open the PR** ready for review: commit, `git push -u origin claude/<slug>`, `gh pr create`. The description follows `AGENTS.md`, "Pull requests". Use `Fixes #N` only when the PR completes the whole issue.
 6. **Hand it over.** If `main` moved (`git merge-base --is-ancestor origin/main <branch>` fails), merge it in, re-run the evidence and update the body, so CI tests what `main` becomes. Every env var the PR needs must already be set in Vercel, or the production build fails. Then stop: the owner merges.
-7. **After the merge:** check the deploy ([ci-and-deploys.md](ci-and-deploys.md#after-a-merge)), close the issues the PR finished, stop your database, and remove the worktree.
-
-## Migrations
-
-1. Bring your database up to date (`npx prisma migrate deploy`).
-2. Edit `prisma/schema.prisma`.
-3. Create `prisma/migrations/<YYYYMMDDHHMMSS>_<name>/` and write its SQL with `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script -o prisma/migrations/<folder>/migration.sql`. Check that the file holds only SQL.
-4. Deploy again, then `npx prisma generate`.
-
-- Migrations stay additive (new tables, nullable columns, indexes). Anything that drops or rewrites data needs the owner's OK.
-- Use a timestamp later than the newest migration on `main`, and check again after merging `main` in: collisions happened twice.
-- Dropping a column, table or enum value takes two deploys. First stop using it (`@ignore` a column's field, or Prisma keeps selecting it), then drop it in a later PR.
-- CI fails if `schema.prisma` and the migrations disagree.
+7. **After the merge:** check the deploy ([ci-and-deploys.md](ci-and-deploys.md#after-a-merge)), close the issues the PR finished, stop your throwaway database, and remove the worktree.
 
 ## Designs
 

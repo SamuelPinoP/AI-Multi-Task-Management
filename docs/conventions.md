@@ -1,6 +1,6 @@
 # Conventions
 
-How the code does things, and the traps that cost time. Read what your change touches.
+How the code does things, and the traps that cost time. Read what your change touches. Times in the database are in [database.md](database.md#times-in-the-database).
 
 ## In the code
 
@@ -36,9 +36,3 @@ How the code does things, and the traps that cost time. Read what your change to
 - Next.js links a file-based `app/icon.svg` only without `metadata.icons`, and `/icon.svg` falls under the sign-in redirect in `src/proxy.ts`: hence `/icons/icon.svg`.
 - Android draws a notification `badge` from its alpha channel: use a white mark on transparent.
 - dnd-kit's auto-scroll starts in the outer fifth of the view; the tree uses 10%. The React Compiler lint (`react-hooks/refs`) flags `drag.listeners`: destructure the hook's result.
-
-## Times in the database
-
-- Prisma stores UTC in `timestamp without time zone`. In raw SQL use `now() AT TIME ZONE 'utc'`, never a Date parameter.
-- `timestamptz` columns (such as `RateLimit.expiresAt`) compare with SQL `now()`; Prisma's `lt: new Date()` shifts by the database's zone there.
-- On a Neon cold start, Prisma's 5-second interactive-transaction default can be too short.

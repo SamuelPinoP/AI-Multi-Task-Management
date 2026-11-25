@@ -1,6 +1,6 @@
 # Testing
 
-What to run, and the traps that waste time. The README's [Testing](../README.md#testing) section describes what each suite covers; [development.md](development.md) sets up a database.
+What to run, and the traps that waste time. The README's [Testing](../README.md#testing) section describes what each suite covers; [database.md](database.md) sets up a database.
 
 ## Commands
 
