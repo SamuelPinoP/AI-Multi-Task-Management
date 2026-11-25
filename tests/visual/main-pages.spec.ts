@@ -376,6 +376,8 @@ test("Integrations", async ({ page }) => {
   await page.goto("/integrations");
   await page.getByRole("button", { name: "Connect Claude Code", exact: true }).click();
   await expect(page.getByRole("list", { name: "Connect Claude Code" })).toBeVisible();
+  // The pointer leaves Close, so the picture shows the button as people see it, not its hover shade.
+  await page.getByRole("heading", { level: 1, name: "Integrations" }).hover();
   await page.waitForLoadState("networkidle");
   await expect(page).toHaveScreenshot("integrations.png", { mask: changing(page) });
 });
