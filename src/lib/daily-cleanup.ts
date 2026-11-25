@@ -13,6 +13,8 @@ export const EMAIL_COUNT_DAYS = 35;
 export const AGENT_RUN_DAYS = 90;
 /** An AI assistant chat nobody opened or wrote in for this long is deleted (#452; Samuel, November 17). */
 export const AGENT_CHAT_DAYS = 90;
+/** The log of AI apps' tool calls over MCP (#478) is kept this long: who called what, never what was asked or answered. */
+export const MCP_TOOL_CALL_DAYS = 30;
 /**
  * Changes the AI assistant proposed in an answer that was never stored (the person left before it
  * finished) are deleted after this long (#310); they expired after an hour anyway. The others go
@@ -40,6 +42,7 @@ type CleanupDb = Pick<
   | "agentRun"
   | "agentChat"
   | "agentProposal"
+  | "mcpToolCall"
 >;
 
 export type DailyCleanupResult = {
@@ -57,6 +60,8 @@ export type DailyCleanupResult = {
   agentChats: number;
   /** AI assistant proposals whose answer was never stored, after UNLINKED_PROPOSAL_DAYS. */
   agentProposals: number;
+  /** AI apps' tool calls over MCP older than MCP_TOOL_CALL_DAYS. */
+  mcpToolCalls: number;
   guests: number;
   /** Guests skipped because a stored file couldn't be deleted; they are retried the next day. */
   guestsSkipped: number;
@@ -68,8 +73,9 @@ export type DailyCleanupResult = {
  * - expired sessions, used or expired password reset tokens, expired email confirmation links
  *   expired rate-limit counters, inbox notifications older than NOTIFICATION_DAYS, hourly
  *   email counts older than EMAIL_COUNT_DAYS, sign-ins older than SIGN_IN_HISTORY_DAYS, AI
- *   assistant runs older than AGENT_RUN_DAYS, AI chats nobody opened for AGENT_CHAT_DAYS, and AI
- *   proposals whose answer was never stored, after UNLINKED_PROPOSAL_DAYS;
+ *   assistant runs older than AGENT_RUN_DAYS, AI chats nobody opened for AGENT_CHAT_DAYS, AI
+ *   proposals whose answer was never stored, after UNLINKED_PROPOSAL_DAYS, and AI apps' MCP tool
+ *   calls older than MCP_TOOL_CALL_DAYS;
  * - guest workspaces older than INACTIVE_GUEST_DAYS without a valid session (a guest has no
  *   password, so once its session is gone nobody can reach it), with their data and stored files;
  * - direct chat uploads that expired without being attached, with their stored files.
@@ -110,6 +116,9 @@ export async function runDailyCleanup({
   const agentProposals = await db.agentProposal.deleteMany({
     where: { messageId: null, createdAt: { lt: new Date(now.getTime() - UNLINKED_PROPOSAL_DAYS * 86_400_000) } },
   });
+  const mcpToolCalls = await db.mcpToolCall.deleteMany({
+    where: { createdAt: { lt: new Date(now.getTime() - MCP_TOOL_CALL_DAYS * 86_400_000) } },
+  });
   const guests = await deleteInactiveGuests({ db, deleteStoredObjects, now });
 
   let uploads = 0;
@@ -130,6 +139,7 @@ export async function runDailyCleanup({
     agentRuns: agentRuns.count,
     agentChats: agentChats.count,
     agentProposals: agentProposals.count,
+    mcpToolCalls: mcpToolCalls.count,
     guests: guests.deleted,
     guestsSkipped: guests.skipped,
     uploads,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dayKeyInZone, formatInstant, isValidTimeZone, toWallClock } from "./user-time";
+import { dayKeyInZone, formatInstant, isValidTimeZone, timeZoneFromCookie, timeZoneToSave, toWallClock } from "./user-time";
 
 function fields(date: Date) {
   return [date.getFullYear(), date.getMonth() + 1, date.getDate(), date.getHours(), date.getMinutes()];
@@ -61,4 +61,21 @@ test("dayKeyInZone gives the reader's calendar day", () => {
   assert.equal(dayKeyInZone("Pacific/Kiritimati", new Date("2026-10-20T20:00:00.000Z")), "2026-10-21");
   assert.equal(dayKeyInZone(null, instant), "2026-11-08");
   assert.equal(dayKeyInZone("Not/AZone", instant), "2026-11-08");
+});
+
+test("the tz cookie's zone, decoded, or null when it's missing, malformed or not a real zone", () => {
+  assert.equal(timeZoneFromCookie("America%2FNew_York"), "America/New_York");
+  assert.equal(timeZoneFromCookie("Asia/Kolkata"), "Asia/Kolkata");
+  assert.equal(timeZoneFromCookie(undefined), null);
+  assert.equal(timeZoneFromCookie(""), null);
+  assert.equal(timeZoneFromCookie("%E0%A4%A"), null, "a broken escape doesn't throw");
+  assert.equal(timeZoneFromCookie("Not%2FAZone"), null);
+});
+
+test("the account's saved zone (#478) changes only when the browser reports a different real one", () => {
+  assert.equal(timeZoneToSave(null, "Europe%2FMadrid"), "Europe/Madrid", "the first time");
+  assert.equal(timeZoneToSave("America/New_York", "Europe%2FMadrid"), "Europe/Madrid", "after a move");
+  assert.equal(timeZoneToSave("Europe/Madrid", "Europe%2FMadrid"), null, "no write when nothing changed");
+  assert.equal(timeZoneToSave("Europe/Madrid", undefined), null, "a request without the cookie keeps the saved zone");
+  assert.equal(timeZoneToSave("Europe/Madrid", "Not%2FAZone"), null);
 });

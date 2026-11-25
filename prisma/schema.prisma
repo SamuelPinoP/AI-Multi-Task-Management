@@ -37,6 +37,10 @@ model User {
   /// How the AI bar shows on the person's pages (#308): at the bottom, minimized to a button, or hidden (then
   /// it waits on the AI page). Null until they choose, which shows the bar. Saved per account, not per device.
   aiDock                       AiDockState?
+  /// The person's IANA time zone, such as "Europe/Madrid" (#478): the browser's `tz` cookie, saved by the requests
+  /// that read the session whenever it changes (src/lib/auth.ts). AI apps connected over MCP send no cookie, so their
+  /// tools use this to know the person's "today", or UTC while it's null.
+  timeZone                     String?
   sessions                     Session[]
   signInEvents                 SignInEvent[]
   oauthAccounts                OAuthAccount[]
@@ -69,6 +73,8 @@ model User {
   agentRuns                    AgentRun[]
   agentChats                   AgentChat[]
   agentProposals               AgentProposal[]
+  mcpGrants                    McpGrant[]
+  mcpToolCalls                 McpToolCall[]
 }
 
 /// One message to the AI assistant (#307): who asked, what answered and how it went. It feeds the daily caps
@@ -230,6 +236,57 @@ enum AgentRunOutcome {
   FAILED
   /// The person is where the provider's free tier may not be offered (src/lib/ai/region.ts).
   REGION
+}
+
+/// An AI app the person allowed to use their account over MCP (#478), and what it may do. Its access tokens name the
+/// grant, and every tool call checks that it still stands (src/lib/mcp/tools.ts). The consent page (#477) creates
+/// grants, and its Connected apps list revokes them.
+model McpGrant {
+  id         String    @id @default(cuid())
+  userId     String
+  /// The app's OAuth client ID: the address of its Client ID Metadata Document, or the ID registration gave it.
+  clientId   String
+  /// The app's name as the person approved it, such as "Claude".
+  clientName String
+  /// What the person allowed: "read", and later "write" (#479). A token never carries a scope its grant lacks.
+  scopes     String[]
+  createdAt  DateTime  @default(now())
+  /// When the app last called a tool, to within an hour.
+  lastUsedAt DateTime?
+  /// When the person disconnected the app. From then on its tools refuse, even with a token that hasn't expired.
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// One tool call from an AI app connected over MCP (#478): when, which app and tool, how it ended and how long it
+/// took. Never the arguments or the answer. Kept 30 days (src/lib/daily-cleanup.ts).
+model McpToolCall {
+  id         String             @id @default(cuid())
+  userId     String
+  /// The app's OAuth client ID, from its access token.
+  clientId   String
+  tool       String
+  outcome    McpToolCallOutcome
+  durationMs Int
+  createdAt  DateTime           @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+/// How a tool call over MCP ended (src/lib/mcp/tools.ts).
+enum McpToolCallOutcome {
+  /// The tool answered.
+  OK
+  /// Nothing ran: the app was disconnected, or the account can't use connected apps.
+  DENIED
+  /// The tool failed, and the app was told so.
+  FAILED
 }
 
 model Session {

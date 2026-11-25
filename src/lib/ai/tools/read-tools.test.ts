@@ -6,7 +6,7 @@ import { visibleTaskWhere } from "../../task-include";
 import { toolDefinition, type ToolContext, type ToolDb } from "./define";
 import { AGENT_TOOLS } from "./index";
 import { WRITE_TOOLS } from "./write-tools";
-import { excerpt, listEvents, listGoals, listOpenTasks, listProjects, MAX_PROJECTS, MAX_TASKS, percentOf, searchNotes, taskStats } from "./read-tools";
+import { DESCRIPTION_CHARS, excerpt, getTask, listEvents, listGoals, listOpenTasks, listProjects, MAX_PROJECTS, MAX_TASKS, percentOf, searchNotes, taskStats } from "./read-tools";
 
 type Model = "task" | "event" | "project" | "note" | "weeklyGoal";
 type FindManyArgs = { where: Record<string, unknown> & { AND?: unknown[] }; take?: number; select?: unknown };
@@ -429,4 +429,160 @@ test("task stats: one project by name or id, its status when it isn't active, an
 
   for (const project of ["", " ", "x".repeat(121)]) assert.equal(taskStats.input.safeParse({ project }).success, false, JSON.stringify(project));
   assert.equal(taskStats.input.safeParse({ userId: "someone-else" }).success, false, "no unknown arguments");
+});
+
+// get_task (#478): one task for AI apps connected over MCP. It reads with findFirst, three times
+// at most: the task, then its parent and its note, each checked like any other item.
+type FindFirstArgs = { where: { AND: [{ id: string }, unknown] }; select: Record<string, unknown> };
+
+function taskDb({ task = null as unknown, parent = null as unknown, note = null as unknown } = {}) {
+  const calls: Array<{ model: "task" | "note"; args: FindFirstArgs }> = [];
+  const findFirst = (model: "task" | "note") => async (args: FindFirstArgs) => {
+    calls.push({ model, args });
+    if (model === "note") return note;
+    return calls.filter((call) => call.model === "task").length === 1 ? task : parent;
+  };
+  const db = { task: { findFirst: findFirst("task") }, note: { findFirst: findFirst("note") } };
+  return { db: db as unknown as ToolDb, calls };
+}
+
+const at = (iso: string) => new Date(iso);
+const STORED_TASK = {
+  id: "t1",
+  title: "Write the launch post",
+  description: "  Draft, then ask Ana to review.  ",
+  status: "IN_PROGRESS",
+  priority: "HIGH",
+  dueDate: due(18),
+  recurrence: "WEEKLY",
+  // 02:00 UTC on November 3 is still November 2 in Los Angeles.
+  createdAt: at("2026-11-03T02:00:00.000Z"),
+  updatedAt: at("2026-11-15T20:00:00.000Z"),
+  completedAt: null as Date | null,
+  parentId: "t0" as string | null,
+  noteId: "n1" as string | null,
+  project: { id: "p1", name: "Launch" } as { id: string; name: string } | null,
+  assignee: { userId: ME } as { userId: string } | null,
+  goal: { id: "g1", title: "Ship the beta", targetWeek: "2026-11-16", userId: ME } as { id: string; title: string; targetWeek: string; userId: string } | null,
+  labels: [{ label: { name: "blog" } }, { label: { name: "launch" } }],
+  subtasks: [{ id: "t2", title: "Outline", status: "DONE" }],
+  blockedBy: [{ blockedBy: { id: "t3", title: "Pick a date", status: "TODO" } }],
+  blocking: [{ task: { id: "t4", title: "Send the newsletter", status: "TODO" } }],
+};
+
+async function getTaskWith(rows: Parameters<typeof taskDb>[0], args: unknown = { id: "t1" }, timeZone: string | null = "America/Los_Angeles") {
+  const { db, calls } = taskDb(rows);
+  const output = await getTask.run(getTask.input.parse(args), { ...contextWith(db), timeZone });
+  return { output, calls, data: output.data as { found: boolean; id?: string; task?: Record<string, unknown> } };
+}
+
+test("get_task: one task the person can see, with its details and what it's linked to, each with a link", async () => {
+  const { output, calls, data } = await getTaskWith({
+    task: STORED_TASK,
+    parent: { id: "t0", title: "Launch week", status: "TODO" },
+    note: { id: "n1", title: "Launch ideas" },
+  });
+  const visible = visibleTaskWhere(ME);
+  assert.deepEqual(calls[0].args.where, { AND: [{ id: "t1" }, visible] }, "the same filter as /api/tasks");
+  const select = calls[0].args.select as Record<string, { where?: unknown; take?: number }>;
+  assert.deepEqual(select.subtasks.where, visible);
+  assert.deepEqual(select.blockedBy.where, { blockedBy: visible });
+  assert.deepEqual(select.blocking.where, { task: visible });
+  assert.deepEqual([select.subtasks.take, select.blockedBy.take, select.blocking.take], [20, 20, 20]);
+  assert.deepEqual(calls[1], { model: "task", args: { where: { AND: [{ id: "t0" }, visible] }, select: { id: true, title: true, status: true } } });
+  assert.deepEqual(calls[2], { model: "note", args: { where: { AND: [{ id: "n1" }, visibleNoteWhere(ME)] }, select: { id: true, title: true } } });
+
+  assert.deepEqual(data, {
+    found: true,
+    task: {
+      id: "t1",
+      title: "Write the launch post",
+      status: "IN_PROGRESS",
+      priority: "HIGH",
+      due: "2026-11-18",
+      when: "Wed",
+      repeats: "weekly",
+      project: "Launch",
+      assignedToYou: true,
+      description: "Draft, then ask Ana to review.",
+      labels: ["blog", "launch"],
+      subtaskOf: { id: "t0", title: "Launch week", status: "TODO" },
+      subtasks: [{ id: "t2", title: "Outline", status: "DONE" }],
+      waitsOn: [{ id: "t3", title: "Pick a date", status: "TODO" }],
+      blocks: [{ id: "t4", title: "Send the newsletter", status: "TODO" }],
+      madeFromNote: { id: "n1", title: "Launch ideas" },
+      goal: { id: "g1", title: "Ship the beta", week: "2026-11-16" },
+      created: "2026-11-02",
+      updated: "2026-11-15",
+    },
+  });
+  assert.deepEqual(
+    output.sources.map((source) => [source.kind, source.title, source.href]),
+    [
+      ["task", "Write the launch post", "/tasks/t1"],
+      ["project", "Launch", "/projects/p1"],
+      ["task", "Launch week", "/tasks/t0"],
+      ["task", "Outline", "/tasks/t2"],
+      ["task", "Pick a date", "/tasks/t3"],
+      ["task", "Send the newsletter", "/tasks/t4"],
+      ["note", "Launch ideas", "/notes?openNote=n1"],
+      ["goal", "Ship the beta", "/goals?week=2026-11-16"],
+    ],
+  );
+});
+
+test("get_task: a parent or note the person can't see, and another member's goal, are left out", async () => {
+  const { output, data } = await getTaskWith({
+    task: { ...STORED_TASK, goal: { ...STORED_TASK.goal!, userId: "another-member" }, completedAt: at("2026-11-16T09:00:00.000Z") },
+  });
+  const task = data.task!;
+  for (const key of ["subtaskOf", "madeFromNote", "goal"]) assert.equal(key in task, false, key);
+  assert.equal(task.completed, "2026-11-16");
+  assert.deepEqual(
+    output.sources.map((source) => source.href),
+    ["/tasks/t1", "/projects/p1", "/tasks/t2", "/tasks/t3", "/tasks/t4"],
+  );
+});
+
+test("get_task: a task that doesn't exist or isn't the person's is simply not found", async () => {
+  const { output, calls, data } = await getTaskWith({ task: null }, { id: "  someone-elses-task " });
+  assert.deepEqual(data, { found: false, id: "someone-elses-task" });
+  assert.deepEqual(output.sources, []);
+  assert.equal(calls.length, 1, "nothing else is looked up");
+});
+
+test("get_task: a bare task, and a description cut at its limit", async () => {
+  const bare = {
+    ...STORED_TASK,
+    description: "x".repeat(DESCRIPTION_CHARS + 5),
+    priority: "NONE",
+    dueDate: null,
+    recurrence: "NONE",
+    parentId: null,
+    noteId: null,
+    project: null,
+    assignee: null,
+    goal: null,
+    labels: [],
+    subtasks: [],
+    blockedBy: [],
+    blocking: [],
+  };
+  const { data } = await getTaskWith({ task: bare }, { id: "t1" }, null);
+  assert.deepEqual(Object.keys(data.task!), ["id", "title", "status", "description", "descriptionCut", "created", "updated"]);
+  assert.equal((data.task!.description as string).length, DESCRIPTION_CHARS);
+  assert.match(data.task!.descriptionCut as string, /first 10000 characters/);
+  // Without a time zone, dates are UTC's.
+  assert.equal(data.task!.created, "2026-11-03");
+});
+
+test("get_task: an id is required, short, and the only argument", () => {
+  for (const args of [{}, { id: "" }, { id: "   " }, { id: "x".repeat(65) }, { id: "t1", userId: "someone" }]) {
+    assert.equal(getTask.input.safeParse(args).success, false, JSON.stringify(args));
+  }
+  assert.equal(getTask.name, "get_task");
+  assert.equal(getTask.access, "read");
+  const schema = JSON.stringify(toolDefinition(getTask).parameters);
+  assert.doesNotMatch(schema, /"\$schema"|"pattern"/);
+  assert.match(schema, /"additionalProperties":false/);
 });

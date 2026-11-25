@@ -112,6 +112,15 @@ While `AI_FREE_TIER` is on (the default), people in the EEA, Switzerland and the
 
 Nothing is sent for a person until they agree to the assistant's data notice. Each message is logged in the `AgentRun` table (outcome, model, tools called, tokens, latency; never the text), kept 90 days.
 
+### AI apps over MCP (optional, free)
+
+`/api/mcp` lets AI apps such as Claude and ChatGPT read a person's workspace (#478). It answers 404 until `MCP_ENABLED` is `"true"`. Leave it off until sign-in for apps (#477) ships: until then no app can get a token.
+
+1. In the checkout linked to Vercel, run `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))" | npx -y vercel@latest env add MCP_TOKEN_SECRET production --sensitive`. It generates the token signing secret and stores it without showing it.
+2. Run `npx -y vercel@latest env add MCP_ENABLED production` and enter `true`. Both take effect with the next deploy, and the deploy check refuses `MCP_ENABLED="true"` without a secret of at least 32 characters.
+
+Changing `MCP_TOKEN_SECRET` ends every access token at once. Connecting and listing tools touch no database; each tool call reads the grant and writes one row to `McpToolCall`, kept 30 days.
+
 ## Deployment environment validation
 
 Run the deployment validator before the first Vercel deploy and after changing environment variables:

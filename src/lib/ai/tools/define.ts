@@ -47,6 +47,8 @@ export type AgentTool<Input extends z.ZodType = z.ZodType> = {
   name: string;
   /** Shown while the tool runs, such as "Checking your open tasks". */
   label: string;
+  /** Its name for people, such as "Open tasks": AI apps connected over MCP show it (#478). */
+  title?: string;
   description: string;
   input: Input;
   /**

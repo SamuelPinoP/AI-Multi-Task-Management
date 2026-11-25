@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { getSafeRedirectPath } from "@/lib/safe-redirect";
 import { renewedSessionEnd, sessionEndsAt, sessionLimit } from "@/lib/session-lifetime";
 import { countryFromHeader, describeDevice, isLastActiveStale, lastActiveStaleBefore } from "@/lib/sign-in-history-core";
+import { TIME_ZONE_COOKIE, timeZoneToSave } from "@/lib/user-time";
 
 import { DEMO_USER_EMAIL, GUEST_USER_EMAIL_DOMAIN, REQUEST_PATH_HEADER, SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 
@@ -225,7 +226,9 @@ export async function getSessionUser(): Promise<(AuthUser & { aiDock: AiDockStat
       id: true,
       createdAt: true,
       expiresAt: true,
-      user: { select: { id: true, name: true, email: true, isGuest: true, emailVerifiedAt: true, lastActiveAt: true, aiDock: true } },
+      user: {
+        select: { id: true, name: true, email: true, isGuest: true, emailVerifiedAt: true, lastActiveAt: true, aiDock: true, timeZone: true },
+      },
     },
   });
 
@@ -237,7 +240,7 @@ export async function getSessionUser(): Promise<(AuthUser & { aiDock: AiDockStat
     return null;
   }
 
-  const { lastActiveAt, ...user } = session.user;
+  const { lastActiveAt, timeZone: savedTimeZone, ...user } = session.user;
   const writes: Promise<unknown>[] = [];
   // Using the app keeps the session going (#354), with at most one write a day. Matching
   // the old end makes simultaneous requests write it once.
@@ -256,6 +259,17 @@ export async function getSessionUser(): Promise<(AuthUser & { aiDock: AiDockStat
       prisma.user.updateMany({
         where: { id: user.id, OR: [{ lastActiveAt: null }, { lastActiveAt: { lt: lastActiveStaleBefore(now) } }] },
         data: { lastActiveAt: now },
+      }),
+    );
+  }
+  // The browser's zone, for AI apps connected over MCP, which send no cookie (#478). Written only when it
+  // changes; matching the old value makes simultaneous requests write it once.
+  const timeZone = timeZoneToSave(savedTimeZone, cookieStore.get(TIME_ZONE_COOKIE)?.value);
+  if (timeZone) {
+    writes.push(
+      prisma.user.updateMany({
+        where: { id: user.id, OR: [{ timeZone: null }, { timeZone: { not: timeZone } }] },
+        data: { timeZone },
       }),
     );
   }

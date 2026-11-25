@@ -39,6 +39,10 @@ export default function PrivacyPage() {
             If you ask the AI assistant something, your question and what it looks up to answer go to Google&apos;s Gemini
             API, only after you agree to that. AI Multi keeps your last 20 chats with it until you delete them.
           </li>
+          <li>
+            If you connect an AI app such as Claude or ChatGPT, it can read your work when you ask it to, and the company
+            that runs it processes what it reads. You can disconnect it at any time.
+          </li>
           <li>You can ask to see, export or delete your data at any time.</li>
           <li>AI Multi is for people {MINIMUM_AGE} and older.</li>
         </ul>
@@ -71,7 +75,8 @@ export default function PrivacyPage() {
           fingerprint of its secret. Other cookies and your browser&apos;s local storage remember your time zone, theme,
           accent color, text size, how you left the sidebar, chats and calendar, and whether this browser has signed in to
           an account before, so it opens the log-in page instead of a guest workspace. All of these are needed for the app
-          to work the way you set it up. There are no advertising or analytics cookies.
+          to work the way you set it up. There are no advertising or analytics cookies. AI Multi also saves your time zone
+          (such as &quot;Europe/Madrid&quot;) with your account, so AI apps you connect know which day it is for you.
         </p>
         <p>
           <strong>Trying it without an account.</strong> If you open AI Multi without an account, it makes a guest
@@ -99,6 +104,14 @@ export default function PrivacyPage() {
           tasks&quot;), never what you asked or what it answered. See{" "}
           <a href="#ai" className={legalLinkClass}>
             The AI assistant
+          </a>{" "}
+          below.
+        </p>
+        <p>
+          <strong>Connected AI apps.</strong> If you connect an AI app to your account, AI Multi keeps the connection and a
+          record of each lookup the app makes, never what it asked or what it got. See{" "}
+          <a href="#ai-apps" className={legalLinkClass}>
+            Connected AI apps
           </a>{" "}
           below.
         </p>
@@ -136,6 +149,7 @@ export default function PrivacyPage() {
             say so and he won&apos;t ask again.
           </li>
           <li>To answer what you ask the AI assistant, with Google&apos;s Gemini API.</li>
+          <li>To let the AI apps you connect look up your work when you ask them to.</li>
           <li>To recover from problems: a daily backup of the database.</li>
         </ul>
         <p>
@@ -189,6 +203,13 @@ export default function PrivacyPage() {
             the notifications you turned on.
           </li>
           <li>
+            <strong>AI apps you connect</strong>, and the companies that run them, get what those apps look up, as{" "}
+            <a href="#ai-apps" className={legalLinkClass}>
+              Connected AI apps
+            </a>{" "}
+            explains.
+          </li>
+          <li>
             <strong>When the law requires it</strong>, or to protect people from harm.
           </li>
         </ul>
@@ -210,6 +231,7 @@ export default function PrivacyPage() {
             you haven&apos;t opened for 90 days is deleted.
           </li>
           <li>AI assistant usage records: 90 days.</li>
+          <li>Connected AI apps: until you disconnect them. The record of their lookups: 30 days.</li>
           <li>Database backups: the 30 most recent daily backups, so deleted data leaves the backups within 30 days.</li>
         </ul>
       </LegalSection>
@@ -289,6 +311,43 @@ export default function PrivacyPage() {
           Nothing changes until you tick the ones you want and apply them yourself, as you; you can cancel instead, and
           what you leave expires after an hour. Changes you apply show in Activity as made via AI Multi.
         </p>
+      </LegalSection>
+
+      <LegalSection id="ai-apps" title="Connected AI apps">
+        <p>
+          You can connect an AI app that supports MCP, such as Claude, ChatGPT or Cursor, to your AI Multi account, so it
+          can look up your work when you ask it to. An app connects only after you approve it on an AI Multi page that names
+          it. Guest workspaces and accounts whose email address isn&apos;t confirmed can&apos;t connect one.
+        </p>
+        <ul className={legalListClass}>
+          <li>
+            <strong>What a connected app can see:</strong> what it looks up to answer you, from the tasks, events, projects,
+            notes and weekly goals you can see in AI Multi, including those in projects you share with other people. That
+            can be task titles, descriptions, statuses, priorities, due dates and labels, and the tasks, notes and goals
+            they&apos;re linked to; event titles, dates and times; project names and how far along each project is; note
+            titles with a short excerpt; your weekly goals; and counts of your tasks. It never sees your password or
+            anyone&apos;s email address.
+          </li>
+          <li>
+            <strong>Who processes it:</strong> what an app reads goes to the company that runs it, such as Anthropic, OpenAI
+            or Google, and from then on that company&apos;s terms and privacy policy apply, not this one. Connect only apps
+            you trust, and check their terms before you do.
+          </li>
+          <li>
+            <strong>What it can do:</strong> only read. A connected app can&apos;t create, change or delete anything in AI
+            Multi.
+          </li>
+          <li>
+            <strong>What AI Multi keeps:</strong> each connection, with the app&apos;s name, what you allowed it, when you
+            connected it and when it was last used, to the nearest hour; and for 30 days, a record of each lookup: which
+            app, which lookup (such as &quot;open tasks&quot;), whether it worked, how long it took and when, never what the
+            app asked or what it got.
+          </li>
+          <li>
+            <strong>Disconnecting:</strong> on the Account page, under Connected apps, click Disconnect next to the app. It
+            loses access at once. Deleting your account disconnects every app.
+          </li>
+        </ul>
       </LegalSection>
 
       <LegalSection id="location" title="Where data is processed">

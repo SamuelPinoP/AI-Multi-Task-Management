@@ -148,6 +148,14 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
       );
     }
 
+    // AI apps' MCP tool calls (#478) are kept 30 days: one from 31 days ago goes, one from 29 stays.
+    await sql(
+      `INSERT INTO "McpToolCall" (id, "userId", "clientId", tool, outcome, "durationMs", "createdAt")
+       VALUES ($1, $3, 'e2e-client', 'list_open_tasks', 'OK', 40, ${UTC_NOW} - interval '31 days'),
+              ($2, $3, 'e2e-client', 'list_open_tasks', 'OK', 40, ${UTC_NOW} - interval '29 days')`,
+      [id("old-mcp-call"), id("recent-mcp-call"), id("member")],
+    );
+
     const response = await request.get("/api/cron/cleanup");
     expect(response.ok(), await response.text()).toBe(true);
     const result = (await response.json()) as Record<string, number>;
@@ -167,6 +175,9 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
     expect(await exists("AgentChatMessage", "id", id("old-agent-chat-message"))).toBe(false);
     expect(await exists("AgentChat", "id", id("recent-agent-chat"))).toBe(true);
     expect(await exists("AgentChatMessage", "id", id("recent-agent-chat-message"))).toBe(true);
+    expect(result.mcpToolCalls).toBeGreaterThanOrEqual(1);
+    expect(await exists("McpToolCall", "id", id("old-mcp-call"))).toBe(false);
+    expect(await exists("McpToolCall", "id", id("recent-mcp-call"))).toBe(true);
 
     // Deleted, with what cascades from them.
     expect(await exists("User", "id", id("old-guest"))).toBe(false);

@@ -3,7 +3,7 @@ import "dotenv/config";
 
 const ALLOWED_STORAGE_PROVIDERS = new Set(["local", "vercel-blob", "aws-s3"]);
 const ALLOWED_EMAIL_PROVIDERS = new Set(["disabled", "resend", "smtp", "brevo"]);
-const BOOLEAN_ENV_NAMES = ["SIGNUP_ENABLED", "GUEST_LOGIN_ENABLED", "PROJECT_CHAT_GUEST_UPLOADS_ENABLED", "AI_FREE_TIER", "ALWAYS_RUN_MIGRATIONS"];
+const BOOLEAN_ENV_NAMES = ["SIGNUP_ENABLED", "GUEST_LOGIN_ENABLED", "PROJECT_CHAT_GUEST_UPLOADS_ENABLED", "AI_FREE_TIER", "ALWAYS_RUN_MIGRATIONS", "MCP_ENABLED"];
 const BYTE_LIMIT_ENV_NAMES = ["PROJECT_CHAT_S3_QUOTA_BYTES", "PROJECT_CHAT_USER_QUOTA_BYTES"];
 // Cloudflare R2's free tier is 10 GB-month. Compare against decimal GB, the smaller reading.
 const R2_FREE_TIER_BYTES = 10 * 1000 ** 3;
@@ -193,6 +193,17 @@ for (const name of ["AI_USER_DAILY_REQUESTS", "AI_APP_DAILY_REQUESTS"]) {
 }
 if (aiProvider === "gemini" && cleanEnvValue("AI_FREE_TIER") !== "false" && Number(cleanEnvValue("AI_APP_DAILY_REQUESTS") || 0) > 500) {
   warnings.push("AI_APP_DAILY_REQUESTS is above the ~500 requests a day of Gemini's free tier. Past it, Google answers 429 and the planner takes over.");
+}
+
+// AI apps over MCP (#478): off unless MCP_ENABLED is "true", and then its access tokens need a
+// signing secret (src/lib/mcp/access-token.ts). Changing the secret ends every access token at once.
+const mcpTokenSecret = cleanEnvValue("MCP_TOKEN_SECRET");
+if (cleanEnvValue("MCP_ENABLED") === "true" && !mcpTokenSecret) {
+  errors.push(
+    `Missing MCP_TOKEN_SECRET for MCP_ENABLED="true". Generate one with node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))" and add it as a server-side secret.`,
+  );
+} else if (mcpTokenSecret && mcpTokenSecret.length < 32) {
+  errors.push("MCP_TOKEN_SECRET is too short. Use at least 32 random characters.");
 }
 
 // Password reset and invitation emails build their links from APP_BASE_URL.

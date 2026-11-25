@@ -18,11 +18,18 @@ test("both documents open signed out, dated, with the contact address", async ({
   await expect(page).toHaveURL(/\/privacy$/);
   await expect(page).toHaveTitle("Privacy Policy · AI Multi");
   await expect(page.getByRole("heading", { level: 1, name: "Privacy Policy" })).toBeVisible();
-  await expect(page.getByText(/^Last updated [A-Z][a-z]+ \d{1,2}, \d{4}$/)).toBeVisible();
+  // The policy is long enough that React streams it: until its reveal script runs, a hidden copy sits
+  // in the page beside the one people see, so text is read from the visible document.
+  const policy = page.getByRole("article");
+  await expect(policy.getByText(/^Last updated [A-Z][a-z]+ \d{1,2}, \d{4}$/)).toBeVisible();
   // What Google's review looks for: how Google user data is used, and the Limited Use statement.
-  await expect(page.getByRole("heading", { name: "Google user data" })).toBeVisible();
-  await expect(page.getByText(/adheres to the Google API Services User Data Policy, including the Limited Use requirements/)).toBeVisible();
-  await expect(page.getByText("AI Multi is for people 18 and older.")).toBeVisible();
+  await expect(policy.getByRole("heading", { name: "Google user data" })).toBeVisible();
+  await expect(policy.getByText(/adheres to the Google API Services User Data Policy, including the Limited Use requirements/)).toBeVisible();
+  await expect(policy.getByText("AI Multi is for people 18 and older.")).toBeVisible();
+  // AI apps connected over MCP (#478): what they see, who processes it, and how to disconnect them.
+  await expect(policy.getByRole("heading", { name: "Connected AI apps" })).toBeVisible();
+  await expect(policy.getByText(/that company's terms and privacy policy apply, not this one/)).toBeVisible();
+  await expect(policy.getByText(/under Connected apps, click Disconnect next to the app/)).toBeVisible();
   await expect(page.getByRole("link", { name: CONTACT }).first()).toHaveAttribute("href", `mailto:${CONTACT}`);
 
   const terms = await page.goto("/terms");
