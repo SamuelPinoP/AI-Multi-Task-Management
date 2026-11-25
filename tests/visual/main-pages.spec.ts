@@ -8,7 +8,8 @@ import { continueAsGuest, openAccountMenu, plusTab, signUpAndLogIn } from "../e2
  * unread message in Team chat (DES-11), and Tasks with the Blue accent and the
  * account menu open (DES-15). On phones, Tasks also has its Filter and sort sheet
  * and its add box taken (#521). The AI page is taken with a ticket's card and its
- * draft, and a task's page with its description in sections (#433).
+ * draft, a task's page with its description in sections (#433), and Integrations
+ * with one app's steps open (#480).
  *
  * Each test signs up a new account, always named "E2E visual", and adds the same data (guest
  * workspaces hold too little for it since #458; the last test shows the guest profile). Due dates are
@@ -366,6 +367,19 @@ test("Calendar", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "March 2026" })).toBeVisible();
   await page.waitForLoadState("networkidle");
   await expect(page).toHaveScreenshot("calendar.png", { mask: changing(page) });
+});
+
+// Integrations (#480, designs 1A and 2A) with Claude Code's steps open. The address is the visual
+// server's own, the same in every run.
+test("Integrations", async ({ page }) => {
+  await signUp(page);
+  await page.goto("/integrations");
+  await page.getByRole("button", { name: "Connect Claude Code", exact: true }).click();
+  await expect(page.getByRole("list", { name: "Connect Claude Code" })).toBeVisible();
+  // The pointer leaves Close, so the picture shows the button as people see it, not its hover shade.
+  await page.getByRole("heading", { level: 1, name: "Integrations" }).hover();
+  await page.waitForLoadState("networkidle");
+  await expect(page).toHaveScreenshot("integrations.png", { mask: changing(page) });
 });
 
 // The guest profile (#458, design 2C) where an account's row sits: at the bottom of the sidebar, and of the

@@ -101,7 +101,7 @@ for (const theme of ["light", "dark"] as const) {
 
     const found: string[] = [];
     // "/login?email=…" for another address shows "Switch accounts?".
-    for (const path of ["/", "/today", "/login?email=a11y-other%40example.test", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/tree", treePath, "/planner", "/goals", "/roadmap", "/trash", "/account", "/ai"]) {
+    for (const path of ["/", "/today", "/login?email=a11y-other%40example.test", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/tree", treePath, "/planner", "/goals", "/roadmap", "/integrations", "/trash", "/account", "/ai"]) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
       found.push(...(await violations(page, path)));

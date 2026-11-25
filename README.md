@@ -173,7 +173,16 @@ failed, as this table does. The comparison and the recommended model are on
 AI apps such as Claude, ChatGPT, Codex and Cursor can read a person's workspace
 over the [Model Context Protocol](https://modelcontextprotocol.io) at `/api/mcp`
 (#478). It's off, a 404, unless `MCP_ENABLED` is `"true"`. Sign-in for apps
-(OAuth), the consent page and Connected apps on the Account page come with #477.
+(OAuth), the consent page and Connected apps come with #477.
+
+- **Integrations page:** `/integrations` (#480), in the sidebar's Tools, gives
+  the server's address with Copy and each app's steps: a custom connector in
+  Claude and ChatGPT, one terminal command in Claude Code and Codex, and
+  one-click install links for Cursor and VS Code (`src/lib/mcp/connect.ts`).
+  The address is `APP_BASE_URL`'s, the one tokens are bound to. While the switch
+  is off, the page shows the not-found page and nothing links to it. Guests get
+  the sign-up pop-up, since apps sign in to an account. Connected apps (#477)
+  becomes a section of this page.
 
 - **Tools:** the assistant's six read tools, the same registry objects with the
   same Zod schemas (`src/lib/ai/tools`), plus `get_task`, one task with its

@@ -12,7 +12,7 @@ export type GuestLimitKind = keyof typeof GUEST_LIMITS;
 export type GuestUsage = Record<GuestLimitKind, number>;
 
 /** Why the sign-up pop-up opened: a limit, something only accounts can do, or the guest's own choice. */
-export type GuestSignupReason = GuestLimitKind | "ai" | "people" | "messages" | "calendar-feed" | "notifications" | "signup";
+export type GuestSignupReason = GuestLimitKind | "ai" | "ai-apps" | "people" | "messages" | "calendar-feed" | "notifications" | "signup";
 
 /** The API's answer, with status 403, when a guest asks for more than their workspace holds. */
 export const GUEST_LIMIT_CODE = "GUEST_LIMIT";
@@ -45,6 +45,8 @@ export function guestHasRoom(usage: GuestUsage, kind: GuestLimitKind, adding = 1
 
 const ACCOUNT_ONLY: Record<Exclude<GuestSignupReason, GuestLimitKind | "signup">, { title: string; error: string }> = {
   ai: { title: "The AI needs a free account", error: "Create an account to use the AI assistant." },
+  // Apps sign in to an account over OAuth (#477), and guests can't grant that (#480).
+  "ai-apps": { title: "Connecting AI apps needs a free account", error: "Create an account to connect AI apps." },
   people: { title: "Inviting people needs a free account", error: "Create an account to invite people." },
   messages: { title: "Messages need a free account", error: "Create an account to send messages." },
   "calendar-feed": { title: "Calendar links need a free account", error: "Create an account to link your calendar." },

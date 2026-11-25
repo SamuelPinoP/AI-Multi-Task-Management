@@ -40,6 +40,9 @@ const appAdminPageTitles: Array<[prefix: string, title: string]> = [
   ["/users", "Users"],
 ];
 
+/** The Integrations page (#480) exists only while MCP_ENABLED is on; otherwise its address is a 404 like any other. */
+const integrationsPageTitles: Array<[prefix: string, title: string]> = [["/integrations", "Integrations"]];
+
 /**
  * Pages that fill the screen and scroll inside, like the chats and the AI page (#308): on phones the
  * bottom tabs sit under them, not over them, and their own header is the only bar above them (#420).
@@ -52,14 +55,14 @@ export function isFullHeightPage(pathname: string) {
 export function pageTitleFor(
   pathname: string,
   projects: Array<{ id: string; name: string }>,
-  { appAdmin = false }: { appAdmin?: boolean } = {},
+  { appAdmin = false, integrations = false }: { appAdmin?: boolean; integrations?: boolean } = {},
 ): { parent?: string; title: string } {
   const projectMatch = pathname.match(/^\/projects\/([^/]+)/);
   if (projectMatch) {
     return { parent: "Projects", title: projects.find((project) => project.id === projectMatch[1])?.name ?? "Project" };
   }
   if (pathname === "/") return { title: "Home" };
-  const titles = appAdmin ? [...pageTitles, ...appAdminPageTitles] : pageTitles;
+  const titles = [...pageTitles, ...(appAdmin ? appAdminPageTitles : []), ...(integrations ? integrationsPageTitles : [])];
   const found = titles.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`));
   return { title: found?.[1] ?? "" };
 }

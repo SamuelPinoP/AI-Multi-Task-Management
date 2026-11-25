@@ -53,6 +53,7 @@ test("tells guests their work comes with them when they sign up (#459)", () => {
 test("says what only accounts can do", () => {
   assert.equal(guestSignupCopy("ai").title, "The AI needs a free account");
   assert.equal(guestSignupCopy("people").title, "Inviting people needs a free account");
+  assert.equal(guestSignupCopy("ai-apps").title, "Connecting AI apps needs a free account");
   assert.equal(guestSignupCopy("signup").title, "Keep your work with a free account");
 });
 
