@@ -7,7 +7,7 @@
 // question needs: no descriptions, no other people's names or emails.
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { defineTool, type Source } from "@/lib/ai/tools/define";
+import { defineTool, optionalArgument, type Source } from "@/lib/ai/tools/define";
 import { occurrencesInRange } from "@/lib/event-occurrences";
 import { eventTimeInputValue } from "@/lib/event-time";
 import { daysFrom, dueLabel, projectHealth } from "@/lib/home-summary";
@@ -40,10 +40,12 @@ function isDayKey(value: string) {
 
 /**
  * A date written YYYY-MM-DD. Checked in code rather than with a JSON Schema pattern, which not
- * every provider accepts. The write tools (./write-tools.ts) take dates the same way.
+ * every provider accepts. The write tools (./write-tools.ts) take dates the same way. An optional
+ * date gets its description from `optionalArgument`'s result instead, where the model sees it.
  */
-export function dayKey(description: string) {
-  return z.string().refine(isDayKey, "Use a real date written YYYY-MM-DD.").describe(description);
+export function dayKey(description?: string) {
+  const day = z.string().refine(isDayKey, "Use a real date written YYYY-MM-DD.");
+  return description ? day.describe(description) : day;
 }
 
 function daysBetween(from: string, to: string) {
@@ -72,18 +74,11 @@ export const listOpenTasks = defineTool({
   description:
     "Lists the person's open tasks (not done), their own and those in projects they belong to, soonest due first, at most 25. Can filter by when they're due, by project and by status.",
   input: z.strictObject({
-    due: z
-      .enum(["overdue", "today", "next_7_days", "no_due_date"])
-      .optional()
-      .describe("overdue: past their due date. today: due today. next_7_days: due today or in the next 7 days. no_due_date: without one. Leave out for every open task."),
-    project: z
-      .string()
-      .trim()
-      .min(1)
-      .max(100)
-      .optional()
-      .describe("Only tasks in this project: its name, part of its name, or its id from list_projects."),
-    status: z.enum(["TODO", "IN_PROGRESS"]).optional().describe("Only tasks to do, or only tasks in progress."),
+    due: optionalArgument(z.enum(["overdue", "today", "next_7_days", "no_due_date"])).describe(
+      "overdue: past their due date. today: due today. next_7_days: due today or in the next 7 days. no_due_date: without one. Leave out for every open task.",
+    ),
+    project: optionalArgument(z.string().trim().max(100)).describe("Only tasks in this project: its name, part of its name, or its id from list_projects."),
+    status: optionalArgument(z.enum(["TODO", "IN_PROGRESS"])).describe("Only tasks to do, or only tasks in progress."),
   }),
   access: "read",
   async run({ due, project, status }, { userId, now, db }) {
@@ -254,7 +249,7 @@ export const listProjects = defineTool({
   description:
     "Lists the projects the person owns or belongs to, most recently updated first, at most 20, with their health as Home shows it: ON_TRACK, AT_RISK (tasks past due), STALE (no update in 7 days) or NOT_STARTED.",
   input: z.strictObject({
-    status: z.enum(["ACTIVE", "COMPLETED", "ARCHIVED"]).optional().describe("Leave out for active projects."),
+    status: optionalArgument(z.enum(["ACTIVE", "COMPLETED", "ARCHIVED"])).describe("Leave out for active projects."),
   }),
   access: "read",
   async run({ status }, { userId, now, timeZone, db }) {
@@ -360,11 +355,9 @@ export const listGoals = defineTool({
   description:
     "Lists the person's weekly goals for one week (this week unless another is given), with how many of each goal's linked tasks are done.",
   input: z.strictObject({
-    week: z
-      .string()
-      .refine((week) => weekStart(week) !== null, "Use an ISO week such as 2026-W47.")
-      .optional()
-      .describe("An ISO week such as 2026-W47. Leave out for this week."),
+    week: optionalArgument(z.string().refine((week) => weekStart(week) !== null, "Use an ISO week such as 2026-W47.")).describe(
+      "An ISO week such as 2026-W47. Leave out for this week.",
+    ),
   }),
   access: "read",
   async run({ week }, { userId, now, db }) {
@@ -427,13 +420,7 @@ export const taskStats = defineTool({
   description:
     "Counts the tasks the person can see, overall and per project (most tasks first, at most 20; tasks outside any project are \"No project\"): total, done, to do (in progress included), the percent done and to do, overdue, and done in the last 7 days. Use it for progress, analytics or \"how am I doing\" questions, and repeat its numbers instead of working them out.",
   input: z.strictObject({
-    project: z
-      .string()
-      .trim()
-      .min(1)
-      .max(120)
-      .optional()
-      .describe("Only this project: its name, part of its name, or its id from list_projects."),
+    project: optionalArgument(z.string().trim().max(120)).describe("Only this project: its name, part of its name, or its id from list_projects."),
   }),
   access: "read",
   async run({ project }, { userId, now, realNow, timeZone, db }) {

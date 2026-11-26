@@ -17,7 +17,7 @@ import {
 } from "@/lib/ai/proposals";
 import { estimateFields, estimateProblem, withEstimate, type SplitTask, type TaskEstimate } from "@/lib/ai/task-estimate";
 import { ticketDescription, ticketFields, ticketProblem } from "@/lib/ai/ticket";
-import { defineTool, type ToolContext, type ToolOutput } from "@/lib/ai/tools/define";
+import { defineTool, optionalArgument, type ToolContext, type ToolOutput } from "@/lib/ai/tools/define";
 import { dayKey } from "@/lib/ai/tools/read-tools";
 import { hasEstimate } from "@/lib/estimates";
 import { parseEventTimes } from "@/lib/event-time";
@@ -36,11 +36,7 @@ const TEXT_MAX = 2000;
 const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const reference = (what: string) => z.string().trim().min(1).max(TITLE_MAX).describe(what);
-const clock = (description: string) =>
-  z
-    .string()
-    .refine((value) => CLOCK.test(value), "Use a 24-hour time written HH:MM.")
-    .describe(description);
+const clock = () => z.string().refine((value) => CLOCK.test(value), "Use a 24-hour time written HH:MM.");
 
 const TASK_SELECT = {
   id: true,
@@ -210,7 +206,7 @@ export const createProject = defineTool({
     "Proposes a new project. Nothing changes until the person applies the proposal in the app. Returns a ref, such as new-1, that create_task and create_event take as the project of items that go in it.",
   input: z.strictObject({
     name: z.string().trim().min(1).max(NAME_MAX).describe("The project's name."),
-    description: z.string().trim().max(TEXT_MAX).optional().describe("What the project is for, when the person said."),
+    description: optionalArgument(z.string().trim().max(TEXT_MAX)).describe("What the project is for, when the person said."),
   }),
   access: "propose",
   // So tasks and events proposed in the same breath find the new project by its name.
@@ -224,16 +220,14 @@ export const createProject = defineTool({
 
 /** Where a new task goes and when it's due: what create_task and create_ticket share. */
 const newTaskFields = {
-  dueDate: dayKey("When it's due, YYYY-MM-DD.").optional(),
-  priority: priorityInput.optional().describe("Only when the person asked for one."),
-  project: z
-    .string()
-    .trim()
-    .min(1)
-    .max(NAME_MAX)
-    .optional()
-    .describe("The project it goes in: the name or id of one of the person's projects, or the ref create_project returned."),
-  parent: reference("To make it a subtask: the parent task's title or id, or the ref create_task or create_ticket returned for a new one.").optional(),
+  dueDate: optionalArgument(dayKey()).describe("When it's due, YYYY-MM-DD."),
+  priority: optionalArgument(priorityInput).describe("Only when the person asked for one."),
+  project: optionalArgument(z.string().trim().max(NAME_MAX)).describe(
+    "The project it goes in: the name or id of one of the person's projects, or the ref create_project returned.",
+  ),
+  parent: optionalArgument(z.string().trim().max(TITLE_MAX)).describe(
+    "To make it a subtask: the parent task's title or id, or the ref create_task or create_ticket returned for a new one.",
+  ),
 };
 
 type NewTask = {
@@ -328,7 +322,7 @@ export const createTask = defineTool({
   input: z
     .strictObject({
       title: z.string().trim().min(1).max(TITLE_MAX).describe("The task's title."),
-      description: z.string().trim().max(TEXT_MAX).optional().describe("Details, when the person gave some."),
+      description: optionalArgument(z.string().trim().max(TEXT_MAX)).describe("Details, when the person gave some."),
       ...newTaskFields,
       ...estimateFields("task"),
     })
@@ -376,19 +370,16 @@ export const updateTask = defineTool({
     "Proposes changes to one of the person's tasks: its title, description, due date, priority, status or project. Nothing changes until the person applies the proposal in the app. Give only the fields to change.",
   input: z.strictObject({
     task: reference("The task: its title, or its id from list_open_tasks."),
-    title: z.string().trim().min(1).max(TITLE_MAX).optional().describe("A new title."),
-    description: z.string().trim().max(TEXT_MAX).optional().describe("A new description; an empty one removes it."),
-    dueDate: dayKey("A new due date, YYYY-MM-DD.").optional(),
-    clearDueDate: z.boolean().optional().describe("true to remove the due date."),
-    priority: z.enum(PRIORITIES).optional().describe("A new priority; NONE removes it."),
-    status: z.enum(["TODO", "IN_PROGRESS", "DONE"]).optional().describe("A new status."),
-    project: z
-      .string()
-      .trim()
-      .min(1)
-      .max(NAME_MAX)
-      .optional()
-      .describe("Moves it to this project: the name or id of one of the person's projects, or the ref create_project returned."),
+    title: optionalArgument(z.string().trim().max(TITLE_MAX)).describe("A new title."),
+    description: optionalArgument(z.string().trim().max(TEXT_MAX)).describe("A new description."),
+    clearDescription: optionalArgument(z.boolean()).describe("true to remove the description."),
+    dueDate: optionalArgument(dayKey()).describe("A new due date, YYYY-MM-DD."),
+    clearDueDate: optionalArgument(z.boolean()).describe("true to remove the due date."),
+    priority: optionalArgument(z.enum(PRIORITIES)).describe("A new priority; NONE removes it."),
+    status: optionalArgument(z.enum(["TODO", "IN_PROGRESS", "DONE"])).describe("A new status."),
+    project: optionalArgument(z.string().trim().max(NAME_MAX)).describe(
+      "Moves it to this project: the name or id of one of the person's projects, or the ref create_project returned.",
+    ),
   }),
   access: "propose",
   async run(args, context) {
@@ -400,9 +391,10 @@ export const updateTask = defineTool({
 
     const changes: TaskChange[] = [];
     if (args.title !== undefined && args.title !== task.title) changes.push({ field: "title", from: task.title, to: args.title });
-    if (args.description !== undefined && (args.description || null) !== task.description) {
-      changes.push({ field: "description", from: task.description, to: args.description || null });
-    }
+    // An empty description counts as left out, like any optional argument (#504): clearDescription removes it.
+    const description = task.description || null;
+    const newDescription = args.description ?? (args.clearDescription ? null : description);
+    if (newDescription !== description) changes.push({ field: "description", from: task.description, to: newDescription });
     const due = task.dueDate ? formatTaskDayKey(task.dueDate) : null;
     const newDue = args.dueDate ?? (args.clearDueDate ? null : due);
     if (newDue !== due) changes.push({ field: "dueDate", from: due, to: newDue });
@@ -447,16 +439,12 @@ export const createEvent = defineTool({
   input: z.strictObject({
     title: z.string().trim().min(1).max(TITLE_MAX).describe("The event's title."),
     date: dayKey("The day it happens, YYYY-MM-DD."),
-    startTime: clock("When it starts, HH:MM in 24-hour time, in the person's time zone. Leave out for an all-day event.").optional(),
-    endTime: clock("When it ends, HH:MM in 24-hour time, on the same day.").optional(),
-    description: z.string().trim().max(TEXT_MAX).optional().describe("Details, when the person gave some."),
-    project: z
-      .string()
-      .trim()
-      .min(1)
-      .max(NAME_MAX)
-      .optional()
-      .describe("The project it belongs to: the name or id of one of the person's projects, or the ref create_project returned."),
+    startTime: optionalArgument(clock()).describe("When it starts, HH:MM in 24-hour time, in the person's time zone. Leave out for an all-day event."),
+    endTime: optionalArgument(clock()).describe("When it ends, HH:MM in 24-hour time, on the same day."),
+    description: optionalArgument(z.string().trim().max(TEXT_MAX)).describe("Details, when the person gave some."),
+    project: optionalArgument(z.string().trim().max(NAME_MAX)).describe(
+      "The project it belongs to: the name or id of one of the person's projects, or the ref create_project returned.",
+    ),
   }),
   access: "propose",
   async run({ title, date, startTime, endTime, description, project }, context) {

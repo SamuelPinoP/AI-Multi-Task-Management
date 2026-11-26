@@ -4,6 +4,7 @@
 // same whichever model wrote it. Subtasks follow their parent: the tools leave the estimate out of a
 // subtask whose parent has none (./tools/write-tools.ts).
 import { z } from "zod";
+import { optionalArgument } from "@/lib/ai/tools/define";
 import { listLine, parseDescription, serializeDescription } from "@/lib/description-sections";
 import { ESTIMATE_SECTION, ESTIMATE_STEPS, SPLIT_OVER, aiEstimateLine, isEstimateSection, stepMinutes, type EstimateStep } from "@/lib/estimates";
 
@@ -38,20 +39,20 @@ export function estimateFields(noun: "task" | "ticket") {
           ? "How long the work will take one person, tests and review included: your best guess from what the ticket describes, never a promise. The ticket shows it as the AI's estimate, and the person can change it."
           : "How long it will take one person: your best guess from what the person said, never a promise. Always give one. The task shows it as the AI's estimate, and the person can change it.",
       ),
-    split: z
-      .array(
-        z.strictObject({
-          title: z.string().trim().min(1).max(SUBTASK_TITLE_MAX).describe("The subtask's title."),
-          size: z.enum(SPLIT_STEPS).describe("Its own estimate: the nearest step."),
-          reason: reason("One line on what its time goes to."),
-        }),
-      )
-      .min(MIN_SPLIT)
-      .max(MAX_SPLIT)
-      .optional()
-      .describe(
-        "Only for an estimate over 2 days, and then always, unless it's a subtask: 2 to 5 subtasks that split the work, each 2 days or less, in the order they'd be done. They're offered unticked, for the person to choose.",
-      ),
+    split: optionalArgument(
+      z
+        .array(
+          z.strictObject({
+            title: z.string().trim().min(1).max(SUBTASK_TITLE_MAX).describe("The subtask's title."),
+            size: z.enum(SPLIT_STEPS).describe("Its own estimate: the nearest step."),
+            reason: reason("One line on what its time goes to."),
+          }),
+        )
+        .min(MIN_SPLIT)
+        .max(MAX_SPLIT),
+    ).describe(
+      "Only for an estimate over 2 days, and then always, unless it's a subtask: 2 to 5 subtasks that split the work, each 2 days or less, in the order they'd be done. They're offered unticked, for the person to choose.",
+    ),
   };
 }
 

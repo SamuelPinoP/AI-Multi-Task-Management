@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { z } from "zod";
 import { visibleEventWhere, visibleNoteWhere } from "../../note-access";
 import { projectAccessWhere } from "../../project-access-core";
 import { visibleTaskWhere } from "../../task-include";
 import { toolDefinition, type ToolContext, type ToolDb } from "./define";
-import { AGENT_TOOLS } from "./index";
+import { AGENT_TOOLS, MCP_TOOLS } from "./index";
 import { WRITE_TOOLS } from "./write-tools";
 import { DESCRIPTION_CHARS, excerpt, getTask, listEvents, listGoals, listOpenTasks, listProjects, MAX_PROJECTS, MAX_TASKS, percentOf, searchNotes, taskStats } from "./read-tools";
 
@@ -121,8 +122,15 @@ test("open tasks: at most 25, and says when there are more", async () => {
 });
 
 test("open tasks: invalid arguments are refused before any query", () => {
-  for (const args of [{ due: "yesterday" }, { status: "DONE" }, { project: "" }, { userId: "someone-else" }]) {
+  for (const args of [{ due: "yesterday" }, { status: "DONE" }, { project: "x".repeat(101) }, { userId: "someone-else" }]) {
     assert.equal(listOpenTasks.input.safeParse(args).success, false, JSON.stringify(args));
+  }
+});
+
+test("open tasks: a filter given as empty text or null counts as left out, as models send them (#504)", async () => {
+  const every = await openTasks({});
+  for (const args of [{ due: "", project: null, status: "  " }, { due: null, project: "", status: null }]) {
+    assert.deepEqual((await openTasks(args)).call, every.call, JSON.stringify(args));
   }
 });
 
@@ -301,6 +309,58 @@ test("every tool has a provider-safe name and a schema without patterns; only th
   }
 });
 
+type JsonSchema = {
+  type?: string | string[];
+  anyOf?: JsonSchema[];
+  enum?: unknown[];
+  minLength?: number;
+  maxLength?: number;
+  items?: JsonSchema;
+  properties?: Record<string, JsonSchema>;
+  required?: string[];
+};
+
+/** The keywords the tools' schemas use; any other counts as refusing, so a new kind of schema gets a look. */
+const KEYWORDS = new Set(["type", "description", "enum", "minLength", "maxLength", "items", "minItems", "maxItems", "properties", "required", "additionalProperties"]);
+
+/** Whether a JSON Schema, written as the tools' schemas are, takes `value`, as a provider like Groq checks it. */
+function schemaTakes(schema: JsonSchema, value: unknown): boolean {
+  if (schema.anyOf) return schema.anyOf.some((option) => schemaTakes(option, value));
+  if (Object.keys(schema).some((key) => !KEYWORDS.has(key))) return false;
+  if (![schema.type].flat().includes(value === null ? "null" : typeof value)) return false;
+  if (schema.enum && !schema.enum.includes(value)) return false;
+  return typeof value !== "string" || (value.length >= (schema.minLength ?? 0) && value.length <= (schema.maxLength ?? Infinity));
+}
+
+/** Every optional property in a tool's schema, nested ones included, with where it is. */
+function* optionalProperties(schema: JsonSchema, path: string): Generator<[string, JsonSchema]> {
+  for (const option of schema.anyOf ?? []) yield* optionalProperties(option, path);
+  if (schema.items) yield* optionalProperties(schema.items, `${path}[]`);
+  for (const [key, property] of Object.entries(schema.properties ?? {})) {
+    if (!schema.required?.includes(key)) yield [`${path}.${key}`, property];
+    yield* optionalProperties(property, `${path}.${key}`);
+  }
+}
+
+test("every optional argument takes empty text and null as left out, in the tool's JSON schema and in the tool (#504)", () => {
+  let optional = 0;
+  for (const tool of new Set([...AGENT_TOOLS, ...MCP_TOOLS])) {
+    for (const [path, property] of optionalProperties(toolDefinition(tool).parameters as JsonSchema, tool.name)) {
+      optional += 1;
+      for (const value of [null, ""]) assert.ok(schemaTakes(property, value), `${path} takes ${JSON.stringify(value)}: ${JSON.stringify(property)}`);
+    }
+    assert.ok(tool.input instanceof z.ZodObject, tool.name);
+    for (const [name, field] of Object.entries(tool.input.shape)) {
+      if (!field.safeParse(undefined).success) continue;
+      for (const value of [null, "", "  "]) {
+        const parsed = field.safeParse(value);
+        assert.ok(parsed.success && parsed.data === undefined, `${tool.name}.${name}: ${JSON.stringify(value)} counts as left out`);
+      }
+    }
+  }
+  assert.ok(optional > 30, `the check found the tools' optional arguments: ${optional}`);
+});
+
 type StatsRow = { name?: string; status?: string; total: number; done: number; toDo: number; inProgress: number; percentDone: number; percentToDo: number; overdue: number; doneLast7Days: number };
 type StatsData = { overall: StatsRow; projects: StatsRow[]; moreProjects?: number; countedUpTo?: string };
 
@@ -427,8 +487,17 @@ test("task stats: one project by name or id, its status when it isn't active, an
   });
   assert.equal(empty.calls.filter((call) => call.model === "project").length, 0, "no project lookup without projects");
 
-  for (const project of ["", " ", "x".repeat(121)]) assert.equal(taskStats.input.safeParse({ project }).success, false, JSON.stringify(project));
+  for (const project of ["x".repeat(121), 5]) assert.equal(taskStats.input.safeParse({ project }).success, false, JSON.stringify(project));
   assert.equal(taskStats.input.safeParse({ userId: "someone-else" }).success, false, "no unknown arguments");
+});
+
+test("task stats: a project given as empty text or null counts every project, as gpt-oss-120b sent it (#504)", async () => {
+  const every = await stats({}, EXAMPLE);
+  for (const project of ["", " ", null]) {
+    const blank = await stats({ project }, EXAMPLE);
+    assert.deepEqual(blank.groupCalls[0].where, every.groupCalls[0].where, JSON.stringify(project));
+    assert.deepEqual(blank.data, every.data, JSON.stringify(project));
+  }
 });
 
 // get_task (#478): one task for AI apps connected over MCP. It reads with findFirst, three times
