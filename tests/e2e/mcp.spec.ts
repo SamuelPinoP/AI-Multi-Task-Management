@@ -5,8 +5,8 @@ import { mintAccessToken } from "../../src/lib/mcp/access-token";
 import { queryDatabase, signUpAndLogIn, uniqueName } from "./helpers";
 
 // AI apps over MCP (#478): the MCP SDK's own client against the local server, with a token this
-// test mints. Sign-in for apps (OAuth, #477) isn't built yet, so the grant is a row put in by hand,
-// as the consent page will store it. No test calls an AI.
+// test mints and a grant put in by hand, as sign-in stores it; oauth.spec.ts signs in the way apps
+// do (#477). No test calls an AI.
 
 /** The e2e server's signing secret (scripts/run-playwright-e2e.mjs, playwright.config.ts). A test value. */
 const MCP_TOKEN_SECRET = "e2e-mcp-token-secret-not-a-real-secret";

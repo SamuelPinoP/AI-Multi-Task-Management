@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { CLIENT_ID_PREFIX, USED_CODE_DAYS } from "@/lib/mcp/oauth";
 import { cleanupExpiredProjectChatUploads } from "@/lib/project-chat-quota";
 import type { ProjectChatStoredAttachmentReference } from "@/lib/project-chat-storage";
 import { signInHistoryCutoff } from "@/lib/sign-in-history-core";
@@ -15,6 +16,14 @@ export const AGENT_RUN_DAYS = 90;
 export const AGENT_CHAT_DAYS = 90;
 /** The log of AI apps' tool calls over MCP (#478) is kept this long: who called what, never what was asked or answered. */
 export const MCP_TOOL_CALL_DAYS = 30;
+/** A disconnected AI app's grant (#477) is deleted this long after it was disconnected. */
+export const MCP_REVOKED_GRANT_DAYS = 30;
+/**
+ * An AI app's registration (#477) is deleted once it is this old and no grant uses it any more: one
+ * nobody connected with goes after a month, and one that was connected a month after it was last
+ * disconnected, so connecting it again soon after still works.
+ */
+export const MCP_UNUSED_CLIENT_DAYS = 30;
 /**
  * Changes the AI assistant proposed in an answer that was never stored (the person left before it
  * finished) are deleted after this long (#310); they expired after an hour anyway. The others go
@@ -43,6 +52,10 @@ type CleanupDb = Pick<
   | "agentChat"
   | "agentProposal"
   | "mcpToolCall"
+  | "mcpAuthorizationCode"
+  | "mcpRefreshToken"
+  | "mcpClient"
+  | "mcpGrant"
 >;
 
 export type DailyCleanupResult = {
@@ -62,6 +75,14 @@ export type DailyCleanupResult = {
   agentProposals: number;
   /** AI apps' tool calls over MCP older than MCP_TOOL_CALL_DAYS. */
   mcpToolCalls: number;
+  /** Consent codes USED_CODE_DAYS past their expiry. */
+  mcpCodes: number;
+  /** Expired refresh tokens: apps unused for a month, or a year after they connected. */
+  mcpRefreshTokens: number;
+  /** App registrations older than MCP_UNUSED_CLIENT_DAYS that no grant uses. */
+  mcpClients: number;
+  /** Grants disconnected more than MCP_REVOKED_GRANT_DAYS ago. */
+  mcpGrants: number;
   guests: number;
   /** Guests skipped because a stored file couldn't be deleted; they are retried the next day. */
   guestsSkipped: number;
@@ -74,8 +95,9 @@ export type DailyCleanupResult = {
  *   expired rate-limit counters, inbox notifications older than NOTIFICATION_DAYS, hourly
  *   email counts older than EMAIL_COUNT_DAYS, sign-ins older than SIGN_IN_HISTORY_DAYS, AI
  *   assistant runs older than AGENT_RUN_DAYS, AI chats nobody opened for AGENT_CHAT_DAYS, AI
- *   proposals whose answer was never stored, after UNLINKED_PROPOSAL_DAYS, and AI apps' MCP tool
- *   calls older than MCP_TOOL_CALL_DAYS;
+ *   proposals whose answer was never stored, after UNLINKED_PROPOSAL_DAYS, AI apps' MCP tool
+ *   calls older than MCP_TOOL_CALL_DAYS, and sign-in's leftovers for AI apps: old consent codes,
+ *   expired refresh tokens, registrations nobody connected with, and grants long disconnected;
  * - guest workspaces older than INACTIVE_GUEST_DAYS without a valid session (a guest has no
  *   password, so once its session is gone nobody can reach it), with their data and stored files;
  * - direct chat uploads that expired without being attached, with their stored files.
@@ -119,6 +141,7 @@ export async function runDailyCleanup({
   const mcpToolCalls = await db.mcpToolCall.deleteMany({
     where: { createdAt: { lt: new Date(now.getTime() - MCP_TOOL_CALL_DAYS * 86_400_000) } },
   });
+  const mcp = await cleanUpAppSignIns(db, now);
   const guests = await deleteInactiveGuests({ db, deleteStoredObjects, now });
 
   let uploads = 0;
@@ -140,10 +163,31 @@ export async function runDailyCleanup({
     agentChats: agentChats.count,
     agentProposals: agentProposals.count,
     mcpToolCalls: mcpToolCalls.count,
+    ...mcp,
     guests: guests.deleted,
     guestsSkipped: guests.skipped,
     uploads,
   };
+}
+
+/** What sign-in for AI apps (#477) leaves behind once nobody can use it. */
+async function cleanUpAppSignIns(db: CleanupDb, now: Date) {
+  const daysAgo = (days: number) => new Date(now.getTime() - days * 86_400_000);
+  // Used codes stay a day, so a second use can still revoke what the first one got.
+  const codes = await db.mcpAuthorizationCode.deleteMany({ where: { expiresAt: { lt: daysAgo(USED_CODE_DAYS) } } });
+  const refreshTokens = await db.mcpRefreshToken.deleteMany({ where: { expiresAt: { lt: now } } });
+  const grants = await db.mcpGrant.deleteMany({ where: { revokedAt: { lt: daysAgo(MCP_REVOKED_GRANT_DAYS) } } });
+  // A grant's client ID is either a registration's or a metadata document's address, so registrations
+  // have no link to grants: look up the registered ones still in use.
+  const inUse = await db.mcpGrant.findMany({
+    where: { clientId: { startsWith: CLIENT_ID_PREFIX } },
+    select: { clientId: true },
+    distinct: ["clientId"],
+  });
+  const clients = await db.mcpClient.deleteMany({
+    where: { createdAt: { lt: daysAgo(MCP_UNUSED_CLIENT_DAYS) }, id: { notIn: inUse.map(({ clientId }) => clientId) } },
+  });
+  return { mcpCodes: codes.count, mcpRefreshTokens: refreshTokens.count, mcpClients: clients.count, mcpGrants: grants.count };
 }
 
 async function deleteInactiveGuests({

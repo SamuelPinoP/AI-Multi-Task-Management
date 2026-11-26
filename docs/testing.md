@@ -35,6 +35,7 @@ npx next build
 - Measure boxes only after transitions end: the sidebar narrows over 200 ms, so wait for the end state, for example `expect.poll` on `#app-sidebar`'s width.
 - An "it's gone" check proves nothing while a modal is open: Radix hides the rest of the page from `getByRole`, so `toHaveCount(0)` passes at once. After confirming in a dialog, wait for the toast or the dialog closing; prove a race by holding the request with `page.route()`.
 - Wait for what the browser shows (a toast, a heading), not the server's state. React's hidden streaming copy can duplicate text: assert on visible text.
+- `page.route()` doesn't catch where a redirect goes next: after Allow's 303, the browser dialed the routed loopback address for real and showed an error page (`ERR_CONNECTION_REFUSED`, `chrome-error://chromewebdata/`). Serve such a stop for real, as `oauth.spec.ts` does on a port the system picks.
 - Scope ambiguous lookups: two "Chat" links appear when the sidebar shows a project's pages (look inside `#main-content`); scope Calendar to the "Workspace" navigation; use `exact: true` for button names (tree handles are "Move <title>"); attachments are `input[type="file"][multiple]`.
 - On phones the profile menu opens from the top bar, or inside the menu sheet on pages without one: use `openAccountMenu()` from `tests/e2e/helpers.ts`.
 - End date patterns such as `^Sun, Nov 1` with `\b`, or they match "Sun, Nov 15". Tests comparing event times with "now" run the browser in an `Etc/GMT±N` zone where it's midday ("Now and next" in `home.spec.ts`).

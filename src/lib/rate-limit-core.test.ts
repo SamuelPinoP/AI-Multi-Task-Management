@@ -46,6 +46,10 @@ test("reads the client IP from the first x-forwarded-for entry", () => {
 test("limits are tighter where abuse costs most", () => {
   assert.ok(RATE_LIMITS.loginAccount.limit < RATE_LIMITS.loginIp.limit);
   assert.ok(RATE_LIMITS.resetRequestAccount.limit <= RATE_LIMITS.resetRequestIp.limit);
+  // Each AI app registration adds a row; other sign-in requests don't (#477).
+  assert.ok(RATE_LIMITS.oauthRegisterIp.limit / RATE_LIMITS.oauthRegisterIp.windowMs < RATE_LIMITS.oauthIp.limit / RATE_LIMITS.oauthIp.windowMs);
+  // One device or one account can't use up its app's share alone.
+  assert.ok(RATE_LIMITS.oauthDevice.limit < RATE_LIMITS.oauthClient.limit && RATE_LIMITS.oauthAccount.limit < RATE_LIMITS.oauthClient.limit);
   for (const rule of Object.values(RATE_LIMITS)) {
     assert.match(rule.name, /^[a-z-]+$/);
     assert.ok(rule.limit > 0 && rule.windowMs >= MINUTE);

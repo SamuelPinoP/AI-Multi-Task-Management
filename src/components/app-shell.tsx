@@ -115,7 +115,8 @@ type NavItem = NavMatch & {
   badge?: { value: number; label: string };
 };
 
-const publicPaths = new Set(["/login", "/signup", "/forgot-password", "/reset-password", "/verify-email", "/privacy", "/terms"]);
+// The consent page for AI apps (#477) has the bare header too, signed in or not: it stands between the app and the account.
+const publicPaths = new Set(["/login", "/signup", "/forgot-password", "/reset-password", "/verify-email", "/privacy", "/terms", "/oauth/authorize"]);
 
 function firstName(user: NonNullable<ShellUser>) {
   if (user.isGuest) return "Guest";

@@ -1,6 +1,8 @@
 // Connecting an AI app to AI Multi's MCP server (#480): the switch, the server's address, each
-// app's steps and the install links Cursor and VS Code open. Nothing here loads the MCP SDK, so the
-// root layout and the Integrations page can import it; the endpoint itself is in handler.ts.
+// app's steps and the install links Cursor and VS Code open, and how Connected apps (#477) shows
+// the apps already connected. Nothing here loads the MCP SDK, so the root layout and the
+// Integrations page can import it; the endpoint itself is in handler.ts.
+import { dayKeyInZone, formatInstant } from "@/lib/user-time";
 
 type Env = Record<string, string | undefined>;
 
@@ -66,6 +68,61 @@ export type ConnectApp = {
 export const EXAMPLE_REQUESTS = ["What's due this week?", "What's on my calendar tomorrow?", "How am I doing on this week's goals?"] as const;
 
 const ALLOW = "Click Allow on the AI Multi page that opens in your browser.";
+
+/** An app as Connected apps on the Integrations page shows it (#477): one grant, from sign-in. */
+export type ConnectedAppView = {
+  id: string;
+  /** The name the person approved, such as "Claude". */
+  name: string;
+  /** Where the consent page sent them back to, such as "claude.ai"; null for grants made before it was saved. */
+  address: string | null;
+  connectedAt: string;
+  lastUsedAt: string | null;
+};
+
+// How apps name themselves when they register (Claude Code says "Claude Code (ai-multi)"), and where web apps return to.
+const KNOWN_APPS: Array<{ id: string; name?: RegExp; address?: RegExp }> = [
+  { id: "claude-code", name: /^claude code\b/i },
+  { id: "codex", name: /^codex\b/i },
+  { id: "cursor", name: /^cursor\b/i, address: /^(cursor:\/\/|([\w-]+\.)*cursor\.(com|sh)$)/i },
+  { id: "vscode", name: /\b(visual studio code|vs ?code)\b/i, address: /^([\w-]+\.)*vscode\.dev$/i },
+  { id: "claude", address: /^([\w-]+\.)*claude\.(ai|com)$/i },
+  { id: "chatgpt", address: /^([\w-]+\.)*(chatgpt\.com|openai\.com)$/i },
+];
+
+/**
+ * Which app in the list a connected app is, from the name it gave and the address it returns to,
+ * or null for any other app. Connected apps leave the AI assistants list (design 4C).
+ */
+export function knownAppId(app: { name: string; address: string | null }) {
+  const found = KNOWN_APPS.find(({ name, address }) => (name && name.test(app.name)) || (address && app.address && address.test(app.address)));
+  return found?.id ?? null;
+}
+
+/** The list's entry for a connected app, for its tile and description, or null for any other app. */
+export function knownApp(app: { name: string; address: string | null }, serverUrl = "") {
+  const id = knownAppId(app);
+  return id ? (connectApps(serverUrl).find((entry) => entry.id === id) ?? null) : null;
+}
+
+/** Letters for an app's tile: the first of its first two words, or its first two letters. */
+export function appTile(name: string) {
+  const words = name.split(/\s+/).filter((word) => /^[\p{L}\p{N}]/u.test(word));
+  if (words.length === 0) return "+";
+  if (words.length === 1) return Array.from(words[0]).slice(0, 2).join("").replace(/^./u, (first) => first.toUpperCase());
+  return (Array.from(words[0])[0] + Array.from(words[1])[0]).toUpperCase();
+}
+
+/** When an app connected or was last used, as Connected apps says it: "Today", "Yesterday", "Nov 18", or "Nov 18, 2025" in another year. */
+export function connectedAppDay(value: string, timeZone: string | null, todayKey: string) {
+  const day = dayKeyInZone(timeZone, new Date(value));
+  const [year, month, date] = todayKey.split("-").map(Number);
+  const yesterday = new Date(Date.UTC(year, month - 1, date - 1)).toISOString().slice(0, 10);
+  if (day === todayKey) return "Today";
+  if (day === yesterday) return "Yesterday";
+  const sameYear = day.slice(0, 4) === todayKey.slice(0, 4);
+  return formatInstant(value, timeZone, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
+}
 
 /**
  * Each app's steps, checked against its own docs (November 2026): Claude's custom connectors,

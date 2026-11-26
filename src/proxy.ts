@@ -25,5 +25,6 @@ export function proxy(request: NextRequest) {
 export const config = {
   // The installable app's files must load signed out too: browsers fetch the
   // manifest, icons and service worker without following a login redirect.
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|uploads|sw.js|manifest.webmanifest|icons/).*)"],
+  // AI apps read sign-in's metadata in /.well-known/ before anyone signs in (#477).
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|uploads|sw.js|manifest.webmanifest|icons/|\\.well-known/).*)"],
 };

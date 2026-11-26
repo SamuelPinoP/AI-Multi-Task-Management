@@ -98,10 +98,16 @@ for (const theme of ["light", "dark"] as const) {
     await continueAsGuest(page);
     const { projectId, treePath } = await seedWorkspace(page);
     await page.evaluate((value) => localStorage.setItem("ai-multi-theme", value), theme);
+    // The consent page AI apps send people to (#477), for an app that registered; a guest gets the sign-up prompt.
+    const registration = await page.request.post("/api/oauth/register", {
+      data: { client_name: "A11y app", redirect_uris: ["http://127.0.0.1/callback"], token_endpoint_auth_method: "none" },
+    });
+    const { client_id: clientId } = (await registration.json()) as { client_id: string };
+    const consentPath = `/oauth/authorize?${new URLSearchParams({ client_id: clientId, response_type: "code", code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", code_challenge_method: "S256" })}`;
 
     const found: string[] = [];
     // "/login?email=…" for another address shows "Switch accounts?".
-    for (const path of ["/", "/today", "/login?email=a11y-other%40example.test", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/tree", treePath, "/planner", "/goals", "/roadmap", "/integrations", "/trash", "/account", "/ai"]) {
+    for (const path of ["/", "/today", "/login?email=a11y-other%40example.test", "/chats", `/chats?project=${projectId}`, "/tasks", "/projects", `/projects/${projectId}`, "/notes", "/events", "/events/calendar", "/board", "/tree", treePath, "/planner", "/goals", "/roadmap", "/integrations", consentPath, "/trash", "/account", "/ai"]) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
       found.push(...(await violations(page, path)));

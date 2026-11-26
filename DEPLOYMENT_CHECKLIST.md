@@ -114,12 +114,12 @@ Nothing is sent for a person until they agree to the assistant's data notice. Ea
 
 ### AI apps over MCP (optional, free)
 
-`/api/mcp` lets AI apps such as Claude and ChatGPT read a person's workspace (#478), and the Integrations page (`/integrations`, #480) shows people how to connect them. Until `MCP_ENABLED` is `"true"`, the endpoint answers 404, the page shows the not-found page (with a 200, like `/usage`, since pages stream), and nothing links to it. Leave it off until sign-in for apps (#477) ships: until then no app can get a token.
+`/api/mcp` lets AI apps such as Claude and ChatGPT read a person's workspace (#478) once they sign in with OAuth and the person clicks Allow on the consent page (`/oauth/authorize`, #477), and the Integrations page (`/integrations`, #480) shows people how to connect them and which apps are connected. Until `MCP_ENABLED` is `"true"`, the endpoint, sign-in's endpoints and metadata answer 404, the pages show the not-found page (with a 200, like `/usage`, since pages stream), and nothing links to them.
 
 1. In the checkout linked to Vercel, run `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))" | npx -y vercel@latest env add MCP_TOKEN_SECRET production --sensitive`. It generates the token signing secret and stores it without showing it.
 2. Run `npx -y vercel@latest env add MCP_ENABLED production` and enter `true`. Both take effect with the next deploy, and the deploy check refuses `MCP_ENABLED="true"` without a secret of at least 32 characters.
 
-Changing `MCP_TOKEN_SECRET` ends every access token at once. Connecting and listing tools touch no database; each tool call reads the grant and writes one row to `McpToolCall`, kept 30 days.
+Changing `MCP_TOKEN_SECRET` ends every access token at once; apps then refresh, so nobody has to connect again. Checking an access token needs no database, so starting a session and listing tools touch none; each tool call reads the grant and writes one row to `McpToolCall`, kept 30 days. Refreshing a token, about once an hour while an app is in use, is one request: three rate-limit counters (network, app and device), a read and a write, and one more read for an app that registered itself. Signing an app in is a handful of queries, once.
 
 ## Deployment environment validation
 
