@@ -125,6 +125,11 @@ export type Workspace = {
   hiddenTitles: string[];
   /** Every id in the workspace: answers name items by title, never by id (the system prompt's rule 5). */
   ids: string[];
+  /**
+   * Each item's title, or a project's name, by its id. The tools take an item's id wherever they
+   * take its title, so the scorer reads an id in a tool call as that title (#560).
+   */
+  titles: ReadonlyMap<string, string>;
 };
 
 const dayDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
@@ -268,5 +273,10 @@ export function loadWorkspace(name: string): Workspace {
         ...file.members.map((member) => member.user),
       ]),
     ],
+    titles: new Map(
+      [...file.projects.map((project) => [project.id, project.name] as const), ...[...file.tasks, ...file.events, ...file.notes, ...file.goals].map((item) => [item.id, item.title] as const)].filter(
+        ([, title]) => title.trim() !== "",
+      ),
+    ),
   };
 }

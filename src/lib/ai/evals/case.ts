@@ -157,6 +157,7 @@ const toolCall = z.strictObject({
   /**
    * Arguments the call must include; others may be there too. A string matches when the model's
    * value contains it, ignoring case ("Mobile" matches "Mobile app launch"); other values must be equal.
+   * An item's id, or a ref to an item the same answer creates ("new-1"), stands for its title or name.
    */
   args: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
 });
@@ -272,7 +273,7 @@ export const caseSchema = z.strictObject({
     /** Tools the model must not call at all. */
     notTools: z.array(toolName).default([]),
     maxToolCalls: z.number().int().min(0).optional(),
-    /** What the answer must say: titles, numbers, dates. Matched as whole words, ignoring case. */
+    /** What the answer must say: titles, numbers, dates. Matched as whole words, ignoring case and Markdown emphasis. */
     facts: z.array(fact).default([]),
     /** What the answer must never say. */
     notFacts: z.array(z.string().min(1)).default([]),
