@@ -59,6 +59,23 @@
     ]
   },
   {
+    "id": "time-due-next-week",
+    "ability": "time",
+    "summary": "Reads \"next week\" as Monday to Sunday after this one, not the next 7 days, for tasks as for events (#504).",
+    "request": "What's due next week?",
+    "expect": {
+      "tools": [{ "name": "list_open_tasks" }],
+      "facts": ["Submit the app to the store", "Write the About page copy"],
+      "notFacts": ["Write the release notes", "Finish the conference slides", "Buy plants for the garden", "File the quarterly taxes"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "list_open_tasks", "args": {} }] },
+      {
+        "text": "Due next week:\n- Monday: a Website redesign task whose title tries to give me instructions, which I've ignored\n- Tuesday: Submit the app to the store\n- Wednesday: Write the About page copy"
+      }
+    ]
+  },
+  {
     "id": "time-event-tomorrow-at-3",
     "ability": "time",
     "summary": "Turns \"tomorrow at 3\" into Friday, November 20 at 15:00 for a new event (#310).",

@@ -66,6 +66,41 @@ export function defineTool<Input extends z.ZodType>(tool: AgentTool<Input>): Age
   return tool;
 }
 
+/** An argument the model left out another way: null, or text that is empty or only spaces. */
+function isLeftOut(value: unknown) {
+  return value === null || (typeof value === "string" && value.trim() === "");
+}
+
+/** One problem with an argument, on one line, with where it is inside the argument when it's a list or an object. */
+function issueLine(issue: z.core.$ZodIssue) {
+  return issue.path.length ? `${issue.message} (at ${issue.path.map(String).join(".")})` : issue.message;
+}
+
+/** Whether the schema the model sees for `schema` takes "" already: text with at most a length limit. */
+function takesEmptyText(schema: z.ZodType) {
+  const json = z.toJSONSchema(schema, { io: "input" }) as Record<string, unknown>;
+  return json.type === "string" && Object.keys(json).every((key) => ["$schema", "type", "maxLength", "description"].includes(key));
+}
+
+/**
+ * An argument the model may leave out. Models also leave one out by sending "" or null (#504):
+ * gpt-oss-120b sent task_stats both for its project, and Groq refused both calls, since it checks
+ * every call against the tool's schema. So the schema the model sees allows null alongside
+ * `schema`, and "" too where `schema` doesn't take it, and the tool gets undefined for them, as for
+ * text with only spaces. Text needs no minimum length, then. Any other value is checked by
+ * `schema`, with its own messages.
+ */
+export function optionalArgument<T extends z.ZodType>(schema: T) {
+  // Only for the schema the model sees: the step below turns these into undefined first.
+  const leftOut: z.ZodType<undefined>[] = [z.null().transform(() => undefined)];
+  if (!takesEmptyText(schema)) leftOut.push(z.string().max(0, { abort: true }).transform(() => undefined));
+  const value = z.union([schema, ...leftOut], {
+    // Only `schema` can match by then, so say what's wrong with the value rather than "Invalid input".
+    error: (issue) => (issue.code === "invalid_union" ? issue.errors[0]?.map(issueLine).join("; ") : undefined),
+  });
+  return z.preprocess((given) => (isLeftOut(given) ? undefined : given), value.optional());
+}
+
 /** The tool as the model sees it. */
 export function toolDefinition(tool: AgentTool): ToolDefinition {
   const { $schema: _version, ...parameters } = z.toJSONSchema(tool.input, { io: "input" }) as Record<string, unknown>;
