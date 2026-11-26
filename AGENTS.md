@@ -4,7 +4,11 @@ Rules for everyone who works in this repository, people and AI coding agents ali
 
 ## Start here
 
-The work order is the [roadmap project](https://github.com/users/SamuelPinoP/projects/5). Take its top "Now" item whose blockers are closed, or the issue the owner names. New issues go on it. Claude Code loads the guide for a folder (`tests/`, `prisma/`, `src/`, `src/lib/ai/`) when it reads a file there; other agents follow the "before" lines:
+The work order is the [roadmap project](https://github.com/users/SamuelPinoP/projects/5). Take its top "Now" item whose blockers are closed, or the issue the owner names. New issues go on it. Other sessions work at the same time, so check open PRs and branches first.
+
+Everything lives in this repository and on GitHub, and GitHub wins over any copy elsewhere, such as notes or a chat project's instructions.
+
+Claude Code loads the guide for a folder (`tests/`, `prisma/`, `src/`, `src/lib/ai/`) when it reads a file there; other agents follow the "before" lines:
 
 - Before you set up, make a worktree or run on Windows or in a cloud sandbox, read [`docs/development.md`](docs/development.md).
 - Before you write or run tests, read [`docs/testing.md`](docs/testing.md).
@@ -17,6 +21,7 @@ The work order is the [roadmap project](https://github.com/users/SamuelPinoP/pro
 
 - Free tiers only; only the owner runs live AI evaluations.
 - Never sign in or create data on production.
+- Never ask for a key, token or password. If work needs one, name it in one line and carry on.
 - Ask the owner before a new dependency, a behavior change, a non-additive migration, touching production data or spending money.
 - Fix causes; never weaken a test. Don't poll CI.
 
@@ -57,7 +62,7 @@ Every issue is a ticket someone else could pick up without asking questions. The
 
 ## Pull requests
 
-When an AI agent finishes an issue, it opens a pull request without being asked, and leaves merging to the owner.
+When an AI agent finishes an issue, it opens a pull request without being asked, and leaves merging to the owner: it never merges a pull request or turns on auto-merge.
 
 Every pull request description follows [`.github/pull_request_template.md`](.github/pull_request_template.md), in this order: **Description**, **Testing evidence**, **QA**. GitHub fills the template in for PRs opened on the website; with `gh pr create --body-file`, start from the template yourself. AI agents write all three sections without being asked (#231).
 
@@ -95,6 +100,16 @@ The steps a person takes in the app to see that the PR works, each with what it 
 - Cover the main path, at least one edge case or error, and the phone layout when the UI changed.
 - Tick the steps you carried out yourself and say where: a local production build or the Vercel preview. Leave the rest unticked for the reviewer. Never sign in or create data on production.
 - When nothing in the app changes (CI, docs, scripts), give the steps that show the change works instead.
+
+## End of a session
+
+An AI agent ends every session with a short summary for the owner:
+
+- What changed, with the PR link.
+- What's next.
+- **Still pending:** first what waits on the owner, then what waits on an AI agent.
+
+There is no handoff file. Anything that must outlast the session goes in an issue, a PR or these docs.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
