@@ -334,18 +334,21 @@ export default function PrivacyPage() {
             you trust, and check their terms before you do.
           </li>
           <li>
-            <strong>What it can do:</strong> only read. A connected app can&apos;t create, change or delete anything in AI
-            Multi.
+            <strong>What it can do:</strong> what you allow on that page: see your work, and, if you leave the box ticked,
+            create, change and delete tasks, events and notes. For now apps can only read: the tools that make changes
+            aren&apos;t available yet.
           </li>
           <li>
-            <strong>What AI Multi keeps:</strong> each connection, with the app&apos;s name, what you allowed it, when you
-            connected it and when it was last used, to the nearest hour; and for 30 days, a record of each lookup: which
-            app, which lookup (such as &quot;open tasks&quot;), whether it worked, how long it took and when, never what the
-            app asked or what it got.
+            <strong>What AI Multi keeps:</strong> each connection, with the app&apos;s name, the address the page showed,
+            what you allowed it, when you connected it and when it was last used, to the nearest hour; a sign-in for each
+            device the app is connected on, stored only as a hash, which ends after 30 days without use and a year after
+            connecting at the latest; and for 30 days, a record of each lookup: which app, which lookup (such as &quot;open
+            tasks&quot;), whether it worked, how long it took and when, never what the app asked or what it got. A
+            connection is deleted 30 days after you disconnect it.
           </li>
           <li>
-            <strong>Disconnecting:</strong> on the Account page, under Connected apps, click Disconnect next to the app. It
-            loses access at once. Deleting your account disconnects every app.
+            <strong>Disconnecting:</strong> on the Integrations page, under Connected apps, click Disconnect next to the
+            app. It loses access at once. Deleting your account disconnects every app.
           </li>
         </ul>
       </LegalSection>

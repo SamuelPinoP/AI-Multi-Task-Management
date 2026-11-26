@@ -8,23 +8,17 @@
 // (RFC 9728), never a redirect. The whole endpoint is off unless MCP_ENABLED is "true".
 import { OAuthError, OAuthErrorCode, type AuthInfo } from "@modelcontextprotocol/server";
 import { createMcpHandler, getPublicOrigin, withMcpAuth } from "mcp-handler";
-import { MIN_SECRET_LENGTH, verifyAccessToken, type TokenCheck } from "@/lib/mcp/access-token";
+import { mcpTokenSecret, verifyAccessToken, type TokenCheck } from "@/lib/mcp/access-token";
 import { configuredOrigin, isMcpEnabled, MCP_PATH, MCP_SERVER_NAME } from "@/lib/mcp/connect";
 import { MCP_INSTRUCTIONS, registerMcpTools, type McpDb } from "@/lib/mcp/tools";
 
 // The switch and the path live in connect.ts, which the app shell and the Integrations page share without loading the SDK.
-export { isMcpEnabled, MCP_PATH };
+export { isMcpEnabled, MCP_PATH, mcpTokenSecret };
 /** Where the endpoint's protected resource metadata lives (RFC 9728 §3.1); sign-in (#477) serves it. */
 export const RESOURCE_METADATA_PATH = `/.well-known/oauth-protected-resource${MCP_PATH}`;
 export const MCP_SERVER_INFO = { name: MCP_SERVER_NAME, version: "1.0.0" };
 
 type Env = Record<string, string | undefined>;
-
-/** The access tokens' signing secret, or null when it's missing or too short to be safe. */
-export function mcpTokenSecret(env: Env) {
-  const secret = env.MCP_TOKEN_SECRET?.trim();
-  return secret && secret.length >= MIN_SECRET_LENGTH ? secret : null;
-}
 
 /**
  * The site's address, which tokens are bound to and links point at: APP_BASE_URL, or the one this

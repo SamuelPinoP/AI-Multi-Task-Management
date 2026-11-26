@@ -156,6 +156,42 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
       [id("old-mcp-call"), id("recent-mcp-call"), id("member")],
     );
 
+    // Sign-in for AI apps (#477). Codes go a day after they expire; expired refresh tokens go; a grant
+    // disconnected 31 days ago goes, one disconnected 29 days ago stays; a registration from 31 days
+    // ago goes once no grant uses it, while one with a grant, or from 29 days ago, stays.
+    const addGrant = (name: string, clientId: string, revokedDaysAgo: number | null) =>
+      sql(
+        `INSERT INTO "McpGrant" (id, "userId", "clientId", "clientName", scopes, "createdAt", "revokedAt")
+         VALUES ($1, $2, $3, 'E2E app', '{read}', ${UTC_NOW} - interval '60 days',
+                 ${revokedDaysAgo === null ? "NULL" : `${UTC_NOW} - make_interval(days => $4)`})`,
+        [id(name), id("member"), clientId, ...(revokedDaysAgo === null ? [] : [revokedDaysAgo])],
+      );
+    for (const [name, daysOld] of [["old-unused-client", 31], ["old-used-client", 31], ["old-disconnected-client", 31], ["new-client", 29]] as const) {
+      await sql(
+        `INSERT INTO "McpClient" (id, name, "redirectUris", "createdAt") VALUES ($1, 'E2E app', '{http://127.0.0.1/callback}', ${UTC_NOW} - make_interval(days => $2))`,
+        [`aim_ci_${id(name)}`, daysOld],
+      );
+    }
+    await addGrant("live-grant", `aim_ci_${id("old-used-client")}`, null);
+    await addGrant("recently-disconnected-grant", `aim_ci_${id("old-disconnected-client")}`, 29);
+    await addGrant("long-disconnected-grant", "https://app.example.test/client.json", 31);
+    for (const [name, expiredHoursAgo] of [["old-code", 25], ["recent-code", 23]] as const) {
+      await sql(
+        `INSERT INTO "McpAuthorizationCode"
+           (id, "codeHash", "userId", "clientId", "clientName", "clientAddress", "redirectUri", "redirectUriSent", "codeChallenge", scopes, resource, "expiresAt")
+         VALUES ($1, $2, $3, 'https://app.example.test/client.json', 'E2E app', 'app.example.test', 'https://app.example.test/callback', true,
+                 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM', '{read}', 'http://localhost/api/mcp', ${UTC_NOW} - make_interval(hours => $4))`,
+        [id(name), id(`${name}-hash`), id("member"), expiredHoursAgo],
+      );
+    }
+    for (const [name, expiresInDays] of [["expired-refresh-token", -1], ["live-refresh-token", 1]] as const) {
+      await sql(
+        `INSERT INTO "McpRefreshToken" (id, "grantId", "tokenHash", scopes, resource, "expiresAt")
+         VALUES ($1, $2, $3, '{read}', 'http://localhost/api/mcp', ${UTC_NOW} + make_interval(days => $4))`,
+        [id(name), id("live-grant"), id(`${name}-hash`), expiresInDays],
+      );
+    }
+
     const response = await request.get("/api/cron/cleanup");
     expect(response.ok(), await response.text()).toBe(true);
     const result = (await response.json()) as Record<string, number>;
@@ -178,6 +214,21 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
     expect(result.mcpToolCalls).toBeGreaterThanOrEqual(1);
     expect(await exists("McpToolCall", "id", id("old-mcp-call"))).toBe(false);
     expect(await exists("McpToolCall", "id", id("recent-mcp-call"))).toBe(true);
+    expect(result.mcpCodes).toBeGreaterThanOrEqual(1);
+    expect(await exists("McpAuthorizationCode", "id", id("old-code"))).toBe(false);
+    expect(await exists("McpAuthorizationCode", "id", id("recent-code"))).toBe(true);
+    expect(result.mcpRefreshTokens).toBeGreaterThanOrEqual(1);
+    expect(await exists("McpRefreshToken", "id", id("expired-refresh-token"))).toBe(false);
+    expect(await exists("McpRefreshToken", "id", id("live-refresh-token"))).toBe(true);
+    expect(result.mcpGrants).toBeGreaterThanOrEqual(1);
+    expect(await exists("McpGrant", "id", id("long-disconnected-grant"))).toBe(false);
+    expect(await exists("McpGrant", "id", id("recently-disconnected-grant"))).toBe(true);
+    expect(await exists("McpGrant", "id", id("live-grant"))).toBe(true);
+    expect(result.mcpClients).toBeGreaterThanOrEqual(1);
+    expect(await exists("McpClient", "id", `aim_ci_${id("old-unused-client")}`)).toBe(false);
+    for (const name of ["old-used-client", "old-disconnected-client", "new-client"]) {
+      expect(await exists("McpClient", "id", `aim_ci_${id(name)}`), name).toBe(true);
+    }
 
     // Deleted, with what cascades from them.
     expect(await exists("User", "id", id("old-guest"))).toBe(false);
@@ -217,6 +268,8 @@ test("the daily cleanup deletes only what nobody can use any more (#132)", async
     for (const file of files) rmSync(file, { force: true });
     await sql(`DELETE FROM "EmailHourlyCount" WHERE hour = ANY($1::timestamp[])`, [emailHours]);
     await sql(`DELETE FROM "RateLimit" WHERE key LIKE $1`, [`e2e-cleanup-${run}-%`]);
+    // Registrations belong to no account, so they don't go with the users below.
+    await sql(`DELETE FROM "McpClient" WHERE id LIKE $1`, [`aim_ci_e2e-cleanup-${run}-%`]);
     await sql(`DELETE FROM "User" WHERE id LIKE $1`, [`e2e-cleanup-${run}-%`]);
     await pool.end();
   }

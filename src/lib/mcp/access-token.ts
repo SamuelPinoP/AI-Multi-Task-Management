@@ -6,7 +6,8 @@
 // The format is ours, not a JWT: `aim_at_<payload>.<signature>`, where the payload is base64url JSON
 // and the signature its HMAC-SHA256 with MCP_TOKEN_SECRET. There's no header to trust, so there's no
 // algorithm to confuse, and the prefix lets secret scanners and logs recognize a leaked token.
-// Sign-in (#477) mints them; tests mint their own. Only node:crypto, so tests can import it anywhere.
+// Sign-in (#477) mints them; tests mint their own. Only node:crypto, so tests and sign-in can import it
+// without the MCP SDK.
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const ACCESS_TOKEN_PREFIX = "aim_at_";
@@ -35,6 +36,12 @@ export type AccessTokenClaims = {
 };
 
 type Payload = { v: number; sub: string; gid: string; cid: string; scope: string; aud: string; iat: number; exp: number };
+
+/** The access tokens' signing secret, or null when it's missing or too short to be safe. */
+export function mcpTokenSecret(env: Record<string, string | undefined>) {
+  const secret = env.MCP_TOKEN_SECRET?.trim();
+  return secret && secret.length >= MIN_SECRET_LENGTH ? secret : null;
+}
 
 function sign(secret: string, payload: string) {
   return createHmac("sha256", secret).update(`${ACCESS_TOKEN_PREFIX}${payload}`).digest();

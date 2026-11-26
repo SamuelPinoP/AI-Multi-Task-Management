@@ -172,8 +172,8 @@ failed, as this table does. The comparison and the recommended model are on
 
 AI apps such as Claude, ChatGPT, Codex and Cursor can read a person's workspace
 over the [Model Context Protocol](https://modelcontextprotocol.io) at `/api/mcp`
-(#478). It's off, a 404, unless `MCP_ENABLED` is `"true"`. Sign-in for apps
-(OAuth), the consent page and Connected apps come with #477.
+(#478), once they sign in with OAuth 2.1 and the person clicks Allow (#477).
+It's all off, a 404, unless `MCP_ENABLED` is `"true"`.
 
 - **Integrations page:** `/integrations` (#480), in the sidebar's Tools, gives
   the server's address with Copy and each app's steps: a custom connector in
@@ -182,7 +182,24 @@ over the [Model Context Protocol](https://modelcontextprotocol.io) at `/api/mcp`
   The address is `APP_BASE_URL`'s, the one tokens are bound to. While the switch
   is off, the page shows the not-found page and nothing links to it. Guests get
   the sign-up pop-up, since apps sign in to an account. Connected apps (#477)
-  becomes a section of this page.
+  lists the apps connected to the account, with when each connected and was
+  last used, and Disconnect, which ends its access at once.
+- **Sign-in (#477):** OAuth 2.1 with PKCE (S256 only). Apps find it from the
+  endpoint's 401: protected resource metadata (RFC 9728) and authorization
+  server metadata (RFC 8414) under `/.well-known/`. An app's client ID is the
+  address of its metadata document, fetched from public https addresses only,
+  at most 5 KB in 5 seconds, and cached (`src/lib/mcp/client-metadata.ts`), or
+  one it registered (RFC 7591). The consent page, `/oauth/authorize`, names the
+  app and where it returns to; Allow gives it a code that works once, for five
+  minutes. Refresh tokens are random, stored as hashes and replaced on every
+  use; an old one coming back disconnects the app. Apps can revoke theirs
+  (RFC 7009). The rules are in `src/lib/mcp/oauth.ts`, the endpoints in
+  `oauth-server.ts` and the tables in `oauth-store.ts`. Every request is
+  rate-limited per network. A request counts against its app only once it
+  proves it comes from the app (a code with its PKCE secret, or a real refresh
+  token), so nobody can use up a popular app's share by naming it. Refreshes
+  are also limited per device, and Allow per account. Guests and unconfirmed
+  emails can't allow.
 
 - **Tools:** the assistant's six read tools, the same registry objects with the
   same Zod schemas (`src/lib/ai/tools`), plus `get_task`, one task with its
@@ -209,8 +226,10 @@ over the [Model Context Protocol](https://modelcontextprotocol.io) at `/api/mcp`
   never the arguments or the answer, for 30 days.
 
 The unit tests run the SDK's own client against the handler in process
-(`src/lib/mcp/*.test.ts`), and `tests/e2e/mcp.spec.ts` runs it against the
-server with a token it mints. No test calls an AI.
+(`src/lib/mcp/*.test.ts`), and sign-in's endpoints against tables kept in
+memory. `tests/e2e/mcp.spec.ts` runs the client against the server with a token
+it mints, and `tests/e2e/oauth.spec.ts` signs in with the SDK's OAuth client,
+clicking Allow in the browser. No test calls an AI.
 
 ## Project chat attachment storage
 
@@ -515,7 +534,10 @@ Every day at about 09:00 UTC, after the backup, Vercel Cron calls
 - chat uploads that expired without being attached, with their stored files;
 - hourly email counts older than 35 days (see "Free-tier usage" below);
 - sign-ins older than a year (see "Users" below);
-- AI apps' MCP tool calls older than 30 days (see "AI apps over MCP" above);
+- AI apps' MCP tool calls older than 30 days, sign-in's codes a day after they
+  expire, expired refresh tokens, apps disconnected more than 30 days ago, and
+  app registrations older than 30 days that no connection uses (see "AI apps
+  over MCP" above);
 - stored calendar feeds that no link points to any more (see "Calendar feeds"
   below; replacing or turning off a link normally deletes its feed at once).
 

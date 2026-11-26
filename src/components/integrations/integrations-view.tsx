@@ -2,14 +2,29 @@
 
 import { Copy } from "lucide-react";
 import { Fragment, useState } from "react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { toast } from "@/components/ui/toaster";
+import { useTodayKey, useUserTimeZone } from "@/components/user-time-zone";
 import { cn } from "@/lib/cn";
-import { connectApps, EXAMPLE_REQUESTS, type ConnectApp, type ConnectStep } from "@/lib/mcp/connect";
+import {
+  appTile,
+  connectApps,
+  connectedAppDay,
+  EXAMPLE_REQUESTS,
+  knownApp,
+  knownAppId,
+  type ConnectApp,
+  type ConnectedAppView,
+  type ConnectStep,
+} from "@/lib/mcp/connect";
 import { openGuestSignup } from "@/lib/workspace-events";
 
 /** The rows' small buttons (design 1A): 2rem tall. */
 const smallButton = "h-8 gap-1.5 px-3 py-0 text-[0.8125rem]";
+const rowClass = "flex min-h-15 items-center gap-3 py-2.5 pl-4 pr-3 sm:min-h-14 sm:gap-3.5 sm:px-6 sm:py-[0.5625rem]";
+const tileClass = "grid h-9 w-9 shrink-0 place-items-center rounded-[0.5625rem] border border-line bg-sunken text-[0.75rem] font-bold tracking-[-0.01em]";
+const groupBarClass = "flex h-10 items-center gap-2.5 border-b border-line bg-sunken px-4 sm:pl-6";
 
 async function copyText(text: string, done: string) {
   try {
@@ -94,8 +109,8 @@ function AppRow({ app, open, onToggle, serverUrl }: { app: ConnectApp; open: boo
   const named = (words: string) => (words.includes(app.name) ? null : <span className="sr-only"> {app.name}</span>);
   return (
     <li className="border-b border-line bg-surface">
-      <div className="flex min-h-15 items-center gap-3 py-2.5 pl-4 pr-3 sm:min-h-14 sm:gap-3.5 sm:px-6 sm:py-[0.5625rem]">
-        <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-[0.5625rem] border border-line bg-sunken text-[0.75rem] font-bold tracking-[-0.01em]">
+      <div className={rowClass}>
+        <span aria-hidden="true" className={tileClass}>
           {app.tile}
         </span>
         <div className="min-w-0 flex-1">
@@ -149,15 +164,86 @@ function AppRow({ app, open, onToggle, serverUrl }: { app: ConnectApp; open: boo
   );
 }
 
+/** A connected app's name in the list: the app's own name when it's one the list knows, else the name it gave. */
+const connectedName = (app: ConnectedAppView) => knownApp(app)?.name ?? app.name;
+
+/** One connected app (design 4C): when it connected, when it was last used, and Disconnect. */
+function ConnectedAppRow({ app, onDisconnect }: { app: ConnectedAppView; onDisconnect: () => void }) {
+  const timeZone = useUserTimeZone();
+  const today = useTodayKey();
+  const known = knownApp(app);
+  const name = connectedName(app);
+  const since = connectedAppDay(app.connectedAt, timeZone, today);
+  const lastUsed = app.lastUsedAt ? connectedAppDay(app.lastUsedAt, timeZone, today) : "Not yet";
+  return (
+    <li className="border-b border-line bg-surface">
+      <div className={rowClass}>
+        <span aria-hidden="true" className={tileClass}>
+          {known?.tile ?? appTile(name)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold">{name}</p>
+          <p className="truncate text-[0.8125rem] leading-[1.1875rem] text-muted max-sm:hidden">{known?.description ?? app.address}</p>
+          <p className="text-xs text-muted sm:hidden">
+            Connected {since} · Last used {lastUsed}
+          </p>
+        </div>
+        <div className="w-[9.375rem] shrink-0 max-sm:hidden">
+          <p className="text-xs text-muted">Connected</p>
+          <p className="text-sm">{since}</p>
+        </div>
+        <div className="w-[9.375rem] shrink-0 max-sm:hidden">
+          <p className="text-xs text-muted">Last used</p>
+          <p className="text-sm">{lastUsed}</p>
+        </div>
+        <button type="button" onClick={onDisconnect} className={cn(uiButtonClass, smallButton, "shrink-0 px-2.5 text-danger sm:w-[8.25rem]")}>
+          Disconnect<span className="sr-only"> {name}</span>
+        </button>
+      </div>
+    </li>
+  );
+}
+
 /**
- * The Integrations page (#480): the MCP server's address, then each AI app with its steps (design 1A,
- * with 2A's steps in the row). Every app signs in with OAuth (#477), which guests can't grant, so
- * their Copy and Connect open the sign-up pop-up instead.
+ * The Integrations page (#480): the MCP server's address, the apps already connected with
+ * Disconnect (design 4C, #477), then every other AI app with its steps (design 1A, with 2A's steps
+ * in the row). Every app signs in with OAuth (#477), which guests can't grant, so their Copy and
+ * Connect open the sign-up pop-up instead.
  */
-export function IntegrationsView({ serverUrl, guest }: { serverUrl: string; guest: boolean }) {
+export function IntegrationsView({
+  serverUrl,
+  guest,
+  connected: connectedApps,
+}: {
+  serverUrl: string;
+  guest: boolean;
+  connected: ConnectedAppView[];
+}) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const apps = connectApps(serverUrl);
+  const [disconnected, setDisconnected] = useState<string[]>([]);
+  const [asking, setAsking] = useState<ConnectedAppView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const connected = connectedApps.filter((app) => !disconnected.includes(app.id));
+  // A connected app leaves the list below; "Other AI apps" always stays.
+  const connectedIds = new Set(connected.map(knownAppId));
+  const apps = connectApps(serverUrl).filter((app) => !connectedIds.has(app.id));
   const askGuestToSignUp = guest ? () => openGuestSignup("ai-apps") : undefined;
+
+  async function disconnect(app: ConnectedAppView) {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/connected-apps/${encodeURIComponent(app.id)}`, { method: "DELETE" });
+      // 404: it was disconnected already, say in another tab.
+      if (!response.ok && response.status !== 404) throw new Error(`Disconnect failed: ${response.status}`);
+      setDisconnected((ids) => [...ids, app.id]);
+      setAsking(null);
+      toast.success(`${connectedName(app)} is disconnected`);
+    } catch {
+      toast.error("Couldn't disconnect the app. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="flex min-h-full flex-col">
@@ -180,8 +266,24 @@ export function IntegrationsView({ serverUrl, guest }: { serverUrl: string; gues
         </div>
       </section>
 
+      {connected.length > 0 ? (
+        <section aria-labelledby="connected-apps">
+          <div className={groupBarClass}>
+            <h2 id="connected-apps" className="text-[0.9375rem] font-semibold">
+              Connected apps
+            </h2>
+            <span className="font-mono text-2xs tabular-nums text-muted">{connected.length}</span>
+          </div>
+          <ul>
+            {connected.map((app) => (
+              <ConnectedAppRow key={app.id} app={app} onDisconnect={() => setAsking(app)} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section aria-labelledby="ai-assistants">
-        <div className="flex h-10 items-center gap-2.5 border-b border-line bg-sunken px-4 sm:pl-6">
+        <div className={groupBarClass}>
           <h2 id="ai-assistants" className="text-[0.9375rem] font-semibold">
             AI assistants
           </h2>
@@ -199,6 +301,17 @@ export function IntegrationsView({ serverUrl, guest }: { serverUrl: string; gues
           ))}
         </ul>
       </section>
+
+      <ConfirmDialog
+        open={asking !== null}
+        kind="confirm"
+        title={asking ? `Disconnect ${connectedName(asking)}?` : ""}
+        message={asking ? `${connectedName(asking)} loses access to your AI Multi account right away. To use it again, connect it here.` : ""}
+        confirmLabel="Disconnect"
+        loading={busy}
+        onConfirm={() => asking && void disconnect(asking)}
+        onCancel={() => setAsking(null)}
+      />
     </div>
   );
 }
