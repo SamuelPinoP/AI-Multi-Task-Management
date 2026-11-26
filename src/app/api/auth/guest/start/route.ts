@@ -11,18 +11,7 @@ import { seedGuestSample } from "@/lib/guest-sample";
 import { isTimeZone } from "@/lib/guest-sample-core";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { clientIpFrom, RATE_LIMITS } from "@/lib/rate-limit-core";
-
-/** Browsers say where a request comes from: Sec-Fetch-Site, or for older ones the Origin, which must be this host. */
-function fromThisSite(request: Request) {
-  const site = request.headers.get("sec-fetch-site");
-  if (site) return site === "same-origin";
-  const origin = request.headers.get("origin");
-  try {
-    return Boolean(origin) && new URL(origin!).host === request.headers.get("host");
-  } catch {
-    return false;
-  }
-}
+import { fromThisSite } from "@/lib/same-site";
 
 /** Crawlers, link previews and page audits that run scripts still get no workspace. */
 const AUTOMATED = /bot|crawl|spider|slurp|lighthouse|facebookexternalhit|embedly|preview/i;

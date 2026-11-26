@@ -20,13 +20,14 @@ How the code does things, and the traps that cost time. Read what your change to
 - **Accessibility:** a control's visible text must be part of its accessible name (axe's `label-content-name-mismatch`), even text marked `aria-hidden`.
 - **Legal pages:** change `LEGAL_LAST_UPDATED` in `src/lib/legal.ts` with every edit to the Privacy Policy or Terms.
 - **Owner-only pages:** `/usage` shows only to `ADMIN_EMAILS` (`src/lib/app-admin-core.ts`); everyone else gets the normal 404. Feedback goes to the same addresses.
-- **AI apps (MCP):** `MCP_ENABLED` turns on `/api/mcp` and the Integrations page together. The switch and the address live in `src/lib/mcp/connect.ts`, which loads no MCP SDK, so the app shell can read it; while it's off, the endpoint answers 404, the page shows the not-found page, and nothing links to it.
+- **AI apps (MCP):** `MCP_ENABLED` turns on `/api/mcp`, sign-in for apps and the Integrations page together. The switch and the address live in `src/lib/mcp/connect.ts`, which loads no MCP SDK, so the app shell can read it; while it's off, the endpoints answer 404, the pages show the not-found page, and nothing links to them.
+  - Sign-in (OAuth 2.1, #477): the rules are plain functions in `src/lib/mcp/oauth.ts`, the endpoints are `(Request) => Response` functions in `oauth-server.ts` with the tables (`oauth-store.ts`), the metadata fetcher and the clock passed in, and the routes only wire them up (`oauth-routes.ts`). Fetching an app's metadata document goes through `client-metadata.ts`, which reaches public https addresses only: never fetch an address a visitor gave any other way.
 - **Env vars:** every new one goes in `.env.example` and `scripts/validate-deployment-env.mjs`.
 - `next dev` keeps a Next.js block in `AGENTS.md` current; if an upgrade changes it, commit the new version.
 
 ## Code traps
 
-- `notFound()` in a page sends the not-found page with a 200, not a 404: `src/app/loading.tsx` makes every page stream, so the status goes first. Tests check for "This page could not be found." instead.
+- `notFound()` in a page sends the not-found page with a 200, not a 404: `src/app/loading.tsx` makes every page stream, so the status goes first. Tests check for "This page could not be found." instead. `redirect()` in a page likewise happens in the browser, so an answer that must be a real 303, such as Allow on the consent page, comes from a route handler.
 - Join Tailwind classes with `cn()`: a template string such as `` `${uiPrimaryButtonClass} px-3 py-1.5` `` keeps the base `py-2`, and the button grows.
 - A `grid` whose rows truncate text needs `grid-cols-1` (`minmax(0, 1fr)`), or an auto column grows to the longest row.
 - Text that can hold a long link or word (messages, answers) needs `wrap-anywhere`: `whitespace-pre-wrap` breaks only at spaces, and `break-words` doesn't stop a grid column or flex item from first growing to the word's width.

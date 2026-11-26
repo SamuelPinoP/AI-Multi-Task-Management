@@ -1,13 +1,18 @@
 // The Integrations page's pieces (#480): the switch, the address apps are given, each app's steps,
-// and the one-click install links, decoded the way Cursor and VS Code read them.
+// the one-click install links, decoded the way Cursor and VS Code read them, and how Connected
+// apps (#477) names and dates the apps already connected.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  appTile,
   configuredOrigin,
   connectApps,
+  connectedAppDay,
   cursorInstallLink,
   EXAMPLE_REQUESTS,
   isMcpEnabled,
+  knownApp,
+  knownAppId,
   MCP_PATH,
   MCP_SERVER_NAME,
   originFromHeaders,
@@ -97,4 +102,42 @@ test("every app gets three steps with the server's address, and nobody copies a 
   // Each ends with the consent page (#477), where the person clicks Allow.
   for (const { name, steps } of apps) assert.match(steps[2].text, /Allow/, name);
   assert.equal(EXAMPLE_REQUESTS.length, 3);
+});
+
+test("Connected apps knows the listed apps by the name they registered or the address they return to (#477)", () => {
+  assert.equal(knownAppId({ name: "Claude Code (ai-multi)", address: "localhost" }), "claude-code");
+  assert.equal(knownAppId({ name: "Codex", address: "localhost" }), "codex");
+  assert.equal(knownAppId({ name: "Cursor", address: "cursor://anysphere.cursor-retrieval" }), "cursor");
+  assert.equal(knownAppId({ name: "MCP client", address: "cursor://anysphere.cursor-retrieval" }), "cursor");
+  assert.equal(knownAppId({ name: "Visual Studio Code", address: "localhost" }), "vscode");
+  assert.equal(knownAppId({ name: "MCP client", address: "insiders.vscode.dev" }), "vscode");
+  // Claude and ChatGPT are known only by their address, which their metadata documents prove.
+  assert.equal(knownAppId({ name: "Claude", address: "claude.ai" }), "claude");
+  assert.equal(knownAppId({ name: "ChatGPT", address: "chatgpt.com" }), "chatgpt");
+  assert.equal(knownAppId({ name: "Claude", address: "claude.ai.evil.example" }), null);
+  assert.equal(knownAppId({ name: "ChatGPT", address: "evil.example" }), null);
+  assert.equal(knownAppId({ name: "Notes helper", address: null }), null);
+  assert.equal(knownApp({ name: "Claude", address: "claude.ai" }, SERVER_URL)?.tile, "Cl");
+  assert.equal(knownApp({ name: "Notes helper", address: "notes.example" }), null);
+});
+
+test("an app the list doesn't know gets its initials on its tile", () => {
+  assert.equal(appTile("Example App"), "EA");
+  assert.equal(appTile("notes"), "No");
+  assert.equal(appTile("  Zed  "), "Ze");
+  assert.equal(appTile("été app"), "ÉA");
+  assert.equal(appTile("(beta) tool"), "To");
+  assert.equal(appTile("---"), "+");
+  assert.equal(appTile(""), "+");
+});
+
+test("Connected apps says when, in the person's time zone", () => {
+  const today = "2026-11-25";
+  assert.equal(connectedAppDay("2026-11-25T08:00:00.000Z", "UTC", today), "Today");
+  assert.equal(connectedAppDay("2026-11-24T23:30:00.000Z", "UTC", today), "Yesterday");
+  // 2 AM UTC on the 25th is still the 24th in New York.
+  assert.equal(connectedAppDay("2026-11-25T02:00:00.000Z", "America/New_York", today), "Yesterday");
+  assert.equal(connectedAppDay("2026-11-18T12:00:00.000Z", "UTC", today), "Nov 18");
+  assert.equal(connectedAppDay("2025-11-18T12:00:00.000Z", "UTC", today), "Nov 18, 2025");
+  assert.equal(connectedAppDay("2026-12-31T12:00:00.000Z", "UTC", "2027-01-01"), "Yesterday");
 });

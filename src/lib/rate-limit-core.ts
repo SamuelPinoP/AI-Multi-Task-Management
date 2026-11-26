@@ -40,6 +40,14 @@ export const RATE_LIMITS = {
    * bound the model requests; this keeps a script from hammering the planner and the database.
    */
   agentChatUser: { name: "agent-chat-user", limit: 30, windowMs: 10 * MINUTE },
+  /**
+   * Sign-in for AI apps (#477): every OAuth request, per network and per app. Popular apps send all
+   * their users' requests from their own servers under one client ID, so these only stop floods.
+   */
+  oauthIp: { name: "oauth-ip", limit: 300, windowMs: 10 * MINUTE },
+  oauthClient: { name: "oauth-client", limit: 300, windowMs: 10 * MINUTE },
+  /** App registrations (RFC 7591) per network: each adds a row. */
+  oauthRegisterIp: { name: "oauth-register-ip", limit: 20, windowMs: 60 * MINUTE },
 } as const satisfies Record<string, RateLimitRule>;
 
 /** Start of the fixed window that `nowMs` falls in. */

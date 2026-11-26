@@ -17,6 +17,14 @@ const nextConfig: NextConfig = {
           { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self'" },
         ],
       },
+      {
+        // The consent page for AI apps (#477) never loads inside another site's frame, where Allow could be clicked unseen.
+        source: "/oauth/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+        ],
+      },
     ];
   },
 };

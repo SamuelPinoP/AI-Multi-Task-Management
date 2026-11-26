@@ -26,10 +26,10 @@ test("both documents open signed out, dated, with the contact address", async ({
   await expect(policy.getByRole("heading", { name: "Google user data" })).toBeVisible();
   await expect(policy.getByText(/adheres to the Google API Services User Data Policy, including the Limited Use requirements/)).toBeVisible();
   await expect(policy.getByText("AI Multi is for people 18 and older.")).toBeVisible();
-  // AI apps connected over MCP (#478): what they see, who processes it, and how to disconnect them.
+  // AI apps connected over MCP (#478): what they see, who processes it, and how to disconnect them (#477).
   await expect(policy.getByRole("heading", { name: "Connected AI apps" })).toBeVisible();
   await expect(policy.getByText(/that company's terms and privacy policy apply, not this one/)).toBeVisible();
-  await expect(policy.getByText(/under Connected apps, click Disconnect next to the app/)).toBeVisible();
+  await expect(policy.getByText(/on the Integrations page, under Connected apps, click Disconnect next to the app/)).toBeVisible();
   await expect(page.getByRole("link", { name: CONTACT }).first()).toHaveAttribute("href", `mailto:${CONTACT}`);
 
   const terms = await page.goto("/terms");

@@ -75,6 +75,7 @@ model User {
   agentProposals               AgentProposal[]
   mcpGrants                    McpGrant[]
   mcpToolCalls                 McpToolCall[]
+  mcpAuthorizationCodes        McpAuthorizationCode[]
 }
 
 /// One message to the AI assistant (#307): who asked, what answered and how it went. It feeds the daily caps
@@ -239,26 +240,105 @@ enum AgentRunOutcome {
 }
 
 /// An AI app the person allowed to use their account over MCP (#478), and what it may do. Its access tokens name the
-/// grant, and every tool call checks that it still stands (src/lib/mcp/tools.ts). The consent page (#477) creates
-/// grants, and its Connected apps list revokes them.
+/// grant, and every tool call checks that it still stands (src/lib/mcp/tools.ts). Sign-in (#477) creates it when the
+/// app first trades its code for tokens, one per app and account; Connected apps on the Integrations page revokes it.
 model McpGrant {
-  id         String    @id @default(cuid())
-  userId     String
+  id            String    @id @default(cuid())
+  userId        String
   /// The app's OAuth client ID: the address of its Client ID Metadata Document, or the ID registration gave it.
-  clientId   String
+  clientId      String
   /// The app's name as the person approved it, such as "Claude".
-  clientName String
-  /// What the person allowed: "read", and later "write" (#479). A token never carries a scope its grant lacks.
-  scopes     String[]
-  createdAt  DateTime  @default(now())
+  clientName    String
+  /// The web address the consent page showed beneath the name, such as "claude.ai" (#477). Null for grants made before it.
+  clientAddress String?
+  /// Everything the person allowed the app, on any device: "read", and "write" (#479). Each token carries only what
+  /// was allowed when it was issued, and never a scope its grant lacks.
+  scopes        String[]
+  createdAt     DateTime  @default(now())
   /// When the app last called a tool, to within an hour.
-  lastUsedAt DateTime?
+  lastUsedAt    DateTime?
   /// When the person disconnected the app. From then on its tools refuse, even with a token that hasn't expired.
-  revokedAt  DateTime?
+  revokedAt     DateTime?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens      McpRefreshToken[]
+  authorizationCodes McpAuthorizationCode[]
+
+  // One grant per app and account. Revoked ones stay, so the app can be connected again.
+  @@unique([userId, clientId], where: raw("\"revokedAt\" IS NULL"))
+  @@index([userId])
+}
+
+/// An AI app that registered itself with Dynamic Client Registration (RFC 7591, #477), as older apps do. Apps that sign
+/// in with a Client ID Metadata Document have no row: their client ID is the document's address, fetched when they ask
+/// to connect (src/lib/mcp/client-metadata.ts). Unused rows are deleted by the daily cleanup.
+model McpClient {
+  /// The client ID the app was given.
+  id           String   @id
+  /// The name it registered with, in its own words: the consent page shows it with the address it returns to.
+  name         String
+  /// Where sign-in may send the person back to: matched exactly, except a loopback address's port.
+  redirectUris String[]
+  /// SHA-256 of the client secret, for apps that registered as confidential clients; null for public ones (PKCE alone).
+  secretHash   String?
+  createdAt    DateTime @default(now())
+}
+
+/// A one-time code from the consent page (#477), which the app exchanges for tokens within minutes. Only its SHA-256 is
+/// stored. Used codes stay a day, so a second use can revoke the grant the first one joined.
+model McpAuthorizationCode {
+  id              String    @id @default(cuid())
+  /// SHA-256 of the code (hex).
+  codeHash        String    @unique
+  userId          String
+  clientId        String
+  clientName      String
+  clientAddress   String
+  /// Where the code was sent. The token request must name the same address.
+  redirectUri     String
+  /// Whether the app named redirect_uri itself; if it did, its token request must too (OAuth 2.1, section 4.1.3).
+  redirectUriSent Boolean
+  /// The PKCE challenge, S256 only.
+  codeChallenge   String
+  /// What the person allowed on the consent page.
+  scopes          String[]
+  /// The MCP endpoint the tokens are for (RFC 8707).
+  resource        String
+  expiresAt       DateTime
+  usedAt          DateTime?
+  /// The grant whose tokens the code was exchanged for.
+  grantId         String?
+  createdAt       DateTime  @default(now())
+
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grant McpGrant? @relation(fields: [grantId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([grantId])
+  @@index([expiresAt])
+}
+
+/// A connected app's refresh token on one device (#477). The token is `aim_rt_<id>.<secret>`: the id finds this row and
+/// only the secret's SHA-256 is stored. Every refresh replaces the secret, so an old one coming back means the token
+/// leaked, and the whole grant is revoked. It expires after REFRESH_TOKEN_DAYS without use.
+model McpRefreshToken {
+  id        String    @id
+  grantId   String
+  /// SHA-256 of the current secret (hex).
+  tokenHash String
+  /// What the person allowed when this device connected. A refresh can ask for less, never more.
+  scopes    String[]
+  /// The MCP endpoint its access tokens are for (RFC 8707), as the person approved it.
+  resource  String
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  /// When the secret was last replaced.
+  rotatedAt DateTime?
+
+  grant McpGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@index([grantId])
+  @@index([expiresAt])
 }
 
 /// One tool call from an AI app connected over MCP (#478): when, which app and tool, how it ended and how long it

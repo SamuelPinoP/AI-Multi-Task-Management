@@ -29,17 +29,20 @@ export function GuestSignupDialog({
   open,
   reason,
   googleSignIn,
+  next: nextPath,
   onOpenChange,
 }: {
   open: boolean;
   reason: GuestSignupReason;
   /** Whether Sign in with Google is set up on this server. */
   googleSignIn: boolean;
+  /** Where to come back to, query and all, such as the consent page for an AI app (#477). */
+  next?: string;
   onOpenChange: (open: boolean) => void;
 }) {
   const pathname = usePathname();
   // Afterwards they come back here, or to the AI when the AI is what they wanted.
-  const next = reason === "ai" ? "/ai" : pathname;
+  const next = nextPath ?? (reason === "ai" ? "/ai" : pathname);
   const { title, description } = guestSignupCopy(reason);
 
   return (
