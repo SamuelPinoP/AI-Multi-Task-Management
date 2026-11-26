@@ -342,7 +342,7 @@ function* optionalProperties(schema: JsonSchema, path: string): Generator<[strin
   }
 }
 
-test("every optional argument takes empty text and null as left out, in the schema the model sees and in the tool (#504)", () => {
+test("every optional argument takes empty text and null as left out, in the tool's JSON schema and in the tool (#504)", () => {
   let optional = 0;
   for (const tool of new Set([...AGENT_TOOLS, ...MCP_TOOLS])) {
     for (const [path, property] of optionalProperties(toolDefinition(tool).parameters as JsonSchema, tool.name)) {

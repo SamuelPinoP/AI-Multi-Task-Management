@@ -73,6 +73,47 @@ export function toGeminiContents(messages: AgentMessage[]): GeminiContent[] {
   });
 }
 
+type JsonSchema = Record<string, unknown>;
+
+function isSchema(value: unknown): value is JsonSchema {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** A branch that optionalArgument (src/lib/ai/tools/define.ts) adds for an argument left out as null or "". */
+function isLeftOutBranch(branch: unknown) {
+  const json = JSON.stringify(branch);
+  return json === '{"type":"null"}' || json === '{"type":"string","maxLength":0}';
+}
+
+/**
+ * A tool's parameters as Gemini gets them (#504): without the null and "" branches, so each optional
+ * argument is one schema with its description beside its type, as before #504. With the branches,
+ * the description sat beside anyOf, which Google's own schema type doesn't allow (Vertex AI says
+ * anyOf "must be the only field set", google/adk-python#3281), and the model acted as if it never
+ * saw it: it named tasks and projects by id, and passed defaults it was told to leave out. Gemini needs no
+ * branches: unlike Groq, it doesn't refuse a call over its schema, and the tools take null and "" anyway.
+ */
+export function geminiSchema(schema: JsonSchema): JsonSchema {
+  const result: JsonSchema = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === "properties" && isSchema(value)) {
+      result[key] = Object.fromEntries(Object.entries(value).map(([name, property]) => [name, isSchema(property) ? geminiSchema(property) : property]));
+    } else if (key === "items" && isSchema(value)) {
+      result[key] = geminiSchema(value);
+    } else if (key === "anyOf" && Array.isArray(value)) {
+      result[key] = value.filter((branch) => !isLeftOutBranch(branch)).map((branch) => (isSchema(branch) ? geminiSchema(branch) : branch));
+    } else if (key === "type" && Array.isArray(value)) {
+      const types = value.filter((type) => type !== "null");
+      result[key] = types.length === 1 ? types[0] : types;
+    } else {
+      result[key] = value;
+    }
+  }
+  const { anyOf, ...rest } = result;
+  // One branch left: it is the argument's own schema, and the description goes beside its type.
+  return Array.isArray(anyOf) && anyOf.length === 1 && isSchema(anyOf[0]) ? { ...anyOf[0], ...rest } : result;
+}
+
 export function geminiRequestBody(request: ProviderRequest) {
   return {
     systemInstruction: { parts: [{ text: request.system }] },
@@ -84,7 +125,7 @@ export function geminiRequestBody(request: ProviderRequest) {
               functionDeclarations: request.tools.map((tool) => ({
                 name: tool.name,
                 description: tool.description,
-                parametersJsonSchema: tool.parameters,
+                parametersJsonSchema: geminiSchema(tool.parameters),
               })),
             },
           ],

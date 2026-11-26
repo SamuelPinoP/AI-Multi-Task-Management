@@ -88,7 +88,7 @@ function takesEmptyText(schema: z.ZodType) {
  * every call against the tool's schema. So the schema the model sees allows null alongside
  * `schema`, and "" too where `schema` doesn't take it, and the tool gets undefined for them, as for
  * text with only spaces. Text needs no minimum length, then. Any other value is checked by
- * `schema`, with its own messages.
+ * `schema`, with its own messages. Gemini gets the schema without those branches (geminiSchema).
  */
 export function optionalArgument<T extends z.ZodType>(schema: T) {
   // Only for the schema the model sees: the step below turns these into undefined first.
