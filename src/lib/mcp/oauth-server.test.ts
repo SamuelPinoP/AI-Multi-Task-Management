@@ -8,6 +8,7 @@ import type { ClientMetadataResolver, ClientMetadataResult } from "./client-meta
 import { FATAL_PROBLEMS, hashSecret, type OAuthApp } from "./oauth";
 import { createOAuthServer } from "./oauth-server";
 import { mayConnectApps, type AccountCheck, type NewAuthorizationCode, type NewRefreshToken, type OAuthStore, type RegisteredClient } from "./oauth-store";
+import { RATE_LIMITS } from "../rate-limit-core";
 
 const ORIGIN = "https://ai-multi.example";
 const RESOURCE = `${ORIGIN}/api/mcp`;
@@ -27,6 +28,9 @@ const APP: OAuthApp = {
 const [APP_REDIRECT] = APP.redirectUris;
 const OTHER_APP_ID = "https://other.example/oauth/client.json";
 const IP = "198.51.100.7";
+// One person's two networks, such as home Wi-Fi and phone data.
+const WIFI = "203.0.113.66";
+const PHONE = "203.0.113.77";
 
 type Grant = { id: string; userId: string; clientId: string; clientName: string; clientAddress: string; scopes: string[]; revokedAt: Date | null };
 
@@ -91,8 +95,13 @@ function memoryStore(accounts: Map<string, AccountCheck>) {
   return { store, clients, codes, grants, refreshTokens };
 }
 
-/** AI Multi's sign-in on a clock the test moves, with accounts, one app's metadata document and rate limits it controls. */
-function setup({ env = ENV as Record<string, string | undefined> } = {}) {
+/**
+ * AI Multi's sign-in on a clock the test moves, with accounts, one app's metadata document and rate
+ * limits it controls. With `countLimits`, the limits also count like src/lib/rate-limit.ts does
+ * within one window: every call counts, and a rule refuses once its count goes over its limit. The
+ * clock starts on a window's edge, and those tests don't move it.
+ */
+function setup({ env = ENV as Record<string, string | undefined>, countLimits = false } = {}) {
   let clock = START;
   const accounts = new Map<string, AccountCheck>([
     ["person", { isGuest: false, emailVerifiedAt: new Date(START - DAY) }],
@@ -108,13 +117,18 @@ function setup({ env = ENV as Record<string, string | undefined> } = {}) {
   };
   const limited = new Set<string>();
   const counted: Array<[string, string | null]> = [];
+  const counts = new Map<string, number>();
   const server = createOAuthServer({
     env,
     store: memory.store,
     resolveClientMetadata,
     rateLimit: async (rule, identifier) => {
       counted.push([rule.name, identifier]);
-      return { allowed: !limited.has(rule.name), retryAfterSeconds: 120 };
+      const key = `${rule.name}:${identifier}`;
+      const count = (counts.get(key) ?? 0) + 1;
+      counts.set(key, count);
+      const over = countLimits && identifier !== null && count > rule.limit;
+      return { allowed: !limited.has(rule.name) && !over, retryAfterSeconds: 120 };
     },
     now: () => new Date(clock),
   });
@@ -126,6 +140,8 @@ function setup({ env = ENV as Record<string, string | undefined> } = {}) {
     fetched,
     limited,
     counted,
+    /** How many requests a limit has counted for one caller. */
+    countOf: (ruleName: string, identifier: string) => counts.get(`${ruleName}:${identifier}`) ?? 0,
     now: () => new Date(clock),
     advance: (ms: number) => void (clock += ms),
     /** The consent page's session: this account, or signed out. */
@@ -223,6 +239,11 @@ const onlyGrant = (site: Site) => {
   assert.equal(site.grants.size, 1);
   return [...site.grants.values()][0];
 };
+/** Adds an account with a confirmed email, and gives back its ID. */
+function confirmedAccount(site: Site, id: string) {
+  site.accounts.set(id, { isGuest: false, emailVerifiedAt: new Date(START - DAY) });
+  return id;
+}
 
 test("everything answers 404 while MCP_ENABLED is off", async () => {
   const site = setup({ env: { ...ENV, MCP_ENABLED: "false" } });
@@ -634,7 +655,7 @@ test("only requests that prove they come from an app count against its share, so
   assert.equal((await site.server.prepareConsent(consentLink(), { origin: ORIGIN, ip: IP })).kind, "consent");
   assert.ok(site.counted.every(([rule]) => rule === "oauth-ip"), JSON.stringify(site.counted));
 
-  // A real code counts against the app. Over its share, the code stays unused for a retry.
+  // A real code counts against its account, then the app. Over the app's share, the code stays unused for a retry.
   site.counted.length = 0;
   const { code } = await allow(site);
   assert.deepEqual(site.counted, [
@@ -646,24 +667,88 @@ test("only requests that prove they come from an app count against its share, so
   assert.equal(held.headers.get("retry-after"), "120");
   assert.deepEqual(site.counted.slice(2), [
     ["oauth-ip", IP],
+    ["oauth-account-tokens", "person"],
     ["oauth-client", APP.id],
   ]);
   site.limited.delete("oauth-client");
   const tokens = await tokensOf(await exchange(site, code));
 
-  // A real refresh counts against the app and the device. Over either, the token stays as it was.
+  // A real refresh counts against its device, then its account, then the app (#562). Over the
+  // device's limit, nothing wider counts it, and the token stays as it was.
   const device = tokens.refresh_token.slice("aim_rt_".length).split(".")[0];
   site.counted.length = 0;
   site.limited.add("oauth-device");
   assert.equal((await refresh(site, tokens.refresh_token)).status, 429);
   assert.deepEqual(site.counted, [
     ["oauth-ip", IP],
-    ["oauth-client", APP.id],
     ["oauth-device", device],
   ]);
   site.limited.delete("oauth-device");
+  // Over the account's limit, the app doesn't count it either.
+  site.counted.length = 0;
+  site.limited.add("oauth-account-tokens");
+  assert.equal((await refresh(site, tokens.refresh_token)).status, 429);
+  assert.deepEqual(site.counted, [
+    ["oauth-ip", IP],
+    ["oauth-device", device],
+    ["oauth-account-tokens", "person"],
+  ]);
+  site.limited.delete("oauth-account-tokens");
+  site.counted.length = 0;
   await tokensOf(await refresh(site, tokens.refresh_token));
+  assert.deepEqual(site.counted, [
+    ["oauth-ip", IP],
+    ["oauth-device", device],
+    ["oauth-account-tokens", "person"],
+    ["oauth-client", APP.id],
+  ]);
   assert.equal(onlyGrant(site).revokedAt, null);
+});
+
+test("a device that keeps retrying a refresh uses up only its own limit, and everyone else still signs in (#562)", async () => {
+  const site = setup({ countLimits: true });
+  const someone = await connect(site, { user: confirmedAccount(site, "someone") });
+
+  // One person connects once, then sends the same refresh again and again: 300 times on Wi-Fi, 100 on their phone.
+  let token = (await connect(site)).refresh_token;
+  const answers = new Map<number, number>();
+  for (const [network, tries] of [
+    [WIFI, 300],
+    [PHONE, 100],
+  ] as const) {
+    for (let i = 0; i < tries; i++) {
+      const response = await refresh(site, token, {}, { "x-forwarded-for": network });
+      answers.set(response.status, (answers.get(response.status) ?? 0) + 1);
+      if (response.status === 200) token = (await tokensOf(response)).refresh_token;
+    }
+  }
+  // The device gets its limit, then 429s that count against nothing wider: the app has counted two codes and those refreshes.
+  const deviceLimit = RATE_LIMITS.oauthDevice.limit;
+  assert.deepEqual(Object.fromEntries(answers), { 200: deviceLimit, 429: 400 - deviceLimit });
+  assert.equal(site.countOf("oauth-client", APP.id), 2 + deviceLimit);
+
+  // Everyone else still gets in: another person's refresh works, and so does a new connection.
+  await tokensOf(await refresh(site, someone.refresh_token));
+  await connect(site, { user: confirmedAccount(site, "newcomer") });
+});
+
+test("one account with many devices adds at most its own limit to its app's share (#562)", async () => {
+  const site = setup({ countLimits: true });
+  const someone = await connect(site, { user: confirmedAccount(site, "someone") });
+
+  // Every Allow adds a device: 15 devices refreshing up to their own limit would be 300 refreshes.
+  const devices: string[] = [];
+  for (let i = 0; i < 15; i++) devices.push((await connect(site)).refresh_token);
+  for (let round = 0; round < RATE_LIMITS.oauthDevice.limit; round++) {
+    for (const [index, token] of devices.entries()) {
+      const response = await refresh(site, token, {}, { "x-forwarded-for": index % 2 ? WIFI : PHONE });
+      if (response.status === 200) devices[index] = (await tokensOf(response)).refresh_token;
+      else assert.equal(response.status, 429);
+    }
+  }
+  // The account's codes and refreshes stop at its own limit, so the app has counted someone's code and that limit.
+  assert.equal(site.countOf("oauth-client", APP.id), 1 + RATE_LIMITS.oauthAccountTokens.limit);
+  await tokensOf(await refresh(site, someone.refresh_token));
 });
 
 test("one account can Allow only so often: past its limit the app hears to try later, and no code is saved", async () => {
