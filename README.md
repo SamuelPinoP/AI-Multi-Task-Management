@@ -194,9 +194,12 @@ It's all off, a 404, unless `MCP_ENABLED` is `"true"`.
   minutes. Refresh tokens are random, stored as hashes and replaced on every
   use; an old one coming back disconnects the app. Apps can revoke theirs
   (RFC 7009). The rules are in `src/lib/mcp/oauth.ts`, the endpoints in
-  `oauth-server.ts` and the tables in `oauth-store.ts`. Every endpoint is
-  rate-limited per network and per app; guests and unconfirmed emails can't
-  allow.
+  `oauth-server.ts` and the tables in `oauth-store.ts`. Every request is
+  rate-limited per network. A request counts against its app only once it
+  proves it comes from the app (a code with its PKCE secret, or a real refresh
+  token), so nobody can use up a popular app's share by naming it. Refreshes
+  are also limited per device, and Allow per account. Guests and unconfirmed
+  emails can't allow.
 
 - **Tools:** the assistant's six read tools, the same registry objects with the
   same Zod schemas (`src/lib/ai/tools`), plus `get_task`, one task with its

@@ -151,10 +151,13 @@ export function createOAuthServer(deps: OAuthServerDeps) {
     });
   }
 
-  const requestLimits = (request: Request, clientId: string): Array<[RateLimitRule, string | null]> => [
-    [RATE_LIMITS.oauthIp, clientIpFrom(request.headers)],
-    [RATE_LIMITS.oauthClient, clientId],
-  ];
+  /**
+   * Every request counts against its network. A client ID is public, so a request counts against
+   * its app only once it proves it comes from the app (a code with its PKCE secret, or a valid
+   * refresh token). Otherwise anyone could use up a popular app's share by naming it, and lock out
+   * everyone who uses that app.
+   */
+  const networkLimit = (request: Request): Array<[RateLimitRule, string | null]> => [[RATE_LIMITS.oauthIp, clientIpFrom(request.headers)]];
 
   /**
    * Checks who's calling the token or revoke endpoint. Apps that registered with a secret must send
@@ -218,6 +221,9 @@ export function createOAuthServer(deps: OAuthServerDeps) {
       return oauthError("invalid_target", `The resource must be ${stored.resource}.`);
     }
     if (!stored.accountAllowed) return oauthError("invalid_grant", "This account can't connect apps.");
+    // The code and its PKCE secret prove the app sent this. Over the limit, the code stays unused for a retry.
+    const limited = await overLimit([[RATE_LIMITS.oauthClient, clientId]]);
+    if (limited) return limited;
     if (!(await store.claimCode(codeHash, at))) return oauthError("invalid_grant", "The code was already used. Connect the app again.");
 
     const refresh = newRefreshToken();
@@ -262,6 +268,13 @@ export function createOAuthServer(deps: OAuthServerDeps) {
     if (resource === undefined || (resource !== null && !isThisResource(resource, stored.resource))) {
       return oauthError("invalid_target", `The resource must be ${stored.resource}.`);
     }
+    // The token proves the app sent this. A device stuck in a loop hits its own limit before the app's.
+    // Over either, the token stays as it was for a retry.
+    const limited = await overLimit([
+      [RATE_LIMITS.oauthClient, clientId],
+      [RATE_LIMITS.oauthDevice, stored.id],
+    ]);
+    if (limited) return limited;
 
     const next = newRefreshToken(stored.id);
     const rotated = await store.rotateRefreshToken({
@@ -295,10 +308,8 @@ export function createOAuthServer(deps: OAuthServerDeps) {
   async function prepareConsent(params: URLSearchParams, { origin, ip }: { origin: string; ip: string | null }): Promise<ConsentCheck> {
     const id = readClientId(params);
     if (!id.ok) return { kind: "fatal", message: id.fatal };
-    const limited = await overLimit([
-      [RATE_LIMITS.oauthIp, ip],
-      [RATE_LIMITS.oauthClient, id.clientId],
-    ]);
+    // Anyone can build a consent link naming any app, so it counts only against the network.
+    const limited = await overLimit([[RATE_LIMITS.oauthIp, ip]]);
     if (limited) return { kind: "fatal", message: FATAL_PROBLEMS.tooMany };
     const found = await findApp(id.clientId);
     if (!found.ok) return { kind: "fatal", message: found.message };
@@ -362,6 +373,16 @@ export function createOAuthServer(deps: OAuthServerDeps) {
       if (decision !== "allow") return oauthError("invalid_request", "decision must be allow or cancel.");
       // Guests can only cancel: the page asks them to sign up first.
       if (!mayConnectApps(user)) return seeOther(consentPath);
+      // Each Allow saves a code that counts against the app, so one account can't do it endlessly.
+      const accountLimit = await deps.rateLimit(RATE_LIMITS.oauthAccount, user.id);
+      if (!accountLimit.allowed) {
+        return seeOther(
+          authorizationResponse(consent.request, origin, {
+            error: "temporarily_unavailable",
+            description: tooManyAttemptsMessage("connections", accountLimit.retryAfterSeconds),
+          }),
+        );
+      }
 
       const at = now();
       const scopes: ResourceScope[] = consent.request.scopes.filter((scope) => scope === "read" || allowWrite);
@@ -395,7 +416,7 @@ export function createOAuthServer(deps: OAuthServerDeps) {
       if (!form) return oauthError("invalid_request", "Send the request as application/x-www-form-urlencoded.");
       const credentials = readClientCredentials(request, form);
       if ("problem" in credentials) return oauthError("invalid_request", credentials.problem);
-      const limited = await overLimit(requestLimits(request, credentials.clientId));
+      const limited = await overLimit(networkLimit(request));
       if (limited) return limited;
       const refused = await authenticate(credentials);
       if (refused) return refused;
@@ -485,7 +506,7 @@ export function createOAuthServer(deps: OAuthServerDeps) {
       if (!form) return oauthError("invalid_request", "Send the request as application/x-www-form-urlencoded.");
       const credentials = readClientCredentials(request, form);
       if ("problem" in credentials) return oauthError("invalid_request", credentials.problem);
-      const limited = await overLimit(requestLimits(request, credentials.clientId));
+      const limited = await overLimit(networkLimit(request));
       if (limited) return limited;
       const refused = await authenticate(credentials);
       if (refused) return refused;

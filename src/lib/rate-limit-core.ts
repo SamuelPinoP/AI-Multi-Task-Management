@@ -41,11 +41,20 @@ export const RATE_LIMITS = {
    */
   agentChatUser: { name: "agent-chat-user", limit: 30, windowMs: 10 * MINUTE },
   /**
-   * Sign-in for AI apps (#477): every OAuth request, per network and per app. Popular apps send all
-   * their users' requests from their own servers under one client ID, so these only stop floods.
+   * Sign-in for AI apps (#477), per network: every request. Popular apps refresh all their users'
+   * tokens from their own servers, so this only stops floods.
    */
   oauthIp: { name: "oauth-ip", limit: 300, windowMs: 10 * MINUTE },
+  /**
+   * Per app: only requests that prove they come from it, a code with its PKCE secret or a valid
+   * refresh token. A client ID is public, so counting anything else would let anyone use up an
+   * app's share and lock out its users.
+   */
   oauthClient: { name: "oauth-client", limit: 300, windowMs: 10 * MINUTE },
+  /** Refreshes per device (one refresh token). About one an hour is normal; this stops one stuck in a loop. */
+  oauthDevice: { name: "oauth-device", limit: 20, windowMs: 10 * MINUTE },
+  /** Allows per account on the consent page: each saves a code that counts against its app. */
+  oauthAccount: { name: "oauth-account", limit: 20, windowMs: 60 * MINUTE },
   /** App registrations (RFC 7591) per network: each adds a row. */
   oauthRegisterIp: { name: "oauth-register-ip", limit: 20, windowMs: 60 * MINUTE },
 } as const satisfies Record<string, RateLimitRule>;

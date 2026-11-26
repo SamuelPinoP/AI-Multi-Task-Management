@@ -278,10 +278,8 @@ test("the consent page reads the app from its document, and shows where the pers
     },
     app: { name: "Example App", address: "app.example", loopback: false },
   });
-  assert.deepEqual(site.counted, [
-    ["oauth-ip", IP],
-    ["oauth-client", APP.id],
-  ]);
+  // Anyone can build a link naming any app, so it counts only against the network.
+  assert.deepEqual(site.counted, [["oauth-ip", IP]]);
   const desktop = await site.server.prepareConsent(consentLink({ redirect_uri: "http://127.0.0.1:50123/callback" }), { origin: ORIGIN, ip: IP });
   assert.ok(desktop.kind === "consent");
   assert.deepEqual(desktop.app, { name: "Example App", address: "localhost", loopback: true });
@@ -307,7 +305,7 @@ test("a link from an app AI Multi can't read or trust stops on the page", async 
   assert.deepEqual([back.searchParams.get("error"), back.searchParams.get("state"), back.searchParams.get("iss")], ["invalid_scope", "state-123", ORIGIN]);
 
   // Too many tries: the page says so, and nothing is fetched.
-  site.limited.add("oauth-client");
+  site.limited.add("oauth-ip");
   const fetchedBefore = site.fetched.length;
   assert.deepEqual(await check(consentLink({ client_id: "https://third.example/client.json" })), fatal(FATAL_PROBLEMS.tooMany));
   assert.equal(site.fetched.length, fetchedBefore);
@@ -616,10 +614,7 @@ test("the token endpoint takes form posts, counts every request, and needs MCP_T
   assert.equal(limited.status, 429);
   assert.equal(limited.headers.get("retry-after"), "120");
   assert.equal(await errorOf(limited), "temporarily_unavailable");
-  assert.deepEqual(site.counted, [
-    ["oauth-ip", IP],
-    ["oauth-client", APP.id],
-  ]);
+  assert.deepEqual(site.counted, [["oauth-ip", IP]]);
 
   const error = t.mock.method(console, "error", () => {});
   const unset = setup({ env: { MCP_ENABLED: "true", APP_BASE_URL: ORIGIN } });
@@ -627,6 +622,58 @@ test("the token endpoint takes form posts, counts every request, and needs MCP_T
   assert.equal(misconfigured.status, 503);
   assert.equal(await errorOf(misconfigured), "server_error");
   assert.equal(error.mock.calls[0].arguments[0], "mcp_misconfigured");
+});
+
+test("only requests that prove they come from an app count against its share, so nobody can use it up by naming the app", async () => {
+  const site = setup();
+  site.limited.add("oauth-client");
+  // Junk naming the app counts only against the sender's network: it gets the usual answers, not 429.
+  assert.equal(await errorOf(await exchange(site, "aim_ac_guess")), "invalid_grant");
+  assert.equal(await errorOf(await refresh(site, "aim_rt_guess.secret")), "invalid_grant");
+  assert.equal((await site.server.revoke(post("/api/oauth/revoke", { client_id: APP.id, token: "aim_rt_guess.secret" }))).status, 200);
+  assert.equal((await site.server.prepareConsent(consentLink(), { origin: ORIGIN, ip: IP })).kind, "consent");
+  assert.ok(site.counted.every(([rule]) => rule === "oauth-ip"), JSON.stringify(site.counted));
+
+  // A real code counts against the app. Over its share, the code stays unused for a retry.
+  site.counted.length = 0;
+  const { code } = await allow(site);
+  assert.deepEqual(site.counted, [
+    ["oauth-ip", null],
+    ["oauth-account", "person"],
+  ]);
+  const held = await exchange(site, code);
+  assert.equal(held.status, 429);
+  assert.equal(held.headers.get("retry-after"), "120");
+  assert.deepEqual(site.counted.slice(2), [
+    ["oauth-ip", IP],
+    ["oauth-client", APP.id],
+  ]);
+  site.limited.delete("oauth-client");
+  const tokens = await tokensOf(await exchange(site, code));
+
+  // A real refresh counts against the app and the device. Over either, the token stays as it was.
+  const device = tokens.refresh_token.slice("aim_rt_".length).split(".")[0];
+  site.counted.length = 0;
+  site.limited.add("oauth-device");
+  assert.equal((await refresh(site, tokens.refresh_token)).status, 429);
+  assert.deepEqual(site.counted, [
+    ["oauth-ip", IP],
+    ["oauth-client", APP.id],
+    ["oauth-device", device],
+  ]);
+  site.limited.delete("oauth-device");
+  await tokensOf(await refresh(site, tokens.refresh_token));
+  assert.equal(onlyGrant(site).revokedAt, null);
+});
+
+test("one account can Allow only so often: past its limit the app hears to try later, and no code is saved", async () => {
+  const site = setup();
+  site.limited.add("oauth-account");
+  const { location, code } = await allow(site);
+  assert.equal(`${location.origin}${location.pathname}`, APP_REDIRECT);
+  assert.equal(code, null);
+  assert.deepEqual([location.searchParams.get("error"), location.searchParams.get("state"), location.searchParams.get("iss")], ["temporarily_unavailable", "state-123", ORIGIN]);
+  assert.equal(site.codes.size, 0);
 });
 
 test("registering gives an app an ID, and a secret unless it registers as public", async () => {

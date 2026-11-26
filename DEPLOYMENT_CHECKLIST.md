@@ -119,7 +119,7 @@ Nothing is sent for a person until they agree to the assistant's data notice. Ea
 1. In the checkout linked to Vercel, run `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))" | npx -y vercel@latest env add MCP_TOKEN_SECRET production --sensitive`. It generates the token signing secret and stores it without showing it.
 2. Run `npx -y vercel@latest env add MCP_ENABLED production` and enter `true`. Both take effect with the next deploy, and the deploy check refuses `MCP_ENABLED="true"` without a secret of at least 32 characters.
 
-Changing `MCP_TOKEN_SECRET` ends every access token at once; apps then refresh, so nobody has to connect again. Checking an access token needs no database, so starting a session and listing tools touch none; each tool call reads the grant and writes one row to `McpToolCall`, kept 30 days. Refreshing a token, about once an hour while an app is in use, is one request: two rate-limit counters, a read and a write, and one more read for an app that registered itself. Signing an app in is a handful of queries, once.
+Changing `MCP_TOKEN_SECRET` ends every access token at once; apps then refresh, so nobody has to connect again. Checking an access token needs no database, so starting a session and listing tools touch none; each tool call reads the grant and writes one row to `McpToolCall`, kept 30 days. Refreshing a token, about once an hour while an app is in use, is one request: three rate-limit counters (network, app and device), a read and a write, and one more read for an app that registered itself. Signing an app in is a handful of queries, once.
 
 ## Deployment environment validation
 
