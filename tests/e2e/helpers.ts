@@ -89,6 +89,25 @@ export async function queryDatabase<T extends Record<string, unknown> = Record<s
 }
 
 /**
+ * Stores an AI chat (#452) for the account with `email`: `turns` questions ("Question 1", …) and
+ * answers ("Answer 1", …), written to the database, so a test gets a conversation longer than the
+ * screen without asking the model that many times.
+ */
+export async function storeAiChat(email: string, title: string, turns: number) {
+  await queryDatabase(
+    `WITH chat AS (
+       INSERT INTO "AgentChat" (id, "userId", title, "createdAt", "updatedAt", "openedAt")
+       SELECT $1, id, $3, t, t, t FROM "User", (SELECT now() AT TIME ZONE 'utc' AS t) AS at WHERE email = $2
+       RETURNING id, "createdAt"
+     )
+     INSERT INTO "AgentChatMessage" (id, "chatId", role, content, "createdAt")
+     SELECT $1 || '-q' || n, chat.id, 'USER'::"AgentChatRole", 'Question ' || n, chat."createdAt" + make_interval(secs => 2 * n) FROM chat, generate_series(1, $4::int) AS n
+     UNION ALL SELECT $1 || '-a' || n, chat.id, 'ASSISTANT'::"AgentChatRole", 'Answer ' || n, chat."createdAt" + make_interval(secs => 2 * n + 1) FROM chat, generate_series(1, $4::int) AS n`,
+    [`e2e-ai-chat-${randomUUID()}`, email, title, turns],
+  );
+}
+
+/**
  * A link like the one in the confirmation email (#130), for the account with
  * `email`. Only its SHA-256 is stored, so tests make their own. `sentMinutesAgo`
  * dates it back, as if it went out earlier.

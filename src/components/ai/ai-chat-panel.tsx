@@ -154,11 +154,13 @@ export function AiChatPanel({
         </div>
       ) : (
         <>
+          {/* relative: keeps the conversation's hidden labels inside this scroller, as on the AI page;
+              otherwise they stretch the chat's frame below its bottom edge (#566). */}
           <div
             ref={followBody}
             data-follows-end=""
             onScroll={onScrollBody}
-            className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-4 pt-2 max-sm:px-4"
+            className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-4 pt-2 max-sm:px-4"
           >
             {opening ? (
               <AiThreadLoading />

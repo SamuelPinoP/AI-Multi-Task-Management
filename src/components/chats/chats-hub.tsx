@@ -425,7 +425,10 @@ export function ChatsHub({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-4">{list}</div>
+          {/* relative: each unread count's hidden words ("2 unread messages") are absolutely positioned and
+              stay inside a positioned scroller only. Otherwise those below the screen stretched the main area:
+              a second scrollbar beside the list's (#566). */}
+          <div className="relative min-h-0 flex-1 overflow-y-auto px-2.5 pb-4">{list}</div>
         </div>
 
         {/* Dragged past 240 px on desktop: a column of photos with their unread counts, like Telegram Desktop (#416, design 3A). */}
