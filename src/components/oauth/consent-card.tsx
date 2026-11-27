@@ -3,7 +3,7 @@
 import { Check, X } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
-import { GuestSignupDialog } from "@/components/guest/guest-signup-dialog";
+import { GuestAuthDialog, type GuestAuthView } from "@/components/guest/guest-auth-dialog";
 import { uiButtonClass, uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { OAUTH_PATHS } from "@/lib/mcp/oauth";
@@ -154,7 +154,8 @@ export function ConsentCard({
 
 /**
  * The consent page for a guest: apps can only connect to an account, so it offers the sign-up
- * pop-up, which comes back here, or Cancel.
+ * pop-up, which comes back here, or Cancel. Its Log in switches to the log-in pop-up (#543), which
+ * comes back here too.
  */
 export function GuestConsentCard({
   app,
@@ -167,7 +168,7 @@ export function GuestConsentCard({
   next: string;
   googleSignIn: boolean;
 }) {
-  const [signupOpen, setSignupOpen] = useState(false);
+  const [auth, setAuth] = useState<{ open: boolean; view: GuestAuthView }>({ open: false, view: "signup" });
   const submitOnce = useSubmitOnce();
   return (
     <ConsentFrame>
@@ -184,12 +185,20 @@ export function GuestConsentCard({
           <button type="submit" name="decision" value="cancel" className={cn(uiButtonClass, "max-sm:min-h-11")}>
             Cancel
           </button>
-          <button type="button" onClick={() => setSignupOpen(true)} className={cn(uiPrimaryButtonClass, "max-sm:min-h-11")}>
+          <button type="button" onClick={() => setAuth({ open: true, view: "signup" })} className={cn(uiPrimaryButtonClass, "max-sm:min-h-11")}>
             Sign up free
           </button>
         </div>
       </form>
-      <GuestSignupDialog open={signupOpen} reason="ai-apps" next={next} googleSignIn={googleSignIn} onOpenChange={setSignupOpen} />
+      <GuestAuthDialog
+        open={auth.open}
+        view={auth.view}
+        reason="ai-apps"
+        next={next}
+        googleSignIn={googleSignIn}
+        onViewChange={(view) => setAuth((current) => ({ ...current, view }))}
+        onOpenChange={(open) => setAuth((current) => ({ ...current, open }))}
+      />
     </ConsentFrame>
   );
 }

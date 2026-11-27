@@ -1,16 +1,13 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipDetail } from "@/components/ui/tooltip";
-import { authPageHref } from "@/lib/auth-links";
 import { cn } from "@/lib/cn";
 import { GUEST_LIMITS, guestLeft, type GuestLimitKind, type GuestUsage } from "@/lib/guest-limits-core";
 import { avatarColor } from "@/lib/project-color";
-import { openGuestSignup } from "@/lib/workspace-events";
+import { openGuestLogin, openGuestSignup } from "@/lib/workspace-events";
 
 function GuestAvatar({ userId, className }: { userId: string; className?: string }) {
   return (
@@ -60,8 +57,6 @@ export function GuestProfileCard({
   trash?: ReactNode;
   className?: string;
 }) {
-  const pathname = usePathname();
-
   return (
     <section aria-label="Guest workspace" className={cn("@container grid gap-2.5 rounded-xl border border-line bg-surface px-2.5 py-3 shadow-card max-lg:px-3", className)}>
       {/* Sized so "Guest workspace" and its line fit the sidebar's default 224 px width. */}
@@ -87,9 +82,10 @@ export function GuestProfileCard({
         >
           Sign up free
         </button>
-        <Link href={authPageHref("login", { next: pathname })} className={cn(uiButtonClass, "px-3 max-lg:min-h-11")}>
+        {/* Over the page, like Sign up (#543): logging in comes back to it. */}
+        <button type="button" onClick={openGuestLogin} className={cn(uiButtonClass, "px-3 max-lg:min-h-11")}>
           Log in
-        </Link>
+        </button>
       </div>
     </section>
   );
