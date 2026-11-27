@@ -16,7 +16,7 @@ How the code does things, and the traps that cost time. Read what your change to
 - **App shell:** `src/components/app-shell.tsx`, with matching and titles in `src/lib/app-nav.ts`. Sidebar counts come from `src/lib/workspace-nav.ts`, refetched on navigation and `notifyWorkspaceChanged()`. On phones the profile is in the top bar.
 - **Tree view:** every move (drag, "Move to…", undo) goes through `moveNode` in `src/components/tree/tree-board.tsx`.
 - **Design tokens:** colors, elevation and type are in `globals.css`. `src/lib/design-tokens.test.ts` checks every text color on every surface, theme and accent palette; `scripts/generate-accent-palettes.mjs` writes the five palettes (rerun it after changing a teal token). Sizes are in rem, never px, so the Text size setting scales them.
-- **UI pieces:** `toast` from `@/components/ui/toaster`; dialogs in `src/components/ui/dialog.tsx` and `src/components/confirm-dialog.tsx`; `DeleteButton` in `src/components/ui/delete-button.tsx`; class names joined with `cn()` (`src/lib/cn.ts`).
+- **UI pieces:** `toast` from `@/components/ui/toaster`; dialogs in `src/components/ui/dialog.tsx` and `src/components/confirm-dialog.tsx`; `DeleteButton` in `src/components/ui/delete-button.tsx`; message boxes that grow with their text in `src/components/ui/growing-textarea.tsx`; class names joined with `cn()` (`src/lib/cn.ts`).
 - **Accessibility:** a control's visible text must be part of its accessible name (axe's `label-content-name-mismatch`), even text marked `aria-hidden`.
 - **Legal pages:** change `LEGAL_LAST_UPDATED` in `src/lib/legal.ts` with every edit to the Privacy Policy or Terms.
 - **Owner-only pages:** `/usage` shows only to `ADMIN_EMAILS` (`src/lib/app-admin-core.ts`); everyone else gets the normal 404. Feedback goes to the same addresses.
@@ -32,6 +32,7 @@ How the code does things, and the traps that cost time. Read what your change to
 - A `grid` whose rows truncate text needs `grid-cols-1` (`minmax(0, 1fr)`), or an auto column grows to the longest row.
 - Text that can hold a long link or word (messages, answers) needs `wrap-anywhere`: `whitespace-pre-wrap` breaks only at spaces, and `break-words` doesn't stop a grid column or flex item from first growing to the word's width.
 - Hidden text (`sr-only`) is absolutely positioned, so it belongs to the nearest positioned ancestor, not to the scroller it sits in. A scroller that holds some needs `relative`, or the text far down its content stretches the box around it: a second scrollbar (#244, the window; #566, the AI chat and the Chats list).
+- An invisible copy of a textarea's text doesn't wrap exactly like the textarea: typing, the textarea wraps a keystroke or two earlier, and on Windows the scrollbar that appears takes 15 px, so a box sized by the copy stays a line short with its first line hidden (#569). Size a textarea by its own text (`field-sizing: content`, as `GrowingTextarea` does).
 - React bubbles events from portals to the surrounding form: a picker's button inside a form submitted it.
 - Memoize context values: a new object on every render forces React to client-render pages still hydrating.
 - A window key listener whose effect depends on refreshed data re-registers on every refresh and drops half-typed shortcuts ("g then a letter"): read the data through a ref.
