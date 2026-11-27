@@ -2,6 +2,7 @@
 
 import { ArrowDown, ChevronLeft, MessagesSquare, SendHorizontal } from "lucide-react";
 import { ChangeEvent, DragEvent, Fragment, KeyboardEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { AiDockSlot } from "@/components/ai/ai-dock";
 import { useChatSearch } from "@/components/chats/chat-search";
 import { ChatSearchPanel, Highlighted } from "@/components/chats/chat-search-panel";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -78,6 +79,12 @@ const COMPOSER_TEXT_CLASS =
   "col-start-1 row-start-1 max-h-[min(calc(6lh+0.75rem),40dvh)] px-1 py-1.5 text-base sm:max-h-[min(calc(10lh+0.75rem),40dvh)] sm:text-sm";
 // From this width (in rem) search's results sit beside the chat; a narrower chat shows them in its place (#409).
 const WIDE_SEARCH_REM = 52;
+// While the AI floats over the thread, above the message box (AiDockSlot), the thread keeps room at its
+// end, so the latest message never sits under the ✦ or the AI bar, and the button back to the latest
+// message waits above the ✦, on its line.
+const ROOM_FOR_AI_CLASS = "group-has-[[data-ai-slot]>*]/chat:pb-24 group-has-[[data-ai-slot]>*]/chat:scroll-pb-24";
+const ABOVE_AI_CLASS =
+  "group-has-[[data-ai-slot]>*]/chat:mb-23 group-has-[[data-ai-slot]>*]/chat:mr-5 lg:group-has-[[data-ai-slot]>*]/chat:mr-8";
 
 function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -797,7 +804,7 @@ export function ProjectChatWorkspace({
       <div
         ref={rootRef}
         className={cn(
-          "relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-zinc-200 bg-white shadow-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none",
+          "group/chat relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-zinc-200 bg-white shadow-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none",
           framed && "sm:rounded-2xl sm:border sm:shadow-xl",
         )}
       >
@@ -838,7 +845,7 @@ export function ProjectChatWorkspace({
         <div
           ref={threadRef}
           inert={resultsCoverChat}
-          className="col-start-1 row-start-2 min-h-0 overflow-y-auto bg-zinc-100/60 px-3 py-3 dark:bg-zinc-950 sm:px-6 sm:py-4 lg:px-8"
+          className={cn("col-start-1 row-start-2 min-h-0 overflow-y-auto bg-zinc-100/60 px-3 py-3 dark:bg-zinc-950 sm:px-6 sm:py-4 lg:px-8", ROOM_FOR_AI_CLASS)}
           onScroll={(event) => {
             const element = event.currentTarget;
             const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
@@ -1114,7 +1121,10 @@ export function ProjectChatWorkspace({
             onClick={jumpToLatest}
             aria-label={unseen ? `Jump to the latest message, ${formatUnreadCount(unseen)} new` : "Jump to the latest message"}
             title="Jump to the latest message"
-            className="relative z-10 col-start-1 row-start-2 m-3 grid h-10 w-10 animate-[ui-pop-in_120ms_ease-out] place-items-center self-end justify-self-end rounded-full border border-line bg-raised text-ink shadow-raised transition-colors hover:bg-surface-hover sm:m-4 sm:mr-6 lg:mr-8"
+            className={cn(
+              "relative z-10 col-start-1 row-start-2 m-3 grid h-10 w-10 animate-[ui-pop-in_120ms_ease-out] place-items-center self-end justify-self-end rounded-full border border-line bg-raised text-ink shadow-raised transition-colors hover:bg-surface-hover sm:m-4 sm:mr-6 lg:mr-8",
+              ABOVE_AI_CLASS,
+            )}
           >
             <ArrowDown aria-hidden="true" className="h-4 w-4" />
             {unseen ? (
@@ -1124,6 +1134,8 @@ export function ProjectChatWorkspace({
             ) : null}
           </button>
         ) : null}
+        {/* The AI bar's place here (#308): over the thread, ending where the message box begins. */}
+        <AiDockSlot inert={resultsCoverChat} className="col-start-1 row-start-2" />
 
         <form
           inert={resultsCoverChat}

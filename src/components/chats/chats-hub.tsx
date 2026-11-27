@@ -17,6 +17,7 @@ import { ArrowLeft, CheckCheck, MessagesSquare, Paperclip, Search } from "lucide
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { AiDockSlot } from "@/components/ai/ai-dock";
 import { ChatSearchButton, ChatSearchProvider } from "@/components/chats/chat-search";
 import { ProjectChatMenu } from "@/components/chats/project-chat-menu";
 import { MobileMenuButton } from "@/components/mobile-menu";
@@ -355,8 +356,7 @@ export function ChatsHub({
   const compact = listSize.collapsed;
 
   return (
-    // On computers the AI bar sits in a band under the page (#308), so the list and the chat end on a line.
-    <div className="flex h-full min-h-0 lg:border-b lg:border-line">
+    <div className="relative flex h-full min-h-0">
       {/* Phones show the list or the chat. On desktop the list always sits beside the chat, at the width
           its edge was dragged to (#416, design 2B), and never takes the conversation below 360 px. */}
       <section
@@ -427,8 +427,9 @@ export function ChatsHub({
 
           {/* relative: each unread count's hidden words ("2 unread messages") are absolutely positioned and
               stay inside a positioned scroller only. Otherwise those below the screen stretched the main area:
-              a second scrollbar beside the list's (#566). */}
-          <div className="relative min-h-0 flex-1 overflow-y-auto px-2.5 pb-4">{list}</div>
+              a second scrollbar beside the list's (#566). While the AI bar or its ✦ shows (#308), the list
+              keeps room at its end, so its last chat can scroll above the ✦ that floats over it on phones. */}
+          <div className="relative min-h-0 flex-1 overflow-y-auto px-2.5 pb-4 [html[data-ai-bar]_&]:pb-24">{list}</div>
         </div>
 
         {/* Dragged past 240 px on desktop: a column of photos with their unread counts, like Telegram Desktop (#416, design 3A). */}
@@ -576,6 +577,8 @@ export function ChatsHub({
           </div>
         )}
       </section>
+      {/* The AI's place (#308): an open chat has its own, above its message box; until then, the whole page. */}
+      {selected ? null : <AiDockSlot className="absolute inset-0" />}
     </div>
   );
 }

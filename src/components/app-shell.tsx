@@ -1096,9 +1096,9 @@ export function AppShell({
   const isPublicPage = publicPaths.has(pathname) || isLoggedOutLanding;
   const showWorkspaceShell = Boolean(currentUser && initialNav && !isPublicPage);
   const fullHeight = isFullHeightPage(pathname);
-  // The AI bar (#308): on every page but the AI page, which has its own message box. The chats get
-  // the same simple bar on computers (Samuel, November 21); on phones, where their message box takes
-  // the bottom of the screen, it waits above that box as the ✦ button. Guests can't use the assistant.
+  // The AI bar (#308): on every page but the AI page, which has its own message box. The chats have
+  // one too: there it floats over their messages, above that box, and starts as the ✦ button
+  // (Samuel, November 26). Guests can't use the assistant.
   const aiDock = Boolean(currentUser && !currentUser.isGuest && pathname !== "/ai");
   // Hidden from pages, it leaves nothing to make room for.
   const { dock } = useAiDock();
@@ -1409,16 +1409,15 @@ export function AppShell({
               scroller. Otherwise it escapes, and the whole window scrolls beside main, a second scrollbar.
               Pages end above the AI bar, and on phones above the bar and the tabs: --page-end is that space,
               which a page's own floating bar keeps clear too (the Tasks page's bulk bar, #520). The chats
-              end above the bar on computers too; on phones their tabs take their own row, and the ✦ floats.
+              reach the bottom: the AI floats over their messages, which make room for it themselves
+              (AiDockSlot), and on phones their tabs take their own row.
               A page whose root has data-page-surface turns main, that space included, its surface color. */}
           <main
             id="main-content"
             className={cn(
               "relative min-h-0 flex-1 overflow-y-auto pb-(--page-end) has-[>[data-page-surface]]:bg-surface",
               fullHeight
-                ? aiBarShown
-                  ? "[--page-end:0rem] lg:[--page-end:6rem]"
-                  : "[--page-end:0rem]"
+                ? "[--page-end:0rem]"
                 : aiBarShown
                   ? "[--page-end:9rem] lg:[--page-end:6rem]"
                   : "[--page-end:6rem] lg:[--page-end:0rem]",

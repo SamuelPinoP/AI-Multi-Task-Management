@@ -808,6 +808,13 @@ html[data-ai-bar] [data-sonner-toaster] {
   --mobile-offset-bottom: 9.25rem !important;
 }
 
+/* On the chats it floats above their own message box, whose top is --ai-end from the bottom of the
+   window (AiDock), so toasts go above it there. */
+html[data-ai-bar="box"] [data-sonner-toaster] {
+  --offset-bottom: calc(var(--ai-end, 0px) + 6.5rem) !important;
+  --mobile-offset-bottom: calc(var(--ai-end, 0px) + 6rem) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 1ms !important;
