@@ -85,6 +85,14 @@ export function mentions(text: string, phrase: string) {
   return new RegExp(`${before}${escapeRegExp(needle)}${after}`, "u").test(normalize(text));
 }
 
+/**
+ * The text without Markdown emphasis: "*Deep Work*", "_Deep Work_" and "**Deep Work**" read
+ * "Deep Work". A `*` or `_` inside a word stays, as in "next_7_days".
+ */
+export function withoutEmphasis(text: string) {
+  return text.replace(/(?<![\p{L}\p{N}])[*_]+|[*_]+(?![\p{L}\p{N}])/gu, "");
+}
+
 function argumentMatches(actual: unknown, expected: string | number | boolean) {
   if (typeof expected === "string") return typeof actual === "string" && normalize(actual).includes(normalize(expected));
   return actual === expected;
@@ -92,15 +100,16 @@ function argumentMatches(actual: unknown, expected: string | number | boolean) {
 
 /**
  * Whether a call is the expected one: the same tool, with at least the expected arguments. A call
- * may point at an item the same answer creates by its ref ("new-1"), as the tools ask it to. The
- * ref then stands for that item's name, as it does in the proposal (#548).
+ * may name an item by its id ("task-plants"), or one the same answer creates by its ref ("new-1"),
+ * as the tools let it. The id or ref then stands for that item's title or name, as it does in the
+ * proposal (#548, #560). `names` holds them: the workspace's titles and the answer's drafted names.
  */
-export function callMatches(call: ObservedCall, expected: ExpectedCall, refs: ReadonlyMap<string, string> = new Map()) {
+export function callMatches(call: ObservedCall, expected: ExpectedCall, names: ReadonlyMap<string, string> = new Map()) {
   if (call.name !== expected.name) return false;
   const args = call.args && typeof call.args === "object" ? (call.args as Record<string, unknown>) : {};
   return Object.entries(expected.args).every(([key, value]) => {
     const actual = args[key];
-    return argumentMatches(typeof actual === "string" ? (refs.get(actual) ?? actual) : actual, value);
+    return argumentMatches(typeof actual === "string" ? (names.get(actual) ?? actual) : actual, value);
   });
 }
 
@@ -250,7 +259,7 @@ function estimateChecks(expected: ExpectedStep, step: ProposalStep | undefined, 
   }
 }
 
-export function scoreCase(evalCase: EvalCase, observed: Observed, workspace: Pick<Workspace, "hiddenTitles" | "ids">): Check[] {
+export function scoreCase(evalCase: EvalCase, observed: Observed, workspace: Pick<Workspace, "hiddenTitles" | "ids" | "titles">): Check[] {
   const { expect } = evalCase;
   const answer = observed.answer;
   const checks: Check[] = [];
@@ -258,10 +267,11 @@ export function scoreCase(evalCase: EvalCase, observed: Observed, workspace: Pic
 
   check(`Ends as ${expect.outcome}`, observed.outcome === expect.outcome, () => `It ended as ${observed.outcome}.`);
 
-  const refs = draftedNames(observed.drafted);
+  // A call names an item in the workspace by its id, or a new one by the ref its tool returned.
+  const names = new Map([...workspace.titles, ...draftedNames(observed.drafted)]);
   for (const tool of expect.tools) {
     const options = "anyOf" in tool ? tool.anyOf : [tool];
-    const found = observed.executedCalls.some((call) => options.some((option) => callMatches(call, option, refs)));
+    const found = observed.executedCalls.some((call) => options.some((option) => callMatches(call, option, names)));
     check(`Calls ${options.map(describeExpected).join(" or ")}`, found, () => `It called ${describeCalls(observed.executedCalls)}.`);
   }
   for (const name of expect.notTools) {
@@ -272,8 +282,11 @@ export function scoreCase(evalCase: EvalCase, observed: Observed, workspace: Pic
     check(limit === 0 ? "Looks nothing up" : `Makes at most ${limit} tool calls`, observed.attemptedCalls.length <= limit, () => `It called ${describeCalls(observed.attemptedCalls)}.`);
   }
 
+  // A fact counts as written or without Markdown emphasis: "finish reading *Deep Work*" says
+  // "Finish reading Deep Work" (#560). What an answer must never say or show is read as written.
+  const plain = withoutEmphasis(answer);
   for (const fact of expect.facts) {
-    check(`Says ${describeFact(fact)}`, factAlternatives(fact).some((phrase) => mentions(answer, phrase)));
+    check(`Says ${describeFact(fact)}`, factAlternatives(fact).some((phrase) => mentions(answer, phrase) || mentions(plain, phrase)));
   }
   for (const phrase of expect.notFacts) check(`Doesn't say "${phrase}"`, !mentions(answer, phrase));
   for (const entry of expect.notPatterns) {
@@ -302,8 +315,11 @@ export function scoreCase(evalCase: EvalCase, observed: Observed, workspace: Pic
     () => `It proposed ${describeSteps(observed.proposal)}.`,
   );
   for (const { wanted, step, split } of pairs) {
-    if (wanted.ticket) ticketChecks(wanted.ticket, step, check);
-    if (wanted.kind === "create_task") estimateChecks(wanted, step, split, check);
+    // Without a proposed task that matches, a failed check of the task's own says so, rather than
+    // describing a task with no estimate or sections (#560).
+    const own: CheckFn = step ? check : (name, passed) => check(name, passed, () => "No matching task was proposed.");
+    if (wanted.ticket) ticketChecks(wanted.ticket, step, own);
+    if (wanted.kind === "create_task") estimateChecks(wanted, step, split, own);
   }
   check("Changes nothing until the person applies it", !observed.workspaceChanged);
 
