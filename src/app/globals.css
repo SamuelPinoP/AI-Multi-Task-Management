@@ -810,9 +810,9 @@ html[data-ai-bar] [data-sonner-toaster] {
 }
 
 /* On the chats it floats above their own message box, whose top is --ai-end from the bottom of the
-   window (AiDock), so toasts go above it there. */
+   window (AiDock), so toasts go above it there, and above the bar as it grows. */
 html[data-ai-bar="box"] [data-sonner-toaster] {
-  --offset-bottom: calc(var(--ai-end, 0px) + 6.5rem) !important;
+  --offset-bottom: calc(var(--ai-end, 0px) + 6.5rem + var(--ai-bar-grow, 0px)) !important;
   --mobile-offset-bottom: calc(var(--ai-end, 0px) + 6rem) !important;
 }
 

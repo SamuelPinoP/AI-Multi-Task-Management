@@ -81,10 +81,11 @@ const COMPOSER_TEXT_CLASS =
 const WIDE_SEARCH_REM = 52;
 // While the AI floats over the thread, above the message box (AiDockSlot), the thread keeps room at its
 // end, so the latest message never sits under the ✦ or the AI bar, and the button back to the latest
-// message waits above the ✦, on its line.
-const ROOM_FOR_AI_CLASS = "group-has-[[data-ai-slot]>*]/chat:pb-24 group-has-[[data-ai-slot]>*]/chat:scroll-pb-24";
+// message waits above the ✦, on its line. Both grow as the bar does with a long message (--ai-bar-grow, #569).
+const ROOM_FOR_AI_CLASS =
+  "group-has-[[data-ai-slot]>*]/chat:pb-[calc(6rem+var(--ai-bar-grow,0px))] group-has-[[data-ai-slot]>*]/chat:scroll-pb-[calc(6rem+var(--ai-bar-grow,0px))]";
 const ABOVE_AI_CLASS =
-  "group-has-[[data-ai-slot]>*]/chat:mb-23 group-has-[[data-ai-slot]>*]/chat:mr-5 lg:group-has-[[data-ai-slot]>*]/chat:mr-8";
+  "group-has-[[data-ai-slot]>*]/chat:mb-[calc(5.75rem+var(--ai-bar-grow,0px))] group-has-[[data-ai-slot]>*]/chat:mr-5 lg:group-has-[[data-ai-slot]>*]/chat:mr-8";
 
 function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;

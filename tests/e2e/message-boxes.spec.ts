@@ -159,6 +159,33 @@ test.describe("on a computer", () => {
     // The chat took the bar's place, and pages end where they did with one line.
     await expect.poll(() => page.locator("#main-content").evaluate((main) => getComputedStyle(main).paddingBottom)).toBe("96px");
   });
+
+  test("on the chats the bar grows upward over the messages, and the latest message stays clear of it", async ({ page }) => {
+    await signUpAndLogIn(page, "E2E AI bar chats box");
+    const project = (await (await page.request.post("/api/projects", { data: { name: uniqueName("E2E boxes chats") } })).json()) as { id: string };
+    for (let index = 1; index <= 8; index += 1) {
+      expect((await page.request.post(`/api/projects/${project.id}/comments`, { data: { message: `Update ${index}` } })).status()).toBe(201);
+    }
+    await page.goto(`/projects/${project.id}/chat`);
+    // There the AI starts as the ✦, which brings the bar over the messages (#570).
+    await page.getByRole("button", { name: "Ask AI Multi", exact: true }).click();
+    const box = bar(page).getByRole("textbox", { name: "Ask AI Multi" });
+    await expect(box).toBeFocused();
+    const chatsBox = page.locator("form", { has: page.locator("#project-chat-message") });
+    const latest = page.getByRole("article").filter({ hasText: "Update 8" });
+
+    for (const text of [MESSAGE, lines(20)]) {
+      await box.fill(text);
+      // Still 24 px above the chats' own box, it grew upward, and the thread made room above it.
+      const barBounds = (await bar(page).boundingBox())!;
+      expect(barBounds.height).toBeGreaterThan(100);
+      expect(Math.round((await chatsBox.boundingBox())!.y - (barBounds.y + barBounds.height))).toBe(24);
+      await expect.poll(async () => {
+        const message = (await latest.boundingBox())!;
+        return message.y + message.height;
+      }).toBeLessThan(barBounds.y);
+    }
+  });
 });
 
 test.describe("on a phone", () => {
