@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { z } from "zod";
+import { parseTaskDueDateForStorage } from "../../task-date-buckets";
 import { toWallClock } from "../../user-time";
 import type { WriteRefusal } from "../../writes";
 import { createMemoryDb, type Row, type Tables } from "../evals/memory-db";
@@ -213,7 +214,8 @@ test("create_tasks: tasks go in the project named exactly, as the person's, and 
         {
           title: "Add a dark and light mode",
           description: "Both themes.",
-          dueDate: new Date("2026-11-30T00:00:00.000Z"),
+          // A date without a time, stored as the app stores it (src/lib/task-date-buckets.ts).
+          dueDate: parseTaskDueDateForStorage("2026-11-30"),
           priority: "HIGH",
           projectId: "proj-mobile",
           assigneeId: null,
@@ -328,7 +330,7 @@ test("update_task: finds the task by its exact title, ignoring case, and hands u
           status: "DONE",
           priority: "URGENT",
           recurrence: "NONE",
-          dueDate: new Date("2026-11-25T00:00:00.000Z"),
+          dueDate: parseTaskDueDateForStorage("2026-11-25"),
           description: "Mention the beta.",
           projectId: "proj-mobile",
           assigneeId: null,
