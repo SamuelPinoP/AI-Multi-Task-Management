@@ -1,62 +1,22 @@
 import "server-only";
 
-// Creating a calendar event: the rules of POST /api/events in one place (#310), so the AI
-// assistant's changes follow them too. Times are wall-clock values (src/lib/event-time.ts).
+// Creating, changing and trashing calendar events: the rules of POST /api/events, and of PATCH and
+// DELETE /api/events/[id], in one place (#310, #479), so the AI assistant's and connected AI apps'
+// changes follow them too. Times are wall-clock values (src/lib/event-time.ts).
 import type { Prisma } from "@prisma/client";
 import { createActivity } from "@/lib/activity";
 import type { Db } from "@/lib/db-client";
-import { parseEventTimes, parseRepeatUntil, type ParsedEventTimes } from "@/lib/event-time";
+import type { EventCreateData, EventUpdateData } from "@/lib/event-fields";
 import { prisma } from "@/lib/prisma";
-import { canEditProjectContent, getProjectAccess, unauthorizedProjectResponse } from "@/lib/project-access";
-import { isValidRecurrence, normalizeRecurrence, type RecurrenceValue } from "@/lib/recurrence";
+import { canEditProjectContent, getProjectAccess, projectAccessWhere, unauthorizedProjectResponse } from "@/lib/project-access";
 import { activityText, refuse, type WriteActor, type WriteResult } from "@/lib/writes";
 
-export type EventCreateData = {
-  title: string;
-  description: string | null;
-  location: string | null;
-  times: ParsedEventTimes;
-  recurrence: RecurrenceValue;
-  repeatUntil: Date | null;
-  projectId: string | null;
-};
+// The fields' checks have no server imports, so the AI's tools share them (src/lib/event-fields.ts).
+export { parseEventCreateBody, parseEventUpdateBody, type EventCreateData, type EventUpdateData } from "@/lib/event-fields";
 
 const EVENT_INCLUDE = { project: { select: { id: true, name: true, color: true } } } satisfies Prisma.EventInclude;
 
 export type CreatedEvent = Prisma.EventGetPayload<{ include: typeof EVENT_INCLUDE }>;
-
-function optionalText(value: unknown) {
-  return typeof value === "string" ? value.trim() || null : null;
-}
-
-/**
- * A new event from the fields the event form sends (`startDate`, `startTime`, `endDate`, `endTime`
- * as `YYYY-MM-DD` and `HH:MM`, `recurrence`, `repeatUntil`…), or the message for a 400.
- */
-export function parseEventCreateBody(body: Record<string, unknown>): { data: EventCreateData } | { error: string } {
-  const title = typeof body.title === "string" ? body.title.trim() : "";
-  if (!title) return { error: "Title is required" };
-
-  const times = parseEventTimes({ startDate: body.startDate, startTime: body.startTime, endDate: body.endDate, endTime: body.endTime });
-  if (times.error !== undefined) return { error: times.error };
-
-  if (body.recurrence && !isValidRecurrence(body.recurrence)) return { error: "Invalid recurrence" };
-  const recurrence = normalizeRecurrence(body.recurrence);
-  const repeatUntil = parseRepeatUntil({ startDate: body.startDate, repeatUntil: body.repeatUntil }, recurrence !== "NONE");
-  if (repeatUntil.error !== undefined) return { error: repeatUntil.error };
-
-  return {
-    data: {
-      title,
-      description: optionalText(body.description),
-      location: optionalText(body.location),
-      times: times.value,
-      recurrence,
-      repeatUntil: repeatUntil.value,
-      projectId: optionalText(body.projectId),
-    },
-  };
-}
 
 export async function createEvent(actor: WriteActor, input: EventCreateData, db: Db = prisma): Promise<WriteResult<CreatedEvent>> {
   if (input.projectId) {
@@ -90,4 +50,76 @@ export async function createEvent(actor: WriteActor, input: EventCreateData, db:
     db,
   );
   return { ok: true, value: event, followUp: { feeds: { userIds: [actor.id], projectIds: [event.projectId] } } };
+}
+
+/** An event moved to the Trash: what Activity and the calendar feeds need. */
+export type TrashedEvent = { id: string; title: string; userId: string; projectId: string | null };
+
+/** Events the person may change: their own and those in their projects, not in the Trash. */
+function changeableEventWhere(id: string, userId: string): Prisma.EventWhereInput {
+  return { id, deletedAt: null, OR: [{ userId }, { project: projectAccessWhere(userId) }] };
+}
+
+/** Replaces an event's fields with `input`, as the event form saves it. A repeating event changes as a whole. */
+export async function updateEvent(actor: WriteActor, id: string, input: EventUpdateData, db: Db = prisma): Promise<WriteResult<CreatedEvent>> {
+  if (input.projectId) {
+    const access = await getProjectAccess(input.projectId, actor.id, db);
+    if (!access) return refuse(400, "Invalid project");
+    if (!canEditProjectContent(access)) return refuse(403, unauthorizedProjectResponse("edit events").error);
+  }
+
+  const existingEvent = await db.event.findFirst({ where: changeableEventWhere(id, actor.id), select: { id: true, projectId: true } });
+  if (!existingEvent) return refuse(404, "Event not found");
+  if (existingEvent.projectId) {
+    const existingAccess = await getProjectAccess(existingEvent.projectId, actor.id, db);
+    if (!canEditProjectContent(existingAccess)) return refuse(403, unauthorizedProjectResponse("edit events").error);
+  }
+
+  const event = await db.event.update({
+    where: { id },
+    data: {
+      title: input.title,
+      description: input.description,
+      location: input.location,
+      ...input.times,
+      recurrence: input.recurrence,
+      ...(input.repeatUntil !== undefined ? { repeatUntil: input.repeatUntil } : {}),
+      project: input.projectId ? { connect: { id: input.projectId } } : { disconnect: true },
+    },
+    include: EVENT_INCLUDE,
+  });
+  return { ok: true, value: event, followUp: { feeds: { userIds: [event.userId], projectIds: [existingEvent.projectId, event.projectId] } } };
+}
+
+/** Moves an event to the Trash, where whoever trashed it, or its owner, can restore it. A repeating event goes as a whole. */
+export async function trashEvent(actor: WriteActor, id: string, db: Db = prisma): Promise<WriteResult<TrashedEvent>> {
+  const existingEvent = await db.event.findFirst({
+    where: changeableEventWhere(id, actor.id),
+    select: { id: true, title: true, userId: true, projectId: true },
+  });
+  if (!existingEvent) return refuse(404, "Event not found");
+
+  if (existingEvent.projectId) {
+    const existingAccess = await getProjectAccess(existingEvent.projectId, actor.id, db);
+    if (!canEditProjectContent(existingAccess)) return refuse(403, unauthorizedProjectResponse("delete events").error);
+  }
+
+  const deleted = await db.event.updateMany({
+    where: { id, deletedAt: null },
+    data: { deletedAt: new Date(), deletedById: actor.id },
+  });
+  if (deleted.count === 0) return refuse(404, "Event not found");
+
+  await createActivity(
+    {
+      userId: existingEvent.userId,
+      action: "DELETED_ITEM",
+      message: activityText(`Deleted event: “${existingEvent.title}”`, actor),
+      entityType: "EVENT",
+      entityId: existingEvent.id,
+      projectId: existingEvent.projectId,
+    },
+    db,
+  );
+  return { ok: true, value: existingEvent, followUp: { feeds: { userIds: [existingEvent.userId], projectIds: [existingEvent.projectId] } } };
 }

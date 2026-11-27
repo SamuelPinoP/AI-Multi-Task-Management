@@ -63,6 +63,14 @@ test("entries read as plain sentences", () => {
   assert.equal(describeTaskEvent({ kind: "LABEL_ADDED", fromValue: null, toValue: "bug" }), "added the label “bug”");
 });
 
+test("a change made through a connected AI app, or the in-app assistant, says which (#479)", () => {
+  assert.equal(describeTaskEvent({ kind: "CREATED", fromValue: null, toValue: null, via: "Claude" }), "created the task via Claude");
+  assert.equal(describeTaskEvent({ kind: "STATUS", fromValue: "To do", toValue: "Done", via: "AI Multi" }), "marked it done via AI Multi");
+  assert.equal(describeTaskEvent({ kind: "PRIORITY", fromValue: "Medium", toValue: "High", via: "ChatGPT" }), "set the priority to High (was Medium) via ChatGPT");
+  // Changes made in the app itself say nothing more.
+  assert.equal(describeTaskEvent({ kind: "STATUS", fromValue: "To do", toValue: "Done", via: null }), "marked it done");
+});
+
 test("comments: trimmed, Windows line breaks unified, empty or too long refused", () => {
   assert.equal(cleanComment("  Looks good\r\nShip it  "), "Looks good\nShip it");
   assert.equal(cleanComment("   "), null);
