@@ -40,27 +40,34 @@ export async function loadHistoryStates(ids: string[], db: Db = prisma) {
   return new Map(rows.map((row) => [row.id, stateOf(row)]));
 }
 
+/** Who changed a task, and what through when it wasn't the app itself, such as "Claude" (#479). */
+export type HistoryActor = { id: string; via?: string };
+
 /** Records what changed on each task between `before` and now. */
-export async function recordTaskChanges(before: Map<string, TaskHistoryState>, actorId: string, db: Db = prisma) {
+export async function recordTaskChanges(before: Map<string, TaskHistoryState>, actor: HistoryActor, db: Db = prisma) {
   const after = await loadHistoryStates([...before.keys()], db);
   const data = [...before].flatMap(([taskId, old]) => {
     const now = after.get(taskId);
-    return now ? diffTaskHistory(old, now).map((event) => ({ ...event, taskId, actorId })) : [];
+    return now ? diffTaskHistory(old, now).map((event) => ({ ...event, taskId, actorId: actor.id, via: actor.via ?? null })) : [];
   });
   if (data.length) await db.taskEvent.createMany({ data });
 }
 
-export async function recordTaskCreated(taskId: string, actorId: string, db: Db = prisma) {
-  await db.taskEvent.create({ data: { taskId, actorId, kind: "CREATED" } });
+export async function recordTaskCreated(taskId: string, actor: HistoryActor, db: Db = prisma) {
+  await db.taskEvent.create({ data: { taskId, actorId: actor.id, via: actor.via ?? null, kind: "CREATED" } });
 }
 
 /**
  * Who may comment on a task: its owner for a personal task; for a project
  * task, Owners and Editors, and its assignee even with view-only access.
  */
-export async function canCommentOnTask(task: { userId: string; projectId: string | null; assignee: { userId: string | null } | null }, userId: string) {
+export async function canCommentOnTask(
+  task: { userId: string; projectId: string | null; assignee: { userId: string | null } | null },
+  userId: string,
+  db: Db = prisma,
+) {
   const assigneeUserId = task.assignee?.userId ?? null;
   // Only a project task that isn't assigned to this person needs their role in the project.
-  const access = task.projectId && assigneeUserId !== userId ? await getProjectAccess(task.projectId, userId) : null;
+  const access = task.projectId && assigneeUserId !== userId ? await getProjectAccess(task.projectId, userId, db) : null;
   return mayCommentOnTask({ userId: task.userId, projectId: task.projectId, assigneeUserId }, userId, access?.accessLevel ?? null);
 }

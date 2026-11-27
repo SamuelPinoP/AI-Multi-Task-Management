@@ -192,9 +192,10 @@ function toTables(file: WorkspaceFile): Tables {
   const taskRows: Row[] = file.tasks.map((task) => ({
     id: task.id,
     title: task.title,
-    // The write tools (#310) read these to describe a change; the sample tasks have neither.
+    // The write tools (#310, #479) read these to describe a change; the sample tasks have none.
     description: null,
     parentId: null,
+    recurrence: "NONE",
     status: task.status,
     priority: task.priority,
     dueDate: task.due ? dayDate(task.due) : null,
@@ -210,6 +211,9 @@ function toTables(file: WorkspaceFile): Tables {
   const eventRows: Row[] = file.events.map((event) => ({
     id: event.id,
     title: event.title,
+    // MCP's update_event (#479) keeps these as they are; the sample events have neither.
+    description: null,
+    location: null,
     startTime: wallClockDate(event.start),
     endTime: event.end ? wallClockDate(event.end) : null,
     hasStartTime: !event.allDay,
@@ -242,7 +246,7 @@ function toTables(file: WorkspaceFile): Tables {
     createdAt: stamp(goal.createdAt),
     updatedAt: stamp(goal.createdAt),
   }));
-  return { project: projectRows, projectMember: memberRows, task: taskRows, event: eventRows, note: noteRows, weeklyGoal: goalRows };
+  return { project: projectRows, projectMember: memberRows, task: taskRows, event: eventRows, note: noteRows, weeklyGoal: goalRows, label: [], taskLabel: [] };
 }
 
 export function workspaceNames() {

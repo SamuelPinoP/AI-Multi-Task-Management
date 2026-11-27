@@ -176,7 +176,8 @@ table does. The comparison and the recommended model are on #256.
 
 AI apps such as Claude, ChatGPT, Codex and Cursor can read a person's workspace
 over the [Model Context Protocol](https://modelcontextprotocol.io) at `/api/mcp`
-(#478), once they sign in with OAuth 2.1 and the person clicks Allow (#477).
+(#478), and change it if the person allows that (#479), once they sign in with
+OAuth 2.1 and the person clicks Allow (#477).
 It's all off, a 404, unless `MCP_ENABLED` is `"true"`.
 
 - **Integrations page:** `/integrations` (#480), in the sidebar's Tools, gives
@@ -211,6 +212,24 @@ It's all off, a 404, unless `MCP_ENABLED` is `"true"`.
   same Zod schemas (`src/lib/ai/tools`), plus `get_task`, one task with its
   description and links. Each is annotated `readOnlyHint: true`.
   `src/lib/mcp/tools.ts` only adapts them to the SDK.
+- **Write tools (#479):** `create_tasks` (1 to 25, each with an optional
+  `sourceUrl`), `update_task`, `complete_task`, `comment_on_task`,
+  `create_event`, `update_event` (repeats included), `create_note`,
+  `append_to_note`, `create_project`, and `delete_task`, `delete_event` and
+  `delete_note`, which move the item to the Trash. They're in the registry too
+  (`src/lib/ai/tools/change-tools.ts`, access `"write"`), need the `write`
+  scope (without it the SDK answers 403 `insufficient_scope`), and are annotated
+  `readOnlyHint: false` and `destructiveHint` (true only for the deletes), with
+  `idempotentHint` where repeating a call changes nothing more. Each call plans
+  and applies its change at once, the app's approval prompt being the person's
+  confirmation: it names items by id or exact title only, refuses before
+  writing anything when that isn't clear, and makes the change through the
+  shared write functions in one transaction (`src/lib/mcp/writes-server.ts`),
+  as the person via the app's name, which Activity and the task's history show
+  ("via Claude", `TaskEvent.via`). A task's `sourceUrl` goes in `TaskLink`; a
+  second task for the same address in the same place is skipped, even from two
+  calls at once (an advisory lock per address). The in-app assistant never gets
+  these tools: it only proposes.
 - **Transport:** stateless Streamable HTTP through Vercel's `mcp-handler`:
   MCP 2026-07-28 (`server/discover`), and the 2025 `initialize` handshake for
   older apps. No sessions and no polling.

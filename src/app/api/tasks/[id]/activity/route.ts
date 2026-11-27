@@ -25,7 +25,7 @@ export async function GET(_req: Request, context: RouteContext) {
         where: { taskId: id },
         orderBy: { createdAt: "asc" },
         take: 500,
-        select: { id: true, kind: true, fromValue: true, toValue: true, createdAt: true, actor: { select: { name: true, email: true } } },
+        select: { id: true, kind: true, fromValue: true, toValue: true, via: true, createdAt: true, actor: { select: { name: true, email: true } } },
       }),
       canCommentOnTask(task, user.id),
     ]);

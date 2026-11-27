@@ -323,7 +323,8 @@ test("the metadata names every endpoint, PKCE S256 only, and the MCP endpoint's 
   assert.deepEqual(protectedResourceMetadata(ORIGIN), {
     resource: RESOURCE,
     authorization_servers: [ORIGIN],
-    scopes_supported: ["read"],
+    // "write" for the tools that make changes (#479).
+    scopes_supported: ["read", "write"],
     bearer_methods_supported: ["header"],
     resource_name: "AI Multi",
   });

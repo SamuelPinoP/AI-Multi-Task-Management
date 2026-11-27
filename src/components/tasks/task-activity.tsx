@@ -25,7 +25,7 @@ import { paletteColor } from "@/lib/project-color";
 import { COMMENT_MAX, describeTaskEvent, type TaskEventKind } from "@/lib/task-history";
 
 type Comment = { id: string; body: string; createdAt: string; editedAt: string | null; author: { id: string; name: string }; mine: boolean };
-type HistoryEvent = { id: string; kind: TaskEventKind; fromValue: string | null; toValue: string | null; createdAt: string; actor: string };
+type HistoryEvent = { id: string; kind: TaskEventKind; fromValue: string | null; toValue: string | null; via: string | null; createdAt: string; actor: string };
 type Activity = { comments: Comment[]; events: HistoryEvent[]; canComment: boolean };
 type Filter = "ALL" | "COMMENTS" | "HISTORY";
 

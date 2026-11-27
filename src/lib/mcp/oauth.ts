@@ -44,10 +44,10 @@ export const CLIENT_SECRET_PREFIX = "aim_cs_";
 export const SCOPES = ["read", "write", "offline_access"] as const;
 export type ResourceScope = "read" | "write";
 /**
- * The scopes the MCP endpoint's tools use, in its metadata. Only "read" until the write tools land
- * (#479); sign-in already handles "write" for apps that ask.
+ * The scopes the MCP endpoint's tools use, in its metadata: "read" for every tool, and "write" for
+ * the tools that make changes (#479).
  */
-export const RESOURCE_METADATA_SCOPES: ResourceScope[] = ["read"];
+export const RESOURCE_METADATA_SCOPES: ResourceScope[] = ["read", "write"];
 /** Public apps prove themselves with PKCE alone; apps that registered with a secret send it. */
 export const TOKEN_ENDPOINT_AUTH_METHODS = ["none", "client_secret_post", "client_secret_basic"] as const;
 

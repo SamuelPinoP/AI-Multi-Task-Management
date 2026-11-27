@@ -1,23 +1,12 @@
-import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
-import { createActivity } from "@/lib/activity";
-import {
-  canEditProjectContent,
-  getProjectAccess,
-  projectAccessWhere,
-  unauthorizedProjectResponse,
-} from "@/lib/project-access";
+import { parseNoteBody, trashNote, updateNote } from "@/lib/note-writes";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-function parseProjectId(input: unknown): string | null {
-  if (typeof input !== "string") return null;
-  const trimmed = input.trim();
-  return trimmed || null;
-}
+// The rules live in src/lib/note-writes.ts, which connected AI apps' changes use too (#479).
 
 export async function PATCH(req: Request, context: RouteContext) {
   try {
@@ -36,65 +25,12 @@ export async function PATCH(req: Request, context: RouteContext) {
       );
 
     const body = await req.json();
-    const title = typeof body.title === "string" ? body.title.trim() : "";
-    const contentInput =
-      typeof body.content === "string" ? body.content.trim() : "";
-    const projectId = parseProjectId(body.projectId);
+    const parsed = parseNoteBody(body && typeof body === "object" ? body : {});
+    if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-    if (!title && !contentInput)
-      return NextResponse.json(
-        { error: "Add a title or note content before saving." },
-        { status: 400 },
-      );
-
-    if (projectId) {
-      const access = await getProjectAccess(projectId, user.id);
-      if (!access)
-        return NextResponse.json({ error: "Invalid project" }, { status: 400 });
-      if (!canEditProjectContent(access))
-        return NextResponse.json(unauthorizedProjectResponse("edit notes"), {
-          status: 403,
-        });
-    }
-
-    // Waiting on prisma and checking if the user can edit the note
-    const existingNote = await prisma.note.findFirst({
-      where: {
-        id,
-        deletedAt: null,
-        OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }],
-      },
-      select: { projectId: true },
-    });
-    if (!existingNote)
-      // Acces denied
-      return NextResponse.json({ error: "Note not found" }, { status: 404 });
-    if (existingNote.projectId) {
-      const existingAccess = await getProjectAccess(
-        existingNote.projectId,
-        user.id,
-      );
-      if (!canEditProjectContent(existingAccess))
-        return NextResponse.json(unauthorizedProjectResponse("edit notes"), {
-          status: 403,
-        });
-    }
-
-    const updated = await prisma.note.updateMany({
-      where: { id, deletedAt: null },
-      // A note's event must be in its project, so moving the note clears it (SMART-05).
-      data: { title, content: contentInput || null, projectId, ...(existingNote.projectId !== projectId ? { eventId: null } : {}) },
-    });
-
-    if (updated.count === 0)
-      return NextResponse.json({ error: "Note not found" }, { status: 404 });
-
-    const note = await prisma.note.findUnique({
-      where: { id },
-      include: { project: { select: { id: true, name: true, color: true } } },
-    });
-
-    return NextResponse.json(note, { status: 200 });
+    const result = await updateNote(user, id, parsed.data);
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    return NextResponse.json(result.value, { status: 200 });
   } catch (error) {
     console.error("PATCH /api/notes/[id] error:", error);
     return NextResponse.json(
@@ -120,46 +56,8 @@ export async function DELETE(_req: Request, context: RouteContext) {
         { status: 400 },
       );
 
-    const existingNote = await prisma.note.findFirst({
-      where: {
-        id,
-        deletedAt: null,
-        OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }],
-      },
-      select: { id: true, title: true, userId: true, projectId: true },
-    });
-
-    if (!existingNote)
-      return NextResponse.json({ error: "Note not found" }, { status: 404 });
-
-    if (existingNote.projectId) {
-      const existingAccess = await getProjectAccess(
-        existingNote.projectId,
-        user.id,
-      );
-      if (!canEditProjectContent(existingAccess))
-        return NextResponse.json(unauthorizedProjectResponse("delete notes"), {
-          status: 403,
-        });
-    }
-
-    const deleted = await prisma.note.updateMany({
-      where: { id, deletedAt: null },
-      data: { deletedAt: new Date(), deletedById: user.id },
-    });
-
-    if (deleted.count === 0)
-      return NextResponse.json({ error: "Note not found" }, { status: 404 });
-
-    await createActivity({
-      userId: existingNote.userId,
-      action: "DELETED_ITEM",
-      message: `Deleted note: “${existingNote.title}”`,
-      entityType: "NOTE",
-      entityId: existingNote.id,
-      projectId: existingNote.projectId,
-    });
-
+    const result = await trashNote(user, id);
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
     return NextResponse.json(
       { message: "Note moved to trash" },
       { status: 200 },
