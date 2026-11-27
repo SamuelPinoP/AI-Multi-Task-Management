@@ -66,7 +66,7 @@ export function AiChatPanel({
 
   // New words, and the card of changes under an answer, keep the conversation at its end unless
   // the reader has scrolled up (#536). The effect covers a chat swapped for one as tall.
-  const { attach: followBody, onScroll: onScrollBody } = useFollowEnd(body, atEnd);
+  const { attach: followBody, onScroll: onScrollBody } = useFollowEnd(body, atEnd, busy);
   const turns = current?.turns;
   useEffect(() => {
     const element = body.current;
@@ -175,10 +175,7 @@ export function AiChatPanel({
                     <li key={text}>
                       <button
                         type="button"
-                        onClick={() => {
-                          atEnd.current = true;
-                          chat.ask(text);
-                        }}
+                        onClick={() => chat.ask(text)}
                         disabled={busy}
                         className="flex w-full items-center gap-2.5 rounded-xl border border-line bg-surface px-3 py-2.5 text-left text-[0.84375rem] text-ink transition-colors hover:bg-surface-hover disabled:opacity-60 max-lg:min-h-11"
                       >

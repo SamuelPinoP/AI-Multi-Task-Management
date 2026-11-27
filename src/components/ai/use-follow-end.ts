@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, type RefObject, type UIEvent } from "react";
+import { useCallback, useEffect, useRef, type RefObject, type UIEvent } from "react";
 
 /** How close to the end, in pixels, still counts as reading the end of the conversation. */
 const NEAR_END_PX = 80;
@@ -17,14 +17,28 @@ const NEAR_END_PX = 80;
  * ResizeObserver on the conversation's contents scrolls to the end whenever they change size
  * while the reader is there, whatever changed them.
  *
+ * A question sent goes in at the end, so it takes the reader there, wherever they were reading.
+ * Only the suggestions did that before; a question sent from the message box after scrolling up
+ * went in below the screen, and its answer arrived there unseen (#568).
+ *
  * `scrollerRef` and `atEndRef` are the caller's refs: callers set `atEndRef.current = true` when
- * they start a chat or send a question, and read `scrollerRef.current` as before. Put the returned
- * `attach` (a callback ref) and `onScroll` on the scrolling element; `attach` (re)connects whenever
- * that element mounts.
+ * they start or open a chat, and read `scrollerRef.current` as before. `busy` is the chat's: it
+ * turns true when a question is sent (from the message box, a suggestion or Try again) and while a
+ * stored chat opens, and either way the reader goes to the end. Put the returned `attach` (a
+ * callback ref) and `onScroll` on the scrolling element; `attach` (re)connects whenever that
+ * element mounts.
  */
-export function useFollowEnd(scrollerRef: RefObject<HTMLDivElement | null>, atEndRef: RefObject<boolean>) {
+export function useFollowEnd(scrollerRef: RefObject<HTMLDivElement | null>, atEndRef: RefObject<boolean>, busy: boolean) {
   // Where the last scroll event left the conversation, to tell scrolling up from content growing.
   const lastTop = useRef(0);
+
+  // Going to the end only as busy turns true: scrolling up while the answer arrives still stops the following.
+  useEffect(() => {
+    if (!busy) return;
+    atEndRef.current = true;
+    const element = scrollerRef.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [busy, scrollerRef, atEndRef]);
 
   const attach = useCallback(
     (element: HTMLDivElement | null) => {
