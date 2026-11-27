@@ -3,6 +3,7 @@
 import { ArrowUp } from "lucide-react";
 import { useSyncExternalStore, type Ref } from "react";
 import { useAiChat } from "@/components/ai/ai-chat-provider";
+import { GrowingTextarea } from "@/components/ui/growing-textarea";
 import { MAX_MESSAGE_CHARS } from "@/lib/ai/chat-limits";
 import { cn } from "@/lib/cn";
 import { sendsChatMessage } from "@/lib/shortcuts";
@@ -26,10 +27,17 @@ function useNarrowScreen() {
   );
 }
 
-// Like the project chat's box: the textarea and an invisible copy of its text share one grid cell,
-// so the copy sets the height. It grows up to 6 lines, then scrolls. 15 px text, 16 px on phones
-// (globals.css), so iOS doesn't zoom in when it's tapped.
-const TEXT_CLASS = "col-start-1 row-start-1 max-h-[calc(6lh+0.5rem)] px-0.5 py-1 text-[0.9375rem] leading-6";
+/**
+ * The text of the AI's message boxes, the chat's and the bar's: 15 px (16 px on phones, globals.css,
+ * so iOS doesn't zoom in when it's tapped) in 24 px lines, 4 px above and below. They grow up to 6
+ * lines on a phone and 8 on wider screens, never past 40% of the screen's height, then scroll
+ * (#569). ChatGPT stops at 8 lines and Gemini at 7; the chats' box goes to 10 on a computer, but
+ * the AI's chat is a smaller window, and the bar floats over the page.
+ */
+export const AI_TEXT_CLASS =
+  "max-h-[min(calc(6lh+0.5rem),40dvh)] py-1 text-[0.9375rem] leading-6 sm:max-h-[min(calc(8lh+0.5rem),40dvh)]";
+
+const TEXT_CLASS = cn(AI_TEXT_CLASS, "px-0.5");
 
 /**
  * The AI chat's message box (#308) with its send button, which is gray until something is typed
@@ -53,27 +61,22 @@ export function AiComposer({ className, ref }: { className?: string; ref?: Ref<H
         className,
       )}
     >
-      <div className="grid min-w-0 flex-1 grid-cols-1 self-center">
-        <textarea
-          ref={ref}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (!sendsChatMessage(event.nativeEvent, window.matchMedia("(pointer: coarse)").matches)) return;
-            event.preventDefault();
-            ask(draft);
-          }}
-          rows={1}
-          maxLength={MAX_MESSAGE_CHARS}
-          aria-label="Message the AI"
-          placeholder={placeholder}
-          className={cn(TEXT_CLASS, "min-h-[calc(1lh+0.5rem)] w-full resize-none border-0 bg-transparent text-ink outline-none placeholder:text-muted")}
-        />
-        {/* The trailing space gives a final empty line its height. */}
-        <div aria-hidden="true" className={cn(TEXT_CLASS, "invisible overflow-hidden whitespace-pre-wrap break-words")}>
-          {`${draft} `}
-        </div>
-      </div>
+      <GrowingTextarea
+        ref={ref}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (!sendsChatMessage(event.nativeEvent, window.matchMedia("(pointer: coarse)").matches)) return;
+          event.preventDefault();
+          ask(draft);
+        }}
+        maxLength={MAX_MESSAGE_CHARS}
+        aria-label="Message the AI"
+        placeholder={placeholder}
+        wrapperClassName="flex-1 self-center"
+        textClassName={TEXT_CLASS}
+        className="min-h-[calc(1lh+0.5rem)] border-0 bg-transparent text-ink outline-none placeholder:text-muted"
+      />
       <button
         type="submit"
         aria-label="Send"

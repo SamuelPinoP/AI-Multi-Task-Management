@@ -1416,10 +1416,11 @@ export function AppShell({
             id="main-content"
             className={cn(
               "relative min-h-0 flex-1 overflow-y-auto pb-(--page-end) has-[>[data-page-surface]]:bg-surface",
+              // On computers the space grows as the bar does with a long message (--ai-bar-grow, AiDock, #569).
               fullHeight
                 ? "[--page-end:0rem]"
                 : aiBarShown
-                  ? "[--page-end:9rem] lg:[--page-end:6rem]"
+                  ? "[--page-end:9rem] lg:[--page-end:calc(6rem+var(--ai-bar-grow,0px))]"
                   : "[--page-end:6rem] lg:[--page-end:0rem]",
             )}
           >

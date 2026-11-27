@@ -7,15 +7,16 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Po
 import { createPortal } from "react-dom";
 import { AiChatPanel } from "@/components/ai/ai-chat-panel";
 import { useAiChat, useAiDock, useAiDockSlot } from "@/components/ai/ai-chat-provider";
-import { AI_PLACEHOLDER, AI_PLACEHOLDER_SHORT } from "@/components/ai/ai-composer";
+import { AI_PLACEHOLDER, AI_PLACEHOLDER_SHORT, AI_TEXT_CLASS } from "@/components/ai/ai-composer";
 import { AiSpark } from "@/components/ai/ai-spark";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { GrowingTextarea } from "@/components/ui/growing-textarea";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "@/components/ui/toaster";
 import { MAX_MESSAGE_CHARS } from "@/lib/ai/chat-limits";
 import { CHAT_SIZE, CHAT_SIZE_KEY, dragChatSize, keyChatSize, parseChatSize, type ChatEdge, type ChatSize } from "@/lib/ai/chat-size";
 import { cn } from "@/lib/cn";
-import { isAskAiShortcut } from "@/lib/shortcuts";
+import { isAskAiShortcut, sendsChatMessage } from "@/lib/shortcuts";
 
 const WIDE_QUERY = "(min-width: 1024px)";
 
@@ -108,7 +109,8 @@ export function AiDockSlot({ className, inert }: { className?: string; inert?: b
 }
 
 /**
- * The AI on every page (#308, round 3's quiet bar, no chips): one line at the bottom of the page.
+ * The AI on every page (#308, round 3's quiet bar, no chips): one line at the bottom of the page,
+ * growing upward with a longer message as the chat's box does (#569).
  * Sending a question, the ✦ or Ctrl J (Cmd J on a Mac) opens the chat above it, 760 × 560 px to
  * start, resized from its top edge and top corners and remembered on this device. On phones the
  * bar sits above the tabs and the chat opens full screen.
@@ -141,7 +143,7 @@ export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
   const expandedRef = useRef(false);
   const card = useRef<HTMLElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
-  const barInput = useRef<HTMLInputElement>(null);
+  const barInput = useRef<HTMLTextAreaElement>(null);
   const bubble = useRef<HTMLButtonElement>(null);
   const drag = useRef<{ edge: ChatEdge; x: number; y: number; start: ChatSize; rootPx: number; last: ChatSize } | null>(null);
   const frame = useRef(0);
@@ -168,6 +170,24 @@ export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
     },
     [],
   );
+
+  // The bar grows upward with a long message (#569). How much taller than one line it is goes in
+  // --ai-bar-grow, so the space pages end with grows too (app-shell.tsx), and so does the toasts'
+  // (globals.css): a draft left in the bar covers nothing the page can't scroll clear of, and the
+  // Tasks page's bulk bar stays above it (#520). Hidden on phones, it's 0.
+  const measureBar = useCallback((form: HTMLFormElement | null) => {
+    if (!form) return;
+    const root = document.documentElement;
+    const sizes = new ResizeObserver(() => {
+      const grow = form.offsetHeight - parseFloat(getComputedStyle(form).minHeight);
+      root.style.setProperty("--ai-bar-grow", `${Math.max(0, Math.round(grow))}px`);
+    });
+    sizes.observe(form);
+    return () => {
+      sizes.disconnect();
+      root.style.removeProperty("--ai-bar-grow");
+    };
+  }, []);
 
   // Opening reads the allowance once, and puts the cursor in the chat's message box.
   useEffect(() => {
@@ -449,6 +469,7 @@ export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
       {resting === "bar" && !expanded ? float(
         <>
           <form
+            ref={measureBar}
             aria-label="Ask AI Multi"
             onSubmit={(event) => {
               event.preventDefault();
@@ -457,7 +478,9 @@ export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
             className={cn(
               FLOAT_CLASS,
               BAR_SHADOW,
-              "hidden h-14 w-[min(45rem,calc(100%-2rem))] items-center gap-2 rounded-full border border-line bg-raised pl-2 pr-2 transition-[border-color,box-shadow] focus-within:border-accent/45 focus-within:ring-[3px] focus-within:ring-accent/15 lg:flex",
+              // One line is 56 px tall, as before. A longer message grows it upward like the chat's
+              // box (#569), and the buttons stay beside the last line.
+              "hidden min-h-14 w-[min(45rem,calc(100%-2rem))] items-end gap-2 rounded-[1.75rem] border border-line bg-raised px-2 py-[0.5625rem] transition-[border-color,box-shadow] focus-within:border-accent/45 focus-within:ring-[3px] focus-within:ring-accent/15 lg:flex",
             )}
           >
             <button
@@ -469,18 +492,26 @@ export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
             >
               <AiSpark />
             </button>
-            <input
+            {/* Enter sends and Shift+Enter starts a new line, as in the chat's box. */}
+            <GrowingTextarea
               ref={barInput}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (!sendsChatMessage(event.nativeEvent, window.matchMedia("(pointer: coarse)").matches)) return;
+                event.preventDefault();
+                sendFromBar();
+              }}
               maxLength={MAX_MESSAGE_CHARS}
               aria-label="Ask AI Multi"
               aria-keyshortcuts="Control+J"
               placeholder={AI_PLACEHOLDER}
-              className="h-10 min-w-0 flex-1 bg-transparent text-[0.9375rem] text-ink outline-none placeholder:text-muted"
+              wrapperClassName="mb-0.5 flex-1"
+              textClassName={AI_TEXT_CLASS}
+              className="min-h-[calc(1lh+0.5rem)] border-0 bg-transparent text-ink outline-none placeholder:text-muted"
             />
             {ready ? null : (
-              <kbd aria-hidden="true" className="shrink-0 whitespace-nowrap rounded-md border border-b-2 border-line bg-raised px-1.5 py-0.5 font-mono text-2xs text-muted">
+              <kbd aria-hidden="true" className="shrink-0 self-center whitespace-nowrap rounded-md border border-b-2 border-line bg-raised px-1.5 py-0.5 font-mono text-2xs text-muted">
                 Ctrl J
               </kbd>
             )}
@@ -492,7 +523,7 @@ export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
               onClick={minimize}
               aria-label="Minimize to a button"
               title="Minimize"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink"
+              className="mb-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-ink"
             >
               <ChevronDown aria-hidden="true" className="h-4.5 w-4.5" />
             </button>

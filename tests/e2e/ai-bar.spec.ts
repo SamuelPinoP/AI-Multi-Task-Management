@@ -411,3 +411,25 @@ test("a long conversation scrolls inside the chat, not its frame (#566)", async 
   expect(await overflow(frame.locator("[data-follows-end]"))).toBeGreaterThan(500);
   expect(await overflow(frame)).toBe(0);
 });
+
+// As on the AI page: a question sent after scrolling up goes to the end of the chat, where its answer arrives (#568).
+test("a question sent from further up the chat brings it to the end, to see the answer (#568)", async ({ page, isMobile }) => {
+  const { email } = await signUpAndLogIn(page, "E2E AI bar send from above");
+  await agree(page);
+  await storeAiChat(email, "A long chat", 15);
+  await page.goto("/tasks");
+  const frame = isMobile ? page.getByRole("dialog", { name: "AI chat" }) : chat(page);
+  if (isMobile) await page.getByRole("button", { name: "Ask AI Multi: Create a task, ask, or create an event" }).click();
+  else await openWithShortcut(page);
+  await frame.getByRole("button", { name: "Chat history" }).click();
+  await frame.getByRole("button", { name: "A long chat" }).click();
+  await expect(frame.getByText("Answer 15", { exact: true })).toBeInViewport();
+
+  await frame.locator("[data-follows-end]").evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await expect(frame.getByText("Answer 1", { exact: true })).toBeInViewport();
+  await frame.getByRole("textbox", { name: "Message the AI" }).fill("One more question");
+  await frame.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(frame.getByText("You asked: One more question", { exact: true })).toBeInViewport();
+});

@@ -8,6 +8,7 @@ import { ChatSearchPanel, Highlighted } from "@/components/chats/chat-search-pan
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AttachmentGallery, ComposerAttachmentTray } from "@/components/project-chat-attachments";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
+import { GrowingTextarea } from "@/components/ui/growing-textarea";
 import { useUserTimeZone } from "@/components/user-time-zone";
 import { searchChat } from "@/lib/chat-search";
 import { formatUnreadCount } from "@/lib/chats";
@@ -70,13 +71,12 @@ const VIDEO_FILE_SIZE_LIMIT = 100 * 1024 * 1024;
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".m4v"]);
 const ACCEPTED_FILE_TYPES =
   ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.webm,.m4v,.zip";
-// The message box grows with its text, like WhatsApp's: up to 6 lines on a phone and 10 on wider
-// screens, never past 40% of the screen's height, then it scrolls. The textarea and an invisible
-// copy of its text share these classes and one grid cell, so the copy sets the height and the
-// textarea stretches to it. Phones get 16px text, so iOS doesn't zoom in when the box is tapped.
-// One line is as tall as the round buttons beside it: 24px + 12px on a phone, 20px + 12px from sm.
+// The message box grows with its text, like WhatsApp's (GrowingTextarea): up to 6 lines on a phone
+// and 10 on wider screens, never past 40% of the screen's height, then it scrolls. Phones get 16px
+// text, so iOS doesn't zoom in when the box is tapped. One line is as tall as the round buttons
+// beside it: 24px + 12px on a phone, 20px + 12px from sm.
 const COMPOSER_TEXT_CLASS =
-  "col-start-1 row-start-1 max-h-[min(calc(6lh+0.75rem),40dvh)] px-1 py-1.5 text-base sm:max-h-[min(calc(10lh+0.75rem),40dvh)] sm:text-sm";
+  "max-h-[min(calc(6lh+0.75rem),40dvh)] px-1 py-1.5 text-base sm:max-h-[min(calc(10lh+0.75rem),40dvh)] sm:text-sm";
 // From this width (in rem) search's results sit beside the chat; a narrower chat shows them in its place (#409).
 const WIDE_SEARCH_REM = 52;
 // While the AI floats over the thread, above the message box (AiDockSlot), the thread keeps room at its
@@ -1208,32 +1208,24 @@ export function ProjectChatWorkspace({
                 ) : null}
 
                 {/* Without the paperclip (direct messages), the text starts a little further in. */}
-                <div className={cn("grid min-w-0 flex-1 grid-cols-1", !allowAttachments && "pl-2")}>
-                  <textarea
-                    id="project-chat-message"
-                    value={message}
-                    onChange={(e) => {
-                      setMessage(e.target.value);
-                      if (error) setError("");
-                    }}
-                    onKeyDown={(event) => {
-                      if (!sendsOnKeyDown(event)) return;
-                      event.preventDefault();
-                      // Enter in an empty box, or while a message is still sending, does nothing.
-                      if (!isSubmitting && canSend) void sendMessage();
-                    }}
-                    placeholder={placeholder}
-                    rows={1}
-                    className={`${COMPOSER_TEXT_CLASS} min-h-[calc(1lh+0.75rem)] w-full resize-none border-0 bg-transparent text-ink outline-none placeholder:text-muted`}
-                  />
-                  {/* The trailing space gives a final empty line its height. */}
-                  <div
-                    aria-hidden="true"
-                    className={`${COMPOSER_TEXT_CLASS} invisible overflow-hidden whitespace-pre-wrap break-words`}
-                  >
-                    {`${message} `}
-                  </div>
-                </div>
+                <GrowingTextarea
+                  id="project-chat-message"
+                  value={message}
+                  onChange={(e) => {
+                    setMessage(e.target.value);
+                    if (error) setError("");
+                  }}
+                  onKeyDown={(event) => {
+                    if (!sendsOnKeyDown(event)) return;
+                    event.preventDefault();
+                    // Enter in an empty box, or while a message is still sending, does nothing.
+                    if (!isSubmitting && canSend) void sendMessage();
+                  }}
+                  placeholder={placeholder}
+                  wrapperClassName={cn("flex-1", !allowAttachments && "pl-2")}
+                  textClassName={COMPOSER_TEXT_CLASS}
+                  className="min-h-[calc(1lh+0.75rem)] border-0 bg-transparent text-ink outline-none placeholder:text-muted"
+                />
 
                 {/* Grey until there's something to send, then teal; its name is "Send message" either way.
                     The message itself shows "Sending" while it uploads. */}
