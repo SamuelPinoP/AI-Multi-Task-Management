@@ -201,9 +201,11 @@ It's all off, a 404, unless `MCP_ENABLED` is `"true"`.
   `oauth-server.ts` and the tables in `oauth-store.ts`. Every request is
   rate-limited per network. A request counts against its app only once it
   proves it comes from the app (a code with its PKCE secret, or a real refresh
-  token), so nobody can use up a popular app's share by naming it. Refreshes
-  are also limited per device, and Allow per account. Guests and unconfirmed
-  emails can't allow.
+  token), so nobody can use up a popular app's share by naming it. Before the
+  app's limit, a refresh counts against its device, and codes and refreshes
+  against their account; a request over one of those doesn't count against the
+  app, so one device or account can't use up its app's share either. Allow is
+  limited per account too. Guests and unconfirmed emails can't allow.
 
 - **Tools:** the assistant's six read tools, the same registry objects with the
   same Zod schemas (`src/lib/ai/tools`), plus `get_task`, one task with its

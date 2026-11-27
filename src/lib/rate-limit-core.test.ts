@@ -50,6 +50,10 @@ test("limits are tighter where abuse costs most", () => {
   assert.ok(RATE_LIMITS.oauthRegisterIp.limit / RATE_LIMITS.oauthRegisterIp.windowMs < RATE_LIMITS.oauthIp.limit / RATE_LIMITS.oauthIp.windowMs);
   // One device or one account can't use up its app's share alone.
   assert.ok(RATE_LIMITS.oauthDevice.limit < RATE_LIMITS.oauthClient.limit && RATE_LIMITS.oauthAccount.limit < RATE_LIMITS.oauthClient.limit);
+  // An account's codes and refreshes are at most a tenth of an app's share, and one stuck device leaves the account room (#562).
+  assert.equal(RATE_LIMITS.oauthAccountTokens.windowMs, RATE_LIMITS.oauthClient.windowMs);
+  assert.ok(RATE_LIMITS.oauthAccountTokens.limit * 10 <= RATE_LIMITS.oauthClient.limit);
+  assert.ok(RATE_LIMITS.oauthDevice.limit < RATE_LIMITS.oauthAccountTokens.limit);
   for (const rule of Object.values(RATE_LIMITS)) {
     assert.match(rule.name, /^[a-z-]+$/);
     assert.ok(rule.limit > 0 && rule.windowMs >= MINUTE);
