@@ -423,3 +423,26 @@ test("a long conversation scrolls inside the chat, never the page around it (#56
   expect(await overflow(page.locator("html"))).toBe(0);
   await expect(messageBox(page)).toBeInViewport();
 });
+
+// Sending a question goes to it, wherever the reader was in the conversation. Only the suggestions
+// did: a question sent from the message box after scrolling up went in below the screen, and its
+// answer arrived there unseen (#568).
+test("a question sent from further up the conversation brings it to the end, to see the answer (#568)", async ({ page, isMobile }) => {
+  const { email } = await signUpAndLogIn(page, "E2E AI send from above");
+  expect((await page.request.post("/api/agent/notice", { data: { version: AI_NOTICE_VERSION } })).ok()).toBe(true);
+  await storeAiChat(email, "A long chat", 15);
+  await page.goto("/ai");
+  const chats = await openChats(page, isMobile);
+  await chats.getByRole("button", { name: "A long chat" }).click();
+  await expect(conversation(page).getByText("Answer 15", { exact: true })).toBeInViewport();
+
+  // The reader scrolls up to the first answer, then sends a question with the button.
+  await conversation(page)
+    .locator("[data-follows-end]")
+    .evaluate((element) => {
+      element.scrollTop = 0;
+    });
+  await expect(conversation(page).getByText("Answer 1", { exact: true })).toBeInViewport();
+  await ask(page, "One more question");
+  await expect(conversation(page).getByText("You asked: One more question", { exact: true })).toBeInViewport();
+});
