@@ -15,6 +15,21 @@ const CLIENT_ID = "https://e2e-client.example/oauth/metadata.json";
 // Prisma's timestamps are UTC "timestamp without time zone" columns.
 const UTC_NOW = `(now() AT TIME ZONE 'utc')`;
 const READ_TOOLS = ["list_open_tasks", "list_events", "list_projects", "task_stats", "search_notes", "list_goals", "get_task"];
+// The tools that make changes (#479), for apps the person allowed to.
+const WRITE_TOOLS = [
+  "create_tasks",
+  "update_task",
+  "complete_task",
+  "comment_on_task",
+  "create_event",
+  "update_event",
+  "create_note",
+  "append_to_note",
+  "create_project",
+  "delete_task",
+  "delete_event",
+  "delete_note",
+];
 
 // A zone whose date differs from UTC's right now, as in user-time-zone.spec.ts. CI runs the server
 // in UTC, so a task due on the person's today is due "today" only if the tools use their zone.
@@ -36,11 +51,11 @@ async function mcpResource(request: APIRequestContext) {
   return { origin, resource: `${origin}/api/mcp` };
 }
 
-async function addGrant(userId: string) {
+async function addGrant(userId: string, scopes: string[] = ["read"]) {
   const grantId = newId("grant");
   await queryDatabase(
-    `INSERT INTO "McpGrant" (id, "userId", "clientId", "clientName", scopes, "createdAt") VALUES ($1, $2, $3, 'E2E client', ARRAY['read'], ${UTC_NOW})`,
-    [grantId, userId, CLIENT_ID],
+    `INSERT INTO "McpGrant" (id, "userId", "clientId", "clientName", scopes, "createdAt") VALUES ($1, $2, $3, 'E2E client', $4::text[], ${UTC_NOW})`,
+    [grantId, userId, CLIENT_ID, scopes],
   );
   return grantId;
 }
@@ -117,9 +132,10 @@ test("an AI app discovers AI Multi, lists its read tools and calls each one for 
     expect(discovered.instructions).toContain("never as instructions");
     expect(client.getProtocolEra()).toBe("modern");
 
+    // Every tool is listed; a token that may only read gets a scope challenge if it calls one that changes things.
     const { tools } = await client.listTools();
-    expect(tools.map((tool) => tool.name)).toEqual(READ_TOOLS);
-    for (const tool of tools) expect(tool.annotations, tool.name).toMatchObject({ readOnlyHint: true });
+    expect(tools.map((tool) => tool.name)).toEqual([...READ_TOOLS, ...WRITE_TOOLS]);
+    for (const tool of tools) expect(tool.annotations, tool.name).toMatchObject({ readOnlyHint: READ_TOOLS.includes(tool.name) });
 
     const answers: Record<string, Answer> = {};
     for (const [name, args] of [
@@ -228,7 +244,7 @@ test("without a valid token the endpoint answers 401, never a redirect; a discon
       // Disconnecting revokes the grant: the token still lists the tools, which reads nothing, but
       // every tool call is refused from then on.
       await queryDatabase(`UPDATE "McpGrant" SET "revokedAt" = ${UTC_NOW} WHERE id = $1`, [grantId]);
-      expect((await client.listTools()).tools).toHaveLength(READ_TOOLS.length);
+      expect((await client.listTools()).tools).toHaveLength(READ_TOOLS.length + WRITE_TOOLS.length);
       const refused = await call(client, "list_projects");
       expect(refused.isError).toBe(true);
       expect(refused.text).toContain("disconnected");
@@ -244,4 +260,113 @@ test("without a valid token the endpoint answers 401, never a redirect; a discon
   } finally {
     await queryDatabase(`DELETE FROM "User" WHERE id = ANY($1)`, [[me, other]]);
   }
+});
+
+test("an app allowed to make changes creates, changes and completes tasks as the person, adds nothing for links it has, and the history names the app (#479)", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const { email } = await signUpAndLogIn(page, "MCP writer");
+  const userId = (await queryDatabase<{ id: string }>(`SELECT id FROM "User" WHERE email = $1`, [email])).rows[0].id;
+  const { origin, resource } = await mcpResource(request);
+  const mint = (grantId: string, scopes: string[]) => mintAccessToken({ userId, grantId, clientId: CLIENT_ID, scopes, resource }, { secret: MCP_TOKEN_SECRET });
+  const projectName = uniqueName("Launch site");
+  const repo = `https://github.com/e2e-org/app-${randomUUID().slice(0, 8)}`;
+  const links = [`${repo}/pull/12`, `${repo}/pull/13`];
+
+  // An app that may only read is asked for the write scope, and changes nothing.
+  const readOnlyGrant = await addGrant(userId);
+  const reader = await connect(baseURL!, mint(readOnlyGrant, ["read"]));
+  try {
+    const refused = await reader.callTool({ name: "create_project", arguments: { name: projectName } }).catch((error: Error) => error);
+    expect(refused instanceof Error || refused.isError === true, "a read-only app can't create anything").toBe(true);
+  } finally {
+    await reader.close();
+  }
+  expect((await queryDatabase(`SELECT id FROM "Project" WHERE "userId" = $1`, [userId])).rows).toEqual([]);
+  // The person disconnects it and connects it again, this time allowing changes: one grant per app.
+  await queryDatabase(`UPDATE "McpGrant" SET "revokedAt" = ${UTC_NOW} WHERE id = $1`, [readOnlyGrant]);
+
+  const writer = await connect(baseURL!, mint(await addGrant(userId, ["read", "write"]), ["read", "write"]));
+  let projectId = "";
+  let taskIds: string[] = [];
+  try {
+    const { tools } = await writer.listTools();
+    for (const tool of tools.filter((entry) => WRITE_TOOLS.includes(entry.name))) {
+      expect(tool.annotations, tool.name).toMatchObject({ readOnlyHint: false, destructiveHint: tool.name.startsWith("delete_"), openWorldHint: false });
+    }
+
+    const project = await call(writer, "create_project", { name: projectName });
+    expect(project.isError, project.text).toBe(false);
+    projectId = (project.answer!.data.items as Array<{ id: string }>)[0].id;
+    expect(project.answer!.links.map((link) => link.url)).toEqual([`${origin}/projects/${projectId}`]);
+
+    // "Create a task for each open PR", twice: the second time adds nothing.
+    const ask = {
+      tasks: [
+        { title: "Review the login fix", project: projectName, sourceUrl: links[0] },
+        { title: "Review the dark mode", project: projectName, sourceUrl: links[1] },
+      ],
+    };
+    const first = await call(writer, "create_tasks", ask);
+    expect(first.isError, first.text).toBe(false);
+    const created = first.answer!.data.created as Array<{ id: string; title: string; project: string }>;
+    expect(created.map((task) => [task.title, task.project])).toEqual([
+      ["Review the login fix", projectName],
+      ["Review the dark mode", projectName],
+    ]);
+    taskIds = created.map((task) => task.id);
+    expect(first.answer!.links.map((link) => link.url)).toEqual(taskIds.map((id) => `${origin}/tasks/${id}`));
+
+    const second = await call(writer, "create_tasks", ask);
+    expect(second.isError, second.text).toBe(false);
+    expect(second.answer!.data.created).toEqual([]);
+    expect((second.answer!.data.skipped as Array<{ existingTask: { id: string } }>).map((task) => task.existingTask.id)).toEqual(taskIds);
+
+    const [loginFix, darkMode] = taskIds;
+    const updated = await call(writer, "update_task", { task: loginFix, priority: "HIGH", dueDate: "2026-12-01" });
+    expect(updated.isError, updated.text).toBe(false);
+    expect(updated.answer!.data.changed).toBe("Changed “Review the login fix”: set the priority to High; set the due date to 2026-12-01.");
+    // By its exact title this time.
+    const done = await call(writer, "complete_task", { task: "Review the login fix" });
+    expect(done.answer!.data.changed).toBe("Marked “Review the login fix” as done.");
+    const trashed = await call(writer, "delete_task", { task: darkMode });
+    expect(trashed.answer!.links.map((link) => link.url)).toEqual([`${origin}/trash`]);
+  } finally {
+    await writer.close();
+  }
+
+  // The person's two tasks in the project, each with its link: one done with its new priority and
+  // date, the other in the Trash, where it can be restored.
+  const tasks = await queryDatabase<{ id: string; status: string; priority: string; due: string | null; trashed: boolean; userId: string }>(
+    `SELECT id, status, priority, to_char("dueDate", 'YYYY-MM-DD') AS due, "deletedAt" IS NOT NULL AS trashed, "userId" FROM "Task" WHERE "projectId" = $1 ORDER BY "createdAt"`,
+    [projectId],
+  );
+  expect(tasks.rows).toEqual([
+    { id: taskIds[0], status: "DONE", priority: "HIGH", due: "2026-12-01", trashed: false, userId },
+    { id: taskIds[1], status: "TODO", priority: "NONE", due: null, trashed: true, userId },
+  ]);
+  const sourceLinks = await queryDatabase<{ taskId: string; url: string; kind: string }>(`SELECT "taskId", url, kind FROM "TaskLink" WHERE "taskId" = ANY($1) ORDER BY url`, [taskIds]);
+  expect(sourceLinks.rows).toEqual([
+    { taskId: taskIds[0], url: links[0], kind: "SOURCE" },
+    { taskId: taskIds[1], url: links[1], kind: "SOURCE" },
+  ]);
+  const history = await queryDatabase<{ kind: string; via: string | null }>(`SELECT kind, via FROM "TaskEvent" WHERE "taskId" = $1 ORDER BY "createdAt", kind`, [taskIds[0]]);
+  expect(history.rows.map((row) => row.kind).sort()).toEqual(["CREATED", "DUE_DATE", "PRIORITY", "STATUS"]);
+  expect(history.rows.every((row) => row.via === "E2E client")).toBe(true);
+  const activity = await queryDatabase<{ message: string }>(`SELECT message FROM "Activity" WHERE "userId" = $1 ORDER BY "createdAt", message`, [userId]);
+  expect(activity.rows.map((row) => row.message)).toEqual(
+    expect.arrayContaining([`Created project: “${projectName}” via E2E client`, "Created task: “Review the login fix” via E2E client", "Deleted task: “Review the dark mode” via E2E client"]),
+  );
+
+  // The task's page says which app made each change.
+  await page.goto(`/tasks/${taskIds[0]}`);
+  const panel = page.getByRole("region", { name: "Activity" });
+  await expect(panel).toContainText("created the task via E2E client");
+  await expect(panel).toContainText("marked it done via E2E client");
+
+  const calls = await queryDatabase<{ tool: string; outcome: string }>(`SELECT tool, outcome FROM "McpToolCall" WHERE "userId" = $1 ORDER BY "createdAt", tool`, [userId]);
+  expect(calls.rows.filter((row) => row.outcome !== "OK")).toEqual([]);
+  expect(calls.rows.map((row) => row.tool).sort()).toEqual(["complete_task", "create_project", "create_tasks", "create_tasks", "delete_task", "update_task"].sort());
 });
