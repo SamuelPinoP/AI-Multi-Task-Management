@@ -428,8 +428,9 @@ export function ChatsHub({
           {/* relative: each unread count's hidden words ("2 unread messages") are absolutely positioned and
               stay inside a positioned scroller only. Otherwise those below the screen stretched the main area:
               a second scrollbar beside the list's (#566). While the AI bar or its ✦ shows (#308), the list
-              keeps room at its end, so its last chat can scroll above the ✦ that floats over it on phones. */}
-          <div className="relative min-h-0 flex-1 overflow-y-auto px-2.5 pb-4 [html[data-ai-bar]_&]:pb-24">{list}</div>
+              keeps room at its end, so its last chat can scroll above the ✦ that floats over it on phones,
+              and above the bar, which grows with a long message (--ai-bar-grow, #569). */}
+          <div className="relative min-h-0 flex-1 overflow-y-auto px-2.5 pb-4 [html[data-ai-bar]_&]:pb-[calc(6rem+var(--ai-bar-grow,0px))]">{list}</div>
         </div>
 
         {/* Dragged past 240 px on desktop: a column of photos with their unread counts, like Telegram Desktop (#416, design 3A). */}

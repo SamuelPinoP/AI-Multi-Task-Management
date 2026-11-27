@@ -160,10 +160,10 @@ test.describe("on a computer", () => {
     await expect.poll(() => page.locator("#main-content").evaluate((main) => getComputedStyle(main).paddingBottom)).toBe("96px");
   });
 
-  test("on the chats the bar grows upward over the messages, and the latest message stays clear of it", async ({ page }) => {
+  test("on a chat the bar grows upward over the messages, and the latest message and the jump button stay clear of it", async ({ page }) => {
     await signUpAndLogIn(page, "E2E AI bar chats box");
     const project = (await (await page.request.post("/api/projects", { data: { name: uniqueName("E2E boxes chats") } })).json()) as { id: string };
-    for (let index = 1; index <= 8; index += 1) {
+    for (let index = 1; index <= 12; index += 1) {
       expect((await page.request.post(`/api/projects/${project.id}/comments`, { data: { message: `Update ${index}` } })).status()).toBe(201);
     }
     await page.goto(`/projects/${project.id}/chat`);
@@ -172,7 +172,11 @@ test.describe("on a computer", () => {
     const box = bar(page).getByRole("textbox", { name: "Ask AI Multi" });
     await expect(box).toBeFocused();
     const chatsBox = page.locator("form", { has: page.locator("#project-chat-message") });
-    const latest = page.getByRole("article").filter({ hasText: "Update 8" });
+    const latest = page.getByRole("article").filter({ hasText: "Update 12" });
+    const bottomOf = async (locator: Locator) => {
+      const bounds = (await locator.boundingBox())!;
+      return bounds.y + bounds.height;
+    };
 
     for (const text of [MESSAGE, lines(20)]) {
       await box.fill(text);
@@ -180,11 +184,39 @@ test.describe("on a computer", () => {
       const barBounds = (await bar(page).boundingBox())!;
       expect(barBounds.height).toBeGreaterThan(100);
       expect(Math.round((await chatsBox.boundingBox())!.y - (barBounds.y + barBounds.height))).toBe(24);
-      await expect.poll(async () => {
-        const message = (await latest.boundingBox())!;
-        return message.y + message.height;
-      }).toBeLessThan(barBounds.y);
+      await expect.poll(() => bottomOf(latest)).toBeLessThan(barBounds.y);
     }
+
+    // Scrolled up, the button back to the latest message waits above the bar too.
+    await latest.evaluate((element) => {
+      let scroller = element.parentElement;
+      while (scroller && getComputedStyle(scroller).overflowY !== "auto") scroller = scroller.parentElement;
+      scroller!.scrollTo(0, 0);
+    });
+    const jump = page.getByRole("button", { name: /^Jump to the latest message/ });
+    await expect(jump).toBeVisible();
+    expect(await bottomOf(jump)).toBeLessThan((await bar(page).boundingBox())!.y);
+  });
+
+  test("on the chats list the bar grows over the page, and the last chat scrolls clear of it", async ({ page }) => {
+    await signUpAndLogIn(page, "E2E AI bar chats list");
+    for (let index = 1; index <= 16; index += 1) {
+      expect((await page.request.post("/api/projects", { data: { name: uniqueName(`E2E list ${index}`) } })).ok()).toBe(true);
+    }
+    await page.goto("/chats");
+    await page.getByRole("button", { name: "Ask AI Multi", exact: true }).click();
+    await bar(page).getByRole("textbox", { name: "Ask AI Multi" }).fill(lines(20));
+    const top = (await bar(page).boundingBox())!.y;
+    // Scrolled to its end, the list's last chat sits above the grown bar.
+    const list = page.locator("#chat-list div.overflow-y-auto").first();
+    await expect
+      .poll(() =>
+        list.evaluate((element) => {
+          element.scrollTo(0, element.scrollHeight);
+          return element.lastElementChild!.getBoundingClientRect().bottom;
+        }),
+      )
+      .toBeLessThan(top);
   });
 });
 
