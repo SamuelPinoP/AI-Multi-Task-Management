@@ -7,8 +7,8 @@ const NEAR_END_PX = 80;
 
 /**
  * Keeps an AI conversation scrolled to its newest words while the reader is at the end: streamed
- * text, the card of changes an answer proposes (#310), a line that wraps once a font loads. It's
- * shared by the AI page and the AI bar's chat.
+ * text, the card of changes an answer proposes (#310), a line that wraps once a font loads, the
+ * message box growing below it. It's shared by the AI page and the AI bar's chat.
  *
  * Only the reader scrolling up stops the following; content that grows never does. Before (#536),
  * every scroll event re-measured "at the end", and a tall card that landed between the browser's
@@ -34,12 +34,14 @@ export function useFollowEnd(scrollerRef: RefObject<HTMLDivElement | null>, atEn
         if (atEndRef.current) element.scrollTop = element.scrollHeight;
         lastTop.current = element.scrollTop;
       };
-      // The scroller keeps its own size; its children grow. They change as the chat does (empty,
-      // loading, the thread, the notice), so the observed set follows them. Their border boxes, so
-      // padding and borders that grow count too, not only what's inside.
+      // The scroller's children grow. They change as the chat does (empty, loading, the thread, the
+      // notice), so the observed set follows them. Their border boxes, so padding and borders that
+      // grow count too, not only what's inside. The scroller itself gets shorter as the message box
+      // below it grows with a long question (#569), and a window or chat can be resized.
       const sizes = new ResizeObserver(follow);
       const watchChildren = () => {
         sizes.disconnect();
+        sizes.observe(element);
         for (const child of element.children) sizes.observe(child, { box: "border-box" });
       };
       watchChildren();
