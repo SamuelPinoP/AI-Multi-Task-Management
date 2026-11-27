@@ -31,6 +31,7 @@ How the code does things, and the traps that cost time. Read what your change to
 - Join Tailwind classes with `cn()`: a template string such as `` `${uiPrimaryButtonClass} px-3 py-1.5` `` keeps the base `py-2`, and the button grows.
 - A `grid` whose rows truncate text needs `grid-cols-1` (`minmax(0, 1fr)`), or an auto column grows to the longest row.
 - Text that can hold a long link or word (messages, answers) needs `wrap-anywhere`: `whitespace-pre-wrap` breaks only at spaces, and `break-words` doesn't stop a grid column or flex item from first growing to the word's width.
+- Hidden text (`sr-only`) is absolutely positioned, so it belongs to the nearest positioned ancestor, not to the scroller it sits in. A scroller that holds some needs `relative`, or the text far down its content stretches the box around it: a second scrollbar (#244, the window; #566, the AI chat and the Chats list).
 - React bubbles events from portals to the surrounding form: a picker's button inside a form submitted it.
 - Memoize context values: a new object on every render forces React to client-render pages still hydrating.
 - A window key listener whose effect depends on refreshed data re-registers on every refresh and drops half-typed shortcuts ("g then a letter"): read the data through a ref.

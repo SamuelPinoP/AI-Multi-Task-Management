@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { AI_NOTICE_VERSION } from "../../src/lib/ai/notice";
-import { continueAsGuest, signUpAndLogIn, uniqueName } from "./helpers";
+import { continueAsGuest, signUpAndLogIn, storeAiChat, uniqueName } from "./helpers";
 
 // The AI bar on every page (#308, round 3's quiet bar), end to end with the fake model
 // (src/lib/ai/providers/fake.ts): a message naming a tool calls it, anything else gets "You asked: …".
@@ -316,4 +316,23 @@ test.describe("on a phone", () => {
     await button.click();
     await expect(page.getByRole("dialog", { name: "AI chat" })).toBeVisible();
   });
+});
+
+// As on the AI page: the conversation's hidden labels ("You:", "AI Multi:") once escaped its scroller,
+// here into the chat's frame, which then ran on below its own bottom edge. Only the conversation scrolls.
+test("a long conversation scrolls inside the chat, not its frame (#566)", async ({ page, isMobile }) => {
+  const { email } = await signUpAndLogIn(page, "E2E AI bar long chat");
+  await storeAiChat(email, "A long chat", 20);
+  await page.goto("/tasks");
+  // The floating chat on a computer, the full-screen sheet on a phone.
+  const frame = isMobile ? page.getByRole("dialog", { name: "AI chat" }) : chat(page);
+  if (isMobile) await page.getByRole("button", { name: "Ask AI Multi: Create a task, ask, or create an event" }).click();
+  else await openWithShortcut(page);
+  await frame.getByRole("button", { name: "Chat history" }).click();
+  await frame.getByRole("button", { name: "A long chat" }).click();
+  await expect(frame.getByText("Answer 20", { exact: true })).toBeInViewport();
+
+  const overflow = (locator: Locator) => locator.evaluate((element) => element.scrollHeight - element.clientHeight);
+  expect(await overflow(frame.locator("[data-follows-end]"))).toBeGreaterThan(500);
+  expect(await overflow(frame)).toBe(0);
 });

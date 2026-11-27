@@ -393,11 +393,14 @@ export function AiPage({ firstName, initialList }: { firstName: string; initialL
           </button>
         </div>
 
+        {/* relative: the conversation's hidden labels ("You:", "AI Multi:") are absolutely positioned, and
+            they stay inside a scroller only if it's positioned. Otherwise they escaped it and stretched the
+            main area below the screen: a second scrollbar beside this one, which scrolled the page away (#566). */}
         <div
           ref={followThread}
           data-follows-end=""
           onScroll={onScrollThread}
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+          className="relative flex min-h-0 flex-1 flex-col overflow-y-auto"
         >
           {opening ? (
             <AiThreadLoading />
