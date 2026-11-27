@@ -441,6 +441,57 @@ test("outside a chat nothing can be proposed, and one answer proposes at most 20
   assert.equal(draft.steps.length, MAX_PROPOSAL_STEPS);
 });
 
+test("an optional argument given as empty text or null counts as left out, as models send them (#504)", async () => {
+  /** The steps one call adds to a new answer's proposal. */
+  async function stepsFor<Input extends z.ZodType>(tool: AgentTool<Input>, args: unknown) {
+    const { draft, call } = setup({ request: "Write it up." });
+    await call(tool, args);
+    return draft.steps;
+  }
+  const task = { title: "Water the plants", estimate: SOON };
+  assert.deepEqual(await stepsFor(createTask, { ...task, description: "", dueDate: null, priority: "", project: null, parent: "  ", split: null }), await stepsFor(createTask, task));
+  const ticket = { title: "Export tasks as a CSV file", summary: "People can download their tasks.", acceptanceCriteria: ["A CSV file downloads."], estimate: SOON };
+  assert.deepEqual(
+    await stepsFor(createTicket, {
+      ...ticket,
+      background: null,
+      outOfScope: "",
+      openQuestions: null,
+      sections: [{ title: "Cost", text: "None.", items: null }],
+      dueDate: "",
+      priority: null,
+      project: "",
+      parent: null,
+      split: "",
+    }),
+    await stepsFor(createTicket, { ...ticket, sections: [{ title: "Cost", text: "None." }] }),
+  );
+  const event = { title: "Stand-up", date: "2026-11-20" };
+  assert.deepEqual(await stepsFor(createEvent, { ...event, startTime: "", endTime: null, description: null, project: "" }), await stepsFor(createEvent, event));
+  assert.deepEqual(await stepsFor(createProject, { name: "Whitewall", description: null }), await stepsFor(createProject, { name: "Whitewall" }));
+
+  // A change: empty fields change nothing, so an empty description no longer removes one; clearDescription does.
+  const { draft, call } = setup({
+    edit: (tables) => {
+      const reading = tables.task.find((row) => row.id === "task-reading");
+      if (reading) reading.description = "Two chapters a week.";
+    },
+  });
+  const blank = { title: "", description: "", clearDescription: null, dueDate: "", clearDueDate: null, priority: null, status: "", project: null };
+  assert.deepEqual(await call(updateTask, { task: "Read Deep Work", ...blank }), {
+    proposed: null,
+    reason: `"Read Deep Work" already looks like that, so there's nothing to change.`,
+  });
+  await call(updateTask, { task: "Read Deep Work", clearDescription: true });
+  assert.deepEqual(draft.steps, [
+    {
+      kind: "update_task",
+      task: { id: "task-reading", name: "Read Deep Work", project: null, dueDate: null },
+      changes: [{ field: "description", from: "Two chapters a week.", to: null }],
+    },
+  ]);
+});
+
 test("invalid arguments never reach a tool: unknown fields, empty titles, made-up dates and times (#310)", () => {
   const refused: Array<[AgentTool, unknown]> = [
     [createProject, { name: "" }],

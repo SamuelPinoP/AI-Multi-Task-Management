@@ -1,5 +1,5 @@
-import { expect, test, type APIResponse, type BrowserContext, type Page } from "@playwright/test";
-import { signUpAndLogIn, uniqueName } from "./helpers";
+import { expect, test, type APIResponse, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import { queryDatabase, signUpAndLogIn, uniqueName } from "./helpers";
 
 // An owner and a teammate share a project; each one's messages are unread for the other.
 test.describe.configure({ mode: "serial" });
@@ -233,4 +233,32 @@ test("the chat header's ⋯ menu opens the project's board and its page", async 
   await conversation.getByRole("button", { name: "More", exact: true }).click();
   await teammate.getByRole("menuitem", { name: /^Project/ }).click();
   await expect(teammate).toHaveURL(new RegExp(`/projects/${projectId}$`));
+});
+
+// Each unread count carries hidden words for screen readers ("1 unread message"), which are absolutely
+// positioned. The list's scroller wasn't, so the counts below the screen escaped it and stretched the main
+// area: a second scrollbar beside the list's, as on the AI page.
+test("a long list of unread chats scrolls inside the list, never the page around it (#566)", async ({ browser }) => {
+  const context = await browser.newContext();
+  contexts.push(context);
+  const page = await context.newPage();
+  await signUpAndLogIn(page, "E2E chats long list");
+  const projectIds: string[] = [];
+  for (let index = 1; index <= 16; index++) {
+    projectIds.push((await ok<{ id: string }>(await page.request.post("/api/projects", { data: { name: `Long list project ${index}` } }))).id);
+  }
+  // A message from someone else in each one, so every row has an unread count.
+  await queryDatabase(
+    `INSERT INTO "ProjectComment" (id, "projectId", "userId", message, "createdAt", "updatedAt")
+     SELECT 'e2e-long-list-' || p.id, p.id, u.id, 'Are you there?', now() AT TIME ZONE 'utc', now() AT TIME ZONE 'utc'
+     FROM unnest($1::text[]) AS p(id), "User" u WHERE u.email = $2`,
+    [projectIds, ownerEmail],
+  );
+
+  await page.goto("/chats");
+  await expect(page.getByRole("list", { name: "Project chats" }).getByRole("link", { name: /1 unread message$/ })).toHaveCount(16);
+  const overflow = (locator: Locator) => locator.evaluate((element) => element.scrollHeight - element.clientHeight);
+  expect(await overflow(page.locator("#chat-list div.overflow-y-auto").first())).toBeGreaterThan(200);
+  expect(await overflow(page.locator("#main-content"))).toBe(0);
+  expect(await overflow(page.locator("html"))).toBe(0);
 });

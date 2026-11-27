@@ -217,7 +217,7 @@ export async function PATCH(req: Request) {
 
     const before = await loadHistoryStates(ids);
     await prisma.$transaction(writes);
-    await recordTaskChanges(before, user.id);
+    await recordTaskChanges(before, { id: user.id });
     afterChange(tasks, user, [change.projectId]);
 
     const updated = await prisma.task.findMany({ where: { id: { in: ids } }, include: taskInclude(user.id) });
@@ -277,7 +277,7 @@ async function restore(input: unknown, user: { id: string; name: string | null; 
   }
   const before = await loadHistoryStates(snapshots.map((snapshot) => snapshot.id));
   await prisma.$transaction(writes);
-  await recordTaskChanges(before, user.id);
+  await recordTaskChanges(before, { id: user.id });
   afterChange(loaded.tasks, user, snapshots.map((snapshot) => snapshot.projectId));
 
   const updated = await prisma.task.findMany({ where: { id: { in: snapshots.map((snapshot) => snapshot.id) } }, include: taskInclude(user.id) });

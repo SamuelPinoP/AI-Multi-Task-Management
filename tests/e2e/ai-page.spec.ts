@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { AI_NOTICE_VERSION } from "../../src/lib/ai/notice";
-import { continueAsGuest, queryDatabase, resetsInPattern, signUpAndLogIn, uniqueName } from "./helpers";
+import { continueAsGuest, queryDatabase, resetsInPattern, signUpAndLogIn, storeAiChat, uniqueName } from "./helpers";
 
 // The AI page (#308) and its stored chats (#452), end to end against the real endpoint and database.
 // The server runs with AI_PROVIDER="fake" (src/lib/ai/providers/fake.ts): a message naming a tool
@@ -403,4 +403,46 @@ test("a conversation keeps following its end as it grows, until the reader scrol
     (element.firstElementChild as HTMLElement).style.paddingBottom = "4500px";
   });
   await expect.poll(fromEnd).toBeLessThan(2);
+});
+
+// The conversation's hidden labels ("You:", "AI Multi:") are absolutely positioned. Its scroller wasn't,
+// so they escaped it and stretched the main area below the screen: a second scrollbar beside the
+// chat's, and scrolling past the end moved the whole page up, leaving an empty screen.
+test("a long conversation scrolls inside the chat, never the page around it (#566)", async ({ page, isMobile }) => {
+  const { email } = await signUpAndLogIn(page, "E2E AI long chat");
+  await storeAiChat(email, "A long chat", 20);
+  await page.goto("/ai");
+  const chats = await openChats(page, isMobile);
+  await chats.getByRole("button", { name: "A long chat" }).click();
+  await expect(conversation(page).getByText("Answer 20", { exact: true })).toBeInViewport();
+
+  // The conversation is what scrolls; the main area and the window have nothing to scroll.
+  const overflow = (locator: Locator) => locator.evaluate((element) => element.scrollHeight - element.clientHeight);
+  expect(await overflow(conversation(page).locator("[data-follows-end]"))).toBeGreaterThan(1000);
+  expect(await overflow(page.locator("#main-content"))).toBe(0);
+  expect(await overflow(page.locator("html"))).toBe(0);
+  await expect(messageBox(page)).toBeInViewport();
+});
+
+// Sending a question goes to it, wherever the reader was in the conversation. Only the suggestions
+// did: a question sent from the message box after scrolling up went in below the screen, and its
+// answer arrived there unseen (#568).
+test("a question sent from further up the conversation brings it to the end, to see the answer (#568)", async ({ page, isMobile }) => {
+  const { email } = await signUpAndLogIn(page, "E2E AI send from above");
+  expect((await page.request.post("/api/agent/notice", { data: { version: AI_NOTICE_VERSION } })).ok()).toBe(true);
+  await storeAiChat(email, "A long chat", 15);
+  await page.goto("/ai");
+  const chats = await openChats(page, isMobile);
+  await chats.getByRole("button", { name: "A long chat" }).click();
+  await expect(conversation(page).getByText("Answer 15", { exact: true })).toBeInViewport();
+
+  // The reader scrolls up to the first answer, then sends a question with the button.
+  await conversation(page)
+    .locator("[data-follows-end]")
+    .evaluate((element) => {
+      element.scrollTop = 0;
+    });
+  await expect(conversation(page).getByText("Answer 1", { exact: true })).toBeInViewport();
+  await ask(page, "One more question");
+  await expect(conversation(page).getByText("You asked: One more question", { exact: true })).toBeInViewport();
 });

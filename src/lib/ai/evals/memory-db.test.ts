@@ -30,6 +30,8 @@ function tables(): Tables {
     event: [],
     note: [],
     weeklyGoal: [{ id: "g1", title: "Goal", userId: "owner", status: "ACTIVE", targetWeek: "2026-W47", createdAt: day("2026-11-16") }],
+    label: [],
+    taskLabel: [],
   };
 }
 
@@ -51,6 +53,15 @@ test("comparisons with NULL are never true, as in SQL", async () => {
   assert.deepEqual(await ids({ dueDate: null }), ["t2"]);
   assert.deepEqual(await ids({ dueDate: { not: null } }), ["t1", "t3", "t4"]);
   assert.deepEqual(await ids({ id: { in: ["t2", "t3", "nope"] } }), ["t2", "t3"]);
+});
+
+test("text matches ignore case only when asked, equals included, as Prisma's mode does", async () => {
+  const db = memoryDb();
+  const ids = async (where: object) => (await db.task.findMany({ where, select: { id: true } })).map((task) => task.id);
+  assert.deepEqual(await ids({ title: { equals: "low, due early", mode: "insensitive" } }), ["t1"]);
+  assert.deepEqual(await ids({ title: { equals: "low, due early" } }), []);
+  assert.deepEqual(await ids({ title: { equals: "Low, due", mode: "insensitive" } }), [], "equals is the whole title");
+  assert.deepEqual(await ids({ title: { contains: "DUE EARLY", mode: "insensitive" } }), ["t1", "t3"]);
 });
 
 test("follows relations: a project's name, its members, and what a select nests", async () => {

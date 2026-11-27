@@ -66,8 +66,16 @@ function quote(value: string) {
   return `“${value}”`;
 }
 
-/** "changed the priority from Medium to High": the sentence after the person's name. */
-export function describeTaskEvent(event: TaskEventDraft) {
+/**
+ * "changed the priority from Medium to High": the sentence after the person's name, with what they
+ * made the change through when it wasn't the app itself: "… via Claude" (#479).
+ */
+export function describeTaskEvent(event: TaskEventDraft & { via?: string | null }) {
+  const sentence = describeChange(event);
+  return event.via ? `${sentence} via ${event.via}` : sentence;
+}
+
+function describeChange(event: TaskEventDraft) {
   const { kind, fromValue: from, toValue: to } = event;
   switch (kind) {
     case "CREATED":

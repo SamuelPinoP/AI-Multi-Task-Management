@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { AGENT_TOOLS } from "../tools";
+import { toolDefinition } from "../tools/define";
 import { ProviderError, type AgentMessage, type ProviderEvent, type ProviderRequest } from "../types";
-import { createGeminiProvider, GEMINI_DEFAULT_MODEL, toGeminiContents } from "./gemini";
+import { createGeminiProvider, GEMINI_DEFAULT_MODEL, geminiRequestBody, toGeminiContents } from "./gemini";
 
 function sseResponse(chunks: unknown[], pieceLength = 7) {
   const bytes = new TextEncoder().encode(chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\r\n\r\n`).join(""));
@@ -92,6 +94,28 @@ test("without tools, sends no tool settings", async () => {
   const body = JSON.parse(String(calls[0].init.body));
   assert.equal(body.tools, undefined);
   assert.equal(body.toolConfig, undefined);
+});
+
+test("gives Gemini each optional argument as one schema, its description beside its type, without the null and empty-text branches (#504)", () => {
+  const tools = AGENT_TOOLS.map(toolDefinition);
+  const body = geminiRequestBody(request({ tools }));
+  assert.ok(body.tools);
+  const declarations = body.tools[0].functionDeclarations;
+  const property = (tool: string, name: string) =>
+    (declarations.find((declaration) => declaration.name === tool)?.parametersJsonSchema.properties as Record<string, unknown>)[name];
+  // Arguments whose descriptions went unread beside anyOf in the November 26 run.
+  assert.deepEqual(property("list_projects", "status"), { type: "string", enum: ["ACTIVE", "COMPLETED", "ARCHIVED"], description: "Leave out for active projects." });
+  assert.deepEqual(property("create_task", "parent"), {
+    type: "string",
+    maxLength: 200,
+    description: "To make it a subtask: the parent task's title or id, or the ref create_task or create_ticket returned for a new one.",
+  });
+  assert.deepEqual(property("create_task", "dueDate"), { type: "string", description: "When it's due, YYYY-MM-DD." });
+  for (const [index, tool] of tools.entries()) {
+    const sent = JSON.stringify(declarations[index].parametersJsonSchema);
+    assert.doesNotMatch(sent, /anyOf|"null"|"maxLength":0[,}]/, tool.name);
+    assert.equal(sent.split('"description"').length, JSON.stringify(tool.parameters).split('"description"').length, `${tool.name} keeps every description`);
+  }
 });
 
 test("streams text and tool calls, and keeps the thought signature for the next request", async () => {

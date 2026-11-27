@@ -47,12 +47,21 @@ export const RATE_LIMITS = {
   oauthIp: { name: "oauth-ip", limit: 300, windowMs: 10 * MINUTE },
   /**
    * Per app: only requests that prove they come from it, a code with its PKCE secret or a valid
-   * refresh token. A client ID is public, so counting anything else would let anyone use up an
-   * app's share and lock out its users.
+   * refresh token, once the device's and account's own limits let them through. A client ID is
+   * public, so counting anything else would let anyone use up an app's share and lock out its users.
    */
   oauthClient: { name: "oauth-client", limit: 300, windowMs: 10 * MINUTE },
-  /** Refreshes per device (one refresh token). About one an hour is normal; this stops one stuck in a loop. */
+  /**
+   * Refreshes per device (one refresh token), counted before the account's and the app's limits.
+   * About one an hour is normal; this stops one stuck in a loop.
+   */
   oauthDevice: { name: "oauth-device", limit: 20, windowMs: 10 * MINUTE },
+  /**
+   * Codes traded and refreshes per account, counted before the app's limit (#562). Every Allow adds a
+   * device, so without this one account's devices could still fill an app's share. With it, one
+   * account uses at most a tenth, and one stuck device leaves room for the account's others.
+   */
+  oauthAccountTokens: { name: "oauth-account-tokens", limit: 30, windowMs: 10 * MINUTE },
   /** Allows per account on the consent page: each saves a code that counts against its app. */
   oauthAccount: { name: "oauth-account", limit: 20, windowMs: 60 * MINUTE },
   /** App registrations (RFC 7591) per network: each adds a row. */

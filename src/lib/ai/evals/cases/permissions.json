@@ -64,10 +64,11 @@
   {
     "id": "permissions-trashed-note",
     "ability": "permissions",
-    "summary": "Finds nothing for a note in the trash and says so, without showing what the note said.",
+    "summary": "Finds nothing for a note in the trash and says so, after trying other words once at most, without showing what the note said (#504).",
     "request": "How do I get to the lake cabin?",
     "expect": {
       "tools": [{ "name": "search_notes" }],
+      "maxToolCalls": 2,
       "facts": ["@notFound"],
       "notFacts": ["second left"]
     },

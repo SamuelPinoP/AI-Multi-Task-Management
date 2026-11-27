@@ -10,7 +10,7 @@ import { OAuthError, OAuthErrorCode, type AuthInfo } from "@modelcontextprotocol
 import { createMcpHandler, getPublicOrigin, withMcpAuth } from "mcp-handler";
 import { mcpTokenSecret, verifyAccessToken, type TokenCheck } from "@/lib/mcp/access-token";
 import { configuredOrigin, isMcpEnabled, MCP_PATH, MCP_SERVER_NAME } from "@/lib/mcp/connect";
-import { MCP_INSTRUCTIONS, registerMcpTools, type McpDb } from "@/lib/mcp/tools";
+import { MCP_INSTRUCTIONS, registerMcpTools, type McpDb, type McpToolDeps } from "@/lib/mcp/tools";
 
 // The switch and the path live in connect.ts, which the app shell and the Integrations page share without loading the SDK.
 export { isMcpEnabled, MCP_PATH, mcpTokenSecret };
@@ -36,8 +36,19 @@ const TOKEN_ERRORS: Record<Exclude<TokenCheck, { ok: true }>["reason"], string> 
   wrong_resource: "The access token is for a different address.",
 };
 
-export function createMcpEndpoint({ env, db, now = () => new Date() }: { env: Env; db: McpDb; now?: () => Date }) {
-  const serve = createMcpHandler((server) => registerMcpTools(server, { db, now }), {
+export function createMcpEndpoint({
+  env,
+  db,
+  now = () => new Date(),
+  writer,
+}: {
+  env: Env;
+  db: McpDb;
+  now?: () => Date;
+  /** How the write tools make changes (#479); without one, they refuse. */
+  writer?: McpToolDeps["writer"];
+}) {
+  const serve = createMcpHandler((server) => registerMcpTools(server, { db, now, writer }), {
     serverInfo: MCP_SERVER_INFO,
     instructions: MCP_INSTRUCTIONS,
   });

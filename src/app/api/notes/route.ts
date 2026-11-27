@@ -1,23 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
-import { createActivity } from "@/lib/activity";
 import { guestLimitResponse } from "@/lib/guest-limits";
-import {
-  projectAccessWhere,
-  getProjectAccess,
-  canEditProjectContent,
-  unauthorizedProjectResponse,
-} from "@/lib/project-access";
-
-function parseProjectId(input: unknown): string | null {
-  if (typeof input !== "string") {
-    return null;
-  }
-
-  const trimmed = input.trim();
-  return trimmed || null;
-}
+import { createNote, parseNoteBody } from "@/lib/note-writes";
+import { projectAccessWhere } from "@/lib/project-access";
 
 export async function GET() {
   try {
@@ -53,19 +39,10 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const title = typeof body.title === "string" ? body.title.trim() : "";
-    const contentInput =
-      typeof body.content === "string" ? body.content.trim() : "";
-    const projectId = parseProjectId(body.projectId);
+    // The fields first, then the account; the rules are in src/lib/note-writes.ts, which AI apps' changes use too (#479).
+    const parsed = parseNoteBody(body && typeof body === "object" ? body : {});
+    if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-    if (!title && !contentInput) {
-      return NextResponse.json(
-        { error: "Add a title or note content before saving." },
-        { status: 400 },
-      );
-    }
-
-    // Error thrown if there is no user
     const user = await requireApiUser();
     if (!user)
       return NextResponse.json(
@@ -75,41 +52,9 @@ export async function POST(req: Request) {
     const guestLimit = await guestLimitResponse(user, "notes");
     if (guestLimit) return guestLimit;
 
-    if (projectId) {
-      const access = await getProjectAccess(projectId, user.id);
-      if (!access)
-      
-        return NextResponse.json({ error: "Invalid project" }, { status: 400 });
-      if (!canEditProjectContent(access))
-        return NextResponse.json(unauthorizedProjectResponse("create notes"), {
-          status: 403,
-        });
-    }
-
-    const note = await prisma.note.create({
-      data: {
-        title,
-        content: contentInput || null,
-        userId: user.id,
-        projectId,
-      },
-      include: {
-        project: {
-          select: { id: true, name: true, color: true },
-        },
-      },
-    });
-
-    await createActivity({
-      userId: user.id,
-      action: "CREATED_NOTE",
-      message: `Created note: “${note.title || note.content?.slice(0, 40) || "Note"}”`,
-      entityType: "NOTE",
-      entityId: note.id,
-      projectId: note.projectId,
-    });
-
-    return NextResponse.json(note, { status: 201 });
+    const result = await createNote(user, parsed.data);
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    return NextResponse.json(result.value, { status: 201 });
   } catch (error) {
     console.error("POST /api/notes error:", error);
     return NextResponse.json(

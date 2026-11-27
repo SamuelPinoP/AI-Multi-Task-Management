@@ -8,7 +8,8 @@
 // - Register (RFC 7591) for apps without a metadata document, and revoke (RFC 7009).
 //
 // Everything answers 404 while MCP_ENABLED is off. Every request an app makes is rate-limited per
-// network and per app.
+// network. A code or refresh token that proves who's asking also counts against its device (for a
+// refresh), its account and its app, in that order.
 import { ACCESS_TOKEN_PREFIX, ACCESS_TOKEN_SECONDS, mcpTokenSecret, mintAccessToken } from "@/lib/mcp/access-token";
 import { clientMetadataUrl, cleanAppName, type ClientMetadataResolver } from "@/lib/mcp/client-metadata";
 import { isMcpEnabled } from "@/lib/mcp/connect";
@@ -141,14 +142,21 @@ export function createOAuthServer(deps: OAuthServerDeps) {
   const { env, store } = deps;
   const now = deps.now ?? (() => new Date());
 
-  /** Counts the request against each limit; the first one that's used up answers 429. */
+  /**
+   * Counts the request against each limit in turn, narrowest first. The first one that's used up
+   * answers 429, and the wider ones after it don't count the request, so a device or an account
+   * over its own limit can't go on using up its app's share (#562).
+   */
   async function overLimit(limits: Array<[RateLimitRule, string | null]>) {
-    const results = await Promise.all(limits.map(([rule, identifier]) => deps.rateLimit(rule, identifier)));
-    const blocked = results.find((result) => !result.allowed);
-    if (!blocked) return null;
-    return oauthError("temporarily_unavailable", tooManyAttemptsMessage("sign-in requests", blocked.retryAfterSeconds), 429, {
-      "Retry-After": String(blocked.retryAfterSeconds),
-    });
+    for (const [rule, identifier] of limits) {
+      const result = await deps.rateLimit(rule, identifier);
+      if (!result.allowed) {
+        return oauthError("temporarily_unavailable", tooManyAttemptsMessage("sign-in requests", result.retryAfterSeconds), 429, {
+          "Retry-After": String(result.retryAfterSeconds),
+        });
+      }
+    }
+    return null;
   }
 
   /**
@@ -221,8 +229,12 @@ export function createOAuthServer(deps: OAuthServerDeps) {
       return oauthError("invalid_target", `The resource must be ${stored.resource}.`);
     }
     if (!stored.accountAllowed) return oauthError("invalid_grant", "This account can't connect apps.");
-    // The code and its PKCE secret prove the app sent this. Over the limit, the code stays unused for a retry.
-    const limited = await overLimit([[RATE_LIMITS.oauthClient, clientId]]);
+    // The code and its PKCE secret prove this comes from the sign-in that made the code, so it counts
+    // against that account, then the app. Over either, the code stays unused for a retry.
+    const limited = await overLimit([
+      [RATE_LIMITS.oauthAccountTokens, stored.userId],
+      [RATE_LIMITS.oauthClient, clientId],
+    ]);
     if (limited) return limited;
     if (!(await store.claimCode(codeHash, at))) return oauthError("invalid_grant", "The code was already used. Connect the app again.");
 
@@ -268,11 +280,14 @@ export function createOAuthServer(deps: OAuthServerDeps) {
     if (resource === undefined || (resource !== null && !isThisResource(resource, stored.resource))) {
       return oauthError("invalid_target", `The resource must be ${stored.resource}.`);
     }
-    // The token proves the app sent this. A device stuck in a loop hits its own limit before the app's.
-    // Over either, the token stays as it was for a retry.
+    // The token proves who's asking, so it counts against its device, then its account, then the app,
+    // and stops at the first that's used up. A device stuck in a loop, or an account with many
+    // devices, then uses at most its own limit of the app's share. Over any of them, the token stays
+    // as it was for a retry.
     const limited = await overLimit([
-      [RATE_LIMITS.oauthClient, clientId],
       [RATE_LIMITS.oauthDevice, stored.id],
+      [RATE_LIMITS.oauthAccountTokens, stored.grant.userId],
+      [RATE_LIMITS.oauthClient, clientId],
     ]);
     if (limited) return limited;
 

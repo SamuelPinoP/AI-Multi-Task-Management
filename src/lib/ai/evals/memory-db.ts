@@ -10,7 +10,7 @@
 // going down.
 import type { ToolDb } from "@/lib/ai/tools/define";
 
-export type ModelName = "task" | "event" | "project" | "projectMember" | "note" | "weeklyGoal";
+export type ModelName = "task" | "event" | "project" | "projectMember" | "note" | "weeklyGoal" | "label" | "taskLabel";
 
 export type Row = Record<string, unknown>;
 
@@ -27,6 +27,7 @@ const RELATIONS: Record<ModelName, Record<string, Relation>> = {
     project: { model: "project", kind: "one", foreignKey: "projectId" },
     assignee: { model: "projectMember", kind: "one", foreignKey: "assigneeId" },
     goal: { model: "weeklyGoal", kind: "one", foreignKey: "goalId" },
+    labels: { model: "taskLabel", kind: "many", foreignKey: "taskId" },
   },
   event: { project: { model: "project", kind: "one", foreignKey: "projectId" } },
   project: {
@@ -38,6 +39,9 @@ const RELATIONS: Record<ModelName, Record<string, Relation>> = {
   projectMember: { project: { model: "project", kind: "one", foreignKey: "projectId" } },
   note: { project: { model: "project", kind: "one", foreignKey: "projectId" } },
   weeklyGoal: { tasks: { model: "task", kind: "many", foreignKey: "goalId" } },
+  // Labels (#276), which MCP's update_task sets by name (#479).
+  label: { project: { model: "project", kind: "one", foreignKey: "projectId" } },
+  taskLabel: { task: { model: "task", kind: "one", foreignKey: "taskId" }, label: { model: "label", kind: "one", foreignKey: "labelId" } },
 };
 
 /** Postgres sorts enum values in the order the schema declares them, not alphabetically. */
@@ -97,7 +101,10 @@ function matchesField(value: unknown, condition: unknown, field: string): boolea
     const present = value !== null && value !== undefined;
     switch (operator) {
       case "equals":
-        if (!matchesField(value, operand, field)) return false;
+        // `mode: "insensitive"` applies to equals too, as in Prisma: MCP's write tools find items by exact title (#479).
+        if (insensitive && typeof operand === "string") {
+          if (!present || typeof value !== "string" || text(value) !== text(operand)) return false;
+        } else if (!matchesField(value, operand, field)) return false;
         break;
       case "not":
         // SQL's `<>` is never true for NULL; `not: null` is "IS NOT NULL".
@@ -308,11 +315,19 @@ function groupBy(tables: Tables, model: ModelName, args: Record<string, unknown>
   return [...groups.values()];
 }
 
-/** The tools' database over `tables`. It only reads: the tools never write. */
+/** The tools' database over `tables`. It only reads: the tools never write through it. */
 export function createMemoryDb(tables: Tables): ToolDb {
   const model = (name: ModelName) => ({
     findMany: async (args?: Record<string, unknown>) => findMany(tables, name, args),
     groupBy: async (args: Record<string, unknown>) => groupBy(tables, name, args),
   });
-  return { task: model("task"), event: model("event"), project: model("project"), note: model("note"), weeklyGoal: model("weeklyGoal") } as unknown as ToolDb;
+  return {
+    task: model("task"),
+    event: model("event"),
+    project: model("project"),
+    note: model("note"),
+    weeklyGoal: model("weeklyGoal"),
+    projectMember: model("projectMember"),
+    label: model("label"),
+  } as unknown as ToolDb;
 }

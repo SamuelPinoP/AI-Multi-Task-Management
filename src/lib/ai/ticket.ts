@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { TICKET_SECTIONS } from "@/lib/ai/ticket-sections";
 import { estimateBody, estimateFields, estimateProblem, type SplitTask, type TaskEstimate } from "@/lib/ai/task-estimate";
+import { optionalArgument } from "@/lib/ai/tools/define";
 import { cleanSectionTitle, escapeLine, listLine, serializeDescription, type DescriptionSection } from "@/lib/description-sections";
 
 export { TICKET_SECTIONS };
@@ -26,30 +27,27 @@ const items = (max: number) => z.array(item).max(max);
 /** The ticket's parts the model fills in: the arguments create_ticket takes besides the task's own. */
 export const ticketFields = {
   summary: z.string().trim().min(1).max(SUMMARY_MAX).describe("One or two sentences: what it delivers, for whom, and why."),
-  background: items(MAX_ITEMS)
-    .optional()
-    .describe("What's known, one point each: what the person said and what the tools found, such as related tasks. Leave out anything you'd have to guess."),
-  acceptanceCriteria: items(MAX_CRITERIA)
-    .min(1)
-    .optional()
-    .describe(
-      "Testable outcomes, one each, that someone can check as done or not: what a person can do or see once it's done. For software, include the tests that prove it. Always give them, unless the person asked for a structure without them.",
-    ),
-  outOfScope: items(MAX_ITEMS).optional().describe("What it deliberately leaves out, when that prevents a misunderstanding."),
-  openQuestions: items(MAX_ITEMS)
-    .optional()
-    .describe("Every decision the request leaves open and everything you assumed, as questions. Never state an assumption as a fact."),
-  sections: z
-    .array(
-      z.strictObject({
-        title: z.string().trim().min(1).max(EXTRA_TITLE_MAX).describe("The section's title, such as Steps to reproduce or Cost."),
-        text: z.string().trim().max(TEXT_MAX).optional().describe("A paragraph."),
-        items: items(MAX_ITEMS).optional().describe("A list, one point each."),
-      }),
-    )
-    .max(MAX_EXTRA_SECTIONS)
-    .optional()
-    .describe("More sections, only when the person asked for them or for a different structure, such as Steps to reproduce, Expected result or Cost."),
+  background: optionalArgument(items(MAX_ITEMS)).describe(
+    "What's known, one point each: what the person said and what the tools found, such as related tasks. Leave out anything you'd have to guess.",
+  ),
+  acceptanceCriteria: optionalArgument(items(MAX_CRITERIA).min(1)).describe(
+    "Testable outcomes, one each, that someone can check as done or not: what a person can do or see once it's done. For software, include the tests that prove it. Always give them, unless the person asked for a structure without them.",
+  ),
+  outOfScope: optionalArgument(items(MAX_ITEMS)).describe("What it deliberately leaves out, when that prevents a misunderstanding."),
+  openQuestions: optionalArgument(items(MAX_ITEMS)).describe(
+    "Every decision the request leaves open and everything you assumed, as questions. Never state an assumption as a fact.",
+  ),
+  sections: optionalArgument(
+    z
+      .array(
+        z.strictObject({
+          title: z.string().trim().min(1).max(EXTRA_TITLE_MAX).describe("The section's title, such as Steps to reproduce or Cost."),
+          text: optionalArgument(z.string().trim().max(TEXT_MAX)).describe("A paragraph."),
+          items: optionalArgument(items(MAX_ITEMS)).describe("A list, one point each."),
+        }),
+      )
+      .max(MAX_EXTRA_SECTIONS),
+  ).describe("More sections, only when the person asked for them or for a different structure, such as Steps to reproduce, Expected result or Cost."),
   ...estimateFields("ticket"),
 };
 

@@ -8,14 +8,21 @@ import { toolDefinition } from "../ai/tools/define";
 import { MCP_TOOLS } from "../ai/tools/index";
 import { mintAccessToken } from "./access-token";
 import { appOrigin, createMcpEndpoint, isMcpEnabled, MCP_PATH, mcpTokenSecret, RESOURCE_METADATA_PATH } from "./handler";
-import { MCP_INSTRUCTIONS, type McpDb } from "./tools";
+import { MCP_INSTRUCTIONS, type McpDb, type McpToolDeps } from "./tools";
 
 const SECRET = "test-secret-that-is-long-enough-0123456789";
 const ORIGIN = "http://localhost:3000";
 const URL_ = `${ORIGIN}${MCP_PATH}`;
 const ENABLED = { MCP_ENABLED: "true", MCP_TOKEN_SECRET: SECRET };
 const USER = "user-1";
-const GRANT = { userId: USER, scopes: ["read"], revokedAt: null, lastUsedAt: null, user: { isGuest: false, emailVerifiedAt: new Date("2026-11-01"), timeZone: "Asia/Kolkata" } };
+const GRANT = {
+  userId: USER,
+  clientName: "Claude",
+  scopes: ["read"],
+  revokedAt: null,
+  lastUsedAt: null,
+  user: { isGuest: false, emailVerifiedAt: new Date("2026-11-01"), timeZone: "Asia/Kolkata", name: "Ana", email: "ana@example.com" },
+};
 
 /** A stand-in database: every model answers with no rows, except the grant, and every query is recorded. */
 function fakeDb(grant: unknown = GRANT) {
@@ -45,9 +52,9 @@ function token({ scopes = ["read"], resource = URL_, expiresAt }: { scopes?: str
   return mintAccessToken({ userId: USER, grantId: "grant-1", clientId: "test-client", scopes, resource, expiresAt }, { secret: SECRET });
 }
 
-function endpoint(env: Record<string, string | undefined> = ENABLED, grant?: unknown) {
+function endpoint(env: Record<string, string | undefined> = ENABLED, grant?: unknown, writer?: McpToolDeps["writer"]) {
   const { db, queries } = fakeDb(grant);
-  return { handle: createMcpEndpoint({ env, db }), queries };
+  return { handle: createMcpEndpoint({ env, db, writer }), queries };
 }
 
 /** The SDK's client on the endpoint; `pin` speaks MCP 2026-07-28 (server/discover), the default the 2025 protocol. */
@@ -163,7 +170,13 @@ for (const modern of [true, false]) {
       const source = MCP_TOOLS.find((entry) => entry.name === tool.name)!;
       assert.equal(tool.description, source.description);
       assert.equal(tool.title, source.title);
-      assert.deepEqual(tool.annotations, { readOnlyHint: true, openWorldHint: false }, tool.name);
+      // Read tools say they only read; write tools that they change only AI Multi, and whether they remove anything (#479).
+      const hints = source.writeHints;
+      const annotations =
+        source.access === "read"
+          ? { readOnlyHint: true, openWorldHint: false }
+          : { readOnlyHint: false, destructiveHint: hints!.destructive, ...(hints!.idempotent ? { idempotentHint: true } : {}), openWorldHint: false };
+      assert.deepEqual(tool.annotations, annotations, tool.name);
       // The same JSON Schema the in-app assistant's model gets for the tool.
       const { $schema: _version, ...inputSchema } = tool.inputSchema as Record<string, unknown>;
       void _version;
@@ -210,5 +223,57 @@ test("a disconnected app is refused at its next tool call, while listing still n
   assert.equal(result.isError, true);
   assert.match((result.content as Array<{ text: string }>)[0].text, /disconnected/);
   assert.deepEqual(queries, ["mcpGrant.findUnique", "mcpToolCall.create"], "nothing was read");
+  await client.close();
+});
+
+/** A writer that records who it acts as and what it's asked to write (#479). */
+function recordingWriter() {
+  const calls: Array<{ actor: unknown; write: string; input: unknown }> = [];
+  const writer: McpToolDeps["writer"] = (actor) => ({
+    async apply(change) {
+      const writes = {
+        createProject: async (input: { name: string }) => {
+          calls.push({ actor, write: "createProject", input });
+          return { id: "project-9", name: input.name };
+        },
+      };
+      return { ok: true, value: await change(writes as never) };
+    },
+  });
+  return { writer, calls };
+}
+
+test("an app allowed only to read is challenged for the write scope when it calls a write tool, and nothing runs (#479)", async () => {
+  const { writer, calls } = recordingWriter();
+  const { handle, queries } = endpoint(ENABLED, undefined, writer);
+  const responses: Response[] = [];
+  const client = await connect(async (request) => {
+    const response = await handle(request);
+    responses.push(response.clone());
+    return response;
+  });
+  const outcome = await client.callTool({ name: "create_project", arguments: { name: "Website" } }).catch((error: unknown) => error);
+  assert.ok(outcome instanceof Error || (outcome as { isError?: boolean }).isError, "the call doesn't succeed");
+  const challenged = responses.find((response) => response.status === 403);
+  assert.ok(challenged, "answered 403, so the app can ask the person to allow changes");
+  assert.match(challenged.headers.get("www-authenticate") ?? "", /error="insufficient_scope".*scope="write"/);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(queries, [], "nothing was read or written");
+  await client.close();
+});
+
+test("with the write scope, a write tool checks the grant, then changes things as the person via the app (#479)", async () => {
+  const { writer, calls } = recordingWriter();
+  const { handle, queries } = endpoint(ENABLED, { ...GRANT, scopes: ["read", "write"] }, writer);
+  const client = await connect(handle, { bearer: token({ scopes: ["read", "write"] }) });
+  const result = await client.callTool({ name: "create_project", arguments: { name: "Website" } });
+  assert.equal(result.isError, undefined);
+  const answer = JSON.parse((result.content as Array<{ text: string }>)[0].text);
+  assert.equal(answer.data.changed, "Created the project “Website”.");
+  assert.deepEqual(answer.links, [{ kind: "project", title: "Website", url: `${ORIGIN}/projects/project-9` }]);
+  assert.deepEqual(calls, [
+    { actor: { id: USER, name: "Ana", email: "ana@example.com", via: "Claude" }, write: "createProject", input: { name: "Website", description: null } },
+  ]);
+  assert.deepEqual(queries, ["mcpGrant.findUnique", "mcpGrant.updateMany", "mcpToolCall.create"]);
   await client.close();
 });

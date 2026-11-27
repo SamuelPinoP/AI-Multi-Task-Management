@@ -125,6 +125,11 @@ export type Workspace = {
   hiddenTitles: string[];
   /** Every id in the workspace: answers name items by title, never by id (the system prompt's rule 5). */
   ids: string[];
+  /**
+   * Each item's title, or a project's name, by its id. The tools take an item's id wherever they
+   * take its title, so the scorer reads an id in a tool call as that title (#560).
+   */
+  titles: ReadonlyMap<string, string>;
 };
 
 const dayDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
@@ -187,9 +192,10 @@ function toTables(file: WorkspaceFile): Tables {
   const taskRows: Row[] = file.tasks.map((task) => ({
     id: task.id,
     title: task.title,
-    // The write tools (#310) read these to describe a change; the sample tasks have neither.
+    // The write tools (#310, #479) read these to describe a change; the sample tasks have none.
     description: null,
     parentId: null,
+    recurrence: "NONE",
     status: task.status,
     priority: task.priority,
     dueDate: task.due ? dayDate(task.due) : null,
@@ -205,6 +211,9 @@ function toTables(file: WorkspaceFile): Tables {
   const eventRows: Row[] = file.events.map((event) => ({
     id: event.id,
     title: event.title,
+    // MCP's update_event (#479) keeps these as they are; the sample events have neither.
+    description: null,
+    location: null,
     startTime: wallClockDate(event.start),
     endTime: event.end ? wallClockDate(event.end) : null,
     hasStartTime: !event.allDay,
@@ -237,7 +246,7 @@ function toTables(file: WorkspaceFile): Tables {
     createdAt: stamp(goal.createdAt),
     updatedAt: stamp(goal.createdAt),
   }));
-  return { project: projectRows, projectMember: memberRows, task: taskRows, event: eventRows, note: noteRows, weeklyGoal: goalRows };
+  return { project: projectRows, projectMember: memberRows, task: taskRows, event: eventRows, note: noteRows, weeklyGoal: goalRows, label: [], taskLabel: [] };
 }
 
 export function workspaceNames() {
@@ -268,5 +277,10 @@ export function loadWorkspace(name: string): Workspace {
         ...file.members.map((member) => member.user),
       ]),
     ],
+    titles: new Map(
+      [...file.projects.map((project) => [project.id, project.name] as const), ...[...file.tasks, ...file.events, ...file.notes, ...file.goals].map((item) => [item.id, item.title] as const)].filter(
+        ([, title]) => title.trim() !== "",
+      ),
+    ),
   };
 }

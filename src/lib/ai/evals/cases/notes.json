@@ -44,10 +44,11 @@
   {
     "id": "notes-not-found",
     "ability": "notes",
-    "summary": "Says it found nothing when a search comes back empty, instead of searching until the step limit as Gemini's first live run did twice.",
+    "summary": "Says it found nothing when a search comes back empty, after trying other words once at most, instead of searching on until the step limit as Gemini did on November 24 (#504).",
     "request": "What did I write down about the Paris trip?",
     "expect": {
       "tools": [{ "name": "search_notes" }],
+      "maxToolCalls": 2,
       "facts": ["@notFound"]
     },
     "reference": [

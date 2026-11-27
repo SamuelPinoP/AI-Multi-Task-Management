@@ -40,8 +40,8 @@ export default function PrivacyPage() {
             API, only after you agree to that. AI Multi keeps your last 20 chats with it until you delete them.
           </li>
           <li>
-            If you connect an AI app such as Claude or ChatGPT, it can read your work when you ask it to, and the company
-            that runs it processes what it reads. You can disconnect it at any time.
+            If you connect an AI app such as Claude or ChatGPT, it can read your work when you ask it to, and change it if
+            you allow that, and the company that runs it processes what it reads. You can disconnect it at any time.
           </li>
           <li>You can ask to see, export or delete your data at any time.</li>
           <li>AI Multi is for people {MINIMUM_AGE} and older.</li>
@@ -316,8 +316,8 @@ export default function PrivacyPage() {
       <LegalSection id="ai-apps" title="Connected AI apps">
         <p>
           You can connect an AI app that supports MCP, such as Claude, ChatGPT or Cursor, to your AI Multi account, so it
-          can look up your work when you ask it to. An app connects only after you approve it on an AI Multi page that names
-          it. Guest workspaces and accounts whose email address isn&apos;t confirmed can&apos;t connect one.
+          can look up your work, and change it if you allow that, when you ask it to. An app connects only after you approve
+          it on an AI Multi page that names it. Guest workspaces and accounts whose email address isn&apos;t confirmed can&apos;t connect one.
         </p>
         <ul className={legalListClass}>
           <li>
@@ -325,8 +325,9 @@ export default function PrivacyPage() {
             notes and weekly goals you can see in AI Multi, including those in projects you share with other people. That
             can be task titles, descriptions, statuses, priorities, due dates and labels, and the tasks, notes and goals
             they&apos;re linked to; event titles, dates and times; project names and how far along each project is; note
-            titles with a short excerpt; your weekly goals; and counts of your tasks. It never sees your password or
-            anyone&apos;s email address.
+            titles with a short excerpt; your weekly goals; and counts of your tasks. When it changes something, it also
+            gets back what changed, and the names of a shared project&apos;s members or labels it asked for. It never sees
+            your password or anyone&apos;s email address.
           </li>
           <li>
             <strong>Who processes it:</strong> what an app reads goes to the company that runs it, such as Anthropic, OpenAI
@@ -335,16 +336,20 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>What it can do:</strong> what you allow on that page: see your work, and, if you leave the box ticked,
-            create, change and delete tasks, events and notes. For now apps can only read: the tools that make changes
-            aren&apos;t available yet.
+            create and change tasks, events, notes and projects, comment on tasks, and move tasks, events and notes to the
+            Trash, where you can restore them. It can&apos;t delete anything for good, and it can only change what you could
+            change yourself. Its changes are made as you, and Activity and a task&apos;s history name the app, such as
+            &quot;via Claude&quot;.
           </li>
           <li>
             <strong>What AI Multi keeps:</strong> each connection, with the app&apos;s name, the address the page showed,
             what you allowed it, when you connected it and when it was last used, to the nearest hour; a sign-in for each
             device the app is connected on, stored only as a hash, which ends after 30 days without use and a year after
-            connecting at the latest; and for 30 days, a record of each lookup: which app, which lookup (such as &quot;open
-            tasks&quot;), whether it worked, how long it took and when, never what the app asked or what it got. A
-            connection is deleted 30 days after you disconnect it.
+            connecting at the latest; for 30 days, a record of each lookup or change: which app, which tool (such as
+            &quot;open tasks&quot; or &quot;create tasks&quot;), whether it worked, how long it took and when, never what the
+            app asked or what it got; and, with a task an app made from a web page such as a pull request, that page&apos;s
+            address, so the same page doesn&apos;t get a second task. A connection is deleted 30 days after you disconnect
+            it; the changes an app made stay, like your own.
           </li>
           <li>
             <strong>Disconnecting:</strong> on the Integrations page, under Connected apps, click Disconnect next to the

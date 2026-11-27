@@ -228,7 +228,7 @@ export function AiPage({ firstName, initialList }: { firstName: string; initialL
 
   // New words, and the card of changes under an answer, keep the conversation scrolled to its end,
   // unless the reader has scrolled up (#536). The effect covers a chat swapped for one as tall.
-  const { attach: followThread, onScroll: onScrollThread } = useFollowEnd(thread, atEnd);
+  const { attach: followThread, onScroll: onScrollThread } = useFollowEnd(thread, atEnd, busy);
   const turns = current?.turns;
   useEffect(() => {
     const element = thread.current;
@@ -393,11 +393,14 @@ export function AiPage({ firstName, initialList }: { firstName: string; initialL
           </button>
         </div>
 
+        {/* relative: the conversation's hidden labels ("You:", "AI Multi:") are absolutely positioned, and
+            they stay inside a scroller only if it's positioned. Otherwise they escaped it and stretched the
+            main area below the screen: a second scrollbar beside this one, which scrolled the page away (#566). */}
         <div
           ref={followThread}
           data-follows-end=""
           onScroll={onScrollThread}
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+          className="relative flex min-h-0 flex-1 flex-col overflow-y-auto"
         >
           {opening ? (
             <AiThreadLoading />
@@ -414,10 +417,7 @@ export function AiPage({ firstName, initialList }: { firstName: string; initialL
                   <li key={text}>
                     <button
                       type="button"
-                      onClick={() => {
-                        atEnd.current = true;
-                        chat.ask(text);
-                      }}
+                      onClick={() => chat.ask(text)}
                       disabled={busy}
                       className="flex w-full items-center gap-2.5 rounded-xl border border-line bg-surface px-3 py-2.5 text-left text-[0.84375rem] text-ink transition-colors hover:bg-surface-hover disabled:opacity-60 max-lg:min-h-11"
                     >

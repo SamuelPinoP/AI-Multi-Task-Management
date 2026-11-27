@@ -93,7 +93,7 @@ flowchart LR
 
 ### Evaluations
 
-`src/lib/ai/evals/` scores the agent on 71 cases (#311, #502). Each case is data: a
+`src/lib/ai/evals/` scores the agent on 72 cases (#311, #502, #504). Each case is data: a
 sample workspace, a fixed clock and time zone, the question, and what a good
 answer does, meaning the tools it calls and with which arguments, the facts it
 states, what it must not call or say, and whether it asks a question back.
@@ -149,30 +149,35 @@ own, so a run never uses the app's daily allowance, and clear it with
 
 | Run | Cases passed | Cost per 1,000 messages | Model time per message, median / 95th percentile | Messages a day on the free plan |
 | --- | --- | --- | --- | --- |
-| Reference answers, no model | 69 of 69 | – | – | – |
-| Gemini 3.1 Flash-Lite | 38 of 42 (90%) | $0.80 | 6.8 s / 59.6 s | About 240 |
-| gpt-oss-120b on Groq | 37 of 42 (88%) | $0.41 | 2.4 s / 14.9 s | About 88 |
+| Reference answers, no model | 72 of 72 | – | – | – |
+| Gemini 3.1 Flash-Lite, November 26 | 62 of 72 (86%) | $3.08 | 1.9 s / 20.7 s | About 211 |
+| gpt-oss-120b on Groq, November 19 | 37 of 42 (88%) | $0.41 | 2.4 s / 14.9 s | About 88 |
 | Claude Haiku 5.5 | Not run: its API needs paid credits | | | |
 | Gemini 3.5 Flash-Lite | Not run: no free tier | | | |
 
 The reference replay runs on every push, in CI, and checks the cases and the
-scorer rather than a model. The live runs are from November 19, 2026, on the 42
-cases there were then; their results are in `src/lib/ai/evals/results/`, and
-costs are at list prices. Gemini took 285 seconds on one answer, past the
-30-second deadline, answered a vague request instead of asking what was meant,
-and twice kept searching until the step limit instead of saying it found
-nothing. Groq read "next week" as the wrong week, took 37 seconds on one answer,
-searched notes for a task, and twice sent `task_stats` an empty or null
-project, which Groq refused. Groq's results file shows those two as not scored,
-because the runner took the refusal for an outage; it now counts them as
-failed, as this table does. The comparison and the recommended model are on
-#256.
+scorer rather than a model. Gemini's run is on all 72 cases, after #504; Groq's
+is on the 42 cases there were on November 19, and #505 runs it again. Results
+are in `src/lib/ai/evals/results/`, and costs are at list prices. Gemini hit
+the step limit in four cases: it looked in the wrong places first for a task
+and a note, and searched on instead of asking for a missing day or saying it
+found nothing. It made one lookup too many in a fifth, wrote a ticket with no
+open questions and a ticket where a task was asked for, and said there was no
+yoga class after looking only ten days ahead. Two misses are the scorer's: it
+named a subtask's parent by its id, which `create_task` accepts, and put a
+goal's title in italics. Groq read "next week" as the wrong week, took 37
+seconds on one answer, searched notes for a task, and twice sent `task_stats`
+an empty or null project, which Groq refused; since #504 the tools' schemas
+allow both. Groq's results file shows those two as not scored, because the
+runner took the refusal for an outage; it now counts them as failed, as this
+table does. The comparison and the recommended model are on #256.
 
 ## AI apps over MCP
 
 AI apps such as Claude, ChatGPT, Codex and Cursor can read a person's workspace
 over the [Model Context Protocol](https://modelcontextprotocol.io) at `/api/mcp`
-(#478), once they sign in with OAuth 2.1 and the person clicks Allow (#477).
+(#478), and change it if the person allows that (#479), once they sign in with
+OAuth 2.1 and the person clicks Allow (#477).
 It's all off, a 404, unless `MCP_ENABLED` is `"true"`.
 
 - **Integrations page:** `/integrations` (#480), in the sidebar's Tools, gives
@@ -197,14 +202,34 @@ It's all off, a 404, unless `MCP_ENABLED` is `"true"`.
   `oauth-server.ts` and the tables in `oauth-store.ts`. Every request is
   rate-limited per network. A request counts against its app only once it
   proves it comes from the app (a code with its PKCE secret, or a real refresh
-  token), so nobody can use up a popular app's share by naming it. Refreshes
-  are also limited per device, and Allow per account. Guests and unconfirmed
-  emails can't allow.
+  token), so nobody can use up a popular app's share by naming it. Before the
+  app's limit, a refresh counts against its device, and codes and refreshes
+  against their account; a request over one of those doesn't count against the
+  app, so one device or account can't use up its app's share either. Allow is
+  limited per account too. Guests and unconfirmed emails can't allow.
 
 - **Tools:** the assistant's six read tools, the same registry objects with the
   same Zod schemas (`src/lib/ai/tools`), plus `get_task`, one task with its
   description and links. Each is annotated `readOnlyHint: true`.
   `src/lib/mcp/tools.ts` only adapts them to the SDK.
+- **Write tools (#479):** `create_tasks` (1 to 25, each with an optional
+  `sourceUrl`), `update_task`, `complete_task`, `comment_on_task`,
+  `create_event`, `update_event` (repeats included), `create_note`,
+  `append_to_note`, `create_project`, and `delete_task`, `delete_event` and
+  `delete_note`, which move the item to the Trash. They're in the registry too
+  (`src/lib/ai/tools/change-tools.ts`, access `"write"`), need the `write`
+  scope (without it the SDK answers 403 `insufficient_scope`), and are annotated
+  `readOnlyHint: false` and `destructiveHint` (true only for the deletes), with
+  `idempotentHint` where repeating a call changes nothing more. Each call plans
+  and applies its change at once, the app's approval prompt being the person's
+  confirmation: it names items by id or exact title only, refuses before
+  writing anything when that isn't clear, and makes the change through the
+  shared write functions in one transaction (`src/lib/mcp/writes-server.ts`),
+  as the person via the app's name, which Activity and the task's history show
+  ("via Claude", `TaskEvent.via`). A task's `sourceUrl` goes in `TaskLink`; a
+  second task for the same address in the same place is skipped, even from two
+  calls at once (an advisory lock per address). The in-app assistant never gets
+  these tools: it only proposes.
 - **Transport:** stateless Streamable HTTP through Vercel's `mcp-handler`:
   MCP 2026-07-28 (`server/discover`), and the 2025 `initialize` handshake for
   older apps. No sessions and no polling.

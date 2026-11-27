@@ -89,7 +89,7 @@ export async function createTask(actor: WriteActor, input: TaskCreateData, db: D
     include: taskInclude(actor.id),
   });
 
-  await recordTaskCreated(task.id, actor.id, db);
+  await recordTaskCreated(task.id, actor, db);
   const done = status === "DONE";
   await createActivity(
     {
@@ -178,7 +178,7 @@ export async function updateTask(actor: WriteActor, id: string, input: TaskUpdat
     await dropLabelsOutsideScope([id, ...subtasks.map((subtask) => subtask.id)], labelScope, db);
   }
   if (labels.ids) await setTaskLabels(id, labels.ids, db === prisma ? undefined : db);
-  await recordTaskChanges(before, actor.id, db);
+  await recordTaskChanges(before, actor, db);
 
   const task = await db.task.findUnique({ where: { id }, include: taskInclude(actor.id) });
   if (!task) return refuse(404, "Task not found");
@@ -241,4 +241,28 @@ export async function trashTask(actor: WriteActor, id: string, db: Db = prisma):
     db,
   );
   return { ok: true, value: existingTask, followUp: { feeds: { userIds: [existingTask.userId], projectIds: [existingTask.projectId] } } };
+}
+
+/** Records the web address a new task comes from (#479), such as the pull request an AI app made it for. */
+export async function addSourceLink(taskId: string, url: string, db: Db = prisma) {
+  await db.taskLink.create({ data: { taskId, url, kind: "SOURCE" } });
+}
+
+/**
+ * The task already made for `url` in the same place, if the person can see one: in project
+ * `projectId`, or among their own tasks outside projects when it's null. Tasks in the Trash don't
+ * count. Inside a transaction it first takes a lock on the address for that place, held until the
+ * transaction ends, so two calls at once can't both add a task for it.
+ */
+export async function findTaskForSourceLink(actorId: string, url: string, projectId: string | null, db: Db = prisma) {
+  const place = projectId ? `project:${projectId}` : `user:${actorId}`;
+  // A function returning void: $queryRaw can't read its result, $executeRaw doesn't try.
+  await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`task-link:${place}:${url}`}))`;
+  return db.task.findFirst({
+    where: {
+      AND: [visibleTaskWhere(actorId), projectId ? { projectId } : { projectId: null, userId: actorId }, { links: { some: { url, kind: "SOURCE" } } }],
+    },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, title: true },
+  });
 }

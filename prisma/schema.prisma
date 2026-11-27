@@ -565,9 +565,32 @@ model Task {
   labels    TaskLabel[]
   comments  TaskComment[]
   events    TaskEvent[]
+  links     TaskLink[]
 
   @@index([parentId])
   @@index([deletedById])
+}
+
+/// A web address a task is linked to (#479), such as the pull request it was made from. An AI app that creates a task
+/// for each open pull request finds the ones it made before by their address, so running it twice adds nothing.
+model TaskLink {
+  id        String       @id @default(cuid())
+  taskId    String
+  /// The full address, as given (http or https).
+  url       String
+  kind      TaskLinkKind
+  createdAt DateTime     @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([url])
+}
+
+/// What a task's link is to it. Pull requests that work on a task (#283) will add their own kind.
+enum TaskLinkKind {
+  /// Where the task came from, such as a pull request or an issue an AI app made it for.
+  SOURCE
 }
 
 /// A colored tag on tasks (#276). A personal label belongs to a user and goes
@@ -618,6 +641,9 @@ model TaskEvent {
   taskId    String
   /// Who made the change; null once their account is deleted.
   actorId   String?
+  /// What they made it through, when it wasn't the app itself: an AI app's name as they approved it, such as "Claude"
+  /// (#479), or "AI Multi" for the in-app assistant. The history says "via Claude".
+  via       String?
   kind      TaskEventKind
   fromValue String?
   toValue   String?
