@@ -6,7 +6,7 @@ Rules for everyone who works in this repository, people and AI coding agents ali
 
 The work order is the [roadmap project](https://github.com/users/SamuelPinoP/projects/5). Take its top "Now" item whose blockers are closed, or the issue the owner names. New issues go on it. Other sessions work at the same time, so check open PRs and branches first.
 
-Everything lives in this repository and on GitHub, and GitHub wins over any copy elsewhere, such as notes or a chat project's instructions.
+Each fact has one home: rules here, guides in `docs/`, the order on the roadmap, plans and decisions in issues and PRs. Link to it instead of copying it, and keep no handoff, plan or notes files, in the repository or outside it. GitHub wins over any copy.
 
 Claude Code loads the guide for a folder (`tests/`, `prisma/`, `src/`, `src/lib/ai/`) when it reads a file there; other agents follow the "before" lines:
 
@@ -19,11 +19,12 @@ Claude Code loads the guide for a folder (`tests/`, `prisma/`, `src/`, `src/lib/
 
 ## Rules
 
+- Work the way a strong team would: the repository is public, so follow common industry practice and never put secrets or personal data in it.
 - Free tiers only; only the owner runs live AI evaluations.
 - Never sign in or create data on production.
-- Never ask for a key, token or password. If work needs one, name it in one line and carry on.
+- Never ask for a key, token or password. When work needs one, or anything else only the owner can give (an account, a dashboard setting, a decision), say so in one line and carry on with what isn't blocked.
 - Ask the owner before a new dependency, a behavior change, a non-additive migration, touching production data or spending money.
-- Fix causes; never weaken a test. Don't poll CI.
+- Prove a bug with a failing test before fixing it. Fix causes; never weaken a test. Don't poll CI.
 
 ## Keep output small
 
@@ -33,7 +34,7 @@ Claude Code loads the guide for a folder (`tests/`, `prisma/`, `src/`, `src/lib/
 
 ## Issues
 
-Every issue is a ticket someone else could pick up without asking questions. The repository is public, so never put secrets or personal data in one.
+Every issue is a ticket someone else could pick up without asking questions.
 
 - **Templates:** open issues from a template in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE): bug, feature, chore or epic. With `gh issue create`, use the same sections.
 - **Title:** the problem or the outcome, in plain words. Roadmap items start with their ID, for example "[TREE-04] A better tree canvas".
@@ -72,7 +73,7 @@ Give the PR a title that says what changes for the user, in plain words.
 
 - What changed and why, in words someone who doesn't read the code can follow.
 - The issue: `Fixes #N` only when the PR finishes the whole issue, otherwise `Part of #N`.
-- Screenshots or a short video for visible changes, desktop and phone.
+- Screenshots or a short video for visible changes, desktop and phone. Link the committed visual references (`tests/visual/__screenshots__/<name>-linux.png?raw=true`) when they cover the page; otherwise send the images to the owner and say so.
 - **Deploy notes**, one line each, writing "None" rather than leaving a line out:
   - Migration: what it adds. Migrations stay additive.
   - New env vars: each one, and whether it's set in Vercel. The production build fails without them.
@@ -107,9 +108,9 @@ An AI agent ends every session with a short summary for the owner:
 
 - What changed, with the PR link.
 - What's next.
-- **Still pending:** first what waits on the owner, then what waits on an AI agent.
+- **Still pending:** first what waits on the owner, then what waits on an AI agent, each in plain words the owner can act on without asking.
 
-There is no handoff file. Anything that must outlast the session goes in an issue, a PR or these docs.
+Anything that must outlast the session goes in an issue, a PR or these docs.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

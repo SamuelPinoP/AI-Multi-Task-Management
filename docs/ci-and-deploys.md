@@ -1,6 +1,6 @@
 # CI and deploys
 
-How a change gets checked and shipped, and where things run. All of it fits free tiers; check any new feature against them (see `AGENTS.md`).
+How a change gets checked and shipped, and where things run. All of it fits free tiers; check any new feature against them (see `AGENTS.md`). Prefer refreshing on focus to polling, and slow, visible-only polling to fast: any request keeps Neon awake for 5 minutes, so polling that never stops spends its CU-hours all day.
 
 ## Required checks
 
@@ -19,7 +19,7 @@ Not required:
 
 ## Deploys
 
-- Production runs on Vercel Hobby (non-commercial use only) with Node 24. Every merge to `main` deploys with `npm run vercel-build`: env validation, `prisma validate` and `generate`, the deploy migrations, then `next build` (Turbopack). Every PR gets a preview deployment.
+- Production runs on Vercel Hobby (non-commercial use only; 1M function calls and 4 hours of active CPU a month) with Node 24. Every merge to `main` deploys with `npm run vercel-build`: env validation, `prisma validate` and `generate`, the deploy migrations, then `next build` (Turbopack). Every PR gets a preview deployment.
 - **Deploy migrations:** `scripts/migrate-deployment-database.ts` runs `prisma migrate deploy` in production and preview builds. Production skips it when the record in R2 shows every migration already applied (`ALWAYS_RUN_MIGRATIONS=true` forces it). Prisma's CLI uses `DATABASE_URL_UNPOOLED` (`PREVIEW_DATABASE_URL_UNPOOLED` on previews), because its advisory lock outlives a pooled session; the app keeps the pooled URL.
 - **Env vars:** every variable a change needs must be set in Vercel before the merge, or the production build fails (`scripts/validate-deployment-env.mjs` lists them). The owner enters every secret.
 
