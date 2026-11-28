@@ -9,6 +9,7 @@ import {
   orderTablesForRestore,
   parseBackup,
   quoteTable,
+  sequenceRestart,
 } from "./database-backup-core";
 
 test("names backups by time so they sort oldest to newest", () => {
@@ -67,4 +68,19 @@ test("validates the backup file", () => {
   assert.throws(() => parseBackup({ ...valid, version: 2 }), /Unsupported backup version/);
   assert.throws(() => parseBackup({ ...valid, tables: { "bad name": [] } }), /malformed/);
   assert.throws(() => parseBackup(null), /not an AI Multi database backup/);
+  // Sequences came with task numbers (#486); older backups have none.
+  assert.deepEqual(parseBackup({ ...valid, sequences: { Task_number_seq: 142 } }).sequences, { Task_number_seq: 142 });
+  assert.throws(() => parseBackup({ ...valid, sequences: { Task_number_seq: "142" } }), /sequence Task_number_seq is malformed/);
+  assert.throws(() => parseBackup({ ...valid, sequences: { "bad name": 1 } }), /malformed/);
+  assert.throws(() => parseBackup({ ...valid, sequences: null }), /sequences are malformed/);
+});
+
+test("a restored sequence continues past every number it gave out", () => {
+  // AM-150 was deleted before the backup: 150 still isn't given out again.
+  assert.deepEqual(sequenceRestart(150, 142), { value: 150, isCalled: true });
+  // An older backup without sequences continues after the highest restored number.
+  assert.deepEqual(sequenceRestart(undefined, 142), { value: 142, isCalled: true });
+  assert.deepEqual(sequenceRestart(3, 7), { value: 7, isCalled: true });
+  // Nothing given out yet: the first task is number 1.
+  assert.deepEqual(sequenceRestart(undefined, null), { value: 1, isCalled: false });
 });

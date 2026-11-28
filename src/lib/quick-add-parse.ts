@@ -10,12 +10,16 @@
  *   set the priority (#361). Without one the task has no priority.
  * - `@person` matches a member of the chosen project by name or email.
  *
+ * - Task numbers such as AM-142 (#486) stay in the title: they're never read as a
+ *   date or a time ("AM-3 Dec" isn't December 3).
+ *
  * Anything that doesn't resolve stays in the title. `ignore` lets the user keep
  * a token as plain text after seeing the chips.
  */
 
 import * as chrono from "chrono-node";
 import type { Priority } from "@/lib/priority";
+import { taskNumberSpans } from "@/lib/task-number";
 
 export type QuickAddPriority = Exclude<Priority, "NONE">;
 export type QuickAddKind = "date" | "project" | "priority" | "assignee";
@@ -204,10 +208,13 @@ export function parseQuickAdd(text: string, options: QuickAddOptions = {}): Quic
   }
 
   if (!ignore.has("date")) {
-    // Hide the tokens first so "#Q4" or "!1" can't be read as dates.
-    const masked = spans.reduce(
-      (current, span) => current.slice(0, span.start) + " ".repeat(span.end - span.start) + current.slice(span.end),
-      text,
+    // Hide the tokens first so "#Q4", "!1" or a task number like "AM-3 Dec" can't be read as dates.
+    const hide = (current: string, span: Span, filler: string) =>
+      current.slice(0, span.start) + filler.repeat(span.end - span.start) + current.slice(span.end);
+    // Task numbers stay in the title, so their filler isn't a space: "on AM-142 fri" keeps "on AM-142".
+    const masked = taskNumberSpans(text).reduce(
+      (current, span) => hide(current, span, "_"),
+      spans.reduce((current, span) => hide(current, span, " "), text),
     );
     const parsed = chrono
       .parse(masked, now, { forwardDate: true })

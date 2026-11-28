@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, MoreHorizontal, Pencil, Repeat, Trash2 } from "lucide-react";
+import { Check, GitBranch, Hash, Link2, MoreHorizontal, Pencil, Repeat, Trash2 } from "lucide-react";
 import { useRef, type MouseEvent, type PointerEvent, type Ref } from "react";
 import {
   DropdownMenu,
@@ -14,17 +14,24 @@ import { daysFrom, dueLabel } from "@/lib/home-summary";
 import { paletteColor, projectColor } from "@/lib/project-color";
 import { labelsOfTask } from "@/lib/labels";
 import { descriptionPreview } from "@/lib/description-sections";
+import { formatTaskNumber } from "@/lib/task-number";
 import { openBlockers, subtaskProgress } from "@/lib/task-relations";
 import { LabelChips } from "./label-chip";
 import { PriorityBadge } from "./priority-badge";
 import { BlockedBadge, ProgressRing } from "./task-badges";
+import { taskCopyActions } from "./task-copy";
 import { recurrenceLabels, type Task } from "./types";
+
+/** The task's number after its title (#486, design 5B), in grey like GitHub's issue numbers. */
+function TaskNumber({ number }: { number: number }) {
+  return <span className="shrink-0 whitespace-nowrap font-mono text-xs tabular-nums text-muted">{formatTaskNumber(number)}</span>;
+}
 
 /**
  * One task as one line (#520, design 1D, after #281's 1B): the select box on the left, shown on
- * hover and while tasks are selected; the title, with its description beside it in grey; then,
- * in columns that line up down the list, the priority, due date and assignee, a Mark done button
- * and ⋯. The title opens the task.
+ * hover and while tasks are selected; the title, then its number (#486) and its description beside
+ * it in grey; then, in columns that line up down the list, the priority, due date and assignee, a
+ * Mark done button and ⋯. The title opens the task.
  */
 export function TaskRow({
   task,
@@ -35,6 +42,7 @@ export function TaskRow({
   busy,
   showProject = true,
   showDescription = true,
+  showNumber = true,
   onSelect,
   onToggle,
   onOpen,
@@ -52,6 +60,8 @@ export function TaskRow({
   showProject?: boolean;
   /** The Display menu's "Descriptions". */
   showDescription?: boolean;
+  /** The Display menu's "Task ID" (#486): shown unless it's turned off. */
+  showNumber?: boolean;
   /** `range` is true for Shift+click, which selects from the last clicked row. */
   onSelect: (task: Task, range: boolean) => void;
   onToggle: (task: Task) => void;
@@ -65,6 +75,7 @@ export function TaskRow({
   const blockers = done ? [] : openBlockers(task.blockedBy);
   // A ticket's summary rather than its Markdown (#433); plain text as it is.
   const description = showDescription ? descriptionPreview(task.description) || null : null;
+  const copy = taskCopyActions(task);
 
   return (
     <li
@@ -98,20 +109,21 @@ export function TaskRow({
         </span>
       </button>
 
-      {/* The title is the button's whole label; its ::after covers the description too, so both open the task. */}
+      {/* The title is the button's whole label; its ::after covers the number and the description too, so they open the task. */}
       <div className="relative ml-1.5 flex h-full min-w-0 flex-1 items-center gap-2.5">
         <button
           type="button"
           onClick={() => onOpen(task)}
           aria-describedby={description ? `task-${task.id}-description` : undefined}
           className={cn(
-            "min-w-0 flex-none truncate text-left text-[0.9375rem] leading-6 after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-accent",
+            "min-w-0 flex-initial truncate text-left text-[0.9375rem] leading-6 after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-accent",
             description ? "max-w-[72%]" : "max-w-full",
             done ? "text-muted line-through" : "hover:text-accent",
           )}
         >
           {task.title}
         </button>
+        {showNumber ? <TaskNumber number={task.number} /> : null}
         {description ? (
           <span id={`task-${task.id}-description`} className="hidden min-w-0 flex-1 truncate text-[0.8125rem] text-muted sm:block">
             {description}
@@ -197,6 +209,19 @@ export function TaskRow({
             Edit
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => void copy.copyId()}>
+            <Hash />
+            Copy ID
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void copy.copyLink()}>
+            <Link2 />
+            Copy link
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void copy.copyBranch()}>
+            <GitBranch />
+            Copy branch name
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => onDelete(task)} className="text-danger [&_svg]:text-danger">
             <Trash2 />
             Delete
@@ -259,10 +284,11 @@ function useLongPress(onLongPress: () => void) {
 }
 
 /**
- * One task on a phone (#521, design 2A): a circle on the left to mark it done; the title, with the
- * due date, label, subtasks, assignee and description on a line under it; the priority on the
- * right. Tapping the task opens it. Pressing and holding selects it; while tasks are selected the
- * circle becomes a select box and a tap selects, and the bulk bar does the rest.
+ * One task on a phone (#521, design 2A): a circle on the left to mark it done; the title and its
+ * number (#486), with the due date, label, subtasks, assignee and description on a line under it;
+ * the priority on the right. Tapping the task opens it. Pressing and holding selects it; while
+ * tasks are selected the circle becomes a select box and a tap selects, and the bulk bar does the
+ * rest.
  */
 export function TaskRowPhone({
   task,
@@ -272,6 +298,7 @@ export function TaskRowPhone({
   selecting,
   busy,
   showDescription = true,
+  showNumber = true,
   onSelect,
   onToggle,
   onOpen,
@@ -285,6 +312,8 @@ export function TaskRowPhone({
   selecting: boolean;
   busy: boolean;
   showDescription?: boolean;
+  /** "Task ID" in Filter and sort (#486). */
+  showNumber?: boolean;
   onSelect: (task: Task, range: boolean) => void;
   onToggle: (task: Task) => void;
   onOpen: (task: Task) => void;
@@ -356,18 +385,21 @@ export function TaskRowPhone({
 
       <div className="grid min-w-0 flex-1 gap-0.5 pb-1.5 pt-2.5">
         {/* The title's ::after covers the row, so a tap anywhere but the circle opens the task (or selects it). */}
-        <button
-          type="button"
-          {...press}
-          onClick={() => (selecting ? onSelect(task, false) : onOpen(task))}
-          aria-describedby={description ? `task-${task.id}-description` : undefined}
-          className={cn(
-            "min-w-0 truncate text-left text-[0.9375rem] leading-5.5 outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-accent",
-            done ? "text-muted line-through" : "text-ink",
-          )}
-        >
-          {task.title}
-        </button>
+        <span className="flex min-w-0 items-baseline gap-2">
+          <button
+            type="button"
+            {...press}
+            onClick={() => (selecting ? onSelect(task, false) : onOpen(task))}
+            aria-describedby={description ? `task-${task.id}-description` : undefined}
+            className={cn(
+              "min-w-0 truncate text-left text-[0.9375rem] leading-5.5 outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-accent",
+              done ? "text-muted line-through" : "text-ink",
+            )}
+          >
+            {task.title}
+          </button>
+          {showNumber ? <TaskNumber number={task.number} /> : null}
+        </span>
         {hasDetails ? (
           <span className="flex min-w-0 items-center gap-2 text-[0.78125rem] leading-4.5">
             {task.status === "IN_PROGRESS" ? <span className="shrink-0 font-semibold text-accent">In progress</span> : null}

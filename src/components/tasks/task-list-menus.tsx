@@ -189,13 +189,18 @@ export function TaskFilterMenu({
 export function TaskDisplayMenu({
   sort,
   showDescriptions,
+  showTaskIds,
   onSortChange,
   onShowDescriptionsChange,
+  onShowTaskIdsChange,
 }: {
   sort: TaskSort;
   showDescriptions: boolean;
+  /** Each task's number after its title, AM-142 (#486): on unless it's turned off. */
+  showTaskIds: boolean;
   onSortChange: (sort: TaskSort) => void;
   onShowDescriptionsChange: (show: boolean) => void;
+  onShowTaskIdsChange: (show: boolean) => void;
 }) {
   return (
     <DropdownMenu modal={false}>
@@ -216,6 +221,9 @@ export function TaskDisplayMenu({
         <DropdownMenuLabel className="text-2xs font-semibold uppercase tracking-wider">Show</DropdownMenuLabel>
         <DropdownMenuCheckboxItem checked={showDescriptions} onCheckedChange={(on) => onShowDescriptionsChange(on === true)} onSelect={keepOpen}>
           Descriptions
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem checked={showTaskIds} onCheckedChange={(on) => onShowTaskIdsChange(on === true)} onSelect={keepOpen}>
+          Task ID
         </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -258,6 +266,8 @@ export function TaskFilterSheet({
   onChange,
   sort,
   onSortChange,
+  showTaskIds,
+  onShowTaskIdsChange,
   projects,
   labels,
   resultCount,
@@ -268,6 +278,9 @@ export function TaskFilterSheet({
   onChange: (filters: TaskFilters) => void;
   sort: TaskSort;
   onSortChange: (sort: TaskSort) => void;
+  /** The computer's Display → Task ID (#486). */
+  showTaskIds: boolean;
+  onShowTaskIdsChange: (show: boolean) => void;
   projects: readonly { id: string; name: string; color: string | null }[];
   labels: readonly Label[];
   /** How many tasks the list shows with these filters. */
@@ -337,6 +350,13 @@ export function TaskFilterSheet({
               {label}
             </SheetChip>
           ))}
+        </div>
+
+        <SheetGroupLabel id="filter-sheet-show">Show</SheetGroupLabel>
+        <div role="group" aria-labelledby="filter-sheet-show" className="flex flex-wrap gap-2">
+          <SheetChip on={showTaskIds} aria-pressed={showTaskIds} onClick={() => onShowTaskIdsChange(!showTaskIds)}>
+            Task ID
+          </SheetChip>
         </div>
 
         {/* Stays in reach while a long list of projects or labels scrolls. */}

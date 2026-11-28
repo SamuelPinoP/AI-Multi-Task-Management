@@ -10,6 +10,8 @@ import {
   CircleCheck,
   CornerLeftUp,
   FileText,
+  GitBranch,
+  Hash,
   Link2,
   Lock,
   MoreHorizontal,
@@ -26,7 +28,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useEffectEvent, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
@@ -35,6 +37,7 @@ import { PRIORITY_MENU_ORDER, priorityLabels } from "@/lib/priority";
 import { projectColor } from "@/lib/project-color";
 import { formatTaskDueDateInput } from "@/lib/task-date-buckets";
 import { TASK_TITLE_MAX } from "@/lib/task-history";
+import { formatTaskNumber } from "@/lib/task-number";
 import { TASK_ORDER_KEY } from "@/lib/task-order";
 import { openBlockers, subtaskProgress } from "@/lib/task-relations";
 import { notifyWorkspaceChanged, openGuestSignupForResponse } from "@/lib/workspace-events";
@@ -48,6 +51,7 @@ import { PriorityBadge } from "./priority-badge";
 import { PropertyPicker } from "./property-picker";
 import { ProgressRing } from "./task-badges";
 import { TaskActivity } from "./task-activity";
+import { taskCopyActions } from "./task-copy";
 import { TaskDescription } from "./task-description";
 import { taskRequestBody } from "./task-sheet";
 import { recurrenceLabels, statusLabels, type Member, type Project, type Recurrence, type RelatedTask, type Task, type TaskInput, type TaskStatus } from "./types";
@@ -314,14 +318,8 @@ export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Ta
     router.push("/tasks");
   }
 
-  async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast.success("Link copied");
-    } catch {
-      toast.error("Could not copy the link.");
-    }
-  }
+  // Copy ID, Copy link and Copy branch name (#486); the link is the permanent /t/142.
+  const copy = taskCopyActions(task);
 
   return (
     <div className="min-h-full">
@@ -393,29 +391,45 @@ export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Ta
         </Link>
         <button
           type="button"
-          onClick={() => void copyLink()}
+          onClick={() => void copy.copyLink()}
           aria-label="Copy link"
           title="Copy link"
           className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted outline-none hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
         >
           <Link2 aria-hidden="true" className="h-4 w-4" />
         </button>
-        {canEdit ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              aria-label="More actions"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted outline-none hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setConfirmDelete(true)} className="text-danger [&_svg]:text-danger">
-                <Trash2 />
-                Delete task
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
+        {/* Anyone who sees the task can copy it (#486, design 5B); only editors delete it. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label="More actions"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted outline-none hover:bg-surface-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => void copy.copyId()}>
+              <Hash />
+              Copy ID
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void copy.copyLink()}>
+              <Link2 />
+              Copy link
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void copy.copyBranch()}>
+              <GitBranch />
+              Copy branch name
+            </DropdownMenuItem>
+            {canEdit ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setConfirmDelete(true)} className="text-danger [&_svg]:text-danger">
+                  <Trash2 />
+                  Delete task
+                </DropdownMenuItem>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-x-10 gap-y-6 px-4 py-6 sm:px-8 lg:grid-cols-[minmax(0,1fr)_19rem] lg:py-9">
@@ -423,25 +437,30 @@ export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Ta
           <label htmlFor="task-title" className="sr-only">
             Title
           </label>
-          <textarea
-            id="task-title"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            onBlur={saveTitle}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                event.currentTarget.blur();
-              }
-            }}
-            readOnly={!canEdit}
-            rows={1}
-            maxLength={TASK_TITLE_MAX}
-            className={cn(
-              "block w-full resize-none overflow-hidden bg-transparent text-[1.625rem] font-semibold leading-tight tracking-[-0.015em] text-ink outline-none [field-sizing:content] placeholder:text-muted focus:rounded-lg focus:ring-2 focus:ring-accent/25",
-              done && "text-muted line-through",
-            )}
-          />
+          {/* The number after the title (#486, design 5B), like a GitHub issue's: where the browser can size the
+              field to its text, the number follows it on the same line; a long title pushes it under. */}
+          <div className="flex flex-wrap items-start gap-x-2.5">
+            <textarea
+              id="task-title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              onBlur={saveTitle}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                }
+              }}
+              readOnly={!canEdit}
+              rows={1}
+              maxLength={TASK_TITLE_MAX}
+              className={cn(
+                "block w-full min-w-[2ch] max-w-full resize-none overflow-hidden bg-transparent text-[1.625rem] font-semibold leading-tight tracking-[-0.015em] text-ink outline-none [field-sizing:content] placeholder:text-muted focus:rounded-lg focus:ring-2 focus:ring-accent/25 supports-[field-sizing:content]:w-auto",
+                done && "text-muted line-through",
+              )}
+            />
+            <span className="text-[1.625rem] font-normal leading-tight tracking-[-0.015em] text-muted">{formatTaskNumber(task.number)}</span>
+          </div>
           {!canEdit ? <p className="mt-2 text-xs text-muted">You can view this task; only its project&rsquo;s editors can change it.</p> : null}
           {parent || task.noteId ? (
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8125rem]">

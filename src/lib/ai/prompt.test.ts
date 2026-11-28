@@ -21,3 +21,9 @@ test("the prompt gives this week's and next week's dates, Monday to Sunday, in t
   // Across the year: 2026 ends in its week 53, and next week is 2027's first.
   assert.deepEqual(weeks("2026-12-31T12:00:00.000Z", "UTC"), ["2026-12-28 to 2027-01-03 (2026-W53)", "2027-01-04 to 2027-01-10 (2027-W01)"]);
 });
+
+test("the prompt says a task number such as AM-142 names a task, never a time or a date (#486)", () => {
+  const prompt = systemPrompt({ realNow: new Date("2026-11-19T15:30:00.000Z"), timeZone: "America/Los_Angeles" });
+  assert.match(prompt, /AM-142 is task number 142, never a time or a date/);
+  assert.match(prompt, /give it to the tools wherever they take a task/);
+});

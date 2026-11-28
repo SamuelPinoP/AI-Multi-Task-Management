@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { projectAccessWhere } from "@/lib/project-access";
+import { parseTaskNumberQuery } from "@/lib/task-number";
 
 const MAX_RESULTS_PER_TYPE = 8;
 
@@ -22,6 +23,15 @@ export async function GET(req: Request) {
     }
 
     const whereContains = { contains: query, mode: "insensitive" as const };
+    const taskNumber = parseTaskNumberQuery(query);
+    const taskSelect = {
+      id: true,
+      number: true,
+      title: true,
+      dueDate: true,
+      status: true,
+      project: { select: { id: true, name: true, color: true } },
+    } as const;
     // Your own items plus anything in a project you can open, as /api/tasks does.
     const visible = { OR: [{ userId: user.id }, { project: projectAccessWhere(user.id) }] };
 
@@ -51,21 +61,21 @@ export async function GET(req: Request) {
         orderBy: { updatedAt: "desc" },
         take: MAX_RESULTS_PER_TYPE,
       }),
-      prisma.task.findMany({
-        where: {
-          deletedAt: null,
-          AND: [visible, { OR: [{ title: whereContains }, { description: whereContains }] }],
-        },
-        select: {
-          id: true,
-          title: true,
-          dueDate: true,
-          status: true,
-          project: { select: { id: true, name: true, color: true } },
-        },
-        orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }],
-        take: MAX_RESULTS_PER_TYPE,
-      }),
+      // "AM-142" or "142" also finds task 142 by its permanent number (#486), first in the list.
+      Promise.all([
+        taskNumber === null ? null : prisma.task.findFirst({ where: { deletedAt: null, number: taskNumber, AND: [visible] }, select: taskSelect }),
+        prisma.task.findMany({
+          where: {
+            deletedAt: null,
+            AND: [visible, { OR: [{ title: whereContains }, { description: whereContains }] }],
+          },
+          select: taskSelect,
+          orderBy: [{ dueDate: "asc" }, { updatedAt: "desc" }],
+          take: MAX_RESULTS_PER_TYPE,
+        }),
+      ]).then(([numbered, found]) =>
+        numbered ? [numbered, ...found.filter((task) => task.id !== numbered.id)].slice(0, MAX_RESULTS_PER_TYPE) : found,
+      ),
       prisma.event.findMany({
         where: {
           deletedAt: null,

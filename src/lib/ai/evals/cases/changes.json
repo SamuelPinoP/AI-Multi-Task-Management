@@ -120,6 +120,22 @@
     ]
   },
   {
+    "id": "changes-task-number",
+    "ability": "changes",
+    "summary": "Names a task by its number, AM-104, which is Write the release notes: never a time or a date (#486). Proposes moving it to next Monday, November 23.",
+    "request": "Move AM-104 to Monday.",
+    "expect": {
+      "tools": [{ "name": "update_task", "args": { "task": "release notes", "dueDate": "2026-11-23" } }],
+      "proposal": [{ "kind": "update_task", "title": "Write the release notes", "dueDate": "2026-11-23" }],
+      "facts": ["Write the release notes", "@awaitsApply"],
+      "notPatterns": ["@doneClaims"]
+    },
+    "reference": [
+      { "toolCalls": [{ "name": "update_task", "args": { "task": "AM-104", "dueDate": "2026-11-23" } }] },
+      { "text": "Here's the change: Write the release notes (AM-104) moves from today to Monday, November 23. Apply it below if that's right." }
+    ]
+  },
+  {
     "id": "changes-subtask",
     "ability": "changes",
     "summary": "Proposes a subtask under an existing task, in its parent's project, Garden makeover (#310). The parent has no estimate, so the subtask gets none either (#434).",

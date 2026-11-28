@@ -272,10 +272,10 @@ export default function PrivacyPage() {
         <ul className={legalListClass}>
           <li>
             <strong>What is sent to Google:</strong> your question with the messages before it in that chat (up to 12 in
-            all), and what the assistant looks up in your workspace to answer it. That can be task titles, statuses,
-            priorities and due dates; event titles, dates and times; the names of the projects these belong to and how far
-            along each project is; note titles with a short excerpt; and your weekly goals. It sends only what the question
-            needs, never your whole workspace, and never your email address or password.
+            all), and what the assistant looks up in your workspace to answer it. That can be task titles, numbers (such as
+            AM-142), statuses, priorities and due dates; event titles, dates and times; the names of the projects these
+            belong to and how far along each project is; note titles with a short excerpt; and your weekly goals. It sends
+            only what the question needs, never your whole workspace, and never your email address or password.
           </li>
           <li>
             <strong>How Google may use it:</strong> during the free beta, AI Multi uses the Gemini API&apos;s free tier.
@@ -323,11 +323,11 @@ export default function PrivacyPage() {
           <li>
             <strong>What a connected app can see:</strong> what it looks up to answer you, from the tasks, events, projects,
             notes and weekly goals you can see in AI Multi, including those in projects you share with other people. That
-            can be task titles, descriptions, statuses, priorities, due dates and labels, and the tasks, notes and goals
-            they&apos;re linked to; event titles, dates and times; project names and how far along each project is; note
-            titles with a short excerpt; your weekly goals; and counts of your tasks. When it changes something, it also
-            gets back what changed, and the names of a shared project&apos;s members or labels it asked for. It never sees
-            your password or anyone&apos;s email address.
+            can be task titles, numbers (such as AM-142), descriptions, statuses, priorities, due dates and labels, and the
+            tasks, notes and goals they&apos;re linked to; event titles, dates and times; project names and how far along
+            each project is; note titles with a short excerpt; your weekly goals; and counts of your tasks. When it
+            changes something, it also gets back what changed, and the names of a shared project&apos;s members or labels it
+            asked for. It never sees your password or anyone&apos;s email address.
           </li>
           <li>
             <strong>Who processes it:</strong> what an app reads goes to the company that runs it, such as Anthropic, OpenAI

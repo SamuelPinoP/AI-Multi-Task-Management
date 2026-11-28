@@ -45,8 +45,9 @@ function contextWith(db: ToolDb): ToolContext {
 /** A due date as the server stores it: a date at midnight UTC. */
 const due = (day: number) => new Date(Date.UTC(2026, 10, day));
 
+/** Task "a" is AM-1, "b" AM-2, and so on. */
 function task(id: string, dueDate: Date | null, extra: Record<string, unknown> = {}) {
-  return { id, title: `Task ${id}`, status: "TODO", priority: "NONE", dueDate, project: null, assignee: null, ...extra };
+  return { id, number: id.charCodeAt(0) - 96, title: `Task ${id}`, status: "TODO", priority: "NONE", dueDate, project: null, assignee: null, ...extra };
 }
 
 const TASKS = [
@@ -71,6 +72,7 @@ test("open tasks: only those the person can see, never done ones", async () => {
   assert.equal(data.total, 5);
   assert.deepEqual(data.tasks[0], {
     id: "a",
+    number: "AM-1",
     title: "Task a",
     status: "TODO",
     priority: "HIGH",
@@ -79,9 +81,9 @@ test("open tasks: only those the person can see, never done ones", async () => {
     project: "Whitewall",
     assignedToYou: true,
   });
-  assert.deepEqual(data.tasks[1], { id: "b", title: "Task b", status: "IN_PROGRESS", due: "2026-11-16", when: "Today" }, "only the fields that are set");
+  assert.deepEqual(data.tasks[1], { id: "b", number: "AM-2", title: "Task b", status: "IN_PROGRESS", due: "2026-11-16", when: "Today" }, "only the fields that are set");
   assert.equal(data.tasks[3].assignedToYou, undefined, "nobody else's name or account is sent");
-  assert.deepEqual(data.tasks[4], { id: "e", title: "Task e", status: "TODO" });
+  assert.deepEqual(data.tasks[4], { id: "e", number: "AM-5", title: "Task e", status: "TODO" });
   assert.deepEqual(output.sources[0], { kind: "task", id: "a", title: "Task a", href: "/tasks?task=a" });
 });
 
@@ -502,7 +504,7 @@ test("task stats: a project given as empty text or null counts every project, as
 
 // get_task (#478): one task for AI apps connected over MCP. It reads with findFirst, three times
 // at most: the task, then its parent and its note, each checked like any other item.
-type FindFirstArgs = { where: { AND: [{ id: string }, unknown] }; select: Record<string, unknown> };
+type FindFirstArgs = { where: { AND: [{ id: string } | { number: number }, unknown] }; select: Record<string, unknown> };
 
 function taskDb({ task = null as unknown, parent = null as unknown, note = null as unknown } = {}) {
   const calls: Array<{ model: "task" | "note"; args: FindFirstArgs }> = [];
@@ -518,6 +520,7 @@ function taskDb({ task = null as unknown, parent = null as unknown, note = null 
 const at = (iso: string) => new Date(iso);
 const STORED_TASK = {
   id: "t1",
+  number: 142,
   title: "Write the launch post",
   description: "  Draft, then ask Ana to review.  ",
   status: "IN_PROGRESS",
@@ -565,7 +568,9 @@ test("get_task: one task the person can see, with its details and what it's link
     found: true,
     task: {
       id: "t1",
+      number: "AM-142",
       title: "Write the launch post",
+      branch: "am-142-write-the-launch-post",
       status: "IN_PROGRESS",
       priority: "HIGH",
       due: "2026-11-18",
@@ -620,6 +625,16 @@ test("get_task: a task that doesn't exist or isn't the person's is simply not fo
   assert.equal(calls.length, 1, "nothing else is looked up");
 });
 
+test("get_task: finds a task by its number, AM-142 in any case (#486)", async () => {
+  const { calls, data } = await getTaskWith({ task: { ...STORED_TASK, parentId: null, noteId: null } }, { id: " am-142 " });
+  assert.deepEqual(calls[0].args.where, { AND: [{ number: 142 }, visibleTaskWhere(ME)] }, "only tasks the person can see");
+  assert.equal(data.task!.id, "t1");
+  assert.equal(data.task!.number, "AM-142");
+  // A bare number could be anything, so it's looked up as an id.
+  const bare = await getTaskWith({ task: null }, { id: "142" });
+  assert.deepEqual(bare.calls[0].args.where, { AND: [{ id: "142" }, visibleTaskWhere(ME)] });
+});
+
 test("get_task: a bare task, and a description cut at its limit", async () => {
   const bare = {
     ...STORED_TASK,
@@ -638,7 +653,7 @@ test("get_task: a bare task, and a description cut at its limit", async () => {
     blocking: [],
   };
   const { data } = await getTaskWith({ task: bare }, { id: "t1" }, null);
-  assert.deepEqual(Object.keys(data.task!), ["id", "title", "status", "description", "descriptionCut", "created", "updated"]);
+  assert.deepEqual(Object.keys(data.task!), ["id", "number", "title", "branch", "status", "description", "descriptionCut", "created", "updated"]);
   assert.equal((data.task!.description as string).length, DESCRIPTION_CHARS);
   assert.match(data.task!.descriptionCut as string, /first 10000 characters/);
   // Without a time zone, dates are UTC's.

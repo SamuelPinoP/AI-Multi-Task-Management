@@ -25,6 +25,7 @@ import { PRIORITIES, type Priority } from "@/lib/priority";
 import { projectAccessWhere } from "@/lib/project-access-core";
 import { formatTaskDayKey } from "@/lib/task-date-buckets";
 import { visibleTaskWhere } from "@/lib/task-include";
+import { parseTaskNumber } from "@/lib/task-number";
 
 /** Items read to find the one a request names. */
 const MATCH_SCAN = 50;
@@ -40,6 +41,7 @@ const clock = () => z.string().refine((value) => CLOCK.test(value), "Use a 24-ho
 
 const TASK_SELECT = {
   id: true,
+  number: true,
   title: true,
   description: true,
   status: true,
@@ -52,6 +54,7 @@ const TASK_SELECT = {
 
 type TaskRow = {
   id: string;
+  number: number;
   title: string;
   description: string | null;
   status: TaskStatus;
@@ -119,15 +122,25 @@ function describeTask(task: TaskRow) {
   };
 }
 
-/** The person's task that `wanted` names (its id or title), among those they can see and change. */
+/** The person's task that `wanted` names (its id, its number such as AM-142, or its title), among those they can see and change. */
 async function findTask(wanted: string, context: ToolContext, filter: (task: TaskRow) => boolean = () => true): Promise<Found<TaskRow>> {
+  // AM-142 is task number 142 (#486), never a time; a title that merely contains it still counts.
+  const number = parseTaskNumber(wanted);
   const rows = (await context.db.task.findMany({
-    where: { AND: [visibleTaskWhere(context.userId), { OR: [{ id: wanted }, { title: { contains: wanted, mode: "insensitive" } }] }] },
+    where: {
+      AND: [
+        visibleTaskWhere(context.userId),
+        { OR: [{ id: wanted }, ...(number === null ? [] : [{ number }]), { title: { contains: wanted, mode: "insensitive" } }] },
+      ],
+    },
     orderBy: [{ updatedAt: "desc" }],
     take: MATCH_SCAN,
     select: TASK_SELECT,
   })) as TaskRow[];
-  return pickOne(rows.filter(filter), wanted, (task) => task.title, describeTask, "task");
+  const candidates = rows.filter(filter);
+  const numbered = number === null ? undefined : candidates.find((task) => task.number === number);
+  if (numbered) return { item: numbered };
+  return pickOne(candidates, wanted, (task) => task.title, describeTask, "task");
 }
 
 /** A project for a new item: one this answer creates (its ref or name), or one of the person's. */
@@ -369,7 +382,7 @@ export const updateTask = defineTool({
   description:
     "Proposes changes to one of the person's tasks: its title, description, due date, priority, status or project. Nothing changes until the person applies the proposal in the app. Give only the fields to change.",
   input: z.strictObject({
-    task: reference("The task: its title, or its id from list_open_tasks."),
+    task: reference("The task: its title, its number such as AM-142, or its id from list_open_tasks."),
     title: optionalArgument(z.string().trim().max(TITLE_MAX)).describe("A new title."),
     description: optionalArgument(z.string().trim().max(TEXT_MAX)).describe("A new description."),
     clearDescription: optionalArgument(z.boolean()).describe("true to remove the description."),
@@ -417,7 +430,7 @@ export const completeTask = defineTool({
   name: "complete_task",
   label: "Preparing to mark a task done",
   description: "Proposes marking one of the person's open tasks as done. Nothing changes until the person applies the proposal in the app.",
-  input: z.strictObject({ task: reference("The task: its title, or its id from list_open_tasks.") }),
+  input: z.strictObject({ task: reference("The task: its title, its number such as AM-142, or its id from list_open_tasks.") }),
   access: "propose",
   async run({ task: wanted }, context) {
     const { draft, problem } = draftFor(context);
@@ -480,7 +493,7 @@ export const trashTask = defineTool({
   label: "Preparing to move a task to the Trash",
   description:
     "Proposes moving one of the person's tasks to the Trash, where they can restore it. Call it once per task. Nothing changes until the person applies the proposal in the app.",
-  input: z.strictObject({ task: reference("The task: its title, or its id from list_open_tasks.") }),
+  input: z.strictObject({ task: reference("The task: its title, its number such as AM-142, or its id from list_open_tasks.") }),
   access: "propose",
   async run({ task: wanted }, context) {
     const { draft, problem } = draftFor(context);

@@ -135,6 +135,23 @@ test("tokens are not read as dates", () => {
   assert.equal(result.project?.id, "q");
 });
 
+test("task numbers are never read as dates or times (#486)", () => {
+  // Each of these lost its number to a date before: "3 Dec", "11 nov", "12/5", "Mon 9 AM-14".
+  for (const text of ["Review AM-3 Dec", "AM-11 nov follow-up", "Fix AM-12/5", "Merge am-31 dec branch", "Fixes AM-142", "Meet 9 AM-12"]) {
+    const result = parseQuickAdd(text, { now, projects });
+    assert.equal(result.title, text, text);
+    assert.equal(result.dueDate, null, text);
+  }
+  // A real date beside a number still counts, and the number stays in the title.
+  const dated = parseQuickAdd("Follow up on AM-142 fri", { now, projects });
+  assert.equal(dated.title, "Follow up on AM-142");
+  assert.equal(dated.dueDate, "2026-10-23");
+  const monday = parseQuickAdd("Ship AM-142 on Mon 9", { now, projects });
+  assert.match(monday.title, /AM-142/);
+  // "XAM-3 Dec" isn't a task number, so its date reads as before.
+  assert.equal(parseQuickAdd("XAM-3 Dec", { now, projects }).dueDate, "2026-12-03");
+});
+
 test("a title made only of tokens keeps the typed text", () => {
   assert.equal(parseQuickAdd("tomorrow", { now }).title, "tomorrow");
   assert.equal(parseQuickAdd("tomorrow", { now }).dueDate, "2026-10-21");

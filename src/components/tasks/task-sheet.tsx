@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, type Sh
 import { labelsOfTask } from "@/lib/labels";
 import { PRIORITY_MENU_ORDER } from "@/lib/priority";
 import { formatTaskDueDateInput } from "@/lib/task-date-buckets";
+import { formatTaskNumber } from "@/lib/task-number";
 import { LabelChip } from "./label-chip";
 import { LabelPicker } from "./label-picker";
 import { scopeKeyFor, useLabels } from "./label-store";
@@ -151,7 +152,16 @@ export function TaskSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side={side}>
         <SheetHeader>
-          <SheetTitle>{task ? "Edit task" : "New task"}</SheetTitle>
+          <SheetTitle>
+            {task ? (
+              <>
+                {/* The number after the title (#486, design 5B). */}
+                Edit task <span className="font-normal text-muted">{formatTaskNumber(task.number)}</span>
+              </>
+            ) : (
+              "New task"
+            )}
+          </SheetTitle>
           <SheetDescription>{task ? "Change any detail, then save." : "Add the details now or later."}</SheetDescription>
           {task?.noteId ? (
             <Link href={`/notes?openNote=${task.noteId}&focus=content`} className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-accent hover:underline">

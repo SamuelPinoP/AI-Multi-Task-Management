@@ -25,6 +25,7 @@ import { TASK_STATUSES, type TaskCreateData, type TaskUpdateData } from "@/lib/s
 import { formatTaskDayKey, parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
 import { cleanComment, COMMENT_MAX, STATUS_WORDS } from "@/lib/task-history";
 import { visibleTaskWhere } from "@/lib/task-include";
+import { parseTaskNumber } from "@/lib/task-number";
 import type { WriteRefusal } from "@/lib/writes";
 
 /** Items read whose id or exact title is the one asked for. */
@@ -46,6 +47,9 @@ const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
 const clock = () => z.string().refine((value) => CLOCK.test(value), "Use a 24-hour time written HH:MM.");
 const itemRef = (noun: string, lister: string) =>
   z.string().trim().min(1).max(TITLE_MAX).describe(`The ${noun}: its id from ${lister}, or its exact title.`);
+/** Tasks also go by their permanent number, such as AM-142 (#486). */
+const taskRef = () =>
+  z.string().trim().min(1).max(TITLE_MAX).describe("The task: its id from list_open_tasks, its number such as AM-142, or its exact title.");
 const projectRef = (what: string) =>
   optionalArgument(z.string().trim().max(NAME_MAX)).describe(`${what}: the id or exact name of one of the person's projects, from list_projects.`);
 const priorityInput = z.enum(PRIORITIES.filter((priority) => priority !== "NONE") as ["URGENT", "HIGH", "MEDIUM", "LOW"]);
@@ -158,6 +162,7 @@ async function choose<Row extends { id: string }>(
 
 const TASK_SELECT = {
   id: true,
+  number: true,
   title: true,
   description: true,
   status: true,
@@ -182,12 +187,16 @@ const describeTask = (task: TaskRow) => ({
   ...(task.dueDate ? { due: formatTaskDayKey(task.dueDate) } : {}),
 });
 
-/** A task the person can see, by id or exact title; `only` narrows it, such as to open tasks. */
+/** A task the person can see, by id, number (AM-142) or exact title; `only` narrows it, such as to open tasks. */
 async function findTask(wanted: string, context: ToolContext, only: Prisma.TaskWhereInput = {}): Promise<Found<TaskRow>> {
   const visible: Prisma.TaskWhereInput = { AND: [visibleTaskWhere(context.userId), only] };
   const find = (match: Prisma.TaskWhereInput, take: number) =>
     context.db.task.findMany({ where: { AND: [visible, match] }, orderBy: [{ updatedAt: "desc" }], take, select: TASK_SELECT });
-  const named = await find({ OR: [{ id: wanted }, { title: { equals: wanted, mode: "insensitive" } }] }, MATCH_SCAN);
+  // AM-142 is task number 142 (#486), never a time.
+  const number = parseTaskNumber(wanted);
+  const named = await find({ OR: [{ id: wanted }, ...(number === null ? [] : [{ number }]), { title: { equals: wanted, mode: "insensitive" } }] }, MATCH_SCAN);
+  const numbered = number === null ? undefined : named.find((task) => task.number === number);
+  if (numbered) return { item: numbered };
   return choose(wanted, named, () => find({ title: { contains: wanted, mode: "insensitive" } }, SHOWN_MATCHES), {
     noun: "task",
     label: (task) => task.title,
@@ -331,7 +340,7 @@ const newTaskInput = z.strictObject({
   priority: optionalArgument(priorityInput).describe("Only when the person asked for one."),
   project: projectRef("The project it goes in. Leave it out for a task of the person's own"),
   parent: optionalArgument(z.string().trim().max(TITLE_MAX)).describe(
-    "To make it a subtask: the id or exact title of its parent task, which can't be a subtask itself. A subtask goes in its parent's project.",
+    "To make it a subtask: the id, number (such as AM-142) or exact title of its parent task, which can't be a subtask itself. A subtask goes in its parent's project.",
   ),
   sourceUrl: optionalArgument(webAddress).describe(
     "The web address the task comes from, such as a pull request's. When a task in the same project already has it, this one is skipped, so asking again makes no duplicates.",
@@ -439,7 +448,7 @@ export const updateTask = defineTool({
     "Changes one of the person's tasks: its title, description, status, priority, due date, project, assignee or labels. Give only what changes. Moving it to another project removes its assignee, a member of the old one, unless you give a new one.",
   input: z
     .strictObject({
-      task: itemRef("task", "list_open_tasks"),
+      task: taskRef(),
       title: optionalArgument(z.string().trim().max(TITLE_MAX)).describe("A new title."),
       description: optionalArgument(z.string().trim().max(TEXT_MAX)).describe("A new description, which replaces the old one."),
       clearDescription: optionalArgument(z.boolean()).describe("true to remove the description."),
@@ -554,7 +563,7 @@ export const completeTask = defineTool({
   label: "Marking a task done",
   title: "Mark a task done",
   description: "Marks one of the person's open tasks as done.",
-  input: z.strictObject({ task: itemRef("task", "list_open_tasks") }),
+  input: z.strictObject({ task: taskRef() }),
   access: "write",
   writeHints: { destructive: false, idempotent: true },
   async run({ task: wanted }, context) {
@@ -581,7 +590,7 @@ export const commentOnTask = defineTool({
   description:
     "Adds a comment to one of the person's tasks, as the person. \"@Name\" lets that member of the task's project know, and the task's assignee hears about it too.",
   input: z.strictObject({
-    task: itemRef("task", "list_open_tasks"),
+    task: taskRef(),
     comment: z.string().trim().min(1).max(COMMENT_MAX).describe("The comment, in the person's words."),
   }),
   access: "write",
@@ -606,7 +615,7 @@ export const deleteTask = defineTool({
   title: "Move a task to the Trash",
   description:
     "Moves one of the person's tasks to the Trash, where they can restore it, only when they asked for it to be deleted. Nothing is deleted for good. One task per call.",
-  input: z.strictObject({ task: itemRef("task", "list_open_tasks") }),
+  input: z.strictObject({ task: taskRef() }),
   access: "write",
   writeHints: { destructive: true, idempotent: true },
   async run({ task: wanted }, context) {
