@@ -15,6 +15,8 @@ export type Member = { id: string; name: string; email: string | null; role: str
 
 export type Task = {
   id: string;
+  /** The permanent number, shown as AM-142 (#486). */
+  number: number;
   title: string;
   description: string | null;
   status: TaskStatus;

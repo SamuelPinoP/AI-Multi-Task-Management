@@ -57,6 +57,7 @@ import { comparePriority, priorityLabels } from "@/lib/priority";
 import { projectColor } from "@/lib/project-color";
 import { describeBulkChange, type BulkTaskChange, type TaskSnapshot } from "@/lib/task-bulk";
 import { compareTaskDueDates, formatTaskDueDateInput } from "@/lib/task-date-buckets";
+import { parseTaskNumberQuery } from "@/lib/task-number";
 import { TASK_ORDER_KEY } from "@/lib/task-order";
 import { topLevelTasks } from "@/lib/task-relations";
 import { useRefreshOnReturn } from "@/lib/use-page-activity";
@@ -149,6 +150,8 @@ export default function TasksPage() {
   const labels = useLabels();
   const [sortBy, setSortBy] = useState<TaskSort>("DUE_DATE_ASC");
   const [showDescriptions, setShowDescriptions] = useState(true);
+  // Task numbers (#486) show after the titles unless Display → Task ID turns them off.
+  const [showTaskIds, setShowTaskIds] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   // Folded project bands, and the bands whose Done section is open.
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
@@ -238,10 +241,12 @@ export default function TasksPage() {
 
   const visibleTasks = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
+    // "AM-142" or "142" also finds task 142 by its permanent number (#486).
+    const queryNumber = parseTaskNumberQuery(query);
     // Subtasks show inside their parent, except when searching.
     const filtered = (query ? tasks : topLevelTasks(tasks)).filter(
       (task) =>
-        (!query || task.title.toLowerCase().includes(query) || (task.description ?? "").toLowerCase().includes(query)) &&
+        (!query || task.number === queryNumber || task.title.toLowerCase().includes(query) || (task.description ?? "").toLowerCase().includes(query)) &&
         (statusFilter === "ALL" || (statusFilter === "DONE") === (task.status === "DONE")) &&
         (!filters.priorities.size || filters.priorities.has(task.priority)) &&
         (!filters.projects.size || filters.projects.has(task.projectId ?? NO_PROJECT)) &&
@@ -558,7 +563,14 @@ export default function TasksPage() {
           {/* Phones filter and sort from a sheet instead. */}
           <div className="contents max-sm:hidden">
             <TaskFilterMenu filters={filters} projects={projects} labels={labels ?? []} onChange={setFilters} />
-            <TaskDisplayMenu sort={sortBy} showDescriptions={showDescriptions} onSortChange={setSortBy} onShowDescriptionsChange={setShowDescriptions} />
+            <TaskDisplayMenu
+              sort={sortBy}
+              showDescriptions={showDescriptions}
+              showTaskIds={showTaskIds}
+              onSortChange={setSortBy}
+              onShowDescriptionsChange={setShowDescriptions}
+              onShowTaskIdsChange={setShowTaskIds}
+            />
           </div>
         </div>
       </header>
@@ -776,6 +788,7 @@ export default function TasksPage() {
                                     highlighted={task.id === linkedTaskId}
                                     busy={busyIds.includes(task.id)}
                                     showDescription={showDescriptions}
+                                    showNumber={showTaskIds}
                                     onToggle={(item) => void toggleTask(item)}
                                     onOpen={openTask}
                                     selected={selected.has(task.id)}
@@ -792,6 +805,7 @@ export default function TasksPage() {
                                     busy={busyIds.includes(task.id)}
                                     showProject={false}
                                     showDescription={showDescriptions}
+                                    showNumber={showTaskIds}
                                     onToggle={(item) => void toggleTask(item)}
                                     onOpen={openTask}
                                     onDelete={setConfirmDelete}
@@ -842,6 +856,8 @@ export default function TasksPage() {
         onChange={setFilters}
         sort={sortBy}
         onSortChange={setSortBy}
+        showTaskIds={showTaskIds}
+        onShowTaskIdsChange={setShowTaskIds}
         projects={projects}
         labels={labels ?? []}
         resultCount={visibleTasks.length}

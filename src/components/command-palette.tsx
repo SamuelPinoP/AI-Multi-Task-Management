@@ -39,12 +39,13 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { ACCENTS } from "@/lib/accent";
 import { projectColor } from "@/lib/project-color";
 import { formatTaskDueDate } from "@/lib/task-date-buckets";
+import { formatTaskNumber } from "@/lib/task-number";
 
 type ProjectRef = { id: string; name: string; color: string | null };
 type SearchData = {
   projects: ProjectRef[];
   notes: Array<{ id: string; title: string; createdAt: string; project: ProjectRef | null }>;
-  tasks: Array<{ id: string; title: string; dueDate: string | null; status: string; project: ProjectRef | null }>;
+  tasks: Array<{ id: string; number: number; title: string; dueDate: string | null; status: string; project: ProjectRef | null }>;
   events: Array<{ id: string; title: string; startTime: string; project: ProjectRef | null }>;
 };
 
@@ -199,7 +200,10 @@ export function CommandPalette({
                 {searched.tasks.map((task) => (
                   <CommandItem key={task.id} value={`task-${task.id}`} onSelect={() => go(`/tasks?task=${task.id}`)}>
                     <SquareCheckBig />
-                    <span className={`min-w-0 flex-1 truncate ${task.status === "DONE" ? "text-muted line-through" : ""}`}>{task.title}</span>
+                    <span className={`min-w-0 truncate ${task.status === "DONE" ? "text-muted line-through" : ""}`}>{task.title}</span>
+                    {/* The permanent number after the title (#486), as on the task's page. */}
+                    <span className="shrink-0 font-mono text-xs tabular-nums text-muted">{formatTaskNumber(task.number)}</span>
+                    <span aria-hidden="true" className="flex-1" />
                     <ProjectTag project={task.project} />
                     {task.dueDate ? <CommandShortcut>Due {formatTaskDueDate(task.dueDate)}</CommandShortcut> : null}
                   </CommandItem>
