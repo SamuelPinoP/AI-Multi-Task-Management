@@ -24,6 +24,8 @@ export type DatabaseBackup = {
   version: typeof BACKUP_VERSION;
   createdAt: string;
   migrations: string[];
+  /** The last value each sequence had given out, such as task numbers (#486), so a restore never gives it out again. Older backups have none. */
+  sequences?: Record<string, number>;
   tables: Record<string, Record<string, unknown>[]>;
 };
 
@@ -89,5 +91,21 @@ export function parseBackup(value: unknown): DatabaseBackup {
   for (const [name, rows] of Object.entries(backup.tables)) {
     if (!isSafeTableName(name) || !Array.isArray(rows)) throw new Error(`The backup's table ${name} is malformed.`);
   }
+  if (backup.sequences !== undefined) {
+    if (!backup.sequences || typeof backup.sequences !== "object") throw new Error("The backup's sequences are malformed.");
+    for (const [name, value] of Object.entries(backup.sequences)) {
+      if (!isSafeTableName(name) || !Number.isSafeInteger(value) || value < 0) throw new Error(`The backup's sequence ${name} is malformed.`);
+    }
+  }
   return backup as DatabaseBackup;
+}
+
+/**
+ * Where a sequence continues after a restore, as Postgres's `setval(sequence, value, isCalled)`: past the last value
+ * it had given out when the backup was made and past the highest value restored, so a task number (#486) is never
+ * given out twice. A sequence that gave out nothing starts at 1.
+ */
+export function sequenceRestart(saved: number | undefined, highestRestored: number | null) {
+  const last = Math.max(saved ?? 0, highestRestored ?? 0);
+  return last > 0 ? { value: last, isCalled: true } : { value: 1, isCalled: false };
 }

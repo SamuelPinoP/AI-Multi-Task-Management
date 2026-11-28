@@ -129,9 +129,13 @@ function setup({ edit, refusal, linked, writer = true }: { edit?: (tables: Table
   return { call, calls: fake.calls, writes, untouched: () => JSON.stringify(workspace.tables) === before };
 }
 
+/** Numbers for the tasks tests add, clear of the sample workspace's. */
+let nextNumber = 900;
+
 /** A task row like the sample workspace's, for tests that need one more. */
 function taskRow(fields: Row): Row {
   return {
+    number: nextNumber++,
     description: null,
     parentId: null,
     recurrence: "NONE",
@@ -357,6 +361,17 @@ test("update_task: only an id or an exact title names a task; anything else chan
 
   // By id, it's clear.
   await call(updateTask, { task: "task-dentist-2", priority: "HIGH" });
+  assert.deepEqual(writes(), ["updateTask"]);
+});
+
+test("update_task: a task's number, such as AM-104, names it in any case (#486); someone else's number names nothing", async () => {
+  const { call, writes } = setup();
+  const output = await call(updateTask, { task: "am-104", priority: "LOW" });
+  assert.equal(output.data.changed, "Changed “Write the release notes”: set the priority to Low.");
+  assert.deepEqual(writes(), ["updateTask"]);
+  // AM-118 is Lee's salary bands, in a project the person isn't in.
+  const hidden = await call(updateTask, { task: "AM-118", priority: "HIGH" });
+  assert.equal(reasonOf(hidden), 'No task the person can see is called "AM-118". Nothing was changed.');
   assert.deepEqual(writes(), ["updateTask"]);
 });
 

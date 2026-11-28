@@ -527,6 +527,9 @@ model Note {
 
 model Task {
   id          String      @id @default(cuid())
+  /// The task's permanent number, shown as AM-142 (#486): app-wide, from a Postgres sequence, so it never changes
+  /// when the task moves to another project and is never given to another task, even after this one is deleted.
+  number      Int         @unique @default(autoincrement())
   title       String
   description String?
   /// The note this task was made from (SMART-05).

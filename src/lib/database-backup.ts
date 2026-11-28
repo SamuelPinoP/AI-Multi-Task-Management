@@ -98,11 +98,17 @@ export async function createDatabaseBackup(now = new Date()) {
     parts.push(`${JSON.stringify(table)}:${result.rows}`);
   }
 
+  // Task numbers (#486) come from a sequence; the restore continues each sequence past its value here.
+  const sequences = await prisma.$queryRawUnsafe<{ name: string; last_value: number }[]>(
+    "SELECT sequencename AS name, last_value::float8 AS last_value FROM pg_sequences WHERE schemaname = current_schema() AND last_value IS NOT NULL ORDER BY sequencename",
+  );
+
   const header = JSON.stringify({
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     createdAt: now.toISOString(),
     migrations: migrations.map((row) => row.migration_name),
+    sequences: Object.fromEntries(sequences.map((row) => [row.name, Number(row.last_value)])),
   });
   const document = `${header.slice(0, -1)},"tables":{${parts.join(",")}}}`;
   return { body: gzipSync(document), counts };

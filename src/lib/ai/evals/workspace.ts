@@ -9,6 +9,7 @@
 import { z } from "zod";
 import main from "@/lib/ai/evals/workspaces/main.json";
 import type { Row, Tables } from "@/lib/ai/evals/memory-db";
+import { formatTaskNumber } from "@/lib/task-number";
 import { isValidTimeZone } from "@/lib/user-time";
 
 const WORKSPACES: Record<string, unknown> = { main };
@@ -53,6 +54,8 @@ const workspaceSchema = z.strictObject({
   tasks: z.array(
     z.strictObject({
       id,
+      /** Its permanent number (#486): 104 is AM-104. */
+      number: z.number().int().positive(),
       title: z.string().min(1),
       owner: id,
       project: id.nullable().default(null),
@@ -151,7 +154,10 @@ function checkReferences(file: WorkspaceFile) {
   for (const item of [...file.tasks, ...file.events, ...file.notes]) {
     if (item.project && !projects.has(item.project)) problems.push(`${item.id} is in a project that doesn't exist`);
   }
+  const numbers = new Set<number>();
   for (const task of file.tasks) {
+    if (numbers.has(task.number)) problems.push(`the number ${task.number} is used twice`);
+    numbers.add(task.number);
     const assignee = task.assignee ? members.get(task.assignee) : undefined;
     if (task.assignee && !assignee) problems.push(`${task.id} is assigned to a member that doesn't exist`);
     if (assignee && assignee.project !== task.project) problems.push(`${task.id} is assigned to a member of another project`);
@@ -191,6 +197,7 @@ function toTables(file: WorkspaceFile): Tables {
   const memberRows: Row[] = file.members.map((member) => ({ id: member.id, projectId: member.project, userId: member.user, name: member.name }));
   const taskRows: Row[] = file.tasks.map((task) => ({
     id: task.id,
+    number: task.number,
     title: task.title,
     // The write tools (#310, #479) read these to describe a change; the sample tasks have none.
     description: null,
@@ -278,9 +285,12 @@ export function loadWorkspace(name: string): Workspace {
       ]),
     ],
     titles: new Map(
-      [...file.projects.map((project) => [project.id, project.name] as const), ...[...file.tasks, ...file.events, ...file.notes, ...file.goals].map((item) => [item.id, item.title] as const)].filter(
-        ([, title]) => title.trim() !== "",
-      ),
+      [
+        ...file.projects.map((project) => [project.id, project.name] as const),
+        ...[...file.tasks, ...file.events, ...file.notes, ...file.goals].map((item) => [item.id, item.title] as const),
+        // A call may name a task by its number, as people do: AM-104 stands for its title (#486).
+        ...file.tasks.map((task) => [formatTaskNumber(task.number), task.title] as const),
+      ].filter(([, title]) => title.trim() !== ""),
     ),
   };
 }

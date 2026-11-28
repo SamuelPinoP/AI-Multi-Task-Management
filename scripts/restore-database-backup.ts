@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { GetObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { Pool } from "pg";
-import { BACKUP_PREFIX, orderTablesForRestore, parseBackup, quoteTable } from "../src/lib/database-backup-core";
+import { BACKUP_PREFIX, orderTablesForRestore, parseBackup, quoteTable, sequenceRestart } from "../src/lib/database-backup-core";
 import { projectChatS3Target } from "../src/lib/project-chat-storage";
 
 async function readBackupBytes(args: string[]) {
@@ -88,6 +88,23 @@ async function main() {
       // Postgres converts the JSON back to each column's type (dates, enums, ...).
       await client.query(`INSERT INTO ${quoteTable(table)} SELECT * FROM json_populate_recordset(NULL::${quoteTable(table)}, $1::json)`, [JSON.stringify(rows)]);
       console.log(`  ${table}: ${rows.length} rows`);
+    }
+
+    // Inserting rows doesn't move a column's sequence, so the next task would take number 1 again (#486).
+    const owned = await client.query<{ sequence: string; table: string; column: string }>(
+      `SELECT s.relname AS sequence, t.relname AS table, a.attname AS column
+         FROM pg_class s
+         JOIN pg_namespace n ON n.oid = s.relnamespace
+         JOIN pg_depend d ON d.objid = s.oid AND d.classid = 'pg_class'::regclass AND d.refclassid = 'pg_class'::regclass AND d.deptype = 'a'
+         JOIN pg_class t ON t.oid = d.refobjid
+         JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
+        WHERE s.relkind = 'S' AND n.nspname = current_schema()`,
+    );
+    for (const { sequence, table, column } of owned.rows) {
+      const { rows } = await client.query<{ highest: string | null }>(`SELECT max(${quoteTable(column)})::text AS highest FROM ${quoteTable(table)}`);
+      const restart = sequenceRestart(backup.sequences?.[sequence], rows[0].highest === null ? null : Number(rows[0].highest));
+      await client.query("SELECT setval($1::regclass, $2, $3)", [quoteTable(sequence), restart.value, restart.isCalled]);
+      console.log(`  ${sequence}: continues after ${restart.isCalled ? restart.value : 0}`);
     }
     await client.query("COMMIT");
     console.log("Restore complete. Everyone needs to log in again (sessions aren't backed up).");

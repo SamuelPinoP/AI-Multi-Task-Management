@@ -16,6 +16,7 @@ import { projectAccessWhere } from "@/lib/project-access-core";
 import { normalizeRecurrence, storedDayKey } from "@/lib/recurrence";
 import { formatTaskDayKey, getLocalDateOnly } from "@/lib/task-date-buckets";
 import { visibleTaskWhere } from "@/lib/task-include";
+import { formatTaskNumber, parseTaskNumber, taskBranchName } from "@/lib/task-number";
 import { dayKeyInZone, toWallClock } from "@/lib/user-time";
 import { weekKeyOf, weekLabel, weekStart } from "@/lib/weekly-review";
 
@@ -111,6 +112,7 @@ export const listOpenTasks = defineTool({
       take: TASK_SCAN,
       select: {
         id: true,
+        number: true,
         title: true,
         status: true,
         priority: true,
@@ -134,6 +136,7 @@ export const listOpenTasks = defineTool({
         total: tasks.length === TASK_SCAN ? `${matches.length} or more` : matches.length,
         tasks: shown.map((task) => ({
           id: task.id,
+          number: formatTaskNumber(task.number),
           title: task.title,
           status: task.status,
           ...(task.priority !== "NONE" ? { priority: task.priority } : {}),
@@ -533,18 +536,21 @@ export const getTask = defineTool({
   label: "Opening a task",
   title: "Task details",
   description:
-    "Returns one task the person can see, by its id from list_open_tasks: its title, description, status, priority, due date, project and labels, its subtasks, the tasks it waits on and blocks, and the note and weekly goal it belongs to, each with a link.",
+    "Returns one task the person can see, by its id from list_open_tasks or its number such as AM-142: its title, number, git branch name, description, status, priority, due date, project and labels, its subtasks, the tasks it waits on and blocks, and the note and weekly goal it belongs to, each with a link.",
   input: z.strictObject({
-    id: z.string().trim().min(1).max(64).describe("The task's id, as list_open_tasks gives it."),
+    id: z.string().trim().min(1).max(64).describe("The task's id, as list_open_tasks gives it, or its number, such as AM-142."),
   }),
   access: "read",
   async run({ id }, { userId, now, timeZone, db }) {
     const visible = visibleTaskWhere(userId);
     const related = { id: true, title: true, status: true } as const;
+    // AM-142 names a task by its permanent number (#486).
+    const number = parseTaskNumber(id);
     const task = await db.task.findFirst({
-      where: { AND: [{ id }, visible] },
+      where: { AND: [number === null ? { id } : { number }, visible] },
       select: {
         id: true,
+        number: true,
         title: true,
         description: true,
         status: true,
@@ -592,7 +598,10 @@ export const getTask = defineTool({
         found: true,
         task: {
           id: task.id,
+          number: formatTaskNumber(task.number),
           title: task.title,
+          // The branch to work on it in, which a pull request names it by (#485).
+          branch: taskBranchName(task.number, task.title),
           status: task.status,
           ...(task.priority !== "NONE" ? { priority: task.priority } : {}),
           ...(task.dueDate ? { due: formatTaskDayKey(task.dueDate), when: dueLabel(task.dueDate, now) } : {}),
