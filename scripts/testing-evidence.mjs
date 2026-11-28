@@ -15,6 +15,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { evidenceTable } from "./testing-evidence-format.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const isWindows = process.platform === "win32";
@@ -206,8 +207,5 @@ rmSync(scratch, { recursive: true, force: true });
 
 const where = commit.ok ? `\`${commit.output.trim()}\`` : "this checkout";
 const dirty = changes.output.trim() ? ", plus uncommitted changes" : "";
-console.log(`Checks run on ${where}${dirty}:\n`);
-console.log("| Check | Command | Result |");
-console.log("|---|---|---|");
-for (const row of rows) console.log(`| ${row.name} | ${row.command} | ${row.result} |`);
+console.log(evidenceTable(`${where}${dirty}`, rows));
 if (rows.some((row) => !row.ok)) process.exitCode = 1;
