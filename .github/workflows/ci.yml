@@ -63,8 +63,9 @@ jobs:
     name: Playwright (server in UTC)
     needs: checks
     runs-on: ubuntu-latest
-    # The suite takes about 18 minutes (#450); 20 cancelled runs on slower runners.
-    timeout-minutes: 30
+    # The job takes 25 to 29 minutes; 30 cancelled passing runs as they uploaded their report
+    # (#580). Running two tests at once should bring it down to about 15 (#582).
+    timeout-minutes: 45
     env:
       TZ: UTC
       # Test the production build: faster and steadier than a cold dev server.
