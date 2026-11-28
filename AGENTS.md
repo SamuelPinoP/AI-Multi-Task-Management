@@ -4,7 +4,11 @@ Rules for everyone who works in this repository, people and AI coding agents ali
 
 ## Start here
 
-The work order is the [roadmap project](https://github.com/users/SamuelPinoP/projects/5). Take its top "Now" item whose blockers are closed, or the issue the owner names. New issues go on it. Claude Code loads the guide for a folder (`tests/`, `prisma/`, `src/`, `src/lib/ai/`) when it reads a file there; other agents follow the "before" lines:
+The work order is the [roadmap project](https://github.com/users/SamuelPinoP/projects/5). Take its top "Now" item whose blockers are closed, or the issue the owner names. New issues go on it. Other sessions work at the same time, so check open PRs and branches first.
+
+Each fact has one home: rules here, guides in `docs/`, the order on the roadmap, plans and decisions in issues and PRs. Link to it instead of copying it, and keep no handoff, plan or notes files, in the repository or outside it. GitHub wins over any copy.
+
+Claude Code loads the guide for a folder (`tests/`, `prisma/`, `src/`, `src/lib/ai/`) when it reads a file there; other agents follow the "before" lines:
 
 - Before you set up, make a worktree or run on Windows or in a cloud sandbox, read [`docs/development.md`](docs/development.md).
 - Before you write or run tests, read [`docs/testing.md`](docs/testing.md).
@@ -15,10 +19,12 @@ The work order is the [roadmap project](https://github.com/users/SamuelPinoP/pro
 
 ## Rules
 
+- Work the way a strong team would: the repository is public, so follow common industry practice and never put secrets or personal data in it.
 - Free tiers only; only the owner runs live AI evaluations.
 - Never sign in or create data on production.
+- Never ask for a key, token or password. When work needs one, or anything else only the owner can give (an account, a dashboard setting, a decision), say so in one line and carry on with what isn't blocked.
 - Ask the owner before a new dependency, a behavior change, a non-additive migration, touching production data or spending money.
-- Fix causes; never weaken a test. Don't poll CI.
+- Prove a bug with a failing test before fixing it. Fix causes; never weaken a test. Don't poll CI.
 
 ## Keep output small
 
@@ -28,7 +34,7 @@ The work order is the [roadmap project](https://github.com/users/SamuelPinoP/pro
 
 ## Issues
 
-Every issue is a ticket someone else could pick up without asking questions. The repository is public, so never put secrets or personal data in one.
+Every issue is a ticket someone else could pick up without asking questions.
 
 - **Templates:** open issues from a template in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE): bug, feature, chore or epic. With `gh issue create`, use the same sections.
 - **Title:** the problem or the outcome, in plain words. Roadmap items start with their ID, for example "[TREE-04] A better tree canvas".
@@ -57,7 +63,7 @@ Every issue is a ticket someone else could pick up without asking questions. The
 
 ## Pull requests
 
-When an AI agent finishes an issue, it opens a pull request without being asked, and leaves merging to the owner.
+When an AI agent finishes an issue, it opens a pull request without being asked, and leaves merging to the owner: it never merges a pull request or turns on auto-merge.
 
 Every pull request description follows [`.github/pull_request_template.md`](.github/pull_request_template.md), in this order: **Description**, **Testing evidence**, **QA**. GitHub fills the template in for PRs opened on the website; with `gh pr create --body-file`, start from the template yourself. AI agents write all three sections without being asked (#231).
 
@@ -67,7 +73,7 @@ Give the PR a title that says what changes for the user, in plain words.
 
 - What changed and why, in words someone who doesn't read the code can follow.
 - The issue: `Fixes #N` only when the PR finishes the whole issue, otherwise `Part of #N`.
-- Screenshots or a short video for visible changes, desktop and phone.
+- Screenshots or a short video for visible changes, desktop and phone. Link the committed visual references (`tests/visual/__screenshots__/<name>-linux.png?raw=true`) when they cover the page; otherwise send the images to the owner and say so.
 - **Deploy notes**, one line each, writing "None" rather than leaving a line out:
   - Migration: what it adds. Migrations stay additive.
   - New env vars: each one, and whether it's set in Vercel. The production build fails without them.
@@ -95,6 +101,16 @@ The steps a person takes in the app to see that the PR works, each with what it 
 - Cover the main path, at least one edge case or error, and the phone layout when the UI changed.
 - Tick the steps you carried out yourself and say where: a local production build or the Vercel preview. Leave the rest unticked for the reviewer. Never sign in or create data on production.
 - When nothing in the app changes (CI, docs, scripts), give the steps that show the change works instead.
+
+## End of a session
+
+An AI agent ends every session with a short summary for the owner:
+
+- What changed, with the PR link.
+- What's next.
+- **Still pending:** first what waits on the owner, then what waits on an AI agent, each in plain words the owner can act on without asking.
+
+Anything that must outlast the session goes in an issue, a PR or these docs.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

@@ -25,7 +25,7 @@ git worktree add ../worktrees/<name> -b claude/<slug> origin/main
 ## How to work
 
 1. **Look first.** `git fetch origin`, `git log origin/main --oneline -5`, `git worktree list`, `gh pr list`, `gh issue list`. Search open and recently closed issues and PRs for the same problem before filing or fixing (two sessions once filed one bug twice).
-2. **Pick the work:** the top item of the roadmap project's "Now" phase whose blockers are closed, or the issue the owner names. If something needs the owner (an account, a secret, a dashboard setting, a decision), say so in one line and carry on with something that isn't blocked.
+2. **Pick the work** (`AGENTS.md`, "Start here"). `gh project item-list 5 --owner SamuelPinoP --format json --limit 100` lists the roadmap in rank order with each item's Phase, and `gh api graphql -f query='{repository(owner:"SamuelPinoP",name:"AI-Multi-Task-Management"){issue(number:<n>){blockedBy(first:10){nodes{number state}}}}}'` shows an issue's blockers. A new issue goes on the board with `gh project item-add 5 --owner SamuelPinoP --url <issue url>`; then set its Phase and Status, place it (`updateProjectV2ItemPosition`) and link real dependencies (`addBlockedBy`), 3 to 5 changes per call. The owner's order wins.
 3. **Make a worktree** (above) and build the smallest complete version, in the style of the surrounding code.
 4. **Test it** ([testing.md](testing.md)): logic in a `node:test` file, flows in a Playwright spec, then `npm run evidence` on the final commit.
 5. **Open the PR** ready for review: commit, `git push -u origin claude/<slug>`, `gh pr create`. The description follows `AGENTS.md`, "Pull requests". Use `Fixes #N` only when the PR completes the whole issue.
@@ -39,8 +39,9 @@ UI work starts with a design canvas, because layouts are chosen from mockups:
 - Research how professional apps do it, then show about three options per question as tappable mockups on one canvas, and recommend one. Phone and desktop go on separate boards.
 - Mockups are read literally: areas that don't change look exactly as the app has them, and no captions go inside the frames.
 - Full width: no white space at the sides and no stacked header rows. Lists run edge to edge, on phones too.
-- For colors, settle the design first, then show it in all five accent palettes.
-- Product priority is bringing in users: guests first, sign-in as pop-ups over pages, and no text that isn't needed.
+- For colors, settle the design first, then show it in all five accent palettes. Plain bug fixes go straight to a PR.
+- Each pick becomes its own issue and PR, built with any tweak the owner adds and recorded in the issue's Decisions. A canvas-only issue changes no code: post the canvas link and an options table as an issue comment. If nothing beats the current design, say so.
+- Product priority is bringing in users: guests first, sign-in as pop-ups over pages, and no text that isn't needed. A switch gets a small "?" that explains it.
 
 ## Windows
 
@@ -53,7 +54,7 @@ These bit people on Windows 11 with Git Bash and PowerShell:
 - **PowerShell history** (PSReadLine) skips lines containing "password", "token", "apikey" or "secret", but a line that sets a key in an environment variable is saved: clear the variable (`Remove-Item Env:<NAME>`) after use.
 - **Crashes:** Windows error 3221226505 kills Playwright workers while `tsc`, ESLint or unit tests run in another worktree: run evidence for one PR at a time.
 - **A server left on a port:** `netstat -ano | grep ":<port> .*LISTENING"`, then `taskkill //PID <pid> //F`.
-- **Preview pane:** it reads the launch configuration of the folder it was opened in, not a worktree's, and shares cookies across every `localhost` port, so it may be signed in to another session's account. Serve on `127.0.0.1` for separate cookies, or screenshot with a throwaway Playwright script (a fresh guest each run), deleted afterwards. Never create data in an account you didn't make. Screenshots crop or time out when the emulated size is larger than the pane, or the pane is hidden.
+- **Preview pane:** it reads the launch configuration of the folder it was opened in, not a worktree's, and shares cookies across every `localhost` port, so it may be signed in to another session's account. Serve on `127.0.0.1` for separate cookies, or screenshot with a throwaway Playwright script (a fresh guest each run), deleted afterwards. Never create data in an account you didn't make. Screenshots crop or time out when the emulated size is larger than the pane, or the pane is hidden; a hidden pane's page has no size until `resize_window` sets one (1280×720 works).
 - **Scratch folders** can move between app restarts, leaving a throwaway database under the old root: look in both.
 
 ## Cloud sandboxes
