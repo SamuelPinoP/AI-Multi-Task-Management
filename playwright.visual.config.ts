@@ -11,6 +11,8 @@ import { defineConfig, devices } from "@playwright/test";
 const e2ePort = process.env.E2E_PORT || "3100";
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${e2ePort}`;
 const isCI = Boolean(process.env.CI);
+// An installed Chromium to start instead of Playwright's own (E2E_CHROMIUM_PATH in playwright.config.ts).
+const chromiumPath = process.env.E2E_CHROMIUM_PATH || undefined;
 
 export default defineConfig({
   testDir: "./tests/visual",
@@ -31,6 +33,7 @@ export default defineConfig({
     // The production build's service worker would cache pages between tests.
     serviceWorkers: "block",
     timezoneId: process.env.TZ || undefined,
+    ...(chromiumPath ? { launchOptions: { executablePath: chromiumPath } } : {}),
   },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } } },

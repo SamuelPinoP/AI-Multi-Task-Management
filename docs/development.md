@@ -76,8 +76,8 @@ A cloud session has no `.env`, no Vercel login and no secrets, and needs none.
   sudo -u postgres createdb -O app app_test
   export DATABASE_URL="$(sed -n 's/^  DATABASE_URL: //p' .github/workflows/ci.yml)"
   npm ci && npx prisma generate && npx prisma migrate deploy
-  npx playwright install --with-deps chromium
+  export E2E_CHROMIUM_PATH=/opt/pw-browsers/chromium
   ```
-  If a download is blocked, name the checks you couldn't run in the PR's Testing evidence; CI runs every check on every push.
+  The sandbox comes with Chromium in `/opt/pw-browsers`: don't install another. When the repo's Playwright wants a different build ("Executable doesn't exist at …/chromium_headless_shell-NNNN"), `E2E_CHROMIUM_PATH` makes e2e, visual and `npm run evidence -- --e2e` runs start the installed one, with no video. If a download is blocked, name the checks you couldn't run in the PR's Testing evidence; CI runs every check on every push.
 - **Deploys:** there is no Vercel MCP and no Vercel login. A merge's production deploy shows on GitHub (see [ci-and-deploys.md](ci-and-deploys.md#after-a-merge)). If the network blocks the production URL, say that `/` and `/login` weren't checked. A red "Vercel" check's build log needs a local session.
 - **The sandbox pauses between turns** and can lose uncommitted changes: commit and push to your `claude/` branch after each step.

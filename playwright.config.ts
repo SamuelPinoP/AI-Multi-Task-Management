@@ -19,6 +19,10 @@ const serverArgs = `--hostname localhost --port ${e2ePort}`;
 // Vercel preview URLs are behind Deployment Protection; CI passes this secret
 // so the @smoke tests can reach them.
 const vercelBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+// A Chromium that's already installed, for a machine whose browser isn't the build this Playwright
+// downloads, such as a cloud sandbox's /opt/pw-browsers/chromium (docs/development.md). Playwright
+// starts it instead and records no video, since that build's ffmpeg is usually missing too.
+const chromiumPath = process.env.E2E_CHROMIUM_PATH || undefined;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -57,7 +61,8 @@ export default defineConfig({
     // watched afterwards from the HTML report.
     screenshot: isCI ? "on" : "only-on-failure",
     trace: isCI ? "on" : "on-first-retry",
-    video: isCI ? "on" : "retain-on-failure",
+    video: chromiumPath ? "off" : isCI ? "on" : "retain-on-failure",
+    ...(chromiumPath ? { launchOptions: { executablePath: chromiumPath } } : {}),
   },
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
