@@ -6,7 +6,10 @@ import { taskInclude } from "@/lib/task-include";
 import { guestLimitResponse } from "@/lib/guest-limits";
 import { parseBody, taskCreateSchema } from "@/lib/schemas/task";
 import { createTask } from "@/lib/task-writes";
-import { runFollowUps } from "@/lib/writes";
+import { changeOrigin, runFollowUps } from "@/lib/writes";
+
+// A new subtask under a task with an estimate gets its own after the response (#540), with a 20-second deadline.
+export const maxDuration = 60;
 
 export async function GET() {
   try {
@@ -42,7 +45,7 @@ export async function POST(req: Request) {
 
     const result = await createTask(user, parsed.data);
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
-    runFollowUps(user, [result.followUp]);
+    runFollowUps(user, [result.followUp], changeOrigin(req));
     return NextResponse.json(result.value, { status: 201 });
   } catch (error) {
     console.error("POST /api/tasks error:", error);

@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { TaskPageView } from "@/components/tasks/task-page-view";
 import type { Task } from "@/components/tasks/types";
+import { estimateButtonFor } from "@/lib/ai/estimate-server";
 import { requirePageUser } from "@/lib/auth";
+import { hasEstimate } from "@/lib/estimates";
 import { prisma } from "@/lib/prisma";
 import { canEditProjectContent, getProjectAccess } from "@/lib/project-access";
 import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
@@ -33,11 +36,16 @@ export default async function TaskPage({ params }: TaskPageProps) {
   }
 
   const canEdit = !task.projectId || canEditProjectContent(await getProjectAccess(task.projectId, user.id));
-  const parent = task.parentId
-    ? await prisma.task.findFirst({ where: { id: task.parentId, ...visibleTaskWhere(user.id) }, select: { id: true, title: true, status: true } })
-    : null;
+  const [parent, estimate] = await Promise.all([
+    task.parentId
+      ? prisma.task.findFirst({ where: { id: task.parentId, ...visibleTaskWhere(user.id) }, select: { id: true, title: true, status: true } })
+      : null,
+    // The Estimate button (#540): on a task without an estimate, for someone who may change it and
+    // use the AI. Vercel's header says where they are, as for the chat.
+    canEdit && !user.isGuest && !hasEstimate(task.description) ? estimateButtonFor(user.id, (await headers()).get("x-vercel-ip-country")) : null,
+  ]);
 
   // The same shape /api/tasks returns, with dates as strings.
   const initialTask = JSON.parse(JSON.stringify(task)) as Task;
-  return <TaskPageView initialTask={initialTask} parent={parent} canEdit={canEdit} />;
+  return <TaskPageView initialTask={initialTask} parent={parent} canEdit={canEdit} estimate={estimate} />;
 }

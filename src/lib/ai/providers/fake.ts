@@ -2,6 +2,7 @@
 // - `createScriptedProvider`: unit tests write each answer in advance.
 // - `createFakeProvider`: AI_PROVIDER="fake", for the e2e tests' server. It
 //   follows simple rules (below). The configuration refuses it on Vercel.
+import { ESTIMATE_TOOL, TASK_REF } from "@/lib/ai/estimate-core";
 import { localCallId, ProviderError, type Provider, type ProviderEvent, type ProviderRequest, type TokenUsage } from "@/lib/ai/types";
 
 export type ScriptedTurn = {
@@ -134,9 +135,30 @@ function resultLine(result: { name: string; content: Record<string, unknown> }) 
   return titles.length ? `${result.name} found ${titles.length}: ${titles.join("; ")}` : `${result.name} found nothing`;
 }
 
+/** The fake model's estimates (#540): 2 h for the task, 30 min for each subtask, for each ref the message lists. */
+function fakeEstimates(content: string) {
+  let refs: unknown = [];
+  try {
+    refs = (JSON.parse(content) as { estimate?: unknown }).estimate;
+  } catch {
+    // Not an estimate message: no estimates.
+  }
+  return {
+    estimates: (Array.isArray(refs) ? refs : [])
+      .filter((ref): ref is string => typeof ref === "string")
+      .map((ref) =>
+        ref === TASK_REF
+          ? { ref, size: "2 h", reason: "Most of it is the work itself, with a check at the end." }
+          : { ref, size: "30 min", reason: "One part of the task, done in one sitting." },
+      ),
+  };
+}
+
 /**
  * The e2e tests' model. Rules, on the person's latest message:
  * - "[429]" or "[503]" in it: fails like a rate limit or an outage;
+ * - a request that must call estimate_tasks (#540): calls it with an estimate for each ref the
+ *   message lists, 2 h for the task and 30 min for each subtask;
  * - "[history]" in it: answers with the messages it was sent before this one, so the tests can see
  *   which earlier turns the server gave the model (#452);
  * - tools' names in it, each optionally followed by its JSON arguments: calls them all, in order;
@@ -166,6 +188,13 @@ export function createFakeProvider(): Provider {
       const content = last?.role === "user" ? last.content : "";
       if (content.includes("[429]")) throw new ProviderError("rate_limited", "The fake provider's rate limit", 429);
       if (content.includes("[503]")) throw new ProviderError("unavailable", "The fake provider is down", 503);
+
+      if (request.toolChoice === ESTIMATE_TOOL) {
+        const args = fakeEstimates(content);
+        yield { type: "tool_call", call: { id: localCallId(0), name: ESTIMATE_TOOL, args } };
+        yield finish(JSON.stringify(args));
+        return;
+      }
 
       if (content.includes("[history]")) {
         const earlier = request.messages.slice(0, -1).map((message) => (message.role === "tool" ? "tool: …" : `${message.role}: ${message.content}`));

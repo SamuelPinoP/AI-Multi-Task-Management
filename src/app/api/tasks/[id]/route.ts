@@ -4,7 +4,10 @@ import { NextResponse } from "next/server";
 import { parseBody, taskUpdateSchema } from "@/lib/schemas/task";
 import { taskInclude, visibleTaskWhere } from "@/lib/task-include";
 import { trashTask, updateTask } from "@/lib/task-writes";
-import { runFollowUps } from "@/lib/writes";
+import { changeOrigin, runFollowUps } from "@/lib/writes";
+
+// A task that gets its estimate passes it on to its subtasks after the response (#540), with a 20-second deadline.
+export const maxDuration = 60;
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -43,7 +46,7 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     const result = await updateTask(user, id, parsed.data);
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
-    runFollowUps(user, [result.followUp]);
+    runFollowUps(user, [result.followUp], changeOrigin(req));
     return NextResponse.json(result.value, { status: 200 });
   } catch (error) {
     console.error("PATCH /api/tasks/[id] error:", error);

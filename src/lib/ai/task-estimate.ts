@@ -8,7 +8,7 @@ import { optionalArgument } from "@/lib/ai/tools/define";
 import { listLine, parseDescription, serializeDescription } from "@/lib/description-sections";
 import { ESTIMATE_SECTION, ESTIMATE_STEPS, SPLIT_OVER, aiEstimateLine, isEstimateSection, stepMinutes, type EstimateStep } from "@/lib/estimates";
 
-const REASON_MAX = 200;
+export const REASON_MAX = 200;
 const MIN_SPLIT = 2;
 const MAX_SPLIT = 5;
 /** As long as any task title the model writes (./tools/write-tools.ts). */

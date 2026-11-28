@@ -129,7 +129,10 @@ export function geminiRequestBody(request: ProviderRequest) {
               })),
             },
           ],
-          toolConfig: { functionCallingConfig: { mode: "AUTO" } },
+          // ANY with one name: the model must call that function (#540).
+          toolConfig: {
+            functionCallingConfig: request.toolChoice ? { mode: "ANY", allowedFunctionNames: [request.toolChoice] } : { mode: "AUTO" },
+          },
         }
       : {}),
     generationConfig: { maxOutputTokens: request.maxOutputTokens },

@@ -58,7 +58,7 @@ export function chatRequestBody(request: ProviderRequest) {
     ...(request.tools.length
       ? {
           tools: request.tools.map((tool) => ({ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.parameters } })),
-          tool_choice: "auto",
+          tool_choice: request.toolChoice ? { type: "function", function: { name: request.toolChoice } } : "auto",
         }
       : {}),
     max_completion_tokens: request.maxOutputTokens,

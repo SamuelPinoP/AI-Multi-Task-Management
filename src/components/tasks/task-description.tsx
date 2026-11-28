@@ -3,6 +3,7 @@
 import { ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { MarkdownText } from "@/components/markdown-text";
+import { EstimateButton } from "@/components/tasks/estimate-button";
 import { uiButtonClass, uiPrimaryButtonClass } from "@/components/ui";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/cn";
@@ -15,7 +16,8 @@ import {
   setChecklistItem,
   type DescriptionSection,
 } from "@/lib/description-sections";
-import { isEstimateSection, ownEstimate } from "@/lib/estimates";
+import type { EstimateButtonState } from "@/lib/ai/estimate-client";
+import { hasEstimate, isEstimateSection, ownEstimate } from "@/lib/estimates";
 
 /** Sections that start folded: the person's own words at the end of a ticket (#433). */
 const FOLDED_AT_FIRST = new Set(["original request"]);
@@ -58,7 +60,8 @@ function ProgressBadge({ done, total }: { done: number; total: number }) {
  * title folds it and opens it again, the pencil edits it, with its title, and the bin removes it
  * while it's being edited. "Add a section" adds one, such as "Cost" with a down payment and a
  * monthly cost, to any description. Checklist boxes tick. Every change saves the whole description
- * through `onSave`, which says whether it was saved.
+ * through `onSave`, which says whether it was saved. With `estimate`, a description without an
+ * estimate has an Estimate button beside Add a section (#540).
  */
 export function TaskDescription({
   description,
@@ -68,6 +71,7 @@ export function TaskDescription({
   headingLevel = 2,
   introId = "task-description",
   onEditingChange,
+  estimate,
 }: {
   description: string;
   canEdit: boolean;
@@ -78,6 +82,11 @@ export function TaskDescription({
   introId?: string;
   /** Whether a section is being edited, so a dialog around it can keep Escape for the section. */
   onEditingChange?: (editing: boolean) => void;
+  /**
+   * The Estimate button (#540): how it shows, and what asks the AI, which resolves once the task
+   * has its estimate or failed to get one.
+   */
+  estimate?: { state: EstimateButtonState; onEstimate: () => Promise<void> };
 }) {
   const ids = useId();
   const style = VARIANTS[variant];
@@ -104,6 +113,8 @@ export function TaskDescription({
   const [toggled, setToggled] = useState<Set<string>>(() => new Set());
   const [editing, setEditingState] = useState<Editing | null>(null);
   const [saving, setSaving] = useState(false);
+  // While the AI estimates, the description stays as it is, so no save can drop the estimate.
+  const [estimating, setEstimating] = useState(false);
   const [titleError, setTitleError] = useState(false);
   const keys = sectionKeys(parsed.sections);
 
@@ -236,6 +247,18 @@ export function TaskDescription({
     void commit(serializeDescription({ intro: savedIntro, sections: sections.map((section, at) => (at === index ? { ...section, body } : section)) }));
   }
 
+  async function askForEstimate() {
+    if (!estimate || estimating) return;
+    setEstimating(true);
+    try {
+      // Changes saved before the click go first, so the AI reads them and the estimate keeps them.
+      await queue.current;
+      await estimate.onEstimate();
+    } finally {
+      setEstimating(false);
+    }
+  }
+
   function editorKeys(event: KeyboardEvent) {
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
@@ -347,7 +370,7 @@ export function TaskDescription({
         value={intro}
         onChange={(event) => setIntro(event.target.value)}
         onBlur={saveIntro}
-        readOnly={!canEdit}
+        readOnly={!canEdit || estimating}
         placeholder={plain ? (canEdit ? "Add a description…" : "No description.") : undefined}
         rows={plain ? 3 : 1}
         className={cn(
@@ -399,7 +422,7 @@ export function TaskDescription({
                   id={`${ids}-edit-${index}`}
                   type="button"
                   onClick={() => startEditing(index)}
-                  disabled={editing !== null}
+                  disabled={editing !== null || estimating}
                   aria-label={`Edit ${section.title}`}
                   title="Edit the section"
                   className={iconButtonClass}
@@ -411,7 +434,11 @@ export function TaskDescription({
             {open ? (
               <div id={bodyId} className={cn("mt-1 pl-[1.375rem] text-ink", style.body)}>
                 {section.body ? (
-                  <MarkdownText text={section.body} onCheck={canEdit ? (line, checked) => check(index, line, checked) : undefined} disabled={editing !== null} />
+                  <MarkdownText
+                    text={section.body}
+                    onCheck={canEdit ? (line, checked) => check(index, line, checked) : undefined}
+                    disabled={editing !== null || estimating}
+                  />
                 ) : (
                   <p className="text-muted">Nothing here yet.</p>
                 )}
@@ -422,15 +449,19 @@ export function TaskDescription({
       })}
       {editing?.index === "new" ? editor(editing) : null}
       {canEdit && editing === null ? (
-        <button
-          id={`${ids}-add`}
-          type="button"
-          onClick={() => setEditing({ index: "new", title: "", body: "" })}
-          className="-ml-1 inline-flex min-h-8 w-fit items-center gap-1.5 rounded-lg px-1.5 text-sm font-medium text-muted outline-none transition-colors hover:bg-surface-hover hover:text-accent focus-visible:ring-2 focus-visible:ring-accent max-sm:min-h-11"
-        >
-          <Plus aria-hidden="true" className="h-4 w-4" />
-          Add a section
-        </button>
+        <div className="-ml-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <button
+            id={`${ids}-add`}
+            type="button"
+            onClick={() => setEditing({ index: "new", title: "", body: "" })}
+            disabled={estimating}
+            className="inline-flex min-h-8 w-fit items-center gap-1.5 rounded-lg px-1.5 text-sm font-medium text-muted outline-none transition-colors hover:bg-surface-hover hover:text-accent focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none max-sm:min-h-11"
+          >
+            <Plus aria-hidden="true" className="h-4 w-4" />
+            Add a section
+          </button>
+          {estimate && !hasEstimate(current) ? <EstimateButton state={estimate.state} busy={estimating} onClick={() => void askForEstimate()} /> : null}
+        </div>
       ) : null}
     </div>
   );

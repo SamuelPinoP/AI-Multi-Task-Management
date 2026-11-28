@@ -2,7 +2,8 @@
 // its caps, fallbacks and agent loop, the real tools, and the sample workspace
 // in memory. Only the model and the planner are stand-ins: the model is a live
 // provider or a case's reference answer, and the planner (which reads Postgres
-// in the app) builds its answer from the same workspace.
+// in the app) builds its answer from the same workspace. An estimate request
+// (#540) goes through runEstimate instead, as the server sends it.
 //
 // For live runs, requests are paced under the free plan's per-minute limits
 // and a 429 is retried after a wait, so a run measures the model rather than
@@ -13,9 +14,10 @@ import { AGENT_LIMITS } from "@/lib/ai/agent-loop";
 import { runAgentChat } from "@/lib/ai/chat";
 import { applyChatEvent, emptyAnswer, type ChatAnswer } from "@/lib/ai/chat-client";
 import { DEFAULT_APP_DAILY_REQUESTS, DEFAULT_USER_DAILY_REQUESTS, type AgentConfig } from "@/lib/ai/config";
-import type { Ability, EvalCase } from "@/lib/ai/evals/case";
+import { runEstimate, type EstimateRun } from "@/lib/ai/estimate-core";
+import { estimateCasePlan, type Ability, type EvalCase } from "@/lib/ai/evals/case";
 import { createMemoryDb } from "@/lib/ai/evals/memory-db";
-import { scoreCase, type Check, type ObservedCall } from "@/lib/ai/evals/score";
+import { scoreCase, scoreEstimateCase, type Check, type EstimateObserved, type ObservedCall } from "@/lib/ai/evals/score";
 import { loadWorkspace, type Workspace } from "@/lib/ai/evals/workspace";
 import { plannerAnswer } from "@/lib/ai/fallback";
 import { PROPOSAL_TTL_MS, type ProposalDraft, type ProposalStep } from "@/lib/ai/proposals";
@@ -285,7 +287,75 @@ export async function runCase(evalCase: EvalCase, options: RunOptions): Promise<
   return (await runCaseAndRecords(evalCase, options)).result;
 }
 
+/**
+ * How the provider failed a case, from its requests: `skipped` when it failed itself (its quota, an
+ * outage), so the case isn't scored, and `refused` when it refused a request or an answer.
+ */
+function providerTrouble(records: RequestRecord[]): Pick<CaseResult, "skipped" | "refused"> {
+  const refused = records.find((record) => !record.injected && record.errorKind === "rejected");
+  const last = records.at(-1);
+  return {
+    skipped: last && !last.injected && last.errorKind && last.errorKind !== "rejected" ? `The provider failed: ${last.error}` : null,
+    refused: refused ? (refused.error ?? "refused") : null,
+  };
+}
+
+/**
+ * An estimate request (#540): one request through runEstimate, the code the server runs, with the
+ * case's task and subtasks. As for a chat, the deadline here leaves room for the pacing waits, and
+ * the scorer holds the model to the server's.
+ */
+async function runEstimateCaseAndRecords(evalCase: EvalCase, options: RunOptions): Promise<{ result: CaseResult; records: RequestRecord[] }> {
+  const plan = evalCase.estimate ? estimateCasePlan(evalCase.estimate) : null;
+  // loadCases turns down a case with nothing to estimate.
+  if (!plan) throw new Error(`${evalCase.id} has nothing to estimate.`);
+  const records: RequestRecord[] = [];
+  const attemptedCalls: ObservedCall[] = [];
+  const provider = instrumentProvider(options.providerFor(evalCase), { records, calls: attemptedCalls, failure: evalCase.setup.failure, pacer: options.pacer, clock: options.clock });
+  let run: EstimateRun | null = null;
+  let error: string | null = null;
+  try {
+    run = await runEstimate({ provider, model: options.model, plan, signal: new AbortController().signal, deadlineMs: RUN_DEADLINE_MS });
+  } catch (failure) {
+    error = failure instanceof Error ? `${failure.name}: ${failure.message}` : String(failure);
+  }
+  const estimates: EstimateRun["estimates"] = run?.estimates ?? new Map();
+  const answered = records.filter((record) => !record.injected && !record.error);
+  const observed = {
+    outcome: run?.record.outcome ?? "PROVIDER_ERROR",
+    attemptedCalls,
+    estimates,
+    validationFailures: run?.record.validationFailures ?? 0,
+    modelRequests: run?.record.modelRequests ?? 0,
+    modelTimeMs: records.filter((record) => !record.injected).reduce((sum, record) => sum + record.latencyMs, 0),
+  } satisfies EstimateObserved;
+  const checks = scoreEstimateCase(evalCase, plan, observed);
+  const titles = new Map([[plan.task.id, plan.task.title], ...plan.subtasks.map((subtask): [string, string] => [subtask.id, subtask.title])]);
+  const result: CaseResult = {
+    id: evalCase.id,
+    ability: evalCase.ability,
+    summary: evalCase.summary,
+    request: evalCase.request,
+    passed: checks.every((check) => check.passed),
+    ...providerTrouble(records),
+    checks,
+    // What the server would write, a line for each task, for the report.
+    answer: [...estimates].map(([id, found]) => `${titles.get(id) ?? id}: ${found.size}. ${found.reason}`).join("\n"),
+    outcome: observed.outcome,
+    toolCalls: attemptedCalls,
+    modelRequests: observed.modelRequests,
+    retries: records.filter((record) => record.retried).length,
+    inputTokens: answered.reduce((sum, record) => sum + record.inputTokens, 0),
+    outputTokens: answered.reduce((sum, record) => sum + record.outputTokens, 0),
+    modelTimeMs: observed.modelTimeMs,
+    proposal: [],
+    error,
+  };
+  return { result, records };
+}
+
 async function runCaseAndRecords(evalCase: EvalCase, options: RunOptions): Promise<{ result: CaseResult; records: RequestRecord[] }> {
+  if (evalCase.estimate) return runEstimateCaseAndRecords(evalCase, options);
   const workspace = workspaceFor(evalCase.workspace);
   const clock = evalCase.clock ?? workspace.clock;
   const realNow = new Date(clock.now);
@@ -348,10 +418,7 @@ async function runCaseAndRecords(evalCase: EvalCase, options: RunOptions): Promi
   );
 
   const answered = records.filter((record) => !record.injected && !record.error);
-  const refused = records.find((record) => !record.injected && record.errorKind === "rejected");
-  const lastRecord = records.at(-1);
-  const skipped =
-    lastRecord && !lastRecord.injected && lastRecord.errorKind && lastRecord.errorKind !== "rejected" ? `The provider failed: ${lastRecord.error}` : null;
+  const { skipped, refused } = providerTrouble(records);
   const observed = {
     outcome: result.record.outcome,
     answer: answer.text,
@@ -382,7 +449,7 @@ async function runCaseAndRecords(evalCase: EvalCase, options: RunOptions): Promi
     modelTimeMs: observed.modelTimeMs,
     proposal: observed.proposal,
     error: result.failure ? (result.failure instanceof Error ? `${result.failure.name}: ${result.failure.message}` : String(result.failure)) : null,
-    refused: refused ? (refused.error ?? "refused") : null,
+    refused,
   };
   return { result: caseResult, records };
 }

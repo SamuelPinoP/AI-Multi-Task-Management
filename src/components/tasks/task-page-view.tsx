@@ -31,6 +31,7 @@ import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/toaster";
+import { estimateToast, type EstimateButtonState, type EstimateError, type EstimateResponse } from "@/lib/ai/estimate-client";
 import { cn } from "@/lib/cn";
 import { labelsOfTask } from "@/lib/labels";
 import { PRIORITY_MENU_ORDER, priorityLabels } from "@/lib/priority";
@@ -110,11 +111,23 @@ const noopSubscribe = () => () => {};
  * the title, description, sub-tasks and activity on the left; the properties
  * on the right, ending in a large green Mark done under "Blocked by", so
  * people always know where it is. On a phone the properties come right after
- * the title.
+ * the title. `estimate` is the Estimate button (#540), for someone who may
+ * change the task and use the AI; null shows none.
  */
-export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Task; parent: RelatedTask | null; canEdit: boolean }) {
+export function TaskPageView({
+  initialTask,
+  parent,
+  canEdit,
+  estimate: initialEstimate,
+}: {
+  initialTask: Task;
+  parent: RelatedTask | null;
+  canEdit: boolean;
+  estimate: EstimateButtonState | null;
+}) {
   const router = useRouter();
   const [task, setTask] = useState(initialTask);
+  const [estimate, setEstimate] = useState(initialEstimate);
   const [loadedId, setLoadedId] = useState(initialTask.id);
   const [title, setTitle] = useState(initialTask.title);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -129,6 +142,7 @@ export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Ta
   if (initialTask.id !== loadedId) {
     setLoadedId(initialTask.id);
     setTask(initialTask);
+    setEstimate(initialEstimate);
     setTitle(initialTask.title);
     setCandidates(null);
   }
@@ -207,6 +221,31 @@ export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Ta
   async function refresh() {
     const response = await fetch(`/api/tasks/${task.id}`, { cache: "no-store" });
     if (response.ok) setTask((await response.json()) as Task);
+  }
+
+  /**
+   * The Estimate button (#540): the AI estimates the task, and its subtasks without an estimate, in
+   * one request, and the task comes back with its Estimate section.
+   */
+  async function estimateTask() {
+    try {
+      const response = await fetch(`/api/tasks/${task.id}/estimate`, { method: "POST" });
+      const body = (await response.json().catch(() => null)) as (EstimateResponse<Task> & EstimateError) | null;
+      if (response.ok && body?.task) {
+        setTask(body.task);
+        const { title, description } = estimateToast(body);
+        toast.success(title, { description });
+        return;
+      }
+      if (body?.code === "used_up" && body.resetsAt) setEstimate({ state: "used_up", resetsAt: body.resetsAt });
+      // Not for this account or where it is now: the button goes.
+      else if (response.status === 403) setEstimate(null);
+      // It has an estimate now, or changed while the AI answered: show it as it is.
+      if (response.status === 409) await refresh();
+      toast.error(body?.error ?? "The AI couldn't estimate this task. Try again.");
+    } catch {
+      toast.error("The AI couldn't estimate this task. Check your connection and try again.");
+    }
   }
 
   /** Saves one change; the API takes the whole task, so the rest is sent as it is. */
@@ -713,7 +752,13 @@ export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Ta
 
         <div className="grid content-start gap-8 lg:col-start-1 lg:row-start-2">
           {/* Plain text, or sections such as a ticket the AI wrote (#433). */}
-          <TaskDescription key={task.id} description={task.description ?? ""} canEdit={canEdit} onSave={(next) => save({ description: next })} />
+          <TaskDescription
+            key={task.id}
+            description={task.description ?? ""}
+            canEdit={canEdit}
+            onSave={(next) => save({ description: next })}
+            estimate={estimate ? { state: estimate, onEstimate: estimateTask } : undefined}
+          />
 
           {!isSubtask ? (
             <section aria-labelledby="subtasks-heading" className="grid gap-2">

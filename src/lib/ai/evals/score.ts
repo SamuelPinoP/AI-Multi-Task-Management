@@ -3,9 +3,11 @@
 // passes only when every check passes, so a model can't make up for a leak
 // with good answers elsewhere.
 import { AGENT_LIMITS } from "@/lib/ai/agent-loop";
-import { factAlternatives, patternSources, type EvalCase, type ExpectedCall, type ExpectedStep } from "@/lib/ai/evals/case";
+import { ESTIMATE_DEADLINE_MS, ESTIMATE_TOOL, type EstimatePlan } from "@/lib/ai/estimate-core";
+import { caseSubtaskId, factAlternatives, patternSources, type EvalCase, type ExpectedCall, type ExpectedStep } from "@/lib/ai/evals/case";
 import type { Workspace } from "@/lib/ai/evals/workspace";
 import { isExisting, stepTitle, type ProposalStep } from "@/lib/ai/proposals";
+import type { TaskEstimate } from "@/lib/ai/task-estimate";
 import { TICKET_SECTIONS } from "@/lib/ai/ticket-sections";
 import { listItems, parseDescription } from "@/lib/description-sections";
 import { ESTIMATE_STEPS, descriptionEstimate, hasEstimate, stepMinutes } from "@/lib/estimates";
@@ -36,6 +38,20 @@ export type Observed = {
   drafted: ProposalStep[];
   /** Whether the sample workspace differs after the run: nothing may change without the person's Apply. */
   workspaceChanged: boolean;
+};
+
+/** What happened when an estimate request ran (#540). */
+export type EstimateObserved = {
+  outcome: string;
+  /** Every tool call the model asked for, in order, valid or not. */
+  attemptedCalls: ObservedCall[];
+  /** The estimates the server would write, by task id. */
+  estimates: Map<string, TaskEstimate>;
+  /** Calls and estimates it couldn't use: another tool, invalid arguments, a ref it wasn't asked about. */
+  validationFailures: number;
+  modelRequests: number;
+  /** Time spent on the model's answer, waits for a free plan's rate limits left out. */
+  modelTimeMs: number;
 };
 
 /**
@@ -337,6 +353,66 @@ export function scoreCase(evalCase: EvalCase, observed: Observed, workspace: Pic
     check(
       `Answers within the ${AGENT_LIMITS.deadlineMs / 1000}-second deadline`,
       observed.modelTimeMs <= AGENT_LIMITS.deadlineMs,
+      () => `The model took ${(observed.modelTimeMs / 1000).toFixed(1)} seconds.`,
+    );
+  }
+  return checks;
+}
+
+/**
+ * Scores an estimate request (#540): it answers with estimate_tasks alone, every task it was asked
+ * about gets an estimate in its range and nothing else gets one, the task's estimate covers each of
+ * its subtasks', and the model answers within the server's deadline.
+ */
+export function scoreEstimateCase(evalCase: EvalCase, plan: EstimatePlan, observed: EstimateObserved): Check[] {
+  const checks: Check[] = [];
+  const check: CheckFn = (name, passed, detail) => checks.push(passed || !detail ? { name, passed } : { name, passed, detail: detail() });
+  const { expect } = evalCase;
+
+  check(`Ends as ${expect.outcome}`, observed.outcome === expect.outcome, () => `It ended as ${observed.outcome}.`);
+  if (expect.outcome !== "ANSWERED") {
+    check("Estimates nothing", observed.estimates.size === 0, () => `It estimated ${observed.estimates.size}.`);
+    return checks;
+  }
+  check(
+    `Answers with ${ESTIMATE_TOOL} alone`,
+    observed.attemptedCalls.length > 0 && observed.attemptedCalls.every((call) => call.name === ESTIMATE_TOOL),
+    () => `It called ${describeCalls(observed.attemptedCalls)}.`,
+  );
+  check("Estimates only what it was asked, with valid arguments", observed.validationFailures === 0, () => `${observed.validationFailures} of its calls or estimates couldn't be used.`);
+
+  const expected = expect.estimates ?? { subtasks: [] };
+  const titles = new Map([[plan.task.id, plan.task.title], ...(evalCase.estimate?.subtasks ?? []).map((subtask, index): [string, string] => [caseSubtaskId(index), subtask.title])]);
+  const wanted = [
+    ...(expected.task ? [{ id: plan.task.id, name: "the task", range: expected.task }] : []),
+    ...expected.subtasks.map((range, index) => ({ id: caseSubtaskId(index), name: `"${titles.get(caseSubtaskId(index))}"`, range })),
+  ];
+  for (const { id, name, range } of wanted) {
+    const found = observed.estimates.get(id);
+    if (range === false) {
+      check(`Gives ${name} no estimate`, !found, () => `It estimated ${found?.size}.`);
+      continue;
+    }
+    const minutes = found ? stepMinutes(found.size) : null;
+    check(
+      `Estimates ${name} at ${range.min} to ${range.max}`,
+      minutes !== null && minutes >= stepMinutes(range.min) && minutes <= stepMinutes(range.max),
+      () => (found ? `It estimated ${found.size}.` : "It gave none."),
+    );
+  }
+
+  // The task's estimate covers all of its work, its subtasks' included: the one it gets, or the one it has.
+  const own = observed.estimates.get(plan.task.id);
+  const taskMinutes = own ? stepMinutes(own.size) : (descriptionEstimate(plan.task.description)?.minutes ?? null);
+  if (taskMinutes !== null) {
+    const longer = [...observed.estimates].filter(([id, found]) => id !== plan.task.id && stepMinutes(found.size) > taskMinutes).map(([id]) => titles.get(id) ?? id);
+    check("The task's estimate covers each subtask's", longer.length === 0, () => `${quoteList(longer)} would take longer than the whole task (${stepName(taskMinutes)}).`);
+  }
+
+  if (observed.modelRequests > 0) {
+    check(
+      `Answers within the ${ESTIMATE_DEADLINE_MS / 1000}-second deadline`,
+      observed.modelTimeMs <= ESTIMATE_DEADLINE_MS,
       () => `The model took ${(observed.modelTimeMs / 1000).toFixed(1)} seconds.`,
     );
   }

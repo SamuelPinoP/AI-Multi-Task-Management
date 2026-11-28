@@ -47,6 +47,12 @@ export type ProviderRequest = {
   system: string;
   messages: AgentMessage[];
   tools: ToolDefinition[];
+  /**
+   * The one tool the model must call, for a request that wants only that call, such as an
+   * estimate (#540). Gemini and OpenAI-compatible providers force it. Anthropic's models think
+   * before they answer, and its API refuses a forced tool with thinking, so there the prompt asks.
+   */
+  toolChoice?: string;
   maxOutputTokens: number;
   /** Aborts the request: the run's deadline passed, or the person went away. */
   signal: AbortSignal;

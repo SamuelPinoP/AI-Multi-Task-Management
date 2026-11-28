@@ -37,7 +37,8 @@ export default function PrivacyPage() {
           <li>With Sign in with Google, it receives only your Google account&apos;s ID, name and email address.</li>
           <li>
             If you ask the AI assistant something, your question and what it looks up to answer go to Google&apos;s Gemini
-            API, only after you agree to that. AI Multi keeps your last 20 chats with it until you delete them.
+            API, only after you agree to that. So does a task you ask it to estimate; once a task has an estimate, its
+            subtasks get one automatically. AI Multi keeps your last 20 chats with it until you delete them.
           </li>
           <li>
             If you connect an AI app such as Claude or ChatGPT, it can read your work when you ask it to, and change it if
@@ -99,7 +100,7 @@ export default function PrivacyPage() {
         <p>
           <strong>The AI assistant.</strong> When you agree to its notice, AI Multi records when. It keeps your chats with
           the assistant, so you can come back to them: your questions, its answers, the links they showed to your items,
-          and the changes it proposed, with which ones you applied. For each message you send it, AI Multi also keeps a usage record: when, which model answered, how it
+          and the changes it proposed, with which ones you applied. For each message you send it, and each estimate it makes, AI Multi also keeps a usage record: when, which model answered, how it
           went, how many requests and tokens it took, and the names of the lookups it made (such as &quot;open
           tasks&quot;), never what you asked or what it answered. See{" "}
           <a href="#ai" className={legalLinkClass}>
@@ -148,7 +149,7 @@ export default function PrivacyPage() {
             personally, to ask for your opinion of AI Multi. Answering is up to you, and if you&apos;d rather not be asked,
             say so and he won&apos;t ask again.
           </li>
-          <li>To answer what you ask the AI assistant, with Google&apos;s Gemini API.</li>
+          <li>To answer what you ask the AI assistant, and to estimate how long tasks will take, with Google&apos;s Gemini API.</li>
           <li>To let the AI apps you connect look up your work when you ask them to.</li>
           <li>To recover from problems: a daily backup of the database.</li>
         </ul>
@@ -198,7 +199,7 @@ export default function PrivacyPage() {
           <li>
             <strong>Service providers</strong> that process data for AI Multi, under their own privacy terms: Vercel hosts
             the app and counts visits (Web Analytics); Neon holds the database; Cloudflare R2 stores uploaded files, the calendar copies behind calendar links, and database backups; Google sends email
-            (Gmail), runs Sign in with Google, and answers the AI assistant&apos;s questions (the Gemini API); GitHub supplies public repository details when a project links a
+            (Gmail), runs Sign in with Google, and answers the AI assistant&apos;s questions and makes its estimates (the Gemini API); GitHub supplies public repository details when a project links a
             repository (AI Multi sends it only the repository&apos;s name); and your browser&apos;s push service delivers
             the notifications you turned on.
           </li>
@@ -265,9 +266,10 @@ export default function PrivacyPage() {
 
       <LegalSection id="ai" title="The AI assistant">
         <p>
-          The AI assistant answers questions about your work. It runs on Google&apos;s Gemini API. Before your first
-          question, the app tells you what it sends and asks you to agree; until you do, nothing is sent, and after that
-          nothing is sent unless you ask something.
+          The AI assistant answers questions about your work and estimates how long tasks will take. It runs on
+          Google&apos;s Gemini API. Before your first question, the app tells you what it sends and asks you to agree;
+          until you do, nothing is sent. After that, something is sent only when you ask something, when you click
+          Estimate on a task, or when a task with an estimate has subtasks to estimate (see Estimates below).
         </p>
         <ul className={legalListClass}>
           <li>
@@ -275,7 +277,16 @@ export default function PrivacyPage() {
             all), and what the assistant looks up in your workspace to answer it. That can be task titles, numbers (such as
             AM-142), statuses, priorities and due dates; event titles, dates and times; the names of the projects these
             belong to and how far along each project is; note titles with a short excerpt; and your weekly goals. It sends
-            only what the question needs, never your whole workspace, and never your email address or password.
+            only what the question needs, never your whole workspace, and never your email address or password. For an
+            estimate, it sends only the task&apos;s title and description and the titles of its subtasks.
+          </li>
+          <li>
+            <strong>Estimates:</strong> on a task without an estimate, Estimate asks how long it will take and adds the
+            answer as the task&apos;s Estimate section, marked AI estimate, which you can edit or remove like any section.
+            Its subtasks without an estimate get one in the same request. After that, its subtasks follow it: a subtask
+            added later gets its own estimate automatically, and when a task gets an estimate after its subtasks exist,
+            those without one get theirs. Each request is made for the person who added the subtask or the estimate, and
+            only if they have agreed to the assistant&apos;s notice.
           </li>
           <li>
             <strong>How Google may use it:</strong> during the free beta, AI Multi uses the Gemini API&apos;s free tier.
@@ -288,12 +299,12 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>In the European Economic Area, Switzerland and the United Kingdom,</strong> Google&apos;s free tier may
-            not be used, so nothing is sent to Google: your planner answers instead.
+            not be used, so nothing is sent to Google: your planner answers instead, and tasks get no AI estimates.
           </li>
           <li>
             <strong>What AI Multi keeps:</strong> when you agreed to the notice; your last 20 chats, each with your
             questions, the answers, the links they showed, and the changes the assistant proposed, with which ones you
-            applied; and a usage record of each message for 90 days, without its
+            applied; and a usage record of each message and estimate for 90 days, without its
             content. Starting a 21st chat deletes the oldest, and a chat you haven&apos;t opened for 90 days is deleted.
           </li>
           <li>
@@ -301,15 +312,16 @@ export default function PrivacyPage() {
             the list on the AI page. They&apos;re deleted for good, and leave the backups within 30 days.
           </li>
           <li>
-            <strong>Limits:</strong> each account may send a set number of requests a day; after that, your planner answers
-            until the next day.
+            <strong>Limits:</strong> each account may send a set number of requests a day, and each estimate is one; after
+            that, your planner answers and no estimates are made until the next day.
           </li>
         </ul>
         <p>
           Answers can be wrong; check them before you rely on them. The assistant can propose changes to your tasks,
           projects and calendar, such as a new task, a new date, or moving a task to the Trash, but it can&apos;t make them.
           Nothing changes until you tick the ones you want and apply them yourself, as you; you can cancel instead, and
-          what you leave expires after an hour. Changes you apply show in Activity as made via AI Multi.
+          what you leave expires after an hour. Changes you apply show in Activity as made via AI Multi. Estimates are the
+          exception: they go straight into the task&apos;s Estimate section, as you, and show in its Activity the same way.
         </p>
       </LegalSection>
 

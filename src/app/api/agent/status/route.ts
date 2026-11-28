@@ -4,7 +4,7 @@ import { answerMode, type AgentStatus } from "@/lib/ai/chat";
 import { readAgentConfig } from "@/lib/ai/config";
 import { hasAcceptedNotice } from "@/lib/ai/notice";
 import { createProvider } from "@/lib/ai/providers";
-import { modelRequestsToday } from "@/lib/ai/server";
+import { modelRequestsToday } from "@/lib/ai/usage-log";
 import { requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 

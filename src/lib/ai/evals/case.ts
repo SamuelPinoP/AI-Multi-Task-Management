@@ -3,12 +3,14 @@
 // answer does and must never do, and a reference answer the unit tests replay.
 // Cases are data, in ./cases; CONTRIBUTING.md says how to add one.
 import { z } from "zod";
+import { buttonPlan, followPlan, type EstimatePlan } from "@/lib/ai/estimate-core";
 import { clockSchema, workspaceNames } from "@/lib/ai/evals/workspace";
 import { AGENT_TOOLS } from "@/lib/ai/tools";
 import { ESTIMATE_STEPS, stepMinutes } from "@/lib/estimates";
 import calendar from "@/lib/ai/evals/cases/calendar.json";
 import changes from "@/lib/ai/evals/cases/changes.json";
 import clarify from "@/lib/ai/evals/cases/clarify.json";
+import estimates from "@/lib/ai/evals/cases/estimates.json";
 import goals from "@/lib/ai/evals/cases/goals.json";
 import history from "@/lib/ai/evals/cases/history.json";
 import injection from "@/lib/ai/evals/cases/injection.json";
@@ -23,7 +25,7 @@ import tickets from "@/lib/ai/evals/cases/tickets.json";
 import time from "@/lib/ai/evals/cases/time.json";
 
 /** One file per ability, named after it. */
-const CASE_FILES: Record<string, unknown> = { calendar, changes, clarify, goals, history, injection, limits, notes, permissions, projects, scope, stats, tasks, tickets, time };
+const CASE_FILES: Record<string, unknown> = { calendar, changes, clarify, estimates, goals, history, injection, limits, notes, permissions, projects, scope, stats, tasks, tickets, time };
 
 export const ABILITIES = [
   "tasks",
@@ -39,6 +41,7 @@ export const ABILITIES = [
   "clarify",
   "changes",
   "tickets",
+  "estimates",
   "injection",
   "scope",
 ] as const;
@@ -243,6 +246,31 @@ const expectedStep = z.strictObject({
 
 export type ExpectedStep = z.infer<typeof expectedStep>;
 
+/** A task or subtask as an estimate request reads it: its title, and its description as stored. */
+const estimateItem = {
+  title: z.string().min(1),
+  /** Markdown sections included: an Estimate section with text in it means it has an estimate already. */
+  description: z.string().min(1).nullable().default(null),
+};
+
+/**
+ * An estimate request (#540) in place of a chat message, sent by the code the server runs
+ * (src/lib/ai/estimate-core.ts). "button" is the Estimate button: the task, and its subtasks without
+ * an estimate. "follow" is a task with an estimate passing it on: to its subtasks without one, or
+ * only to those marked `added`, just created.
+ */
+const estimateRequest = z.strictObject({
+  kind: z.enum(["button", "follow"]),
+  task: z.strictObject({
+    ...estimateItem,
+    /** Whether it's a subtask itself, which has none of its own. */
+    subtask: z.boolean().default(false),
+  }),
+  subtasks: z.array(z.strictObject({ ...estimateItem, added: z.boolean().default(false) })).default([]),
+});
+
+export type EstimateRequest = z.infer<typeof estimateRequest>;
+
 export const caseSchema = z.strictObject({
   /** Lowercase words joined by hyphens, starting with the ability: "tasks-overdue". */
   id: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/),
@@ -254,8 +282,10 @@ export const caseSchema = z.strictObject({
   clock: clockSchema.optional(),
   /** Earlier messages in the same chat, oldest first, as the chat history stores them. */
   history: z.array(z.strictObject({ role: z.enum(["USER", "ASSISTANT", "PLANNER"]), content: z.string().min(1) })).default([]),
-  /** The person's message. */
+  /** The person's message; for an estimate request, what the person did, in words. */
   request: z.string().min(1),
+  /** An estimate request instead of a chat message (#540), with `expect.estimates`. */
+  estimate: estimateRequest.optional(),
   /** The state around the question: today's usage, where it comes from, a provider failure. */
   setup: z
     .strictObject({
@@ -286,6 +316,16 @@ export const caseSchema = z.strictObject({
      * propose none: nobody asked.
      */
     proposal: z.array(expectedStep).default([]),
+    /**
+     * For an estimate request (#540): the range the task's own estimate must land in (the button
+     * only), and each subtask's in order, or false for one that must get none.
+     */
+    estimates: z
+      .strictObject({
+        task: estimateRange.optional(),
+        subtasks: z.array(z.union([estimateRange, z.literal(false)])).default([]),
+      })
+      .optional(),
   }),
   /**
    * A good answer, one model turn per request, replayed in the unit tests to check the case
@@ -313,6 +353,69 @@ export function patternSources(value: string): string[] {
   return value.startsWith("@") ? PATTERN_SETS[value.slice(1)] : [value];
 }
 
+/** The id an estimate case's task gets, and its subtasks'. The model reads refs ("task", "subtask-1"), never these. */
+export const CASE_TASK_ID = "case-task";
+
+export function caseSubtaskId(index: number) {
+  return `case-subtask-${index + 1}`;
+}
+
+/** An estimate case's request as the server builds it; null when it has nothing to estimate. */
+export function estimateCasePlan(estimate: EstimateRequest): EstimatePlan | null {
+  const task = { id: CASE_TASK_ID, title: estimate.task.title, description: estimate.task.description };
+  const subtasks = estimate.subtasks.map((subtask, index) => ({ id: caseSubtaskId(index), title: subtask.title, description: subtask.description }));
+  if (estimate.kind === "button") return buttonPlan({ ...task, parentId: estimate.task.subtask ? "case-parent" : null }, subtasks);
+  const added = subtasks.filter((_subtask, index) => estimate.subtasks[index].added).map((subtask) => subtask.id);
+  return followPlan(task, subtasks, added.length ? added : undefined);
+}
+
+/**
+ * What's wrong with an estimate case beyond its schema (#540): it must be a request the server would
+ * send, expect an estimate for exactly the tasks that get one, and have nothing of a chat.
+ */
+export function estimateCaseProblems(found: EvalCase): string[] {
+  const { estimate } = found;
+  const expected = found.expect.estimates;
+  if (found.ability !== "estimates") return estimate || expected ? ["only an estimates case has an estimate request or expect.estimates"] : [];
+  if (!estimate) return ["an estimates case needs an estimate request"];
+  const problems: string[] = [];
+  const chat = [
+    found.workspace !== "main" && "workspace",
+    found.clock && "clock",
+    found.history.length > 0 && "history",
+    found.setup.usedToday && "setup.usedToday",
+    found.setup.country && "setup.country",
+    found.expect.tools.length > 0 && "expect.tools",
+    found.expect.notTools.length > 0 && "expect.notTools",
+    found.expect.maxToolCalls !== undefined && "expect.maxToolCalls",
+    found.expect.facts.length > 0 && "expect.facts",
+    found.expect.notFacts.length > 0 && "expect.notFacts",
+    found.expect.notPatterns.length > 0 && "expect.notPatterns",
+    found.expect.asks && "expect.asks",
+    found.expect.proposal.length > 0 && "expect.proposal",
+  ].filter((name): name is string => typeof name === "string");
+  if (chat.length) problems.push(`an estimate request has no ${chat.join(", ")}: those are for chat messages`);
+  if (estimate.task.subtask && estimate.subtasks.length) problems.push("a subtask has no subtasks of its own");
+  if (estimate.kind === "button" && estimate.subtasks.some((subtask) => subtask.added)) problems.push("only a follow request has added subtasks");
+  const plan = estimateCasePlan(estimate);
+  if (!plan) problems.push(estimate.kind === "button" ? "the button shows only on a task without an estimate" : "a follow request needs a task with an estimate and a subtask to estimate");
+  if (found.expect.outcome !== "ANSWERED") {
+    if (expected) problems.push(`a request that ends as ${found.expect.outcome} estimates nothing: leave out expect.estimates`);
+    return problems;
+  }
+  if (!expected) return [...problems, "give the ranges the estimates must land in, in expect.estimates"];
+  if (estimate.kind === "button" && !expected.task) problems.push("the button estimates the task: give its range in expect.estimates.task");
+  if (estimate.kind === "follow" && expected.task) problems.push("a follow request leaves the task's own estimate as it is: no expect.estimates.task");
+  if (expected.subtasks.length !== estimate.subtasks.length) problems.push(`expect.estimates.subtasks needs one entry for each of the ${estimate.subtasks.length} subtasks`);
+  if (!plan) return problems;
+  estimate.subtasks.forEach((subtask, index) => {
+    const asked = plan.targets.includes(caseSubtaskId(index));
+    const wanted = expected.subtasks[index];
+    if (wanted !== undefined && asked !== (wanted !== false)) problems.push(`"${subtask.title}" ${asked ? "gets an estimate: give its range" : "gets none: expect false"}`);
+  });
+  return problems;
+}
+
 /** Every case, checked: a mistake in a case file fails here, before any model is asked. */
 export function loadCases(): EvalCase[] {
   const cases: EvalCase[] = [];
@@ -333,6 +436,7 @@ export function loadCases(): EvalCase[] {
       if (found.ability !== file) problems.push(`${label}: its ability is ${found.ability}, so it belongs in cases/${found.ability}.json`);
       if (!found.id.startsWith(`${found.ability}-`)) problems.push(`${label}: its id should start with "${found.ability}-"`);
       if (!workspaceNames().includes(found.workspace)) problems.push(`${label}: there is no workspace named ${found.workspace}`);
+      for (const problem of estimateCaseProblems(found)) problems.push(`${label}: ${problem}`);
       for (const value of found.expect.facts) {
         if (typeof value === "string" && value.startsWith("@") && !Object.hasOwn(PHRASE_SETS, value.slice(1))) problems.push(`${label}: there is no phrase set named ${value}`);
       }

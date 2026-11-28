@@ -7,6 +7,7 @@ import "server-only";
 // check the request body first (src/lib/schemas/task.ts) and run the follow-ups.
 import type { Prisma } from "@prisma/client";
 import { createActivity } from "@/lib/activity";
+import { gainsEstimate, newSubtaskFollows } from "@/lib/ai/estimate-core";
 import type { Db } from "@/lib/db-client";
 import { dropLabelsOutsideScope, labelScopeFor, resolveTaskLabelIds, setTaskLabels } from "@/lib/labels-server";
 import { visibleNoteWhere } from "@/lib/note-access";
@@ -34,14 +35,16 @@ export async function createTask(actor: WriteActor, input: TaskCreateData, db: D
   let projectId = input.projectId;
 
   // A subtask (SMART-02) goes in its parent's project, one level deep.
+  let parentDescription: string | null = null;
   if (parentId) {
     const parent = await db.task.findFirst({
       where: { id: parentId, ...visibleTaskWhere(actor.id) },
-      select: { projectId: true, parentId: true },
+      select: { projectId: true, parentId: true, description: true },
     });
     if (!parent) return refuse(400, "Invalid parent task");
     if (parent.parentId) return refuse(400, "Subtasks can't have their own subtasks");
     projectId = parent.projectId;
+    parentDescription = parent.description;
   }
 
   // A task made from a note (SMART-05) goes in the note's project.
@@ -105,8 +108,13 @@ export async function createTask(actor: WriteActor, input: TaskCreateData, db: D
   return {
     ok: true,
     value: task,
-    // The assignee hears about it in their inbox (SMART-08).
-    followUp: { feeds: { userIds: [actor.id], projectIds: [task.projectId] }, assigned: task.assigneeId ? task : undefined },
+    followUp: {
+      feeds: { userIds: [actor.id], projectIds: [task.projectId] },
+      // The assignee hears about it in their inbox (SMART-08).
+      assigned: task.assigneeId ? task : undefined,
+      // A subtask of a task with an estimate gets its own once it exists (#540).
+      estimate: parentId && newSubtaskFollows(parentDescription, task.description) ? { parentId, subtaskIds: [task.id] } : undefined,
+    },
   };
 }
 
@@ -137,7 +145,7 @@ export async function updateTask(actor: WriteActor, id: string, input: TaskUpdat
 
   const existingTask = await db.task.findFirst({
     where: changeableTaskWhere(id, actor.id),
-    select: { id: true, status: true, title: true, userId: true, projectId: true, assigneeId: true },
+    select: { id: true, status: true, title: true, userId: true, projectId: true, assigneeId: true, description: true, parentId: true },
   });
   if (!existingTask) return refuse(404, "Task not found");
 
@@ -206,6 +214,8 @@ export async function updateTask(actor: WriteActor, id: string, input: TaskUpdat
       feeds: { userIds: [existingTask.userId], projectIds: [existingTask.projectId, projectId] },
       // A new assignee hears about it in their inbox (SMART-08).
       assigned: task.assigneeId && task.assigneeId !== existingTask.assigneeId ? task : undefined,
+      // A task that just got its estimate passes it on to its subtasks without one (#540).
+      estimate: task.subtasks.length > 0 && gainsEstimate(existingTask, existingTask.description, task.description) ? { parentId: id } : undefined,
     },
   };
 }

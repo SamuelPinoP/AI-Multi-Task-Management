@@ -3,39 +3,18 @@ import "server-only";
 // The AI assistant on the server (#307): the real database, provider and
 // planner behind runAgentChat, the streamed response, the usage log, and the
 // chat history the question and its answer are stored in (#452).
-import { quotaDayStart } from "@/lib/ai/allowance";
-import { runAgentChat, type ChatEvent, type RunRecord } from "@/lib/ai/chat";
+import { runAgentChat, type ChatEvent } from "@/lib/ai/chat";
 import { saveExchange, type ContinuedChat } from "@/lib/ai/chat-history";
 import { readAgentConfig } from "@/lib/ai/config";
 import { plannerAnswer } from "@/lib/ai/fallback";
 import { storeProposal } from "@/lib/ai/proposals-server";
 import { createProvider } from "@/lib/ai/providers";
 import { AGENT_TOOLS } from "@/lib/ai/tools";
+import { modelRequestsToday, saveRun } from "@/lib/ai/usage-log";
 import { prisma } from "@/lib/prisma";
 import { generateSmartPlanner } from "@/lib/smart-planner";
 import { toWallClock } from "@/lib/user-time";
 import { getUserTimeZone } from "@/lib/user-time-server";
-
-/** Model requests counted since the quota day began (allowance.ts): the person's own, and everyone's. */
-export async function modelRequestsToday(userId: string, now = new Date()) {
-  const since = quotaDayStart(now);
-  const [user, app] = await Promise.all([
-    prisma.agentRun.aggregate({ where: { userId, createdAt: { gte: since } }, _sum: { modelRequests: true } }),
-    prisma.agentRun.aggregate({ where: { createdAt: { gte: since } }, _sum: { modelRequests: true } }),
-  ]);
-  return { user: user._sum.modelRequests ?? 0, app: app._sum.modelRequests ?? 0 };
-}
-
-async function saveRun(userId: string, record: RunRecord, startedAt: Date) {
-  try {
-    await prisma.agentRun.create({
-      data: { userId, createdAt: startedAt, latencyMs: Date.now() - startedAt.getTime(), ...record },
-    });
-  } catch (error) {
-    // The answer has already gone out; losing one row only undercounts the caps a little.
-    console.error("agent_run_log_failed", { error: error instanceof Error ? error.name : "UnknownError" });
-  }
-}
 
 /**
  * Answers one message as a stream of JSON lines (see `ChatEvent`), stores it with its answer in the
