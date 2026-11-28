@@ -29,6 +29,8 @@ let ownerCommentId = "";
 let attachmentId = "";
 let projectTaskId = "";
 let projectTaskTitle = "";
+/** Its permanent number (#486). */
+let projectTaskNumber = 0;
 let editorMemberId = "";
 let adminMemberId = "";
 let ownerPersonalNoteId = "";
@@ -111,12 +113,13 @@ test.beforeAll(async ({ browser }, testInfo) => {
   attachmentId = comment.attachments[0].id;
 
   projectTaskTitle = uniqueName("Owner project task");
-  const task = await json<{ id: string }>(
+  const task = await json<{ id: string; number: number }>(
     await api.owner.post("/api/tasks", {
       data: { title: projectTaskTitle, projectId },
     }),
   );
   projectTaskId = task.id;
+  projectTaskNumber = task.number;
 
   const details = await json<{
     members: { id: string; role: string; user: { email: string } | null }[];
@@ -167,6 +170,12 @@ test("members can open the project; outsiders can't see it exists", async () => 
     );
     expect
       .soft(taskResults.tasks.some((task) => task.id === projectTaskId), `task search as ${role}`)
+      .toBe(role !== "outsider");
+
+    // By its number too (#486), and only for those who can see it.
+    const numberResults = await json<{ tasks: { id: string }[] }>(await api[role].get(`/api/search?q=AM-${projectTaskNumber}`));
+    expect
+      .soft(numberResults.tasks.some((task) => task.id === projectTaskId), `search for AM-${projectTaskNumber} as ${role}`)
       .toBe(role !== "outsider");
   }
 });
