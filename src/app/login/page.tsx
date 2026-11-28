@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { tooManyAttemptsMessage } from "@/lib/rate-limit-core";
 import { redirect } from "next/navigation";
 import {
   getCurrentUser,
@@ -13,17 +12,17 @@ import { LOGIN_IDENTIFIER_COOKIE, LOGIN_IDENTIFIER_MAX_LENGTH } from "@/lib/auth
 import { authPageHref } from "@/lib/auth-links";
 import { isGoogleSignInEnabled } from "@/lib/google-auth";
 import { googleSignInErrorMessage } from "@/lib/google-auth-core";
+import { loginFailureMessage } from "@/lib/login-core";
 import { GoogleSignIn } from "@/components/google-sign-in-button";
 import { AgreementNotice } from "@/components/legal";
 import { SignedInAsOtherAccount } from "@/components/signed-in-as-other-account";
 import { uiCardClass, uiPrimaryButtonClass } from "@/components/ui";
 
 function getErrorMessage(error: string | undefined, signupEnabled: boolean, retry: string | undefined) {
-  if (error === "rate-limited") return tooManyAttemptsMessage("sign-in attempts", Number(retry) || 60);
-  if (error === "missing") return "Enter your email or username, and your password.";
+  // A wrong password, a missing field or too many attempts: the same words as the log-in pop-up (#543).
+  const failure = loginFailureMessage(error, retry);
+  if (failure) return failure;
   if (error === "logged-out") return "You have been logged out.";
-  // One message whichever part was wrong, so it doesn't tell anyone which accounts exist.
-  if (error === "invalid") return "Incorrect email, username or password.";
   if (error === "reset") return "Password reset. Please sign in with your new password.";
   if (error === "guest-disabled") {
     return signupEnabled

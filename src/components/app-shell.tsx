@@ -42,7 +42,7 @@ import { LogoMark } from "@/components/brand/logo-mark";
 import { CommandPalette } from "@/components/command-palette";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { GuestProfileCard, GuestProfileChip, GuestProfileRail } from "@/components/guest/guest-profile";
-import { GuestSignupDialog } from "@/components/guest/guest-signup-dialog";
+import { GuestAuthDialog, type GuestAuthView } from "@/components/guest/guest-auth-dialog";
 import { MobileMenuButton, MobileMenuContext, type MobileMenu } from "@/components/mobile-menu";
 import { NewTaskDialog } from "@/components/new-task-dialog";
 import { NotificationsMenu } from "@/components/notifications-menu";
@@ -87,6 +87,7 @@ import { useRefreshOnReturn } from "@/lib/use-page-activity";
 import { guestHasRoom, type GuestLimitKind, type GuestSignupReason } from "@/lib/guest-limits-core";
 import {
   notifyWorkspaceChanged,
+  OPEN_GUEST_LOGIN_EVENT,
   OPEN_GUEST_SIGNUP_EVENT,
   OPEN_NEW_TASK_EVENT,
   OPEN_SEARCH_EVENT,
@@ -1111,7 +1112,12 @@ export function AppShell({
   const [searchOpen, setSearchOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [newTaskDraft, setNewTaskDraft] = useState<NewTaskDraft>({});
-  const [signup, setSignup] = useState<{ open: boolean; reason: GuestSignupReason }>({ open: false, reason: "signup" });
+  // The guest's sign-up and log-in pop-ups (#458, #543): one dialog, which switches between them.
+  const [guestAuth, setGuestAuth] = useState<{ open: boolean; view: GuestAuthView; reason: GuestSignupReason }>({
+    open: false,
+    view: "signup",
+    reason: "signup",
+  });
 
   // A guest past a limit gets the sign-up pop-up instead of the form (#458).
   const guestUsage = currentUser?.isGuest ? (nav?.guest ?? null) : null;
@@ -1125,14 +1131,21 @@ export function AppShell({
   const isGuest = Boolean(currentUser?.isGuest);
 
   // The sign-up pop-up opens from anywhere: the guest profile, the AI, an API answer past a limit.
+  // The log-in pop-up opens from the guest profile, over the page, like Sign up (#543).
   useEffect(() => {
-    const open = (event: Event) => {
+    const open = (view: GuestAuthView, reason: GuestSignupReason) => {
       setMenuOpen(false);
       setNewTaskOpen(false);
-      setSignup({ open: true, reason: (event as CustomEvent<GuestSignupReason>).detail ?? "signup" });
+      setGuestAuth({ open: true, view, reason });
     };
-    window.addEventListener(OPEN_GUEST_SIGNUP_EVENT, open);
-    return () => window.removeEventListener(OPEN_GUEST_SIGNUP_EVENT, open);
+    const openSignup = (event: Event) => open("signup", (event as CustomEvent<GuestSignupReason>).detail ?? "signup");
+    const openLogin = () => open("login", "signup");
+    window.addEventListener(OPEN_GUEST_SIGNUP_EVENT, openSignup);
+    window.addEventListener(OPEN_GUEST_LOGIN_EVENT, openLogin);
+    return () => {
+      window.removeEventListener(OPEN_GUEST_SIGNUP_EVENT, openSignup);
+      window.removeEventListener(OPEN_GUEST_LOGIN_EVENT, openLogin);
+    };
   }, []);
 
   // Pages open the same pop-up, sometimes in a project (the Tasks page's project cards).
@@ -1443,11 +1456,13 @@ export function AppShell({
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
       {currentUser.isGuest ? (
-        <GuestSignupDialog
-          open={signup.open}
-          reason={signup.reason}
+        <GuestAuthDialog
+          open={guestAuth.open}
+          view={guestAuth.view}
+          reason={guestAuth.reason}
           googleSignIn={googleSignIn}
-          onOpenChange={(open) => setSignup((current) => ({ ...current, open }))}
+          onViewChange={(view) => setGuestAuth((current) => ({ ...current, view }))}
+          onOpenChange={(open) => setGuestAuth((current) => ({ ...current, open }))}
         />
       ) : null}
     </div>

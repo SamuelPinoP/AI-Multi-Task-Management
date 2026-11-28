@@ -388,3 +388,26 @@ test("a guest is asked to sign up, since apps connect to an account, and can can
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   expect((await callback).searchParams.get("error")).toBe("access_denied");
 });
+
+// The sign-up pop-up's Log in switches to the log-in pop-up (#543), which comes back here as the account.
+test("a guest with an account logs in from the pop-up and comes back to the consent page", async ({ browser, baseURL, page, request }) => {
+  const other = await browser.newContext({ baseURL });
+  const { email, password } = await signUpAndLogIn(await other.newPage(), "OAuth guest login");
+  await other.close();
+  const { clientId } = await registerApp(request);
+  const { path } = consentLink(clientId);
+
+  await continueAsGuest(page);
+  await page.goto(path);
+  await page.getByRole("button", { name: "Sign up free" }).click();
+  await page.getByRole("dialog", { name: "Connecting AI apps needs a free account" }).getByRole("button", { name: "Log in", exact: true }).click();
+  const login = page.getByRole("dialog", { name: "Log in to AI Multi" });
+  await login.getByLabel("Email or username").fill(email);
+  await login.getByLabel("Password").fill(password);
+  await login.getByRole("button", { name: "Log in", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Allow" })).toBeVisible();
+  const back = new URL(page.url());
+  const sent = new URL(path, back.origin);
+  expect(back.pathname).toBe(sent.pathname);
+  expect(Object.fromEntries(back.searchParams)).toEqual(Object.fromEntries(sent.searchParams));
+});

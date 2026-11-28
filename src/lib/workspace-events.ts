@@ -58,6 +58,13 @@ export function openGuestSignup(reason: GuestSignupReason = "signup") {
   window.dispatchEvent(new CustomEvent<GuestSignupReason>(OPEN_GUEST_SIGNUP_EVENT, { detail: reason }));
 }
 
+/** Asks the shell to open the guest's log-in pop-up (#543): the guest profile's Log in does. */
+export const OPEN_GUEST_LOGIN_EVENT = "workspace:open-guest-login";
+
+export function openGuestLogin() {
+  window.dispatchEvent(new Event(OPEN_GUEST_LOGIN_EVENT));
+}
+
 /**
  * When an API answer says a guest reached a limit or needs an account, opens the sign-up pop-up
  * instead of an error message, and says so; false for any other answer.

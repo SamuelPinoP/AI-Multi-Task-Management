@@ -6,7 +6,7 @@ AI Multi is a full-stack productivity and collaboration platform built with Next
 
 ## Key Features
 
-- Secure authentication with signup, a confirmed email before the first login, Sign in with Google, login with a username or email, logout, and password reset, in forms that browsers' password managers save and fill in. Sessions stay signed in while used, up to a year, and can be ended on other devices
+- Secure authentication with signup, a confirmed email before the first login, Sign in with Google, login with a username or email, logout, and password reset, in forms that browsers' password managers save and fill in. In a guest workspace, Sign up and Log in open as pop-ups over the page. Sessions stay signed in while used, up to a year, and can be ended on other devices
 - Notes, tasks, events, projects, calendars, a rule-based Smart Daily Planner, and trash recovery
 - Project-specific Kanban boards for organizing tasks by status
 - Project collaboration with invitations and Owner, Admin and Editor roles enforced server-side: everyone edits, admins invite, remove and promote members, and only the owner dismisses or removes an admin
