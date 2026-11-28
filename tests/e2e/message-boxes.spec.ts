@@ -8,7 +8,8 @@ import { continueAsGuest, signUpAndLogIn, storeAiChat, uniqueName } from "./help
 //
 // Headless Chromium hides scrollbars. Real ones take 15 px from the text on Windows, and that's what
 // kept the old boxes a line short with their first line hidden, so these tests show them.
-test.use({ launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] } });
+// Its own launch options replace the config's, so it keeps E2E_CHROMIUM_PATH's browser too.
+test.use({ launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"], executablePath: process.env.E2E_CHROMIUM_PATH || undefined } });
 
 // Long enough to wrap two or three times in the widest box, the chats' on a computer.
 const MESSAGE =

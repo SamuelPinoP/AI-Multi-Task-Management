@@ -26,11 +26,17 @@ Claude Code loads the guide for a folder (`tests/`, `prisma/`, `src/`, `src/lib/
 - Ask the owner before a new dependency, a behavior change, a non-additive migration, touching production data or spending money.
 - Prove a bug with a failing test before fixing it. Fix causes; never weaken a test. Don't poll CI.
 
-## Keep output small
+## Keep sessions small
+
+Every step resends the whole conversation, so the number of steps and their size are the cost.
 
 - Send long test runs to a file and read the summary and failures.
-- Read big files by section.
-- Take screenshots only to prove a visual change.
+- Search with `grep`, and read big files by section.
+- Batch commands that don't depend on each other into one step.
+- Take screenshots only to prove a visual change, and look at each one once.
+- Before the end, run only the specs you touch; run `npm run evidence` once, on the final commit, and again only if the code changes after it.
+- Skip running commentary: tell the owner what blocks you, and the rest in the end-of-session summary.
+- One issue per session, started fresh: after a long pause, start a new session that links to the PR instead of resuming. Start build sessions at high effort, keep max for hard design or debugging, and run one big session at a time.
 
 ## Issues
 

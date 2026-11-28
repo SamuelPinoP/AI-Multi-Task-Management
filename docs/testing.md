@@ -23,7 +23,7 @@ npx next build
 
 - **Logic:** a `node:test` file next to the code, added to the `test:unit` script. Date code also passes `npm run test:unit:zones`.
 - **Flows:** a Playwright spec in `tests/e2e/`. New pages go in the page list of `tests/e2e/accessibility.spec.ts`; a phone spec goes in the phone project's `testMatch` in `playwright.config.ts`.
-- **Production build:** run e2e against one, because a busy dev server loses clicks before hydration: `npx next build`, then `E2E_SERVER_MODE=start E2E_PORT=31xx node scripts/run-playwright-e2e.mjs <specs>` with `DATABASE_URL` set and `TZ=UTC` like CI. The runner doesn't build.
+- **Production build:** run e2e against one, because a busy dev server loses clicks before hydration: `npx next build`, then `E2E_SERVER_MODE=start E2E_PORT=31xx node scripts/run-playwright-e2e.mjs <specs>` with `DATABASE_URL` set and `TZ=UTC` like CI. The runner doesn't build. In a cloud sandbox, set `E2E_CHROMIUM_PATH` ([development.md](development.md#cloud-sandboxes)).
 - **Evidence:** on the final commit, alone, run `npm run evidence` and paste its table into the PR. `-- --build` adds the production build; `-- --e2e <specs>` builds and runs those specs (every spec without names). Say that CI runs every spec on every push.
 - The e2e server always runs with `EMAIL_PROVIDER=disabled`, and previews run with Preview's variables, so `@smoke` tests must hold whether a switch such as `GUEST_LOGIN_ENABLED` is on or off.
 
