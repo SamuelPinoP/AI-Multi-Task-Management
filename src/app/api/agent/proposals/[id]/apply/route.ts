@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { agentAccount } from "@/lib/ai/chat-history";
 import { parseApplyRequest } from "@/lib/ai/proposals-core";
 import { applyProposal } from "@/lib/ai/proposals-server";
+import { changeOrigin } from "@/lib/writes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// New subtasks under a task with an estimate get theirs after the response (#540), with a 20-second deadline.
+export const maxDuration = 60;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -23,7 +26,7 @@ export async function POST(request: Request, context: RouteContext) {
   const choice = parseApplyRequest(await request.text().catch(() => ""));
   if (!choice.ok) return NextResponse.json({ error: choice.error }, { status: 400 });
   try {
-    const result = await applyProposal(user, (await context.params).id, choice.steps);
+    const result = await applyProposal(user, (await context.params).id, choice.steps, changeOrigin(request));
     if (!result.ok) return NextResponse.json({ error: result.error, proposal: result.proposal }, { status: result.status });
     return NextResponse.json({ proposal: result.proposal });
   } catch (error) {

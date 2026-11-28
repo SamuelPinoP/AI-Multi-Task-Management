@@ -41,6 +41,11 @@ export const RATE_LIMITS = {
    */
   agentChatUser: { name: "agent-chat-user", limit: 30, windowMs: 10 * MINUTE },
   /**
+   * Estimates (#540) per person: the Estimate button, and the automatic ones for new subtasks. The
+   * daily caps bound the model requests; this keeps a burst of new subtasks from all asking at once.
+   */
+  agentEstimateUser: { name: "agent-estimate-user", limit: 30, windowMs: 10 * MINUTE },
+  /**
    * Sign-in for AI apps (#477), per network: every request. Popular apps refresh all their users'
    * tokens from their own servers, so this only stops floods.
    */

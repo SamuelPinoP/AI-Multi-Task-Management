@@ -79,6 +79,8 @@ export function anthropicRequestBody(request: ProviderRequest, effort: Anthropic
     max_tokens: request.maxOutputTokens,
     system: request.system,
     messages: toAnthropicMessages(request.messages),
+    // No tool_choice, even for `toolChoice`: Claude thinks before it answers, and the API refuses a
+    // forced tool with thinking. The prompt asks for the call instead.
     ...(request.tools.length
       ? { tools: request.tools.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })) }
       : {}),

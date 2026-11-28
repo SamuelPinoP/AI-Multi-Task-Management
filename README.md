@@ -93,7 +93,7 @@ flowchart LR
 
 ### Evaluations
 
-`src/lib/ai/evals/` scores the agent on 72 cases (#311, #502, #504). Each case is data: a
+`src/lib/ai/evals/` scores the agent on 81 cases (#311, #502, #504, #540). Each case is data: a
 sample workspace, a fixed clock and time zone, the question, and what a good
 answer does, meaning the tools it calls and with which arguments, the facts it
 states, what it must not call or say, and whether it asks a question back.
@@ -111,7 +111,10 @@ checks its sections, in order, how many acceptance criteria and open questions
 it has, and that it invents no dates, amounts or limits the request didn't give.
 A new task's estimate must land in a range, never on one step: fixing a typo on
 one page is 15 minutes to an hour, two-step sign-in is 3 days to a week, split,
-and a subtask under a task without an estimate has none.
+and a subtask under a task without an estimate has none. The Estimate button's
+cases (#540) send a task and its subtasks as the server does instead of a
+question: each estimate must land in its range, only the tasks asked about get
+one, and the task's estimate covers each of its subtasks'.
 
 ```powershell
 npm run agent:eval -- --provider reference
@@ -149,14 +152,14 @@ own, so a run never uses the app's daily allowance, and clear it with
 
 | Run | Cases passed | Cost per 1,000 messages | Model time per message, median / 95th percentile | Messages a day on the free plan |
 | --- | --- | --- | --- | --- |
-| Reference answers, no model | 72 of 72 | – | – | – |
+| Reference answers, no model | 81 of 81 | – | – | – |
 | Gemini 3.1 Flash-Lite, November 26 | 62 of 72 (86%) | $3.08 | 1.9 s / 20.7 s | About 211 |
 | gpt-oss-120b on Groq, November 19 | 37 of 42 (88%) | $0.41 | 2.4 s / 14.9 s | About 88 |
 | Claude Haiku 5.5 | Not run: its API needs paid credits | | | |
 | Gemini 3.5 Flash-Lite | Not run: no free tier | | | |
 
 The reference replay runs on every push, in CI, and checks the cases and the
-scorer rather than a model. Gemini's run is on all 72 cases, after #504; Groq's
+scorer rather than a model. Gemini's run is on the 72 cases there were on November 26, after #504; Groq's
 is on the 42 cases there were on November 19, and #505 runs it again. Results
 are in `src/lib/ai/evals/results/`, and costs are at list prices. Gemini hit
 the step limit in four cases: it looked in the wrong places first for a task

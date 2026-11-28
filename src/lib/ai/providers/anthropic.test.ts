@@ -99,6 +99,14 @@ test("leaves the effort out for models without it, and the tools when there are 
   assert.equal("tools" in body, false);
 });
 
+test("leaves the tool to the model even when the request names one: Claude thinks first (#540)", async () => {
+  const done = sseResponse([start, { type: "content_block_start", index: 0, content_block: { type: "text", text: "Hi" } }, { type: "content_block_stop", index: 0 }, ...stop("end_turn")]);
+  const { calls } = await collect(done, { toolChoice: "list_open_tasks" });
+  const body = JSON.parse(String(calls[0].init.body));
+  assert.equal("tool_choice" in body, false);
+  assert.deepEqual(body.output_config, { effort: "low" });
+});
+
 test("streams the answer's text and reports the tokens, cached ones included", async () => {
   const { events } = await collect(
     sseResponse([

@@ -96,6 +96,12 @@ test("without tools, sends no tool settings", async () => {
   assert.equal(body.toolConfig, undefined);
 });
 
+test("a request that names the tool to call makes Gemini call that one (#540)", () => {
+  assert.deepEqual(geminiRequestBody(request({ toolChoice: "list_open_tasks" })).toolConfig, {
+    functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["list_open_tasks"] },
+  });
+});
+
 test("gives Gemini each optional argument as one schema, its description beside its type, without the null and empty-text branches (#504)", () => {
   const tools = AGENT_TOOLS.map(toolDefinition);
   const body = geminiRequestBody(request({ tools }));

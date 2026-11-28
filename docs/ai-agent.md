@@ -9,7 +9,7 @@ The MCP server that shares the agent's tools, GitHub on tasks, Linear and Jira i
 A chat agent inside the app that turns plain requests into finished work, always confirmed by the user before anything changes:
 
 - **Tickets the professional way:** "create a ticket that does X" becomes a ticket with the sections of `AGENTS.md`, "Issues": context, testable acceptance criteria and an estimate.
-- **Estimates:** every task the AI creates gets one.
+- **Estimates:** every task the AI creates gets one, any other task gets one from its Estimate button, and subtasks follow their parent.
 - **Multi-step actions:** "create a project called Whitewall with a ticket about security and a deadline on the 17th" previews a project, tickets and a calendar entry; one click creates them all.
 - **Times and repeats:** "every Tuesday and Thursday at 10:00" stores the time and the repeat exactly.
 
@@ -22,7 +22,10 @@ What matters is the engineering around the model: validated tool calls, safety, 
 - **History:** each person keeps their last 20 chats of up to 40 messages, deleted after 90 days unopened (`src/lib/ai/chat-history.ts`, `chat-history-core.ts`, routes in `src/app/api/agent/chats/`). Only whole exchanges are stored, and the browser sends only the question: the server builds the model's history from the database.
 - **Actions:** write tools only add steps to the answer's proposal, stored for an hour in `AgentProposal`; Apply and Cancel routes run it after the person ticks what to apply on the card. Each write tool has a *plan* half and an *apply* half, built on `src/lib/*-writes.ts`, so the MCP server can reuse them: connected AI apps' write tools (#479, `src/lib/ai/tools/change-tools.ts`) run both in one call, the app's own approval prompt being the person's confirmation, and never reach the in-app agent. The agent can't change or delete events, notes, goals or projects, and says so.
 - **Tickets:** the model fills a typed ticket (`create_ticket`, validated with Zod); the server writes it into the task's description; the person edits the draft before Apply; the task's page shows it in sections. Markdown renders with `react-markdown` and `remark-gfm`, raw HTML off.
-- **Estimates:** an Estimate section in the description, one of nine fixed steps from 15 min to 1 week, marked "AI estimate" until a person edits it. Work over 2 days comes with 2 to 5 suggested subtasks, each with an estimate, unticked on the card. Subtasks follow their parent: they get an estimate when it has one. There is no estimate column and nothing on task rows.
+- **Estimates:** an Estimate section in the description, one of nine fixed steps from 15 min to 1 week, marked "AI estimate" until a person edits it. Work over 2 days comes with 2 to 5 suggested subtasks, each with an estimate, unticked on the card. There is no estimate column and nothing on task rows.
+  - The Estimate button (#540) shows beside "Add a section" on a task without an estimate, for people who can use the AI. `POST /api/tasks/[id]/estimate` estimates the task and its subtasks without one in a single model request, with `estimate_tasks` forced (`ProviderRequest.toolChoice`; Anthropic's thinking can't be forced, so it's only asked). The model gets the task's title and description and its subtasks' titles, nothing else (`src/lib/ai/estimate-core.ts`).
+  - Subtasks follow their parent: a subtask created under a task with an estimate, and a task's subtasks without one when it gets its own, are estimated after the response (`FollowUp.estimate` in `src/lib/writes.ts`, run with `after()` by `estimateSubtasks` in `src/lib/ai/estimate-server.ts`). Each is one request for the person who made the change, counted against the caps, and skipped when that person can't use the AI or a cap is used up. Changes over MCP carry no country, so they get none.
+  - The answer is written only where the description is still the one the model read, and shows in the task's Activity as made via AI Multi.
 - **Numbers:** a `task_stats` tool computes counts and percentages in code, and the model repeats them.
 - **Not for guests:** the AI needs an account, and only people who agreed to the data notice.
 
@@ -68,7 +71,7 @@ What matters is the engineering around the model: validated tool calls, safety, 
 
 ## Evaluations
 
-The cases are JSON in `src/lib/ai/evals/cases/` over a sample workspace, scored by `npm run agent:eval -- --provider <reference|gemini|anthropic|groq>`. The reference replay runs in CI with the unit tests; results are saved in `src/lib/ai/evals/results/<date>-<model>.json`.
+The cases are JSON in `src/lib/ai/evals/cases/` over a sample workspace, scored by `npm run agent:eval -- --provider <reference|gemini|anthropic|groq>`. The estimate request's cases (`estimates.json`, #540) send a task and its subtasks the way the server does instead of a chat message, and give the range each estimate must land in. The reference replay runs in CI with the unit tests; results are saved in `src/lib/ai/evals/results/<date>-<model>.json`.
 
 - Live runs are by hand, never in CI, and only the owner runs them: they use his keys.
 - A change to the prompt, tools, provider or model runs them before and after, and the PR explains any case that now fails. [`CONTRIBUTING.md`](../CONTRIBUTING.md#changing-the-ai-assistant) has the steps and how to add a case.

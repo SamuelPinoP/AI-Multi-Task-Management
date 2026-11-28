@@ -66,8 +66,13 @@ export function exhaustedCap(allowance: Allowance): "user" | "app" | null {
   return null;
 }
 
+/** "about 7 hours" from `now` until `resetsAt` (ISO 8601), for messages about the reset. */
+export function timeUntil(resetsAt: string, now: Date) {
+  const hours = Math.max(1, Math.ceil((new Date(resetsAt).getTime() - now.getTime()) / 3_600_000));
+  return hours === 1 ? "about an hour" : `about ${hours} hours`;
+}
+
 /** "about 7 hours", for messages about the reset. */
 export function untilReset(allowance: Allowance, now: Date) {
-  const hours = Math.max(1, Math.ceil((new Date(allowance.resetsAt).getTime() - now.getTime()) / 3_600_000));
-  return hours === 1 ? "about an hour" : `about ${hours} hours`;
+  return timeUntil(allowance.resetsAt, now);
 }

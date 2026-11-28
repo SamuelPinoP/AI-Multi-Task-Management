@@ -92,6 +92,11 @@ test("sends the conversation, the tools and the key the way Chat Completions exp
   assert.equal("tool_choice" in body, false, "tool_choice without tools is an error");
 });
 
+test("a request that names the tool to call makes the model call that one (#540)", async () => {
+  const { calls } = await collect(sseResponse([finish("tool_calls")]), { toolChoice: "list_open_tasks" });
+  assert.deepEqual(JSON.parse(String(calls[0].init.body)).tool_choice, { type: "function", function: { name: "list_open_tasks" } });
+});
+
 test("streams the answer's text and reports the tokens from the last chunk", async () => {
   const { events } = await collect(sseResponse([{ choices: [{ index: 0, delta: { role: "assistant", content: "" } }] }, text("Two tasks "), text("are due."), finish("stop"), usage(120, 9)]));
   assert.deepEqual(events, [

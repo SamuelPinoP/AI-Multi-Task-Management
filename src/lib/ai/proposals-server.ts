@@ -25,7 +25,7 @@ import { createProject } from "@/lib/project-writes";
 import { parseTaskDueDateForStorage } from "@/lib/task-date-buckets";
 import { visibleTaskWhere } from "@/lib/task-include";
 import { createTask, trashTask, updateTask } from "@/lib/task-writes";
-import { runFollowUps, type FollowUp, type WriteActor, type WriteResult } from "@/lib/writes";
+import { runFollowUps, type ChangeOrigin, type FollowUp, type WriteActor, type WriteResult } from "@/lib/writes";
 
 // Several changes make several inserts each; Prisma's 5-second default is tight on a cold database.
 const APPLY_TRANSACTION = { maxWait: 10_000, timeout: 20_000 };
@@ -154,9 +154,10 @@ function notPending(view: ProposalView | null): ProposalOutcome {
  * all of them), every one of those or none. Steps that need a new project or task need it chosen
  * too; asking for one without it is refused, and the proposal stays pending. The proposal is
  * claimed in the same transaction as the changes, so a second Apply waits for the first and then
- * finds nothing pending. A refused step leaves it FAILED, with why, and nothing changed.
+ * finds nothing pending. A refused step leaves it FAILED, with why, and nothing changed. `origin`
+ * is where the person applied it from, which new subtasks' estimates need (#540).
  */
-export async function applyProposal(person: WriteActor, proposalId: string, chosen: number[] | null, now = new Date()): Promise<ProposalOutcome> {
+export async function applyProposal(person: WriteActor, proposalId: string, chosen: number[] | null, origin?: ChangeOrigin, now = new Date()): Promise<ProposalOutcome> {
   const view = await currentView(person.id, proposalId, now);
   if (!view || view.state !== "pending") return notPending(view);
   const steps = chosen ?? view.steps.map((_, index) => index);
@@ -179,7 +180,7 @@ export async function applyProposal(person: WriteActor, proposalId: string, chos
       await tx.agentProposal.update({ where: { id: proposalId }, data: { links: result.links } });
       return { ...result, steps: current };
     }, APPLY_TRANSACTION);
-    runFollowUps(actor, followUps);
+    runFollowUps(actor, followUps, origin);
     return { ok: true, proposal: { ...view, steps: appliedSteps, state: "applied", applied, links } };
   } catch (error) {
     if (error instanceof NotPending) return notPending(await currentView(person.id, proposalId, now));
