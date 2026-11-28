@@ -333,12 +333,13 @@ export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Ta
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
         </Link>
         <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-[0.8125rem] text-muted">
+          {/* Each chevron shows from the same width as the link after it, so two never sit side by side (#584). */}
           <Link href="/tasks" className="shrink-0 hover:text-ink">
             Tasks
           </Link>
           {project ? (
             <>
-              <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+              <ChevronRight aria-hidden="true" className="hidden h-3.5 w-3.5 shrink-0 sm:block" />
               <Link href={`/projects/${project.id}`} className="hidden min-w-0 items-center gap-1.5 hover:text-ink sm:inline-flex">
                 <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-[3px]" style={{ backgroundColor: projectColor(project) }} />
                 <span className="truncate">{project.name}</span>
@@ -347,7 +348,7 @@ export function TaskPageView({ initialTask, parent, canEdit }: { initialTask: Ta
           ) : null}
           {parent ? (
             <>
-              <ChevronRight aria-hidden="true" className="hidden h-3.5 w-3.5 shrink-0 sm:block" />
+              <ChevronRight aria-hidden="true" className="hidden h-3.5 w-3.5 shrink-0 md:block" />
               <Link href={`/tasks/${parent.id}`} className="hidden max-w-40 truncate hover:text-ink md:inline">
                 {parent.title}
               </Link>

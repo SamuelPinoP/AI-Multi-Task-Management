@@ -90,3 +90,36 @@ test("subtasks, dependencies, the board and the planner (SMART-02)", async ({ pa
   await page.goto("/tasks");
   await expect(deployRow).not.toContainText("Blocked");
 });
+
+test("a subtask's breadcrumb has one chevron between each pair of names at every width (#584)", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "It sets each width itself, so the phone run covers computers too.");
+  await continueAsGuest(page);
+  const [projectName, parentTitle, title] = [uniqueName("Website"), uniqueName("Launch site"), uniqueName("Fix links")];
+  const create = async (url: string, data: object) => {
+    const response = await page.request.post(url, { data });
+    expect(response.status()).toBe(201);
+    return (await response.json()) as { id: string };
+  };
+  const project = await create("/api/projects", { name: projectName });
+  const parent = await create("/api/tasks", { title: parentTitle, projectId: project.id });
+  const subtask = await create("/api/tasks", { title, parentId: parent.id });
+  await page.goto(`/tasks/${subtask.id}`);
+  await expect(page.getByLabel("Title")).toHaveValue(title);
+
+  // What the breadcrumb shows, in order, with › for each chevron: a name that hides takes the chevron before it along.
+  const breadcrumb = page.getByRole("navigation", { name: "Breadcrumb" });
+  const shown = () =>
+    breadcrumb
+      .locator(":scope > *")
+      .filter({ visible: true })
+      .evaluateAll((parts) => parts.map((part) => (part instanceof SVGElement ? "›" : part.textContent)));
+  const widths: [number, string[]][] = [
+    [375, ["Tasks", "›", title]],
+    [700, ["Tasks", "›", projectName, "›", title]],
+    [1280, ["Tasks", "›", projectName, "›", parentTitle, "›", title]],
+  ];
+  for (const [width, parts] of widths) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect.soft.poll(shown, `${width} px wide`).toEqual(parts);
+  }
+});
