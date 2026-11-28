@@ -3,11 +3,12 @@
 // Playwright spec (tests/e2e/mcp.spec.ts) repeats the main path against a real server.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { Client, StreamableHTTPClientTransport, type OAuthClientProvider } from "@modelcontextprotocol/client";
 import { toolDefinition } from "../ai/tools/define";
 import { MCP_TOOLS } from "../ai/tools/index";
 import { mintAccessToken } from "./access-token";
 import { appOrigin, createMcpEndpoint, isMcpEnabled, MCP_PATH, mcpTokenSecret, RESOURCE_METADATA_PATH } from "./handler";
+import { authorizationServerMetadata, protectedResourceMetadata } from "./oauth";
 import { MCP_INSTRUCTIONS, type McpDb, type McpToolDeps } from "./tools";
 
 const SECRET = "test-secret-that-is-long-enough-0123456789";
@@ -107,22 +108,66 @@ test("switched on without a secret, it says it isn't set up rather than serving"
   }
 });
 
-test("without a valid token: 401 with a challenge naming the resource metadata, never a redirect", async () => {
+test("without a valid token: 401 with a challenge naming the resource metadata and both scopes, never a redirect", async () => {
   const { handle, queries } = endpoint();
   const expired = token({ expiresAt: Math.floor(Date.now() / 1000) - 1 });
-  const attempts: Array<Record<string, string>> = [{}, { authorization: "Bearer not-a-token" }, { authorization: `Bearer ${expired}` }, { authorization: `Basic ${token()}` }];
-  for (const headers of attempts) {
+  const attempts: Array<[Record<string, string>, string]> = [
+    [{}, "No authorization provided"],
+    [{ authorization: "Bearer not-a-token" }, "The access token isn't one AI Multi issued."],
+    [{ authorization: `Bearer ${expired}` }, "The access token expired."],
+    [{ authorization: `Basic ${token()}` }, "No authorization provided"],
+  ];
+  for (const [headers, description] of attempts) {
     const response = await post(handle, headers);
     assert.equal(response.status, 401, JSON.stringify(headers));
     assert.equal(response.headers.get("location"), null);
     const challenge = response.headers.get("www-authenticate") ?? "";
     assert.match(challenge, /^Bearer /);
     assert.match(challenge, /error="invalid_token"/);
+    assert.ok(challenge.includes(`error_description="${description}"`), challenge);
     assert.ok(challenge.includes(`resource_metadata="${ORIGIN}${RESOURCE_METADATA_PATH}"`), challenge);
-    assert.match(challenge, /scope="read"/);
+    // Every scope the tools use, so apps ask to write too and the person chooses on the consent page.
+    assert.match(challenge, /scope="read write"/);
+    assert.deepEqual(await response.json(), { error: "invalid_token", error_description: description });
   }
   assert.equal(RESOURCE_METADATA_PATH, "/.well-known/oauth-protected-resource/api/mcp");
   assert.deepEqual(queries, [], "checking tokens never touches the database");
+});
+
+test("an app that asks for the scopes a 401 names, as the SDK's own client does, asks to write too (#483)", async () => {
+  // MCP's scope selection takes the challenge's scope first. When the 401 named only "read",
+  // VS Code, opencode and other apps built on the SDK connected read-only, and the consent page
+  // never offered the person the choice to allow changes.
+  const { handle } = endpoint();
+  const callback = "http://127.0.0.1:43210/callback";
+  let consentLink: URL | undefined;
+  const app: OAuthClientProvider = {
+    redirectUrl: callback,
+    clientMetadata: { client_name: "Spec app", redirect_uris: [callback], grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], token_endpoint_auth_method: "none" },
+    clientInformation: () => ({ client_id: "aim_ci_specapp" }),
+    tokens: () => undefined,
+    saveTokens: () => {},
+    redirectToAuthorization: (url) => {
+      consentLink = url;
+    },
+    saveCodeVerifier: () => {},
+    codeVerifier: () => "",
+  };
+  const transport = new StreamableHTTPClientTransport(new URL(URL_), {
+    authProvider: app,
+    // The metadata documents are sign-in's (oauth-server.ts); everything else is the endpoint.
+    fetch: async (url, init) => {
+      const { pathname } = new URL(url);
+      if (pathname === RESOURCE_METADATA_PATH) return Response.json(protectedResourceMetadata(ORIGIN));
+      if (pathname === "/.well-known/oauth-authorization-server") return Response.json(authorizationServerMetadata(ORIGIN));
+      return handle(new Request(url, init));
+    },
+  });
+  const client = new Client({ name: "spec-app", version: "1.0.0" });
+  await assert.rejects(client.connect(transport));
+  assert.equal(consentLink?.pathname, "/oauth/authorize");
+  assert.equal(consentLink?.searchParams.get("scope"), "read write offline_access");
+  assert.equal(consentLink?.searchParams.get("resource"), URL_);
 });
 
 test("a token for another address, or without the read scope, gets nothing", async () => {

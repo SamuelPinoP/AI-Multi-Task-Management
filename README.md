@@ -238,7 +238,9 @@ It's all off, a 404, unless `MCP_ENABLED` is `"true"`.
   (RFC 8707). Checking one needs no database, so connecting and listing the
   tools never wake Neon. Without a valid token the answer is 401 with a
   `WWW-Authenticate` challenge naming the protected resource metadata
-  (RFC 9728), never a redirect.
+  (RFC 9728) and both scopes, `read write`, never a redirect. Apps such as
+  VS Code ask for exactly the scopes a 401 names, so it names both and the
+  person chooses on the consent page; tokens still need only `read` (#483).
 - **Grants:** each tool call checks that the token's grant (`McpGrant`) still
   stands and holds the token's scopes, so Disconnect works at the next call.
   Guests and accounts with an unconfirmed email get nothing.
@@ -255,6 +257,32 @@ The unit tests run the SDK's own client against the handler in process
 memory. `tests/e2e/mcp.spec.ts` runs the client against the server with a token
 it mints, and `tests/e2e/oauth.spec.ts` signs in with the SDK's OAuth client,
 clicking Allow in the browser. No test calls an AI.
+
+### Real AI apps
+
+Checked by hand on November 27 and 28, 2026 (#483), against a local production
+build (`next build`, then `next start` with `MCP_ENABLED="true"`) and a new
+account with a confirmed email. The requests were "Create an AI Multi task: we
+need a dark and light mode", "What's on my AI Multi calendar this week?", "Add
+a design review on Friday at 3 PM" and "Save these meeting notes as a note".
+
+| App | Signs in with | Checked | Result |
+| --- | --- | --- | --- |
+| Claude Code 2.1.252 | Its metadata document, back to `localhost` | `claude mcp login`, the tool list, two token refreshes | Connects with read and write, lists the 19 tools and refreshes. The requests weren't run: the CLI wasn't signed in to Anthropic on the test computer. |
+| Codex 0.150.1 | Its metadata document, back to `127.0.0.1` | `codex mcp login`, the requests as one conversation, Disconnect, a token refresh | The calendar, the design review (Friday, December 4 at 3 PM) and the note worked, and the task's history says "via Codex". It took "an AI Multi task" for a coding job, while "Add a task in AI Multi: …" made the task (#578). After Disconnect its next call was refused, and it connected again. |
+| VS Code 1.142 | Its metadata document, back to `127.0.0.1:33418` or `vscode.dev` | Its document against sign-in's checks, and its code | The document passes. It asks for exactly the scopes a 401 names, which kept it read-only until the 401 named both. Not connected: its Allow dialog and Copilot need a person. |
+| Cursor | Registration, back to `cursor://` | Nothing: not installed on the test computer | The unit tests cover its registration and return address. |
+| opencode 2.2.6 | Its metadata document, back to `127.0.0.1` | `opencode mcp auth` | Connected read-only, with no choice on the consent page, until the 401 named both scopes; then it asked to write and the person could choose. |
+| Claude, ChatGPT | Their own servers | Nothing yet | They can't reach a local build or a protected preview, so they're checked on production once `MCP_ENABLED` is on there. |
+
+Claude Code, Codex and opencode signed in with a Client ID Metadata Document,
+and none registered; VS Code's document passes the same checks. Each is under
+1 KB: `https://claude.ai/oauth/claude-code-client-metadata`,
+`https://chatgpt.com/oauth/codex/<install>/client.json`,
+`https://opencode.ai/oauth/opencode/client.json` and
+`https://vscode.dev/oauth/client-metadata.json`. Coding agents need the request
+to name AI Multi: in a new Codex session, "What's due this week?" got "I don't
+have access to your calendar or task list" (#578).
 
 ## Project chat attachment storage
 

@@ -232,7 +232,7 @@ test("without a valid token the endpoint answers 401, never a redirect; a discon
         const challenge = response.headers()["www-authenticate"] ?? "";
         expect(challenge).toMatch(/^Bearer /);
         expect(challenge).toContain('resource_metadata="');
-        expect(challenge).toContain('scope="read"');
+        expect(challenge).toContain('scope="read write"');
       }
     }
 
