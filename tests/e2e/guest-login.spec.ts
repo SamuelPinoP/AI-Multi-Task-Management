@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 import { accountMenuButton, continueAsGuest, expectHome, signUpAndLogIn } from "./helpers";
 
 /*
@@ -18,6 +18,15 @@ async function makeAccount(browser: Browser, baseURL: string | undefined, label:
   }
 }
 
+/**
+ * Waits until the pop-up has settled: focus inside and its opening animation done. Radix starts
+ * listening for clicks outside a moment after it shows, so a click straight away can go unheard.
+ */
+async function settled(dialog: Locator) {
+  await expect(dialog.getByRole("button", { name: "Continue with Google" })).toBeFocused();
+  await dialog.evaluate((element) => Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)));
+}
+
 /** The guest profile's Log in: in the sidebar on a computer, in the menu sheet on a phone. */
 async function openLogIn(page: Page) {
   const profile = page.getByRole("region", { name: "Guest workspace" });
@@ -25,6 +34,7 @@ async function openLogIn(page: Page) {
   await profile.getByRole("button", { name: "Log in", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Log in to AI Multi" });
   await expect(dialog).toBeVisible();
+  await settled(dialog);
   return dialog;
 }
 
