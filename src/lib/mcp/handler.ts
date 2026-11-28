@@ -5,11 +5,13 @@
 // Every request needs a valid access token. Checking one needs no database, so starting an app and
 // listing the tools never wake Neon; tool calls then check the grant (tools.ts). Without a valid
 // token the answer is 401 with a WWW-Authenticate challenge naming the protected resource metadata
-// (RFC 9728), never a redirect. The whole endpoint is off unless MCP_ENABLED is "true".
-import { OAuthError, OAuthErrorCode, type AuthInfo } from "@modelcontextprotocol/server";
+// (RFC 9728) and the scopes to ask for, never a redirect. The whole endpoint is off unless
+// MCP_ENABLED is "true".
+import { bearerAuthChallengeResponse, OAuthError, OAuthErrorCode, type AuthInfo } from "@modelcontextprotocol/server";
 import { createMcpHandler, getPublicOrigin, withMcpAuth } from "mcp-handler";
 import { mcpTokenSecret, verifyAccessToken, type TokenCheck } from "@/lib/mcp/access-token";
 import { configuredOrigin, isMcpEnabled, MCP_PATH, MCP_SERVER_NAME } from "@/lib/mcp/connect";
+import { RESOURCE_METADATA_SCOPES } from "@/lib/mcp/oauth";
 import { MCP_INSTRUCTIONS, registerMcpTools, type McpDb, type McpToolDeps } from "@/lib/mcp/tools";
 
 // The switch and the path live in connect.ts, which the app shell and the Integrations page share without loading the SDK.
@@ -78,12 +80,22 @@ export function createMcpEndpoint({
         extra: { userId: check.claims.userId, grantId: check.claims.grantId },
       };
     };
-    return withMcpAuth(serve, verify, {
+    const response = await withMcpAuth(serve, verify, {
       required: true,
-      // Every grant includes "read"; the challenge tells apps to ask for it.
+      // Every grant includes "read", so every token must carry it.
       requiredScopes: ["read"],
       resourceUrl: origin,
       resourceMetadataPath: RESOURCE_METADATA_PATH,
     })(request);
+    if (response.status !== 401) return response;
+    // withMcpAuth's 401 names only the scope it requires of every token. Apps that ask for what a 401
+    // names, as MCP's scope selection says (VS Code and the SDK's own client), then asked for "read"
+    // alone and connected read-only, with no choice on the consent page (#483). So a 401 names every
+    // scope the tools use, and the person chooses on the consent page.
+    const { error_description: description } = (await response.json().catch(() => ({}))) as { error_description?: string };
+    return bearerAuthChallengeResponse(new OAuthError(OAuthErrorCode.InvalidToken, description ?? "Invalid token"), {
+      requiredScopes: RESOURCE_METADATA_SCOPES,
+      resourceMetadataUrl: `${origin}${RESOURCE_METADATA_PATH}`,
+    });
   };
 }
