@@ -286,8 +286,9 @@ function useLongPress(onLongPress: () => void) {
 /**
  * One task on a phone (#521, design 2A): a circle on the left to mark it done; the title and its
  * number (#486), with the due date, label, subtasks, assignee and description on a line under it;
- * the priority on the right. Tapping the task opens it. Pressing and holding selects it; while tasks are selected the
- * circle becomes a select box and a tap selects, and the bulk bar does the rest.
+ * the priority on the right. Tapping the task opens it. Pressing and holding selects it; while
+ * tasks are selected the circle becomes a select box and a tap selects, and the bulk bar does the
+ * rest.
  */
 export function TaskRowPhone({
   task,
