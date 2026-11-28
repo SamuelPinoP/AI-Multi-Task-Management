@@ -29,10 +29,28 @@ function middle(box: { x: number; y: number; width: number; height: number }) {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
+/** Where something's box ends on the screen. */
+async function bottomOf(locator: Locator) {
+  const box = (await locator.boundingBox())!;
+  return box.y + box.height;
+}
+
+/** A project's chat's own message box. */
+const messageBox = (page: Page) => page.locator("form", { has: page.locator("#project-chat-message") });
+
+/** A new project whose chat has 8 messages, "Update 1" to "Update 8": enough to scroll on any screen. */
+async function chatWithMessages(page: Page, name: string) {
+  const project = (await (await page.request.post("/api/projects", { data: { name: uniqueName(name) } })).json()) as { id: string };
+  for (let index = 1; index <= 8; index += 1) {
+    expect((await page.request.post(`/api/projects/${project.id}/comments`, { data: { message: `Update ${index}` } })).status()).toBe(201);
+  }
+  return project;
+}
+
 test.describe("on a computer", () => {
   test.skip(({ isMobile }) => isMobile, "Phones get the bar as a button above the tabs; see below.");
 
-  test("the bar is at the bottom of every page but the AI page, the chats included", async ({ page }) => {
+  test("the bar is at the bottom of every page but the AI page, and floats over the chats' messages", async ({ page }) => {
     await signUpAndLogIn(page, "E2E AI bar");
     for (const path of ["/", "/tasks", "/events", "/account"]) {
       await page.goto(path);
@@ -51,26 +69,59 @@ test.describe("on a computer", () => {
     await expect(page.getByRole("region", { name: "Conversation" })).toBeVisible();
     await expect(bar(page)).toHaveCount(0);
 
-    // The chats get the same simple bar, not the ✦ button that opened the whole chat (Samuel, November 21).
-    // They end above it, so their own message box stays clear of it.
-    const project = (await (await page.request.post("/api/projects", { data: { name: uniqueName("AI bar chats") } })).json()) as { id: string };
-    await page.request.post(`/api/projects/${project.id}/comments`, { multipart: { message: "Hello from the chat" } });
+    // The chats have no band of their own for it (Samuel, November 26): it floats over their messages,
+    // above their message box, and starts as the ✦ so the chat can be read. With no chat open, the ✦
+    // sits where it does on any page.
+    const project = await chatWithMessages(page, "AI bar chats");
+    const bubble = page.getByRole("button", { name: "Ask AI Multi", exact: true });
     for (const path of ["/chats", `/chats?project=${project.id}`, `/projects/${project.id}/chat`]) {
       await page.goto(path);
-      await expect(bar(page), path).toBeVisible();
-      await expect(page.getByRole("button", { name: "Ask AI Multi", exact: true }), path).toHaveCount(0);
+      await expect(bubble, path).toBeVisible();
+      await expect(bar(page), path).toHaveCount(0);
       await expect(chat(page), path).toHaveCount(0);
-      const barBox = (await bar(page).boundingBox())!;
-      expect(Math.round(page.viewportSize()!.height - (barBox.y + barBox.height)), path).toBe(24);
-      if (path !== "/chats") {
-        const send = (await page.getByRole("button", { name: "Send message" }).boundingBox())!;
-        expect(send.y + send.height, path).toBeLessThan(barBox.y);
+      const bubbleBox = (await bubble.boundingBox())!;
+      if (path === "/chats") {
+        expect(Math.round(page.viewportSize()!.height - (bubbleBox.y + bubbleBox.height)), path).toBe(24);
+        continue;
       }
+      // 24 px above the message box, and the latest message, scrolled to, stays clear of it.
+      expect(Math.round((await messageBox(page).boundingBox())!.y - (bubbleBox.y + bubbleBox.height)), path).toBe(24);
+      await expect.poll(async () => bottomOf(page.getByRole("article").filter({ hasText: "Update 8" })), path).toBeLessThan(bubbleBox.y);
     }
-    // Its ✦ opens the chat there as on any page.
+
+    // The ✦ brings the same bar as on any page, with the cursor in it: over the conversation, 24 px above its box.
+    await bubble.click();
+    const input = bar(page).getByRole("textbox", { name: "Ask AI Multi" });
+    await expect(input).toBeFocused();
+    await expect(bubble).toBeHidden();
+    const chatsBox = (await messageBox(page).boundingBox())!;
+    const barBox = (await bar(page).boundingBox())!;
+    expect(Math.round(chatsBox.y - (barBox.y + barBox.height))).toBe(24);
+    expect(Math.abs(middle(barBox).x - middle(chatsBox).x)).toBeLessThan(2);
+    // Its ⌄ goes back to the ✦.
+    await bar(page).getByRole("button", { name: "Minimize to a button" }).click();
+    await expect(bubble).toBeVisible();
+    await expect(bar(page)).toHaveCount(0);
+
+    // The bar's ✦ opens the chat as on any page, also over the conversation, and Escape goes back to the bar.
+    await bubble.click();
     await bar(page).getByRole("button", { name: "Open the AI chat" }).click();
     await expect(chat(page)).toBeVisible();
     await expect(chatBox(page)).toBeFocused();
+    expect(Math.round(chatsBox.y - (await bottomOf(chat(page))))).toBe(24);
+    await page.keyboard.press("Escape");
+    await expect(chat(page)).toHaveCount(0);
+    await expect(input).toBeFocused();
+
+    // The bar stays until the person leaves the page. Minimizing there didn't change the setting, so
+    // other pages still show the bar, and back on the chat it starts as the ✦ again.
+    await page.locator("#app-sidebar").getByRole("link", { name: "Tasks", exact: true }).click();
+    await expect(page).toHaveURL(/\/tasks$/);
+    await expect(bar(page)).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`/projects/${project.id}/chat$`));
+    await expect(bubble).toBeVisible();
+    await expect(bar(page)).toHaveCount(0);
   });
 
   test("guests don't get the bar", async ({ page }) => {
@@ -307,14 +358,38 @@ test.describe("on a phone", () => {
     await expect(sheet.getByRole("button", { name: "What's overdue?" })).toBeVisible();
   });
 
-  test("on the chats the ✦ button sits above their message box and opens the chat", async ({ page }) => {
+  test("on the chats the ✦ button floats above their message box and opens the chat", async ({ page }) => {
     await signUpAndLogIn(page, "E2E AI bar phone chats");
+    const project = await chatWithMessages(page, "AI bar phone chats");
+    const button = page.getByRole("button", { name: "Ask AI Multi", exact: true });
+
+    // The list: the ✦ 24 px above the tabs, without the bar.
     await page.goto("/chats");
-    const button = page.getByRole("button", { name: "Ask AI Multi" });
     await expect(button).toBeVisible();
     await expect(page.getByRole("button", { name: /^Ask AI Multi: / })).toHaveCount(0);
+    const tabs = (await page.getByRole("navigation", { name: "Primary" }).boundingBox())!;
+    expect(Math.round(tabs.y - (await bottomOf(button)))).toBe(24);
+
+    // A chat: 24 px above its message box, and the latest message, scrolled to, stays clear of it.
+    await page.goto(`/chats?project=${project.id}`);
+    await expect(button).toBeVisible();
+    const buttonBox = (await button.boundingBox())!;
+    expect(Math.round((await messageBox(page).boundingBox())!.y - (buttonBox.y + buttonBox.height))).toBe(24);
+    await expect.poll(async () => bottomOf(page.getByRole("article").filter({ hasText: "Update 8" }))).toBeLessThan(buttonBox.y);
+
+    // It opens the chat full screen, whose ⋯ menu has no bar to minimize to the ✦ here; closing it leaves the ✦.
     await button.click();
-    await expect(page.getByRole("dialog", { name: "AI chat" })).toBeVisible();
+    const sheet = page.getByRole("dialog", { name: "AI chat" });
+    await expect(sheet).toBeVisible();
+    await sheet.getByRole("button", { name: "More" }).click();
+    await expect(page.getByRole("menuitem", { name: "Hide from pages" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Minimize to a button" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menuitem", { name: "Hide from pages" })).toHaveCount(0);
+    await expect(sheet).toBeVisible();
+    await sheet.getByRole("button", { name: "Collapse" }).click();
+    await expect(sheet).toBeHidden();
+    await expect(button).toBeVisible();
   });
 });
 

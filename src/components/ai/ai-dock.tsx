@@ -2,10 +2,11 @@
 
 import { ArrowUp, ChevronDown, EyeOff, Minimize2, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AiChatPanel } from "@/components/ai/ai-chat-panel";
-import { useAiChat, useAiDock } from "@/components/ai/ai-chat-provider";
+import { useAiChat, useAiDock, useAiDockSlot } from "@/components/ai/ai-chat-provider";
 import { AI_PLACEHOLDER, AI_PLACEHOLDER_SHORT, AI_TEXT_CLASS } from "@/components/ai/ai-composer";
 import { AiSpark } from "@/components/ai/ai-spark";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -56,7 +57,7 @@ function sendButtonClass(ready: boolean) {
   );
 }
 
-/** Where the bar and the chat sit on a computer: centred at the bottom of the page, 24 px up. */
+/** Where the bar and the chat sit on a computer: centred at the bottom of the page, 24 px up (on the chats, of their messages). */
 const FLOAT_CLASS = "absolute bottom-6 left-1/2 z-30 -translate-x-1/2";
 const BAR_SHADOW = "shadow-[0_1px_2px_rgb(16_26_25/0.06),0_10px_28px_-10px_rgb(16_26_25/0.22)]";
 
@@ -87,16 +88,38 @@ function MovedToast({ id, onUndo }: { id: string | number; onUndo: () => void })
 }
 
 /**
+ * Where the AI floats on a page with a message box of its own, the chats: a layer over the page's
+ * messages that ends where the box begins, so the ✦, the bar and the chat float over the messages,
+ * never over the box (Samuel, November 26: the bar had a band of its own under the chats). While
+ * something floats in it, things beside it make room with `group-has-[[data-ai-slot]>*]`. The
+ * chats always give one, the whole page while no chat is open, and nothing shows until they do.
+ */
+export function AiDockSlot({ className, inert }: { className?: string; inert?: boolean }) {
+  const { setSlot } = useAiDockSlot();
+  const register = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!element) return;
+      setSlot(element);
+      // Another chat's slot may already have taken over: leave that one.
+      return () => setSlot((current) => (current === element ? null : current));
+    },
+    [setSlot],
+  );
+  return <div ref={register} data-ai-slot="" inert={inert} className={cn("pointer-events-none relative z-20 *:pointer-events-auto", className)} />;
+}
+
+/**
  * The AI on every page (#308, round 3's quiet bar, no chips): one line at the bottom of the page,
  * growing upward with a longer message as the chat's box does (#569).
  * Sending a question, the ✦ or Ctrl J (Cmd J on a Mac) opens the chat above it, 760 × 560 px to
  * start, resized from its top edge and top corners and remembered on this device. On phones the
  * bar sits above the tabs and the chat opens full screen.
  *
- * `ownComposer` is for pages with their own message box at the bottom, the chats. On computers
- * they get the same bar as every other page (Samuel, November 21: the chats opened the big chat
- * instead, "I need it to remain simple"), and end above it. On phones their box takes the bottom
- * of the screen, so the AI waits above it as the ✦ button instead of a second box.
+ * `ownComposer` is for pages with their own message box at the bottom, the chats. There the AI
+ * floats over their messages, above that box (AiDockSlot), and starts as the ✦ button so the
+ * chat can be read (Samuel, November 26). The ✦ opens the same bar as on every other page
+ * (November 21: "I need it to remain simple") until the person leaves the page; on phones, where
+ * their box takes the bottom of the screen, it opens the chat instead.
  *
  * The person can minimize it to the ✦ button or hide it from pages (it then waits on the AI
  * page); that choice is saved per account (`dock`).
@@ -104,8 +127,16 @@ function MovedToast({ id, onUndo }: { id: string | number; onUndo: () => void })
 export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
   const { draft, setDraft, ask, busy, loadStatus, announcement, current } = useAiChat();
   const { dock, setDock } = useAiDock();
+  const { slot } = useAiDockSlot();
   const router = useRouter();
+  const pathname = usePathname();
   const wide = useWideScreen();
+  const floatIn = ownComposer ? slot : null;
+  // The chats start with the ✦ whatever the setting; it opens the bar there until the person leaves the page.
+  const [barPage, setBarPage] = useState<string | null>(null);
+  if (barPage !== null && barPage !== pathname) setBarPage(null);
+  // What waits while the chat is closed: the bar, the ✦ button, or nothing once hidden from pages.
+  const resting = dock === "hidden" ? null : ownComposer ? (barPage === pathname ? "bar" : "button") : dock === "open" ? "bar" : "button";
   const [expanded, setExpanded] = useState(false);
   const [size, setSize] = useState<ChatSize>(CHAT_SIZE.initial);
   const sizeRead = useRef(false);
@@ -113,6 +144,7 @@ export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
   const card = useRef<HTMLElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const barInput = useRef<HTMLTextAreaElement>(null);
+  const bubble = useRef<HTMLButtonElement>(null);
   const drag = useRef<{ edge: ChatEdge; x: number; y: number; start: ChatSize; rootPx: number; last: ChatSize } | null>(null);
   const frame = useRef(0);
   const ready = draft.trim().length > 0;
@@ -133,7 +165,8 @@ export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
   const collapse = useCallback(
     (focusBar = false) => {
       setExpanded(false);
-      if (focusBar) window.requestAnimationFrame(() => barInput.current?.focus());
+      // Back to the bar, or to the ✦ where that's what waits (the chats, or minimized).
+      if (focusBar) window.requestAnimationFrame(() => (barInput.current ?? bubble.current)?.focus());
     },
     [],
   );
@@ -165,14 +198,24 @@ export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
 
   // Toasts appear above the bar or the ✦ button while either is there (globals.css), not over them.
   // Once the AI is hidden they come back down, so "Moved to AI page" shows where the button was.
-  const shown = dock !== "hidden";
+  // On the chats it floats above their message box, whose top is --ai-end from the window's bottom.
+  const shown = dock !== "hidden" && (floatIn !== null || !ownComposer);
   useEffect(() => {
     if (!shown) return;
-    document.documentElement.dataset.aiBar = "";
+    const root = document.documentElement;
+    root.dataset.aiBar = floatIn ? "box" : "";
+    let observer: ResizeObserver | null = null;
+    if (floatIn) {
+      // The box grows with a longer message, and the window can change: the place for the AI follows both.
+      observer = new ResizeObserver(() => root.style.setProperty("--ai-end", `${Math.max(0, Math.round(window.innerHeight - floatIn.getBoundingClientRect().bottom))}px`));
+      observer.observe(floatIn);
+    }
     return () => {
-      delete document.documentElement.dataset.aiBar;
+      observer?.disconnect();
+      delete root.dataset.aiBar;
+      root.style.removeProperty("--ai-end");
     };
-  }, [shown]);
+  }, [shown, floatIn]);
 
   // Ctrl J or Cmd J, from anywhere but a dialog: opens the chat, or brings the cursor back to it,
   // or, from inside it, closes it again. While the AI is hidden from pages, it goes to the AI page.
@@ -203,15 +246,23 @@ export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
 
   function minimize() {
     collapse();
-    setDock("minimized");
+    // The chats go back to the ✦ they start with, and the setting stays as it is.
+    if (ownComposer) setBarPage(null);
+    else setDock("minimized");
   }
 
   /** The ✦ button: the bar comes back, and with it the conversation if there is one. Phones open the chat. */
   function reopen() {
-    setDock("open");
+    // On the chats until the person leaves the page; anywhere else it's saved.
+    if (ownComposer) setBarPage(pathname);
+    else setDock("open");
     if (current?.turns?.length || !wide) open();
     else window.requestAnimationFrame(() => barInput.current?.focus());
   }
+
+  // On the chats the chat, the ✦ and the bar float in the place the page gives them (AiDockSlot).
+  // Until it has, they wait, rather than show over the message box for a moment.
+  const float = (node: ReactNode) => (floatIn ? createPortal(node, floatIn) : ownComposer ? null : node);
 
   // A drag cut short (the page changes, say) still lets go of the pointer and the cursor.
   useEffect(
@@ -272,10 +323,11 @@ export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
 
   const heightPx = Math.round(size.height * 16);
 
-  // In the chat's ⋯ menu, after "Open on the AI page". Minimizing makes sense only while the bar shows.
+  // In the chat's ⋯ menu, after "Open on the AI page". Minimizing makes sense only while the bar shows,
+  // so not on a phone's chats, which keep the ✦.
   const menuItems = (
     <>
-      {dock === "open" ? (
+      {resting === "bar" && (wide || !ownComposer) ? (
         <DropdownMenuItem onSelect={minimize}>
           <Minimize2 />
           Minimize to a button
@@ -290,7 +342,7 @@ export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
 
   return (
     <>
-      {expanded && wide ? (
+      {expanded && wide ? float(
         <section
           ref={card}
           aria-label="AI chat"
@@ -378,16 +430,18 @@ export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
         </SheetContent>
       </Sheet>
 
-      {/* The ✦ button: minimized, and on a phone's chats, which have their own message box (above that box there). */}
-      {!expanded && (dock === "minimized" || (ownComposer && dock === "open")) ? (
+      {/* The ✦ button: minimized, and on the chats until it's clicked (on a phone's chats, in place of the bar). */}
+      {!expanded && (resting === "button" || (resting === "bar" && ownComposer)) ? float(
         <div
           className={cn(
-            "group/bubble absolute bottom-6 right-6 z-30 h-14 w-14 max-lg:fixed max-lg:right-3",
-            ownComposer ? "max-lg:bottom-[calc(8.75rem+max(0.5rem,env(safe-area-inset-bottom)))]" : "max-lg:bottom-[calc(3.9375rem+max(0.5rem,env(safe-area-inset-bottom)))]",
-            dock === "open" && "lg:hidden",
+            "group/bubble absolute bottom-6 right-6 z-30 h-14 w-14 max-lg:right-3",
+            // The chats keep it in their place for it; anywhere else phones keep it above the tabs.
+            !floatIn && "max-lg:fixed max-lg:bottom-[calc(3.9375rem+max(0.5rem,env(safe-area-inset-bottom)))]",
+            resting === "bar" && "lg:hidden",
           )}
         >
           <button
+            ref={bubble}
             type="button"
             onClick={reopen}
             aria-label="Ask AI Multi"
@@ -412,7 +466,7 @@ export function AiDock({ ownComposer = false }: { ownComposer?: boolean }) {
         </div>
       ) : null}
 
-      {dock === "open" && !expanded ? (
+      {resting === "bar" && !expanded ? float(
         <>
           <form
             ref={measureBar}

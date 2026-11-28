@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { DeleteChatsDialog, RenameChatDialog } from "@/components/ai/ai-chat-dialogs";
 import type { AgentStatus, ChatEvent } from "@/lib/ai/chat";
 import {
@@ -106,8 +106,19 @@ type AiDockContextValue = {
   setDock: (dock: AiDock) => void;
 };
 
+/**
+ * Where the AI bar floats on a page with a message box of its own, the chats: the place over the
+ * page's messages that the page marks with <AiDockSlot />, which ends where its box begins. Null on
+ * other pages, where the bar floats at the bottom of the page.
+ */
+type AiDockSlotContextValue = {
+  slot: HTMLElement | null;
+  setSlot: Dispatch<SetStateAction<HTMLElement | null>>;
+};
+
 const AiChatContext = createContext<AiChatContextValue | null>(null);
 const AiDockContext = createContext<AiDockContextValue | null>(null);
+const AiDockSlotContext = createContext<AiDockSlotContextValue>({ slot: null, setSlot: () => {} });
 
 let lastId = 0;
 function newId() {
@@ -143,6 +154,7 @@ export function AiChatProvider({ enabled, initialDock, children }: { enabled: bo
   const [chats, setChats] = useState<AiChat[]>([]);
   const [listState, setListState] = useState<AiChatListState>("idle");
   const [dock, setDockState] = useState<AiDock>(initialDock);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
   const dockRef = useRef(initialDock);
   // What the server has, and the saves in order, so the last choice is the one that sticks.
   const savedDock = useRef(initialDock);
@@ -642,11 +654,13 @@ export function AiChatProvider({ enabled, initialDock, children }: { enabled: bo
     ],
   );
   const dockValue = useMemo<AiDockContextValue>(() => ({ dock, setDock }), [dock, setDock]);
+  const slotValue = useMemo<AiDockSlotContextValue>(() => ({ slot, setSlot }), [slot]);
 
   const dialogChat = dialog && dialog.kind !== "deleteAll" ? (chats.find((chat) => chat.id === dialog.chatId) ?? null) : null;
 
   return (
     <AiDockContext.Provider value={dockValue}>
+      <AiDockSlotContext.Provider value={slotValue}>
       <AiChatContext.Provider value={value}>
         {children}
         {dialog?.kind === "rename" && dialogChat ? (
@@ -670,6 +684,7 @@ export function AiChatProvider({ enabled, initialDock, children }: { enabled: bo
           }}
         />
       </AiChatContext.Provider>
+      </AiDockSlotContext.Provider>
     </AiDockContext.Provider>
   );
 }
@@ -678,6 +693,11 @@ export function useAiDock() {
   const context = useContext(AiDockContext);
   if (!context) throw new Error("useAiDock must be used inside AiChatProvider");
   return context;
+}
+
+/** The chats' place for the AI bar (AiDockSlot), and how a page sets it. Outside the provider it's never set. */
+export function useAiDockSlot() {
+  return useContext(AiDockSlotContext);
 }
 
 export function useAiChat() {

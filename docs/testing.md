@@ -42,6 +42,7 @@ npx next build
 - End date patterns such as `^Sun, Nov 1` with `\b`, or they match "Sun, Nov 15". Tests comparing event times with "now" run the browser in an `Etc/GMT±N` zone where it's midday ("Now and next" in `home.spec.ts`).
 - `signUpAndLogIn` marks the email confirmed; pass `{ confirmEmail: false }` for an unconfirmed user and `{ name }` for a fixed name.
 - Changing words the UI shows can break an older test that asserts them: search `tests/` for the old words first. Chat search shows results beside the chat only at about 1440 px or wider.
+- Watching a run's log: Playwright's list reporter prints a failure as `  x  12 [mobile] › …`, two spaces first, so match `^\s+x\s`. `npm run evidence` prints its E2E row only when the run ends.
 - CI retries a failed test once. A test that passes only on retry shows "N flaky" in the run summary: treat it as a bug, open an issue and fix the race.
 - Every e2e server logs `pg`'s DeprecationWarning "Calling client.query() when the client is already executing a query", from Prisma, on `main` too. It breaks only in `pg` 9 (unreleased): find the caller with `--trace-deprecation` before upgrading.
 

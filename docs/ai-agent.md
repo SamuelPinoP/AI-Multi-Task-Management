@@ -73,6 +73,7 @@ The cases are JSON in `src/lib/ai/evals/cases/` over a sample workspace, scored 
 - Live runs are by hand, never in CI, and only the owner runs them: they use his keys.
 - A change to the prompt, tools, provider or model runs them before and after, and the PR explains any case that now fails. [`CONTRIBUTING.md`](../CONTRIBUTING.md#changing-the-ai-assistant) has the steps and how to add a case.
 - When the agent gets something wrong, add a case first.
+- A change to `src/lib/ai/evals/score.ts` says how the saved runs score now. Results keep only the attempted `toolCalls`, so rebuild each result's observations (`executedCalls` = `toolCalls`, `drafted` = `proposal ?? []`, `workspaceChanged` false) with its cases from `git show <run commit>:src/lib/ai/evals/cases/<file>.json`. Score that with `main`'s scorer as the baseline, compare the new scorer with the baseline, not with the saved checks, and list every check that changes.
 
 ## Free-tier facts
 
