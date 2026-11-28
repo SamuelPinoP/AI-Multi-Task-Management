@@ -12,9 +12,9 @@ import { continueAsGuest, openAccountMenu, plusTab, queryDatabase, signUpAndLogI
  * with one app's steps open (#480).
  *
  * Each test signs up a new account, always named "E2E visual", and adds the same data (guest
- * workspaces hold too little for it since #458; the last test shows the guest profile). Due dates are
- * yesterday, today and tomorrow, which the pages show as words, so the images
- * don't change from day to day. The month calendar runs on a fixed clock
+ * workspaces hold too little for it since #458; the last tests show the guest profile and the log-in
+ * pop-up, #543). Due dates are yesterday, today and tomorrow, which the pages show as words, so the
+ * images don't change from day to day. The month calendar runs on a fixed clock
  * instead. What still changes between runs is masked: the greeting, times,
  * avatar colors (they come from random user ids), and the account's email.
  * Task numbers are set (`pinTaskNumbers`).
@@ -414,4 +414,18 @@ test("Guest profile", async ({ page }) => {
   if (!(await profile.isVisible())) await page.getByRole("button", { name: /^Open navigation/ }).click();
   await expect(profile.getByText("4 left")).toBeVisible();
   await expect(profile).toHaveScreenshot("guest-profile.png", { mask: [profile.locator("[style*='background-color']")] });
+});
+
+// The guest's log-in pop-up (#543), over the page like the sign-up pop-up. A new guest's Notes page is
+// empty, so nothing behind the pop-up's rounded corners changes between runs.
+test("Log in pop-up", async ({ page }) => {
+  await continueAsGuest(page);
+  await page.goto("/notes");
+  await page.waitForLoadState("networkidle");
+  const profile = page.getByRole("region", { name: "Guest workspace" });
+  if (!(await profile.isVisible())) await page.getByRole("button", { name: /^Open navigation/ }).click();
+  await profile.getByRole("button", { name: "Log in", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Log in to AI Multi" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveScreenshot("login-popup.png");
 });

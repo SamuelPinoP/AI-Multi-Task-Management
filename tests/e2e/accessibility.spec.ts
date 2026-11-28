@@ -173,6 +173,32 @@ for (const theme of ["light", "dark"] as const) {
     await page.keyboard.type("task");
     await expect(page.getByRole("option").first()).toBeVisible();
     found.push(...(await violations(page, "command palette")));
+    await page.keyboard.press("Escape");
+
+    // The guest's log-in pop-up over a page (#543): empty, after a wrong password, and with the note for an
+    // email that isn't confirmed; then the sign-up pop-up it switches to.
+    await page.goto("/tasks");
+    await page.waitForLoadState("networkidle");
+    const profile = page.getByRole("region", { name: "Guest workspace" });
+    if (!(await profile.isVisible())) await page.getByRole("button", { name: /^Open navigation/ }).click();
+    await profile.getByRole("button", { name: "Log in", exact: true }).click();
+    const login = page.getByRole("dialog", { name: "Log in to AI Multi" });
+    await expect(login).toBeVisible();
+    found.push(...(await violations(page, "log-in pop-up")));
+    await login.getByLabel("Email or username").fill(uniqueName("nobody").replace(" ", "_"));
+    await login.getByLabel("Password").fill("wrong-password");
+    await login.getByRole("button", { name: "Log in", exact: true }).click();
+    await expect(login.getByText("Incorrect email, username or password.")).toBeVisible();
+    found.push(...(await violations(page, "log-in pop-up after a wrong password")));
+    await page.route("**/api/auth/login", (route) => route.fulfill({ status: 403, json: { error: "unconfirmed" } }));
+    await login.getByLabel("Password").fill("any-password");
+    await login.getByRole("button", { name: "Log in", exact: true }).click();
+    await expect(login.getByRole("button", { name: "Get a new link" })).toBeVisible();
+    found.push(...(await violations(page, "log-in pop-up for an unconfirmed email")));
+    await page.unroute("**/api/auth/login");
+    await login.getByRole("button", { name: "Sign up free" }).click();
+    await expect(page.getByRole("dialog", { name: "Keep your work with a free account" })).toBeVisible();
+    found.push(...(await violations(page, "sign-up pop-up")));
 
     expect(found).toEqual([]);
   });
