@@ -8,7 +8,7 @@ The "Protect main" ruleset requires a PR and three checks:
 
 - `Vercel`: the preview deployment's build.
 - `Lint, types, unit tests, build`: 15-minute limit. It also applies the migrations to an empty database, fails if `schema.prisma` and the migrations disagree, runs the unit tests in other time zones, fails if Radix UI is installed twice, and runs `npm audit --omit=dev --audit-level=high`.
-- `Playwright (server in UTC)`: 30-minute limit; retries a failed test once.
+- `Playwright (server in UTC)`: 45-minute limit, for a job that takes 25 to 29 minutes (#582 aims for about 15); retries a failed test once.
 
 Head branches are deleted on merge. Loosening a check needs the owner's OK. Dependabot's minor and patch PRs auto-merge once green; majors are skipped and listed in the monthly maintenance issue. A Radix bump needs the `overrides` entry for `@radix-ui/react-toggle` in `package.json` to match.
 
