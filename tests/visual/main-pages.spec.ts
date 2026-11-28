@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { AI_NOTICE_VERSION } from "../../src/lib/ai/notice";
-import { continueAsGuest, openAccountMenu, plusTab, signUpAndLogIn } from "../e2e/helpers";
+import { continueAsGuest, openAccountMenu, plusTab, queryDatabase, signUpAndLogIn } from "../e2e/helpers";
 
 /*
  * Screenshots of the main pages, compared with reference images (TEST-05, #269).
@@ -17,6 +17,7 @@ import { continueAsGuest, openAccountMenu, plusTab, signUpAndLogIn } from "../e2
  * don't change from day to day. The month calendar runs on a fixed clock
  * instead. What still changes between runs is masked: the greeting, times,
  * avatar colors (they come from random user ids), and the account's email.
+ * Task numbers are set (`pinTaskNumbers`).
  */
 
 function dateInputValue(daysFromToday: number) {
@@ -39,15 +40,32 @@ async function post(page: Page, url: string, data: Record<string, unknown>) {
   return (await response.json()) as { id: string };
 }
 
+/**
+ * Task numbers (#486) come from one sequence for the whole app, so a task's number depends on how many tasks the
+ * tests before it made, and the pages show it after the title. So each test gives its tasks the same numbers in
+ * every run, from AM-139. The sequence first moves far past them, so it never gives one out again, and a task an
+ * earlier test numbered gives its number up.
+ */
+async function pinTaskNumbers(ids: string[], first = 139) {
+  await queryDatabase(`SELECT setval('"Task_number_seq"', 100000) WHERE (SELECT last_value FROM "Task_number_seq") < 100000`);
+  for (const [index, id] of ids.entries()) {
+    await queryDatabase(`UPDATE "Task" SET "number" = nextval('"Task_number_seq"') WHERE "number" = $1`, [first + index]);
+    await queryDatabase(`UPDATE "Task" SET "number" = $1 WHERE "id" = $2`, [first + index, id]);
+  }
+}
+
 /** Two projects and five tasks: overdue, due today, due tomorrow, and done. Returns the first project's id. */
 async function addTasks(page: Page) {
   const website = await post(page, "/api/projects", { name: "Launch website", color: "#0f9488" });
   const app = await post(page, "/api/projects", { name: "Mobile app", color: "#d97706" });
-  await post(page, "/api/tasks", { title: "Fix the signup form", dueDate: dateInputValue(-1), priority: "HIGH", projectId: website.id });
-  await post(page, "/api/tasks", { title: "Write the launch post", dueDate: dateInputValue(0), priority: "HIGH", projectId: website.id });
-  await post(page, "/api/tasks", { title: "Review open pull requests", dueDate: dateInputValue(0), priority: "MEDIUM", status: "IN_PROGRESS", projectId: app.id });
-  await post(page, "/api/tasks", { title: "Plan the next sprint", dueDate: dateInputValue(1), priority: "LOW" });
-  await post(page, "/api/tasks", { title: "Set up the domain", priority: "MEDIUM", status: "DONE", projectId: website.id });
+  const tasks = [
+    await post(page, "/api/tasks", { title: "Fix the signup form", dueDate: dateInputValue(-1), priority: "HIGH", projectId: website.id }),
+    await post(page, "/api/tasks", { title: "Write the launch post", dueDate: dateInputValue(0), priority: "HIGH", projectId: website.id }),
+    await post(page, "/api/tasks", { title: "Review open pull requests", dueDate: dateInputValue(0), priority: "MEDIUM", status: "IN_PROGRESS", projectId: app.id }),
+    await post(page, "/api/tasks", { title: "Plan the next sprint", dueDate: dateInputValue(1), priority: "LOW" }),
+    await post(page, "/api/tasks", { title: "Set up the domain", priority: "MEDIUM", status: "DONE", projectId: website.id }),
+  ];
+  await pinTaskNumbers(tasks.map((task) => task.id));
   return website.id;
 }
 
@@ -346,6 +364,7 @@ test("Task page with sections", async ({ page }) => {
       "> Make a ticket for buying a family car, with a Cost section.",
     ].join("\n"),
   });
+  await pinTaskNumbers([id], 142);
   // Tall enough for the whole description, which a phone shows under the task's properties.
   await page.setViewportSize({ width: page.viewportSize()!.width, height: 1400 });
   await page.goto(`/tasks/${id}`);

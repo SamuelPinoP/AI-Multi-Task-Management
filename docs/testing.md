@@ -55,3 +55,4 @@ The screenshots in `tests/visual` are compared with references made on Linux in 
 - A mask is the masked element's box, so over text sized by random data it changes between runs (the phone image's 0.1% limit is about 345 px). Mask a fixed-size container or fix the data (the visual accounts are all "E2E visual").
 - A tool that counts every differing pixel is stricter than `toHaveScreenshot`, which ignores differences within its color threshold: check an image near the limit with Playwright's own comparison before calling it a failure.
 - `task-sections-phone` shows tomorrow's date, so it drifts a little every day.
+- Task numbers come from one sequence for the whole app, so a task's number depends on what ran before: a visual test that shows tasks pins their numbers with `pinTaskNumbers`.
