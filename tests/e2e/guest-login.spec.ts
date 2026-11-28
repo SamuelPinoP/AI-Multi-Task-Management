@@ -171,7 +171,7 @@ test("logging in from a guest's own project lands on Projects, and from the AI's
   await page.goto("/");
   await expectHome(page);
   await page.goto("/projects");
-  await page.locator("#main-content").getByRole("link", { name: "Website relaunch" }).first().click();
+  await page.locator("#main-content").getByRole("link", { name: "Launch website", exact: true }).click();
   await expect(page).toHaveURL(/\/projects\/[^/]+$/);
   await openLogIn(page);
   await logIn(page, account.email, account.password);

@@ -34,7 +34,8 @@ test("a guest sees what the workspace holds where the profile sits", async ({ pa
   await expect(profile.getByText("5 left")).toBeVisible();
   await expect(profile.getByText("Events", { exact: true })).toBeVisible();
   await expect(profile.getByText("2 left")).toBeVisible();
-  await expect(profile.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+  // Log in opens a pop-up over the page, like Sign up (#543): guest-login.spec.ts.
+  await expect(profile.getByRole("button", { name: "Log in", exact: true })).toBeVisible();
   // Guests get no bell: nothing can reach them.
   await expect(page.getByRole("button", { name: /^Notifications/ })).toHaveCount(0);
 
@@ -49,7 +50,7 @@ test("a guest sees what the workspace holds where the profile sits", async ({ pa
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("The AI assistant");
   await expect(dialog.getByRole("link", { name: "Sign up with email" })).toHaveAttribute("href", "/signup");
-  await expect(dialog.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+  await expect(dialog.getByRole("button", { name: "Log in", exact: true })).toBeVisible();
   await expect(dialog).toContainText("You must be 18 or older.");
 });
 
